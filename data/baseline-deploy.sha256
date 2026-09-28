@@ -58,7 +58,7 @@ a7f6d6e31fa8111b724b1b06d46311866ea490845b7377797fca481072550e6d  dotfiles/secur
 497102907be39a6e82346d1f24ab4f7b34c36cab1fd3eb2a271d812066414993  dotfiles/theme/.config/gtk-4.0/settings.ini
 7120b38f5a9ec3b00e22fac420218c406c8fddd8c62ff5359a275102a70e303c  dotfiles/theme/.config/kdeglobals
 25c572c4b4f84a8342bd763e4429f6f3c5025f3fef2c3ec77232eb71aab30012  dotfiles/waybar/.config/waybar/scripts/net-wired.sh
-dec74fdfc6af56cf5eb35537b2060b4ee789e3a2e663d85b692f423142f814a2  dotfiles/waybar/.config/waybar/scripts/net-wireless.sh
+6688b4714fa5be29c249fbc72567e3de67c908df0a8daa3c0e8afdc5a24f7c95  dotfiles/waybar/.config/waybar/scripts/net-wireless.sh
 ac81224fc768b751e3c5ac3b10ff1c8ef6c6f8b00ab7fd075b40d9dfbc9417ec  dotfiles/waybar/.config/waybar/scripts/ws-refresh.sh
 ff8a9bc3e5ea8b4f7bed7d58b31552511db9b438b67740c233032a1b81efe63c  dotfiles/waybar/.config/waybar/scripts/ws-render.sh
 ca4bc90e66fdda4c6f231e5751bc54e5eaa07eaaad0bdc27007a9635ef6b467b  dotfiles/waybar/.config/waybar/style.css

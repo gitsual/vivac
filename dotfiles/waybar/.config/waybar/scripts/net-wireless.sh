@@ -36,8 +36,12 @@ iface="$(nmcli -t -f DEVICE,TYPE device status | awk -F: '$2=="wifi"{print $1; e
 }
 
 radio="$(nmcli radio wifi)"
-nmcli device wifi rescan ifname "$iface" >/dev/null 2>&1 || true
-sleep 1
+# The menu opens on the list NetworkManager already holds, so a click is
+# instant; --rescan (the menu's own entry) forces a fresh scan first.
+if [[ "${1:-}" == --rescan ]]; then
+	nmcli device wifi rescan ifname "$iface" >/dev/null 2>&1 || true
+	sleep 2
+fi
 
 # Parallel arrays: one row per menu line, the action read from kinds[].
 kinds=() labels=() ssids=() secured=()
@@ -46,7 +50,8 @@ if [[ "$radio" == enabled ]]; then
 else
 	kinds+=(radio) labels+=("󰖩  $(i18n_get net.wifi_on)")
 fi
-kinds+=(edit) labels+=("  $(i18n_get net.edit)") ssids+=('' '') secured+=('' '')
+kinds+=(rescan) labels+=("󰑓  $(i18n_get net.rescan)")
+kinds+=(edit) labels+=("  $(i18n_get net.edit)") ssids+=('' '' '') secured+=('' '' '')
 
 active=''
 while IFS=: read -r in_use ssid security signal; do
@@ -71,6 +76,7 @@ radio)
 	if [[ "$radio" == enabled ]]; then nmcli radio wifi off; else nmcli radio wifi on; fi
 	exit 0
 	;;
+rescan) exec "$self" --rescan ;;
 edit) exec nm-connection-editor ;;
 esac
 
