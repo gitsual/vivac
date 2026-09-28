@@ -25,6 +25,7 @@ libnotify
 librsvg
 lynis
 neovim
+network-manager-applet
 networkmanager
 noto-fonts
 noto-fonts-cjk

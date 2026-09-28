@@ -5,6 +5,10 @@ window#waybar { background: rgba(@COLOR_BG:rgb@, 0.95); border-radius: 12px; bor
 #custom-ws.urgent { border-bottom: 2px solid #@COLOR_URGENT@; }
 #custom-updates { color: #@COLOR_MUTED@; }
 #network { color: #@COLOR_INFO@; }
+/* Two network gauges, one per adapter: a missing link recedes, a link with
+   no address is the one worth a look, so it takes the accent. */
+#network.disconnected, #network.disabled { color: #@COLOR_MUTED@; }
+#network.linked { color: #@COLOR_ACCENT@; }
 #temperature.critical { color: #@COLOR_URGENT@; border-bottom: 2px solid #@COLOR_URGENT@; }
 #custom-weather { color: #@COLOR_FG_DIM@; }
 /* The focused window's title is context, not a reading: it recedes, and it

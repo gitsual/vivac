@@ -57,9 +57,11 @@ a7f6d6e31fa8111b724b1b06d46311866ea490845b7377797fca481072550e6d  dotfiles/secur
 497102907be39a6e82346d1f24ab4f7b34c36cab1fd3eb2a271d812066414993  dotfiles/theme/.config/gtk-3.0/settings.ini
 497102907be39a6e82346d1f24ab4f7b34c36cab1fd3eb2a271d812066414993  dotfiles/theme/.config/gtk-4.0/settings.ini
 7120b38f5a9ec3b00e22fac420218c406c8fddd8c62ff5359a275102a70e303c  dotfiles/theme/.config/kdeglobals
+25c572c4b4f84a8342bd763e4429f6f3c5025f3fef2c3ec77232eb71aab30012  dotfiles/waybar/.config/waybar/scripts/net-wired.sh
+dec74fdfc6af56cf5eb35537b2060b4ee789e3a2e663d85b692f423142f814a2  dotfiles/waybar/.config/waybar/scripts/net-wireless.sh
 ac81224fc768b751e3c5ac3b10ff1c8ef6c6f8b00ab7fd075b40d9dfbc9417ec  dotfiles/waybar/.config/waybar/scripts/ws-refresh.sh
 ff8a9bc3e5ea8b4f7bed7d58b31552511db9b438b67740c233032a1b81efe63c  dotfiles/waybar/.config/waybar/scripts/ws-render.sh
-005bfa1905df80b44b6cb6ed2d9ff5b0fb55edfa13688b095403164356f06f53  dotfiles/waybar/.config/waybar/style.css
+ca4bc90e66fdda4c6f231e5751bc54e5eaa07eaaad0bdc27007a9635ef6b467b  dotfiles/waybar/.config/waybar/style.css
 d92b7d39cd2f0ded3acd33a61edf70a3d9d9fdef9f95c4929cf9bf4d483abc31  dotfiles/waybar/.config/waybar/workspace-icons.json
 9536bb64e3f90cbae800680a7841bc225cf80321eb91376e5f8e5b16c43cd8d7  dotfiles/welcome/.local/bin/vivac-welcome
 16e0f8c1f5ed428ec0c8da4e8775f7c3ae967171ab62f337dc365c076514a411  dotfiles/wofi/.config/wofi/style.css

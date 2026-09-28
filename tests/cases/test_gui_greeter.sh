@@ -46,7 +46,7 @@ listing() {
 }
 base="$(listing)"
 with="$(listing --gui-greeter)"
-extra="$(comm -13 <(grep '^would install official' <<<"$base" | sed 's/.*: //' | tr ' ' '\n' | LC_ALL=C sort) \
+extra="$(LC_ALL=C comm -13 <(grep '^would install official' <<<"$base" | sed 's/.*: //' | tr ' ' '\n' | LC_ALL=C sort) \
 	<(grep '^would install official' <<<"$with" | sed 's/.*: //' | tr ' ' '\n' | LC_ALL=C sort))"
 [[ "$extra" == "$(<"$repo_root/packages/gui-greeter.txt")" ]] || fail "--gui-greeter added something outside its manifest: $extra"
 grep -q 'would install /etc/greetd/config.toml with: command = "env LANG=' <<<"$with" || fail 'bootstrap --gui-greeter did not reach apply-system --greeter'

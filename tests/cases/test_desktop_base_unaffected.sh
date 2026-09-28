@@ -30,7 +30,7 @@ for package in "${desktop[@]}"; do
 	[[ " ${base#*: } " != *" $package "* ]] || fail "default bootstrap would install desktop package $package"
 	[[ " ${with#*: } " == *" $package "* ]] || fail "--desktop does not install $package"
 done
-extra="$(comm -13 <(tr ' ' '\n' <<<"${base#*: }" | LC_ALL=C sort) <(tr ' ' '\n' <<<"${with#*: }" | LC_ALL=C sort))"
+extra="$(LC_ALL=C comm -13 <(tr ' ' '\n' <<<"${base#*: }" | LC_ALL=C sort) <(tr ' ' '\n' <<<"${with#*: }" | LC_ALL=C sort))"
 [[ "$extra" == "$(printf '%s\n' "${desktop[@]}" | LC_ALL=C sort)" ]] || fail "--desktop added something outside its manifest: $extra"
 [[ "$(listing laptop-intel)" == "$base" ]] || fail 'the default listing depends on the archetype'
 

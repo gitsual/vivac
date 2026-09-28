@@ -52,11 +52,11 @@ expect() {
 	return 0
 }
 
-expect vm-virtio 'network cpu memory disk pulseaudio custom/power custom/weather hyprland/window' 'battery backlight bluetooth custom/gpu temperature'
-expect laptop-intel 'battery backlight bluetooth temperature' 'custom/gpu'
+expect vm-virtio 'network#wired cpu memory disk pulseaudio custom/power custom/weather hyprland/window' 'battery backlight bluetooth custom/gpu temperature'
+expect laptop-intel 'network#wireless network#wired battery backlight bluetooth temperature' 'custom/gpu'
 expect laptop-amd-hybrid 'battery backlight custom/gpu temperature' 'bluetooth'
-expect desktop-nvidia 'custom/gpu temperature' 'battery backlight bluetooth'
-expect headless-unknown 'network custom/power' 'battery backlight bluetooth custom/gpu temperature'
+expect desktop-nvidia 'network#wired custom/gpu temperature' 'network#wireless battery backlight bluetooth'
+expect headless-unknown 'network#wired custom/power' 'network#wireless battery backlight bluetooth custom/gpu temperature'
 
 # The temperature module reads the sensor the facts found, never a hardcoded
 # hwmon index: probe order differs between machines, and a config that names

@@ -97,7 +97,7 @@ listing() {
 }
 base="$(listing)"
 with="$(listing --ricer)"
-extra="$(comm -13 <(tr ' ' '\n' <<<"${base#*: }" | LC_ALL=C sort) <(tr ' ' '\n' <<<"${with#*: }" | LC_ALL=C sort))"
+extra="$(LC_ALL=C comm -13 <(tr ' ' '\n' <<<"${base#*: }" | LC_ALL=C sort) <(tr ' ' '\n' <<<"${with#*: }" | LC_ALL=C sort))"
 [[ "$extra" == "$(<"$repo_root/packages/ricer.txt")" ]] || fail "--ricer added something outside its manifest: $extra"
 grep -Eq 'nwg-bar|cliphist' <<<"$base" && fail 'the default bootstrap installs ricing tools'
 

@@ -50,7 +50,7 @@ listing() {
 }
 base="$(listing)"
 with="$(listing --ime)"
-extra="$(comm -13 <(tr ' ' '\n' <<<"${base#*: }" | LC_ALL=C sort) <(tr ' ' '\n' <<<"${with#*: }" | LC_ALL=C sort))"
+extra="$(LC_ALL=C comm -13 <(tr ' ' '\n' <<<"${base#*: }" | LC_ALL=C sort) <(tr ' ' '\n' <<<"${with#*: }" | LC_ALL=C sort))"
 [[ "$extra" == "$(grep -Ev '^[[:space:]]*(#|$)' "$repo_root/packages/ime.txt")" ]] || fail "--ime added something outside its manifest: $extra"
 grep -q fcitx <<<"$base" && fail 'the default bootstrap installs the input method'
 

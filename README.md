@@ -535,8 +535,12 @@ carries the `/sys` file the sensor actually lives in, chosen by driver name (`k1
 in probe order and differs between machines. A VM reports `none` and the module is not placed at
 all.
 
-The network module shows the address inline (`{ipaddr}/{cidr}`) instead of hiding it in a
-tooltip, and click-toggles to the interface name; the bluetooth tooltip enumerates the connected
+There are two network gauges, one per adapter: wired always, wireless when `has_wifi` says so.
+Each shows its address inline (`{ipaddr}/{cidr}`) instead of hiding it in a tooltip and greys out
+when its link is down, so a cable pulled and a Wi-Fi dropped read differently. A click opens a
+rofi menu over NetworkManager (`scripts/net-wireless.sh`, `scripts/net-wired.sh`): the networks in
+range, a radio toggle, connect with the key asked once and kept by NetworkManager; right click
+opens `nm-connection-editor` for everything else. The bluetooth tooltip enumerates the connected
 devices. Weather is a fifth setting, `weather_location` (default `auto`, which lets wttr.in
 geolocate by IP) — set it to a place name or airport code to ask about somewhere else, and note
 that the module makes an outbound request every half hour either way.
