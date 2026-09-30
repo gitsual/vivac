@@ -173,6 +173,9 @@ bind = SUPER, bracketright, workspace, e+1
 # @help: hypr help.hypr.ws_prev
 bind = SUPER, bracketleft, workspace, e-1
 
+# Apps that remember being maximized ask for it again on launch; honouring
+# that makes a new window cover the workspace instead of splitting it.
+windowrule = suppress_event maximize, match:class .*
 windowrule = float on, match:class ^(pavucontrol)$
 windowrule = center on, match:class ^(pavucontrol)$
 windowrule = animation slide, match:class ^(rofi)$
