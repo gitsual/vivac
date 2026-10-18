@@ -1,0 +1,105 @@
+{
+  "$schema": "https://github.com/glzr-io/zebar/raw/v3.0.0/resources/zpack-schema.json",
+  "name": "vivac",
+  "version": "1.0.0",
+  "description": "The vivac bar: ten workspaces, the gauges the machine can answer for, and the palette of the current theme.",
+  "tags": ["topbar", "glazewm"],
+  "previewImages": [],
+  "repositoryUrl": "",
+  "widgets": [
+    {
+      "name": "bar",
+      "htmlPath": "./index.html",
+      "zOrder": "normal",
+      "shownInTaskbar": false,
+      "focused": false,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
+      "caching": {
+        "defaultDuration": 604800,
+        "rules": [
+          { "urlRegex": "\\.(css|js|json)$", "duration": 0 }
+        ]
+      },
+      "privileges": {
+        "shellCommands": [
+          {
+            "program": "cmd.exe",
+            "argsRegex": "^/c echo (theme|power|help|sound|bluetooth|security|network|updates)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul \\|\\| conhost\\.exe --headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac\\.ps1 (theme|power|help|sound|bluetooth|security|network|updates)$"
+          },
+          {
+            "program": "powershell.exe",
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-security\\.ps1 -Status$"
+          },
+          {
+            "program": "powershell.exe",
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-tray\\.ps1 (-Status|-Updates|-Bluetooth|-Eject [A-Z]:|-Open (bluetooth|updates|antivirus))$"
+          },
+          {
+            "program": "nvidia-smi",
+            "argsRegex": "^--query-gpu=temperature\\.gpu --format=csv,noheader,nounits$"
+          }
+        ]
+      },
+      "presets": [
+        {
+          "name": "default",
+          "anchor": "top_left",
+          "offsetX": "0px",
+          "offsetY": "0px",
+          "width": "100%",
+          "height": "48px",
+          "monitorSelection": { "type": "all" },
+          "dockToEdge": { "enabled": true, "edge": "top", "windowMargin": "0px" }
+        }
+      ]
+    },
+    {
+      "name": "calendar",
+      "htmlPath": "./calendar.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": false,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
+      "caching": { "defaultDuration": 604800, "rules": [{ "urlRegex": "\\.(css|js|json)$", "duration": 0 }] },
+      "privileges": { "shellCommands": [] },
+      "presets": [
+        {
+          "name": "default",
+          "anchor": "top_center",
+          "offsetX": "0px",
+          "offsetY": "46px",
+          "width": "300px",
+          "height": "290px",
+          "monitorSelection": { "type": "primary" }
+        }
+      ]
+    },
+    {
+      "name": "forecast",
+      "htmlPath": "./forecast.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": false,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
+      "caching": { "defaultDuration": 604800, "rules": [{ "urlRegex": "\\.(css|js|json)$", "duration": 0 }] },
+      "privileges": { "shellCommands": [] },
+      "presets": [
+        {
+          "name": "default",
+          "anchor": "top_center",
+          "offsetX": "0px",
+          "offsetY": "46px",
+          "width": "420px",
+          "height": "440px",
+          "monitorSelection": { "type": "primary" }
+        }
+      ]
+    }
+  ]
+}

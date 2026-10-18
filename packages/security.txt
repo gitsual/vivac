@@ -1,0 +1,4 @@
+# A second opinion beside Defender (on demand, no real-time conflict) and a
+# password manager, so secrets stay out of dotfiles as in the source.
+Malwarebytes.Malwarebytes
+KeePassXCTeam.KeePassXC

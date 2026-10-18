@@ -1,0 +1,7 @@
+# Everyday applications Windows does not already cover well: a PDF viewer, a
+# media player, an office suite and an archiver. The browser, the file
+# manager and the image viewer are Windows' own (Edge, Explorer, Photos).
+SumatraPDF.SumatraPDF
+VideoLAN.VLC
+TheDocumentFoundation.LibreOffice
+7zip.7zip

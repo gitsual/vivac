@@ -1,0 +1,288 @@
+# GlazeWM configuration, rendered by scripts/deploy.ps1 from
+# render/glazewm/config.yaml.in. Do not edit the deployed copy: it is
+# replaced on every deploy and every theme switch, and the replaced file is
+# kept under %LOCALAPPDATA%\vivac\backups.
+#
+# Theme: @THEME_TITLE@ (@THEME_ESSENCE@). Modifier: @SET_MOD@.
+
+general:
+  # The bar and vivac's resident host (bin/vivac-daemon.ps1, which keeps the
+  # help pane, power menu and theme picker one keypress away) start with the
+  # window manager and leave with it.
+  startup_commands:
+    - 'shell-exec zebar'
+    - 'shell-exec conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac-daemon.ps1'
+  shutdown_commands:
+    - 'shell-exec taskkill /IM zebar.exe /F'
+    - 'shell-exec --hide-window cmd.exe /c echo quit>\\.\pipe\@PIPE_NAME@'
+  config_reload_commands: []
+  focus_follows_cursor: false
+  toggle_workspace_on_refocus: false
+  cursor_jump:
+    enabled: true
+    trigger: 'monitor_focus'
+  hide_method: 'cloak'
+  show_all_in_taskbar: false
+
+# The same breathing room as the source desktop: 8 between windows, 15 to the
+# edge. The bar reserves its own strip at the top (dockToEdge in the bar's
+# zpack.json), so the top gap does not have to know the bar's height.
+gaps:
+  scale_with_dpi: true
+  inner_gap: '8px'
+  outer_gap:
+    top: '15px'
+    right: '15px'
+    bottom: '15px'
+    left: '15px'
+
+# Borders carry the palette, as they do under Hyprland: the accent on the
+# focused window, the inactive border on the rest, which also fade slightly.
+window_effects:
+  focused_window:
+    border:
+      enabled: true
+      color: '#@COLOR_ACCENT:lower@'
+    hide_title_bar:
+      enabled: false
+    corner_style:
+      enabled: true
+      style: 'rounded'
+    transparency:
+      enabled: false
+      opacity: '100%'
+  other_windows:
+    border:
+      enabled: true
+      color: '#@COLOR_BORDER_INACTIVE:lower@'
+    hide_title_bar:
+      enabled: false
+    corner_style:
+      enabled: true
+      style: 'rounded'
+    transparency:
+      enabled: true
+      opacity: '95%'
+
+window_behavior:
+  initial_state: 'tiling'
+  state_defaults:
+    floating:
+      centered: true
+      shown_on_top: false
+    fullscreen:
+      maximized: false
+      shown_on_top: false
+
+# Ten numbered workspaces, as in the source; the tenth is reached with 0.
+workspaces:
+  - name: '1'
+  - name: '2'
+  - name: '3'
+  - name: '4'
+  - name: '5'
+  - name: '6'
+  - name: '7'
+  - name: '8'
+  - name: '9'
+  - name: '10'
+
+window_rules:
+  - commands: ['ignore']
+    match:
+      # The bar is not a window to tile.
+      - window_process: { equals: 'zebar' }
+      # vivac's own surfaces (help, power menu, theme picker) place themselves.
+      - window_process: { equals: 'powershell' }
+        window_title: { regex: '^vivac' }
+      # GlazeWM names a process without its extension and stops at the first
+      # dot, so Flow.Launcher.exe is 'Flow'.
+      - window_process: { regex: '^Flow' }
+        window_class: { regex: 'Flow\.Launcher' }
+      - window_title: { regex: '[Pp]icture.in.[Pp]icture' }
+        window_class: { regex: 'Chrome_WidgetWin_1|MozillaDialogClass' }
+      - window_process: { equals: 'EXCEL' }
+        window_class: { not_regex: 'XLMAIN' }
+      - window_process: { equals: 'WINWORD' }
+        window_class: { not_regex: 'OpusApp' }
+      - window_process: { equals: 'POWERPNT' }
+        window_class: { not_regex: 'PPTFrameClass' }
+  # The first-run wizard is the only thing on screen while it runs.
+  - commands: ['set-floating --centered']
+    match:
+      - window_title: { equals: 'vivac-welcome' }
+  # Small dialogs read better floating than stretched across half a screen.
+  - commands: ['set-floating --centered']
+    match:
+      - window_process: { equals: 'SndVol' }
+      - window_process: { equals: 'Taskmgr' }
+
+binding_modes: []
+
+# vivac's own surfaces are asked for through the resident host's pipe, which
+# answers at once; when the host is not running, `||` starts the surface on
+# its own instead, which takes about two seconds.
+#
+# Every binding carries a `# @help:` line naming its pane and label; the help
+# pane is built from data/help-registry.tsv and a test refuses a binding
+# without a row there, or a row without a binding here.
+keybindings:
+  # @help: wm help.wm.terminal
+  - commands: ['shell-exec wt']
+    bindings: ['@SET_MOD@+enter']
+  # vivac's menu. With Win as the modifier the resident host's keyboard hook
+  # answers Win+R itself, before Windows or GlazeWM see it, so the binding is
+  # only rendered for Alt.
+@?set_mod=alt@  # @help: wm help.wm.menu
+@?set_mod=alt@  - commands: ['shell-exec --hide-window cmd.exe /c echo menu>\\.\pipe\@PIPE_NAME@ 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 menu']
+@?set_mod=alt@    bindings: ['@SET_MOD@+r']
+  # @help: wm help.wm.editor
+  - commands: ['shell-exec wt nvim']
+    bindings: ['@SET_MOD@+e']
+  # @help: wm help.wm.close
+  - commands: ['close']
+    bindings: ['@SET_MOD@+q']
+  # @help: wm help.wm.exit
+  - commands: ['wm-exit']
+    bindings: ['@SET_MOD@+m']
+  # @help: wm help.wm.floating
+  - commands: ['toggle-floating --centered']
+    bindings: ['@SET_MOD@+space']
+  # @help: wm help.wm.fullscreen
+  - commands: ['toggle-fullscreen']
+    bindings: ['@SET_MOD@+f']
+  # @help: wm help.wm.split
+  - commands: ['toggle-tiling-direction']
+    bindings: ['@SET_MOD@+j']
+  # @help: wm help.wm.lock
+  - commands: ['shell-exec rundll32.exe user32.dll,LockWorkStation']
+    bindings: ['@SET_MOD@+l']
+  # @help: wm help.wm.screenshot
+  - commands: ['shell-exec explorer.exe ms-screenclip:']
+    bindings: ['@SET_MOD@+shift+s']
+  # @help: wm help.wm.help
+  - commands: ['shell-exec --hide-window cmd.exe /c echo help>\\.\pipe\@PIPE_NAME@ 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 help']
+    bindings: ['@SET_MOD@+f1']
+  # @help: wm help.wm.power
+  - commands: ['shell-exec --hide-window cmd.exe /c echo power>\\.\pipe\@PIPE_NAME@ 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 power']
+    bindings: ['@SET_MOD@+shift+e']
+  # @help: wm help.wm.theme
+  - commands: ['shell-exec --hide-window cmd.exe /c echo theme>\\.\pipe\@PIPE_NAME@ 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 theme']
+    bindings: ['@SET_MOD@+shift+t']
+  # vivac's clipboard history. With Win as the modifier the resident host's
+  # keyboard hook answers Win+V itself, before Windows or GlazeWM see it, so
+  # the binding is only rendered for Alt.
+@?set_mod=alt@  # @help: wm help.wm.clipboard
+@?set_mod=alt@  - commands: ['shell-exec --hide-window cmd.exe /c echo clipboard>\\.\pipe\@PIPE_NAME@ 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 clipboard']
+@?set_mod=alt@    bindings: ['@SET_MOD@+v']
+  # @help: wm help.wm.reload
+  - commands: ['wm-reload-config']
+    bindings: ['@SET_MOD@+shift+r']
+
+  # @help: wm help.wm.focus_left
+  - commands: ['focus --direction left']
+    bindings: ['@SET_MOD@+left']
+  # @help: wm help.wm.focus_right
+  - commands: ['focus --direction right']
+    bindings: ['@SET_MOD@+right']
+  # @help: wm help.wm.focus_up
+  - commands: ['focus --direction up']
+    bindings: ['@SET_MOD@+up']
+  # @help: wm help.wm.focus_down
+  - commands: ['focus --direction down']
+    bindings: ['@SET_MOD@+down']
+  # @help: wm help.wm.move_left
+  - commands: ['move --direction left']
+    bindings: ['@SET_MOD@+shift+left']
+  # @help: wm help.wm.move_right
+  - commands: ['move --direction right']
+    bindings: ['@SET_MOD@+shift+right']
+  # @help: wm help.wm.move_up
+  - commands: ['move --direction up']
+    bindings: ['@SET_MOD@+shift+up']
+  # @help: wm help.wm.move_down
+  - commands: ['move --direction down']
+    bindings: ['@SET_MOD@+shift+down']
+  # @help: wm help.wm.shrink_w
+  - commands: ['resize --width -2%']
+    bindings: ['@SET_MOD@+control+left']
+  # @help: wm help.wm.grow_w
+  - commands: ['resize --width +2%']
+    bindings: ['@SET_MOD@+control+right']
+  # @help: wm help.wm.shrink_h
+  - commands: ['resize --height -2%']
+    bindings: ['@SET_MOD@+control+up']
+  # @help: wm help.wm.grow_h
+  - commands: ['resize --height +2%']
+    bindings: ['@SET_MOD@+control+down']
+
+  # @help: wm help.wm.ws_1
+  - commands: ['focus --workspace 1']
+    bindings: ['@SET_MOD@+1']
+  # @help: wm help.wm.ws_2
+  - commands: ['focus --workspace 2']
+    bindings: ['@SET_MOD@+2']
+  # @help: wm help.wm.ws_3
+  - commands: ['focus --workspace 3']
+    bindings: ['@SET_MOD@+3']
+  # @help: wm help.wm.ws_4
+  - commands: ['focus --workspace 4']
+    bindings: ['@SET_MOD@+4']
+  # @help: wm help.wm.ws_5
+  - commands: ['focus --workspace 5']
+    bindings: ['@SET_MOD@+5']
+  # @help: wm help.wm.ws_6
+  - commands: ['focus --workspace 6']
+    bindings: ['@SET_MOD@+6']
+  # @help: wm help.wm.ws_7
+  - commands: ['focus --workspace 7']
+    bindings: ['@SET_MOD@+7']
+  # @help: wm help.wm.ws_8
+  - commands: ['focus --workspace 8']
+    bindings: ['@SET_MOD@+8']
+  # @help: wm help.wm.ws_9
+  - commands: ['focus --workspace 9']
+    bindings: ['@SET_MOD@+9']
+  # @help: wm help.wm.ws_10
+  - commands: ['focus --workspace 10']
+    bindings: ['@SET_MOD@+0']
+  # Carrying a window follows it, as movetoworkspace does in the source.
+  # @help: wm help.wm.ws_move_1
+  - commands: ['move --workspace 1', 'focus --workspace 1']
+    bindings: ['@SET_MOD@+shift+1']
+  # @help: wm help.wm.ws_move_2
+  - commands: ['move --workspace 2', 'focus --workspace 2']
+    bindings: ['@SET_MOD@+shift+2']
+  # @help: wm help.wm.ws_move_3
+  - commands: ['move --workspace 3', 'focus --workspace 3']
+    bindings: ['@SET_MOD@+shift+3']
+  # @help: wm help.wm.ws_move_4
+  - commands: ['move --workspace 4', 'focus --workspace 4']
+    bindings: ['@SET_MOD@+shift+4']
+  # @help: wm help.wm.ws_move_5
+  - commands: ['move --workspace 5', 'focus --workspace 5']
+    bindings: ['@SET_MOD@+shift+5']
+  # @help: wm help.wm.ws_move_6
+  - commands: ['move --workspace 6', 'focus --workspace 6']
+    bindings: ['@SET_MOD@+shift+6']
+  # @help: wm help.wm.ws_move_7
+  - commands: ['move --workspace 7', 'focus --workspace 7']
+    bindings: ['@SET_MOD@+shift+7']
+  # @help: wm help.wm.ws_move_8
+  - commands: ['move --workspace 8', 'focus --workspace 8']
+    bindings: ['@SET_MOD@+shift+8']
+  # @help: wm help.wm.ws_move_9
+  - commands: ['move --workspace 9', 'focus --workspace 9']
+    bindings: ['@SET_MOD@+shift+9']
+  # @help: wm help.wm.ws_move_10
+  - commands: ['move --workspace 10', 'focus --workspace 10']
+    bindings: ['@SET_MOD@+shift+0']
+  # Walk the workspaces that exist, wrapping at the ends. Comma and period sit
+  # in the same place on every Latin layout, where brackets do not (on a
+  # Spanish keyboard they need AltGr).
+  # @help: wm help.wm.ws_next
+  - commands: ['focus --next-active-workspace']
+    bindings: ['@SET_MOD@+oem_period']
+  # @help: wm help.wm.ws_prev
+  - commands: ['focus --prev-active-workspace']
+    bindings: ['@SET_MOD@+oem_comma']

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The shared composition of every wallpaper in the catalogue: an original
+     geometric night landscape, drawn once and dressed in whichever palette the
+     theme carries. It is the shipped Bad Romance piece turned into tokens, so a
+     new theme inherits the composition instead of inventing a worse one.
+     The closing </svg> is deliberately absent: an ornament fragment is
+     appended first, and scripts/make-wallpaper.sh closes the document. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="3840" height="2160" viewBox="0 0 3840 2160">
+<title>@THEME_TITLE@ — @THEME_ESSENCE@</title>
+<desc>Original geometric night landscape rendered in the @THEME_TITLE@ palette.</desc>
+<defs>
+ <linearGradient id="sky" x2="1" y2="1"><stop stop-color="#@COLOR_BG:darker@"/><stop offset=".55" stop-color="#@COLOR_BG@"/><stop offset="1" stop-color="#@COLOR_SURFACE_ALT@"/></linearGradient>
+ <radialGradient id="halo"><stop stop-color="#@COLOR_ACCENT@" stop-opacity=".22"/><stop offset="1" stop-color="#@COLOR_ACCENT@" stop-opacity="0"/></radialGradient>
+ <linearGradient id="moon" x2=".7" y2="1"><stop stop-color="#@COLOR_FG@"/><stop offset="1" stop-color="#@COLOR_ACCENT@"/></linearGradient>
+ <linearGradient id="ridge" x2=".5" y2="1"><stop stop-color="#@COLOR_SURFACE_ALT:dim@"/><stop offset="1" stop-color="#@COLOR_SURFACE:dark@"/></linearGradient>
+ <linearGradient id="front" x2="0" y2="1"><stop stop-color="#@COLOR_SURFACE:dark@"/><stop offset="1" stop-color="#@COLOR_BG:darker@"/></linearGradient>
+</defs>
+<path fill="url(#sky)" d="M0 0h3840v2160H0z"/>
+<ellipse cx="2640" cy="900" rx="1400" ry="1100" fill="url(#halo)"/>
+<g fill="#@COLOR_FG@" opacity=".45"><circle cx="1040" cy="420" r="2"/><circle cx="1950" cy="310" r="2.5"/><circle cx="3170" cy="420" r="2"/><circle cx="3460" cy="810" r="3"/><circle cx="1590" cy="740" r="2"/></g>
+<circle cx="2640" cy="860" r="290" fill="none" stroke="#@COLOR_FG@" stroke-opacity=".12" stroke-width="2"/>
+<circle cx="2640" cy="860" r="246" fill="url(#moon)"/>
+<path d="M0 1610 760 1270 1390 1570 2370 820 3180 1510 3840 1250V2160H0Z" fill="url(#ridge)"/>
+<path d="m2370 820 810 690-621-263-189 109Z" fill="#@COLOR_ACCENT@" opacity=".22"/>
+<path d="m1390 1570 980-750-416 666Z" fill="#@COLOR_BG@" opacity=".5"/>
+<path d="M0 1770 620 1560 1230 1800 2000 1450 2840 1780 3840 1510V2160H0Z" fill="#@COLOR_SURFACE:dim@"/>
+<path d="M0 1980 930 1780 1670 2000 2710 1640 3840 1920V2160H0Z" fill="url(#front)"/>
+<path d="m1670 2000 1040-360 1130 280" fill="none" stroke="#@COLOR_MUTED@" stroke-opacity=".25" stroke-width="2"/>
+<g fill="#@COLOR_FG@" opacity=".7" font-family="sans-serif"><text x="180" y="1930" font-size="34" letter-spacing="12">@THEME_TITLE:upper@</text><text x="183" y="1974" font-size="15" letter-spacing="6" opacity=".55">@THEME_ESSENCE:upper@</text></g>

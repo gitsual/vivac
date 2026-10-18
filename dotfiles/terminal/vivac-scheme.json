@@ -1,0 +1,23 @@
+{
+  "name": "vivac",
+  "background": "#18131B",
+  "foreground": "#E8D5AB",
+  "cursorColor": "#E1777D",
+  "selectionBackground": "#5A4855",
+  "black": "#100D12",
+  "red": "#BD6161",
+  "green": "#55A185",
+  "yellow": "#979367",
+  "blue": "#6CA4B1",
+  "purple": "#E1777D",
+  "cyan": "#547F8A",
+  "white": "#C0AD95",
+  "brightBlack": "#7C606E",
+  "brightRed": "#BD6161",
+  "brightGreen": "#55A185",
+  "brightYellow": "#E1777D",
+  "brightBlue": "#6CA4B1",
+  "brightPurple": "#E1777D",
+  "brightCyan": "#6CA4B1",
+  "brightWhite": "#E8D5AB"
+}

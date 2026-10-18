@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The mark alone, square, for anywhere the wordmark does not fit: the same
+     coin the banner carries, with nothing behind it. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="vivac">
+  <defs>
+    <radialGradient id="halo"><stop stop-color="#@COLOR_ACCENT@" stop-opacity=".30"/><stop offset="1" stop-color="#@COLOR_ACCENT@" stop-opacity="0"/></radialGradient>
+    <linearGradient id="moon" x2=".7" y2="1"><stop stop-color="#@COLOR_FG@"/><stop offset="1" stop-color="#@COLOR_ACCENT@"/></linearGradient>
+    <linearGradient id="sky" x2="1" y2="1"><stop stop-color="#@COLOR_BG:darker@"/><stop offset=".55" stop-color="#@COLOR_BG@"/><stop offset="1" stop-color="#@COLOR_SURFACE_ALT@"/></linearGradient>
+    <linearGradient id="ridge" x2=".5" y2="1"><stop stop-color="#@COLOR_SURFACE_ALT:dim@"/><stop offset="1" stop-color="#@COLOR_SURFACE:dark@"/></linearGradient>
+    <linearGradient id="front" x2="0" y2="1"><stop stop-color="#@COLOR_SURFACE:dark@"/><stop offset="1" stop-color="#@COLOR_BG:darker@"/></linearGradient>
+    <clipPath id="coin"><circle cx="128" cy="128" r="104"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#coin)">
+    <circle cx="128" cy="128" r="104" fill="url(#sky)"/>
+    <ellipse cx="166" cy="98" rx="94" ry="79" fill="url(#halo)"/>
+    <g fill="#@COLOR_FG@" opacity=".45"><circle cx="72" cy="70" r="2.2"/><circle cx="105" cy="49" r="2.5"/><circle cx="209" cy="78" r="2.2"/><circle cx="56" cy="116" r="1.8"/></g>
+    <circle cx="166" cy="98" r="33" fill="url(#moon)"/>
+    <path d="M24 174 72 143 110 169 166 113 209 161 232 146v86H24Z" fill="url(#ridge)"/>
+    <path d="m166 113 43 48-33-14-10 6z" fill="#@COLOR_ACCENT@" opacity=".25"/>
+    <path d="M24 204 80 184 133 209 191 176 232 199v33H24Z" fill="url(#front)"/>
+  </g>
+  <circle cx="128" cy="128" r="104" fill="none" stroke="#@COLOR_ACCENT@" stroke-width="5"/>
+</svg>

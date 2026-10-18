@@ -1,0 +1,10 @@
+{
+  "command": [
+    "C:\\Windows\\System32\\cmd.exe",
+    "/c",
+    "echo",
+    "portable task executed"
+  ],
+  "working_directory": "~",
+  "environment": {}
+}

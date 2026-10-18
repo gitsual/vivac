@@ -1,0 +1,174 @@
+# The colours a theme may use, and nowhere else to get one.
+#
+# Every hex here is lifted from the author's own colour corpus (Paleta Sanz +
+# Deep Winter, and the numbered sub-palette packs). The rule it enforces is
+# the corpus's own: a colour that is not in the corpus does not enter, because
+# a colour has to carry memory or function — a decorative colour with no cause
+# is slop. tests/cases/test_theme_catalogue.sh rejects any theme value that is
+# not a row below.
+#
+# hex	pack	role
+0E1513	noche-fria	deep
+0B100F	noche-fria	deep
+131313	noche-fria	deep
+0A0A0F	noche-fria	deep
+14201D	noche-fria	deep
+1C2B27	noche-fria	raised
+253850	noche-fria	base
+302541	noche-fria	base
+283536	noche-fria	base
+2D1F2D	noche-fria	base
+241B0E	noche-fria	deep
+2A1520	noche-fria	deep
+302B21	neutros	base
+18131B	noche-fria	deep
+# 2. Pack Paz Zen — neutros claros, cuerpo de texto
+B9B9B9	paz-zen	text
+C9C9C8	paz-zen	text
+D9D9D8	paz-zen	text
+E9E9E7	paz-zen	text
+# 3. Pack Tierras Cálidas
+72342E	tierras-calidas	surface
+7D3931	tierras-calidas	surface
+873F34	tierras-calidas	surface
+924437	tierras-calidas	surface
+# 4. Pack Atardecer Romántico
+B56067	atardecer-romantico	accent
+C4686E	atardecer-romantico	accent
+D26F76	atardecer-romantico	accent
+E1777D	atardecer-romantico	accent
+# 5. Pack Otoño Dorado
+C4A982	otono-dorado	accent
+D2B68F	otono-dorado	accent
+DFC39D	otono-dorado	accent
+F2D2BC	otono-dorado	accent
+# 6. Pack Mar Tranquilo
+194A60	mar-tranquilo	surface
+357393	mar-tranquilo	surface
+519BC5	mar-tranquilo	accent
+6DC4F8	mar-tranquilo	accent
+# 7. Pack Bosque Encantado
+AFC59E	bosque-encantado	accent
+BAD0AA	bosque-encantado	accent
+C4DBB5	bosque-encantado	accent
+CFE6C1	bosque-encantado	accent
+# 9. Pack Aurora Boreal
+434565	aurora-boreal	surface
+4B4E72	aurora-boreal	surface
+535680	aurora-boreal	surface
+5B5F8D	aurora-boreal	surface
+# 11. Pack Noche Estrellada
+26513B	noche-estrellada	surface
+286041	noche-estrellada	surface
+2B6F46	noche-estrellada	surface
+2D7E4C	noche-estrellada	surface
+# 12. Pack Desierto Místico
+5E4F1E	desierto-mistico	surface
+6E5926	desierto-mistico	surface
+7D622F	desierto-mistico	surface
+8D6C37	desierto-mistico	surface
+# 15. Pack Sueños Pastel
+D5BC70	suenos-pastel	accent
+E3D6A3	suenos-pastel	accent
+EBCCA9	suenos-pastel	accent
+F2D2BC	suenos-pastel	accent
+# 17. Pack Oasis Tropical
+80CFBB	oasis-tropical	accent
+92DA7D	oasis-tropical	accent
+B3E56B	oasis-tropical	accent
+C1E696	oasis-tropical	accent
+# 18. Pack Crepúsculo en el Mar
+5AA9D6	crepusculo-en-el-mar	accent
+64B6E7	crepusculo-en-el-mar	accent
+6CA4B1	crepusculo-en-el-mar	accent
+77B0BD	crepusculo-en-el-mar	accent
+# 19. Pack Refugio Forestal
+134D10	refugio-forestal	surface
+205D18	refugio-forestal	surface
+2E6E21	refugio-forestal	surface
+3B7E29	refugio-forestal	surface
+# 20. Pack Calidez Rústica
+695F4B	calidez-rustica	surface
+756652	calidez-rustica	surface
+816D58	calidez-rustica	surface
+8D745F	calidez-rustica	surface
+# 24. Pack Retro Sofisticado
+43363F	retro-sofisticado	surface
+56444F	retro-sofisticado	surface
+69525E	retro-sofisticado	surface
+7C606E	retro-sofisticado	surface
+# Oro apagado y metales — el metal es apagado, nunca cromo brillante
+AAA875	oro-apagado	accent
+E8D5AB	oro-apagado	text
+DECD77	oro-apagado	accent
+E8C66A	oro-apagado	accent
+937E2F	oro-apagado	accent
+A8904A	oro-apagado	accent
+# Tierra y naturaleza
+174B45	tierra	surface
+55A185	tierra	accent
+5FB3A1	tierra	accent
+8A9A93	tierra	text
+D9E2DD	tierra	text
+# Fuego y especias — presencia, deseo, burdeos memoria
+5B1339	fuego	accent
+3D0115	fuego	deep
+681038	fuego	accent
+731F51	fuego	accent
+63092F	fuego	accent
+# Neutros funcionales y apoyos
+979367	neutros	muted
+A19D6E	neutros	muted
+5A4855	neutros	surface
+C0AD95	neutros	text
+BD6161	neutros	urgent
+D4D4D4	neutros	text
+1E1E1E	neutros	deep
+#
+# --- Ampliación: el resto de los packs numerados del corpus ---
+# 1. Pack Amanecer Urbano
+3C372B	amanecer-urbano	surface
+484236	amanecer-urbano	surface
+544E40	amanecer-urbano	surface
+# 8. Pack Vino y Rosas
+3C1331	vino-y-rosas	deep
+521C44	vino-y-rosas	surface
+692657	vino-y-rosas	surface
+7F2F6A	vino-y-rosas	accent
+# 10. Pack Cítricos Vibrantes
+5DAC04	citricos-vibrantes	accent
+75BF18	citricos-vibrantes	accent
+8DD22C	citricos-vibrantes	accent
+A5E540	citricos-vibrantes	accent
+# 13. Pack Retro Elegante
+534134	retro-elegante	surface
+634E3F	retro-elegante	surface
+745B4A	retro-elegante	surface
+B79C74	retro-elegante	accent
+# 14. Pack Primavera Suave
+B4B27C	primavera-suave	accent
+# 21. Pack Glamour Nocturno
+4D011A	glamour-nocturno	deep
+5C001F	glamour-nocturno	surface
+6C0024	glamour-nocturno	surface
+# 22. Pack Aurora Pastel
+E1997C	aurora-pastel	accent
+E7AC91	aurora-pastel	accent
+ECBFA7	aurora-pastel	accent
+# 23. Pack Tierra y Cielo
+CEDC8C	tierra-y-cielo	accent
+D1D77E	tierra-y-cielo	accent
+D3D171	tierra-y-cielo	accent
+D6CC63	tierra-y-cielo	accent
+# Apoyos de superficie del corpus extendido
+5A524A	neutros	surface
+43363F	retro-sofisticado	surface
+695F4B	calidez-rustica	surface
+#
+# --- Verdigrís Nocturno: tokens canónicos del eje 03-LA-TORRE ---
+2C3F39	verdigris	surface
+6E93C8	verdigris	accent
+9A7BC8	verdigris	accent
+B06A8F	verdigris	accent
+C5654E	verdigris	urgent
+D79A57	verdigris	accent

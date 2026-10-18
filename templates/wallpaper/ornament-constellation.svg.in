@@ -1,0 +1,13 @@
+  <!-- Constelación — the graph made visible: nodes and the edges between them. -->
+  <g stroke="#@COLOR_ACCENT@" stroke-width="2" opacity="0.38" fill="none">
+    <path d="M420 430 L 760 300 L 1080 520 L 1440 380 L 1180 760 L 760 300"/>
+    <path d="M1080 520 L 1180 760 L 620 880 L 420 430"/>
+    <path d="M2980 1180 L 3320 1040 L 3560 1260 L 3180 1420 Z"/>
+  </g>
+  <g fill="#@COLOR_ACCENT@" opacity="0.72">
+    <circle cx="420" cy="430" r="9"/><circle cx="760" cy="300" r="13"/>
+    <circle cx="1080" cy="520" r="9"/><circle cx="1440" cy="380" r="11"/>
+    <circle cx="1180" cy="760" r="9"/><circle cx="620" cy="880" r="12"/>
+    <circle cx="2980" cy="1180" r="9"/><circle cx="3320" cy="1040" r="11"/>
+    <circle cx="3560" cy="1260" r="9"/><circle cx="3180" cy="1420" r="10"/>
+  </g>
