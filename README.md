@@ -64,7 +64,7 @@ restores what was there before, the wallpaper and accent colour included.
   is well, in the accent or the urgent colour with a few words when
   something needs a look; clicking it opens a vivac surface with Defender's
   state, a quick scan, a signature update and the history. Scans report
-  back with a vivac notification. `scriptspply-system.ps1 -SecurityQuiet`
+  back with a vivac notification. `scripts\apply-system.ps1 -SecurityQuiet`
   (elevated) then hides Windows Security's own tray icon and non-critical
   notifications; threat alerts stay Windows' own.
 
