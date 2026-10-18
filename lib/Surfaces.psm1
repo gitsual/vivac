@@ -1940,77 +1940,185 @@ function Get-LockAccounts {
 }
 
 # The greeter (-Greeter): what the lock becomes at sign-in, after Windows has
-# signed in by itself -- the source's ReGreet rather than its hyprlock: the
-# frame of system/etc/greetd/regreet.css (the surface at 92%, a two-pixel
-# inactive border, twelve-pixel corners, buttons in the alternate surface
-# that take the accent), a greeting, the account, the field, and restart and
-# shut down, each asking for a second press.
+# signed in by itself. It wears the look of the bar's hover popups
+# (templates\zebar\vivac\styles.css.in): panels in the base colour with
+# twelve-pixel corners and the accent rule under them, the heading in the
+# accent, facts in a strip of the surface colour, key caps at the foot. The
+# theme's wallpaper is behind it, veiled in the base colour, and the account
+# has its Windows picture and full name. Restart and shut down ask for a
+# second press.
 function Get-GreeterXaml($p) {
-    $user = ConvertTo-XmlText $env:USERNAME
+    $name = $env:USERNAME
+    try { $full = [string](Get-LocalUser -Name $env:USERNAME -ErrorAction Stop).FullName; if ($full) { $name = $full } } catch { }
+    $account = [string](@(Get-LockAccounts | ForEach-Object { $_[0] } | Where-Object { $_ -match '@' }) + '')[0]
+    $hour = (Get-Date).Hour
+    $greeting = T $(if ($hour -ge 6 -and $hour -lt 14) { 'greeter.morning' } elseif ($hour -ge 14 -and $hour -lt 21) { 'greeter.afternoon' } else { 'greeter.evening' })
+    $theme = [string]$settings['theme']
+    try { $theme = [string](Read-VivacTheme $settings['theme']).Title } catch { }
+    if (-not $theme) { $theme = [string]$settings['theme'] }
+    $online = [Net.NetworkInformation.NetworkInterface]::GetIsNetworkAvailable()
+    $net = T $(if ($online) { 'greeter.online' } else { 'greeter.offline' })
+    $netColor = $(if ($online) { $p['COLOR_INFO'] } else { $p['COLOR_MUTED'] })
+    $accountVis = $(if ($account) { 'Visible' } else { 'Collapsed' })
+    $x = { param($s) ConvertTo-XmlText ([string]$s) }
+    $fact = { param($label, $value, $col) "<StackPanel Grid.Column=`"$col`" HorizontalAlignment=`"Center`"><TextBlock HorizontalAlignment=`"Center`" FontSize=`"11`" Foreground=`"#$($p['COLOR_FG_DIM'])`" Text=`"$(& $x $label)`"/><TextBlock HorizontalAlignment=`"Center`" FontSize=`"12`" Margin=`"0,2,0,0`" Text=`"$(& $x $value)`" TextTrimming=`"CharacterEllipsis`"/></StackPanel>" }
     @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="vivac - lock" WindowStyle="None" ResizeMode="NoResize" Topmost="True" ShowInTaskbar="False"
         Background="#$($p['COLOR_BG'])"
         FontFamily="JetBrainsMono Nerd Font, Cascadia Mono, Consolas" Foreground="#$($p['COLOR_FG'])">
-  <Window.Resources>
-    <Style x:Key="Act" TargetType="Button">
-      <Setter Property="Foreground" Value="#$($p['COLOR_FG'])"/>
-      <Setter Property="Background" Value="#$($p['COLOR_SURFACE_ALT'])"/>
-      <Setter Property="BorderBrush" Value="#$($p['COLOR_MUTED'])"/>
-      <Setter Property="Cursor" Value="Hand"/>
-      <Setter Property="Focusable" Value="False"/>
-      <Setter Property="Template">
-        <Setter.Value>
-          <ControlTemplate TargetType="Button">
-            <Border x:Name="B" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="1" CornerRadius="8" Padding="12,8">
-              <ContentPresenter HorizontalAlignment="Center"/>
-            </Border>
-            <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="B" Property="Background" Value="#$($p['COLOR_ACCENT'])"/>
-                <Setter Property="Foreground" Value="#$($p['COLOR_BG'])"/>
-              </Trigger>
-            </ControlTemplate.Triggers>
-          </ControlTemplate>
-        </Setter.Value>
-      </Setter>
-    </Style>
-  </Window.Resources>
   <Grid>
-    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,64,0,0">
-      <TextBlock x:Name="Clock" HorizontalAlignment="Center" FontSize="40"/>
-      <TextBlock x:Name="Day" HorizontalAlignment="Center" FontSize="15" Foreground="#$($p['COLOR_FG_DIM'])" Margin="0,4,0,0"/>
-    </StackPanel>
-    <Border HorizontalAlignment="Center" VerticalAlignment="Center" Width="440" Padding="24" CornerRadius="12"
-            BorderThickness="2" BorderBrush="#$($p['COLOR_BORDER_INACTIVE'])" Background="#EB$($p['COLOR_SURFACE'])">
-      <StackPanel>
-        <TextBlock HorizontalAlignment="Center" FontSize="24" FontWeight="Bold" Foreground="#$($p['COLOR_ACCENT'])"
-                   Text="$(ConvertTo-XmlText (T 'greeter.welcome'))"/>
-        <TextBlock HorizontalAlignment="Center" FontSize="15" Margin="0,6,0,20" Foreground="#$($p['COLOR_FG_DIM'])" Text="$user"/>
-        <Border x:Name="Field" Height="44" CornerRadius="8" BorderThickness="1"
-                BorderBrush="#$($p['COLOR_ACCENT'])" Background="#$($p['COLOR_SURFACE_ALT'])">
-          <Grid>
-            <TextBlock x:Name="Placeholder" HorizontalAlignment="Center" VerticalAlignment="Center" FontStyle="Italic"
-                       Foreground="#$($p['COLOR_FG_DIM'])" Text="$(ConvertTo-XmlText (T 'lock.placeholder'))"/>
-            <PasswordBox x:Name="Secret" Background="Transparent" BorderThickness="0" Foreground="#$($p['COLOR_FG'])"
-                         CaretBrush="#$($p['COLOR_ACCENT'])" PasswordChar="&#x25CF;" FontSize="16"
-                         HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="12,0"/>
-          </Grid>
-        </Border>
-        <TextBlock x:Name="Status" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,14,0,18"
-                   Foreground="#$($p['COLOR_MUTED'])" Text="$(ConvertTo-XmlText (T 'lock.hint'))"/>
-        <Grid>
-          <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
-          <Button x:Name="Restart" Grid.Column="0" Style="{StaticResource Act}" Content="$(ConvertTo-XmlText (T 'greeter.restart'))"/>
-          <Button x:Name="Shutdown" Grid.Column="2" Style="{StaticResource Act}" Content="$(ConvertTo-XmlText (T 'greeter.shutdown'))"/>
-        </Grid>
-      </StackPanel>
+    <Grid.Resources>
+$(Get-KitResourcesXaml $p)
+    </Grid.Resources>
+    <Image x:Name="Backdrop" Stretch="UniformToFill"/>
+    <Rectangle>
+      <Rectangle.Fill>
+        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+          <GradientStop Offset="0" Color="#8C$($p['COLOR_BG'])"/>
+          <GradientStop Offset="0.5" Color="#B3$($p['COLOR_BG'])"/>
+          <GradientStop Offset="1" Color="#E6$($p['COLOR_BG'])"/>
+        </LinearGradientBrush>
+      </Rectangle.Fill>
+    </Rectangle>
+
+    <!-- The bar's strip, as the desktop will have it. -->
+    <Border VerticalAlignment="Top" Margin="16,12,16,0" Height="38" CornerRadius="12" Padding="16,0"
+            Background="#D9$($p['COLOR_BG'])" BorderThickness="0,0,0,3" BorderBrush="#$($p['COLOR_ACCENT'])">
+      <Grid>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock Text="vivac" FontWeight="Bold" Foreground="#$($p['COLOR_ACCENT'])"/>
+          <TextBlock Text="  $(& $x $theme)" Foreground="#$($p['COLOR_FG_DIM'])"/>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+          <TextBlock Text="&#xE774;" FontFamily="$script:KitIconFont" FontSize="13" Foreground="#$netColor" VerticalAlignment="Center" Margin="0,0,8,0"/>
+          <TextBlock Text="$(& $x $env:COMPUTERNAME)" Foreground="#$($p['COLOR_FG_DIM'])" VerticalAlignment="Center"/>
+        </StackPanel>
+      </Grid>
     </Border>
+
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,24">
+      <TextBlock x:Name="Clock" HorizontalAlignment="Center" FontSize="104" FontWeight="Light"/>
+      <TextBlock x:Name="Day" HorizontalAlignment="Center" FontSize="17" Foreground="#$($p['COLOR_FG_DIM'])" Margin="0,0,0,34"/>
+
+      <Border x:Name="Card" Width="420" CornerRadius="16" Padding="28,26,28,22" Opacity="0"
+              Background="#F0$($p['COLOR_BG'])" BorderThickness="0,0,0,3" BorderBrush="#$($p['COLOR_ACCENT'])">
+        <Border.Effect><DropShadowEffect BlurRadius="48" ShadowDepth="10" Opacity="0.45" Color="#000000"/></Border.Effect>
+        <Border.RenderTransform><TranslateTransform x:Name="CardShift" Y="18"/></Border.RenderTransform>
+        <Border.Triggers>
+          <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+            <BeginStoryboard><Storyboard>
+              <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.45"/>
+              <DoubleAnimation Storyboard.TargetName="CardShift" Storyboard.TargetProperty="Y" To="0" Duration="0:0:0.45">
+                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+              </DoubleAnimation>
+            </Storyboard></BeginStoryboard>
+          </EventTrigger>
+        </Border.Triggers>
+        <StackPanel>
+          <Grid Width="92" Height="92" HorizontalAlignment="Center">
+            <Ellipse Fill="#$($p['COLOR_ACCENT'])"/>
+            <TextBlock Text="$(& $x $name.Substring(0, 1).ToUpper())" FontSize="38" FontWeight="Bold" Foreground="#$($p['COLOR_BG'])"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Ellipse x:Name="Avatar" Margin="4"/>
+          </Grid>
+          <TextBlock HorizontalAlignment="Center" Margin="0,16,0,0" FontSize="13" FontWeight="Bold" Foreground="#$($p['COLOR_ACCENT'])" Text="$(& $x $greeting)"/>
+          <TextBlock HorizontalAlignment="Center" Margin="0,2,0,0" FontSize="22" FontWeight="SemiBold" Text="$(& $x $name)"/>
+          <TextBlock HorizontalAlignment="Center" Margin="0,2,0,0" FontSize="12" Foreground="#$($p['COLOR_MUTED'])" Text="$(& $x $account)" Visibility="$accountVis"/>
+
+          <Border x:Name="Field" Height="48" CornerRadius="24" Margin="0,22,0,0" BorderThickness="2"
+                  BorderBrush="#$($p['COLOR_ACCENT'])" Background="#$($p['COLOR_SURFACE'])">
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition/><ColumnDefinition Width="46"/></Grid.ColumnDefinitions>
+              <TextBlock Text="&#xE72E;" FontFamily="$script:KitIconFont" FontSize="15" Foreground="#$($p['COLOR_FG_DIM'])"
+                         HorizontalAlignment="Right" VerticalAlignment="Center"/>
+              <TextBlock x:Name="Placeholder" Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" FontStyle="Italic"
+                         Foreground="#$($p['COLOR_FG_DIM'])" Text="$(& $x (T 'lock.placeholder'))"/>
+              <PasswordBox x:Name="Secret" Grid.Column="1" Margin="6,0,0,0" Background="Transparent" BorderThickness="0"
+                           Foreground="#$($p['COLOR_FG'])" CaretBrush="#$($p['COLOR_ACCENT'])" PasswordChar="&#x25CF;" FontSize="16"
+                           VerticalContentAlignment="Center"/>
+              <Button x:Name="Go" Grid.Column="2" Width="36" Height="36" Focusable="False" Cursor="Hand" HorizontalAlignment="Left">
+                <Button.Template><ControlTemplate TargetType="Button">
+                  <Grid x:Name="G">
+                    <Ellipse Fill="#$($p['COLOR_ACCENT'])"/>
+                    <TextBlock Text="&#xE72A;" FontFamily="$script:KitIconFont" FontSize="14" Foreground="#$($p['COLOR_BG'])"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Grid>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="G" Property="Opacity" Value="0.85"/></Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate></Button.Template>
+              </Button>
+            </Grid>
+          </Border>
+          <TextBlock x:Name="Caps" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,10,0,0" FontSize="12" Foreground="#$($p['COLOR_ACCENT'])">
+            <Run FontFamily="Segoe UI Symbol" Text="&#x21EA;"/><Run Text=" $(& $x (T 'greeter.caps'))"/>
+          </TextBlock>
+          <TextBlock x:Name="Status" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,10,0,0"
+                     MinHeight="16" FontSize="12" Foreground="#$($p['COLOR_MUTED'])"/>
+
+          <Border Margin="0,14,0,0" CornerRadius="10" Padding="6,8" Background="#B3$($p['COLOR_SURFACE'])">
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+              $(& $fact (T 'greeter.theme') $theme 0)
+              $(& $fact (T 'greeter.host') $env:COMPUTERNAME 1)
+              $(& $fact (T 'greeter.network') $net 2)
+            </Grid>
+          </Border>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <Grid VerticalAlignment="Bottom" Margin="28,0,28,24">
+      <Border HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="10" Padding="12,8" Background="#D9$($p['COLOR_BG'])">
+        $(Get-KitHintsXaml $p @(@('Intro', (T 'greeter.hint_enter')), @('Esc', (T 'greeter.hint_clear'))))
+      </Border>
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <Button x:Name="Restart" Style="{StaticResource KitGhost}" Focusable="False" Margin="0,0,10,0">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE777;" FontFamily="$script:KitIconFont" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBlock x:Name="RestartText" Text="$(& $x (T 'greeter.restart'))"/>
+          </StackPanel>
+        </Button>
+        <Button x:Name="Shutdown" Style="{StaticResource KitGhost}" Focusable="False">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE7E8;" FontFamily="$script:KitIconFont" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBlock x:Name="ShutdownText" Text="$(& $x (T 'greeter.shutdown'))"/>
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
   </Grid>
 </Window>
 "@
+}
+
+# A picture for the greeter (the wallpaper, the account's), decoded at the
+# width it is shown at; nothing when it cannot be read.
+function New-LockPicture([string]$Path, [int]$Width) {
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $null }
+    try {
+        $b = New-Object Windows.Media.Imaging.BitmapImage
+        $b.BeginInit()
+        $b.UriSource = New-Object Uri($Path)
+        $b.DecodePixelWidth = $Width
+        $b.CacheOption = 'OnLoad'
+        $b.EndInit()
+        $b.Freeze()
+        $b
+    } catch { $null }
+}
+
+# The picture Windows shows for this account on its own sign-in screen.
+function Get-AccountPicturePath {
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $k = Get-ItemProperty -LiteralPath "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\$sid" -ErrorAction SilentlyContinue
+    if (-not $k) { return $null }
+    foreach ($n in 'Image448', 'Image240', 'Image192') {
+        if ($k.PSObject.Properties[$n] -and (Test-Path -LiteralPath $k.$n)) { return [string]$k.$n }
+    }
+    $null
 }
 
 function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
@@ -2050,13 +2158,49 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
     $primary = [Windows.Markup.XamlReader]::Parse($primaryXaml)
     $clock = $primary.FindName('Clock'); $secret = $primary.FindName('Secret')
     $field = $primary.FindName('Field'); $status = $primary.FindName('Status'); $placeholder = $primary.FindName('Placeholder')
-    $day = $primary.FindName('Day')
+    $day = $primary.FindName('Day'); $caps = $primary.FindName('Caps'); $shift = $primary.FindName('CardShift')
     $showTime = {
         $clock.Text = (Get-Date).ToString('HH:mm')
-        if ($day) { $day.Text = (Get-Date).ToString('dddd, d MMMM') }
+        if ($day) { $d = (Get-Date).ToString('dddd, d MMMM'); $day.Text = $d.Substring(0, 1).ToUpper() + $d.Substring(1) }
+        if ($caps) { $caps.Visibility = $(if ([Windows.Input.Keyboard]::IsKeyToggled('CapsLock')) { 'Visible' } else { 'Collapsed' }) }
     }
     & $showTime
-    if ($NoShow) { return $primary }
+    # The greeter's pictures: the theme's wallpaper behind everything, the
+    # account's own picture in its circle.
+    $backdrop = $null
+    if ($Greeter) {
+        $wall = $null
+        try { if (Get-Command Get-VivacWallpaper -ErrorAction SilentlyContinue) { $wall = Get-VivacWallpaper -Theme (Read-VivacTheme $settings['theme']) } } catch { }
+        $backdrop = New-LockPicture $wall 1920
+        if ($backdrop) { $primary.FindName('Backdrop').Source = $backdrop }
+        $face = New-LockPicture (Get-AccountPicturePath) 192
+        # Windows' own placeholder (a grey figure on grey) says less than the
+        # initial in the accent: any picture without colour is left out.
+        if ($face) {
+            $px = New-Object Windows.Media.Imaging.FormatConvertedBitmap($face, [Windows.Media.PixelFormats]::Bgra32, $null, 0)
+            $bytes = New-Object byte[] ($px.PixelWidth * $px.PixelHeight * 4)
+            $px.CopyPixels($bytes, $px.PixelWidth * 4, 0)
+            $spread = 0; $n = 0
+            for ($i = 0; $i -lt $bytes.Length; $i += 64) {
+                $hi = [Math]::Max($bytes[$i], [Math]::Max($bytes[$i + 1], $bytes[$i + 2]))
+                $lo = [Math]::Min($bytes[$i], [Math]::Min($bytes[$i + 1], $bytes[$i + 2]))
+                $spread += $hi - $lo; $n++
+            }
+            if ($n -and ($spread / $n) -lt 8) { $face = $null }
+        }
+        if ($face) {
+            $brush = New-Object Windows.Media.ImageBrush($face)
+            $brush.Stretch = 'UniformToFill'
+            $primary.FindName('Avatar').Fill = $brush
+        }
+    }
+    # The card fades in when shown; a picture taken without showing it
+    # (tests, previews) has it in place already.
+    if ($NoShow) {
+        $card = $primary.FindName('Card')
+        if ($card) { $card.Opacity = 1; $shift.Y = 0; $card.Triggers.Clear() }
+        return $primary
+    }
 
     # One window per screen: the clock and the field on the primary one, the
     # base colour on the rest, so no screen shows the desktop.
@@ -2074,6 +2218,13 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
         $other = New-Object Windows.Window
         $other.WindowStyle = 'None'; $other.ResizeMode = 'NoResize'; $other.Topmost = $true; $other.ShowInTaskbar = $false
         $other.Background = "#$($p['COLOR_BG'])"; $other.Cursor = [Windows.Input.Cursors]::None; $other.Title = 'vivac - lock'
+        if ($backdrop) {
+            $g = New-Object Windows.Controls.Grid
+            $img = New-Object Windows.Controls.Image; $img.Source = $backdrop; $img.Stretch = 'UniformToFill'
+            $veil = New-Object Windows.Shapes.Rectangle; $veil.Fill = "#CC$($p['COLOR_BG'])"
+            [void]$g.Children.Add($img); [void]$g.Children.Add($veil)
+            $other.Content = $g
+        }
         & $place $other $screen
         $windows += $other
     }
@@ -2101,11 +2252,24 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
         $status.Foreground = "#$($p['COLOR_URGENT'])"
         $status.Text = $Message
         $secret.Clear()
+        # The greeter's card shakes its head.
+        if ($shift) {
+            $no = New-Object Windows.Media.Animation.DoubleAnimationUsingKeyFrames
+            $i = 0
+            foreach ($v in 0, -12, 10, -8, 6, -3, 0) {
+                [void]$no.KeyFrames.Add((New-Object Windows.Media.Animation.LinearDoubleKeyFrame($v, [Windows.Media.Animation.KeyTime]::FromTimeSpan([TimeSpan]::FromMilliseconds(55 * $i)))))
+                $i++
+            }
+            $shift.BeginAnimation([Windows.Media.TranslateTransform]::XProperty, $no)
+        }
     }
+    # The greeter's foot carries the keys, so its status line stays empty
+    # until there is something to say.
+    $idle = $(if ($Greeter) { '' } else { T 'lock.hint' })
     $reset = {
         $field.BorderBrush = "#$($p['COLOR_ACCENT'])"
         $status.Foreground = "#$($p['COLOR_MUTED'])"
-        $status.Text = T 'lock.hint'
+        $status.Text = $idle
     }
 
     $tick = New-Object Windows.Threading.DispatcherTimer
@@ -2141,8 +2305,15 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
     $secret.Add_PasswordChanged({ $placeholder.Visibility = $(if ($secret.SecurePassword.Length) { 'Hidden' } else { 'Visible' }); if ($secret.SecurePassword.Length) { & $reset } })
     $primary.Add_PreviewKeyDown({
             param($s, $e)
-            if ([string]$e.Key -ne 'Return' -or $state.Busy) { return }
+            if ($state.Busy) { return }
+            if ([string]$e.Key -eq 'Escape') { $e.Handled = $true; $secret.Clear(); & $disarm; return }
+            if ([string]$e.Key -ne 'Return') { return }
             $e.Handled = $true
+            & $submit
+        })
+    $go = $primary.FindName('Go')
+    if ($go) { $go.Add_Click({ if (-not $state.Busy) { & $submit; [void]$secret.Focus() } }) }
+    $submit = {
             if (-not $secret.SecurePassword.Length) {
                 # Windows Hello draws its own prompt: vivac's windows stop
                 # being topmost for as long as it is up, so it can be seen.
@@ -2162,15 +2333,26 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
                 if ($native::CheckPassword($a[0], $a[1], $secret.Password)) { $ok = $true; break }
             }
             if ($ok) { & $finish } else { & $fail (T 'lock.wrong') }
-        })
+        }
 
     # Restart and shut down: the first press names what the second will do.
     $power = @{
         Restart  = @{ Flag = '/r'; Label = (T 'greeter.restart'); Confirm = (T 'greeter.restart_confirm') }
         Shutdown = @{ Flag = '/s'; Label = (T 'greeter.shutdown'); Confirm = (T 'greeter.shutdown_confirm') }
     }
+    # The greeter's buttons carry an icon and a text block named after them;
+    # it is the text that changes, and the button takes the accent.
+    $label = {
+        param($b, [string]$Text)
+        $t = $primary.FindName("$($b.Name)Text")
+        if ($t) { $t.Text = $Text } else { $b.Content = $Text }
+    }
     $disarm = {
-        if ($state.Armed) { $state.Armed.Content = $power[$state.Armed.Name].Label }
+        if ($state.Armed) {
+            & $label $state.Armed $power[$state.Armed.Name].Label
+            $state.Armed.ClearValue([Windows.Controls.Control]::BackgroundProperty)
+            $state.Armed.ClearValue([Windows.Controls.Control]::ForegroundProperty)
+        }
         $state.Armed = $null
     }
     foreach ($name in $power.Keys) {
@@ -2184,7 +2366,8 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
                 }
                 & $disarm
                 $state.Armed = $b; $state.ArmedAt = Get-Date
-                $b.Content = $power[$b.Name].Confirm
+                & $label $b $power[$b.Name].Confirm
+                $b.Background = "#$($p['COLOR_ACCENT'])"; $b.Foreground = "#$($p['COLOR_BG'])"
                 [void]$secret.Focus()
             })
     }
