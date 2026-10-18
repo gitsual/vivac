@@ -317,27 +317,93 @@ function New-KitRow($p, [int]$Glyph, [string]$Name, [string]$Sub = '', $Right = 
 # --------------------------------------------------------------------- notify
 
 # vivac's own notification, in the palette, as dunst draws them in the
-# source: top right under the bar, the accent as frame, gone after five
-# seconds or at a click. It never takes the focus from what you were doing.
-function New-VivacNotification([string]$Title, [string]$Body) {
+# source: top right under the bar, gone after a few seconds or at a click.
+# It never takes the focus from what you were doing. The same card carries
+# what other programs post (lib/Toasts.psm1): the program's icon and name,
+# the time, the title and the text, a close mark, and a line along the foot
+# that runs out with the time left. $Image is a picture file the program sent
+# (its logo), $IconKey a shell name to take the icon from, $Glyph a fallback.
+# The window's Tag holds the parts a caller drives: Close, Progress, Card.
+function New-VivacNotification([string]$Title, [string]$Body, [string]$App = 'vivac', [string]$Image = '', [string]$IconKey = '', [int]$Glyph = 0xEA8F) {
     Update-SurfaceContext
     $p = Get-Palette
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+    $bodyRow = ''
+    if ($Body) {
+        $bodyRow = "<TextBlock Grid.Row=`"2`" Grid.ColumnSpan=`"2`" Margin=`"0,3,0,0`" FontSize=`"12.5`" Foreground=`"#$($p['COLOR_FG'])`" Opacity=`"0.85`" TextWrapping=`"Wrap`" TextTrimming=`"CharacterEllipsis`" MaxHeight=`"68`" Text=`"$(ConvertTo-XmlText $Body)`"/>"
+    }
     $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        Title="vivac - notification" Width="340" SizeToContent="Height"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="vivac - notification" Width="380" SizeToContent="Height"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False"
         FontFamily="JetBrainsMono Nerd Font, Cascadia Mono, Consolas" FontSize="13">
-  <Border Background="#F2$($p['COLOR_BG'])" BorderBrush="#$($p['COLOR_ACCENT'])" BorderThickness="2" CornerRadius="10" Padding="14,10">
-    <StackPanel>
-      <TextBlock Foreground="#$($p['COLOR_ACCENT'])" FontWeight="SemiBold" Text="$(ConvertTo-XmlText $Title)"/>
-      <TextBlock Foreground="#$($p['COLOR_FG'])" Margin="0,4,0,0" TextWrapping="Wrap" Text="$(ConvertTo-XmlText $Body)"/>
-    </StackPanel>
+  <Border x:Name="Card" Background="#F2$($p['COLOR_BG'])" BorderBrush="#$($p['COLOR_SURFACE_ALT'])" BorderThickness="1" CornerRadius="12" Cursor="Hand">
+    <Grid>
+      <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="3"/></Grid.RowDefinitions>
+      <Grid Margin="14,12,12,12">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Border Width="36" Height="36" CornerRadius="9" Background="#$($p['COLOR_SURFACE'])" VerticalAlignment="Top" HorizontalAlignment="Left">
+          <Grid>
+            <TextBlock x:Name="Glyph" Text="$(Get-KitGlyph $Glyph)" FontFamily="$script:KitIconFont" FontSize="16" Foreground="#$($p['COLOR_ACCENT'])" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Image x:Name="Icon" Width="24" Height="24" RenderOptions.BitmapScalingMode="HighQuality"/>
+          </Grid>
+        </Border>
+        <Grid Grid.Column="1">
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <TextBlock FontSize="11" Foreground="#$($p['COLOR_MUTED'])" TextTrimming="CharacterEllipsis">
+            <Run Text="$(ConvertTo-XmlText $App)" Foreground="#$($p['COLOR_ACCENT'])"/><Run Text="  $((Get-Date).ToString('HH:mm'))"/>
+          </TextBlock>
+          <TextBlock x:Name="Close" Grid.Column="1" Text="$(Get-KitGlyph 0xE711)" FontFamily="$script:KitIconFont" FontSize="11" Foreground="#$($p['COLOR_MUTED'])" Margin="8,1,0,0" Cursor="Hand"/>
+          <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0" FontSize="14" FontWeight="SemiBold" Foreground="#$($p['COLOR_FG'])" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="42" Text="$(ConvertTo-XmlText $Title)"/>
+          $bodyRow
+        </Grid>
+      </Grid>
+      <Border x:Name="Progress" Grid.Row="1" Background="#$($p['COLOR_ACCENT'])" HorizontalAlignment="Left" Width="380" CornerRadius="0,0,0,12"/>
+    </Grid>
   </Border>
 </Window>
 "@
     $w = [Windows.Markup.XamlReader]::Parse($xaml)
+    $icon = $w.FindName('Icon')
+    $glyphText = $w.FindName('Glyph')
+    if ($Image -and (Test-Path -LiteralPath $Image)) {
+        try {
+            $bmp = New-Object Windows.Media.Imaging.BitmapImage
+            $bmp.BeginInit()
+            $bmp.UriSource = New-Object Uri $Image
+            $bmp.DecodePixelWidth = 48
+            $bmp.CacheOption = 'OnLoad'
+            $bmp.EndInit()
+            $icon.Source = $bmp
+            $glyphText.Visibility = 'Hidden'
+        } catch { }
+    }
+    if (-not $icon.Source -and $IconKey) {
+        try {
+            Import-VivacMenu
+            $src = [VivacIcons]::Get($IconKey)
+            if ($src) { $icon.Source = $src; $glyphText.Visibility = 'Hidden' }
+            else {
+                # Not fetched yet: asked for now, picked up as soon as it is there.
+                [VivacIcons]::Request($IconKey, $null)
+                $poll = New-Object Windows.Threading.DispatcherTimer
+                $poll.Interval = [TimeSpan]::FromMilliseconds(150)
+                $poll.Tag = @{ Key = $IconKey; Icon = $icon; Glyph = $glyphText; Left = 20 }
+                $poll.Add_Tick({
+                        param($s)
+                        $t = $s.Tag; $t.Left--
+                        $got = [VivacIcons]::Get($t.Key)
+                        if ($got) { $t.Icon.Source = $got; $t.Glyph.Visibility = 'Hidden' }
+                        if ($got -or $t.Left -le 0 -or [VivacIcons]::IsMissing($t.Key)) { $s.Stop() }
+                    })
+                $poll.Start()
+            }
+        } catch { }
+    }
+    $w.Tag = @{ Close = $w.FindName('Close'); Progress = $w.FindName('Progress'); Card = $w.FindName('Card') }
     $area = [Windows.SystemParameters]::WorkArea
     $w.WindowStartupLocation = 'Manual'
     $w.Left = $area.Right - $w.Width - 12

@@ -57,6 +57,11 @@ $sys = Join-Path $paths.State 'system-original.json'
 if (Test-Path -LiteralPath $sys) {
     $o = Get-Content -Raw -LiteralPath $sys | ConvertFrom-Json
     $has = { param($n) [bool]$o.PSObject.Properties[$n] }
+    if (& $has 'toasts') {
+        Write-Host '  [restore]   notification banners'
+        Import-Module (Join-Path $PSScriptRoot '..\lib\Toasts.psm1') -Force
+        [void](Restore-VivacToastBanners -DryRun:$DryRun)
+    }
     if (& $has 'run_glazewm') {
         Write-Host '  [restore]   HKCU Run\GlazeWM'
         if (-not $DryRun) {

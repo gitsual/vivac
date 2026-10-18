@@ -19,6 +19,9 @@
                 terminals and sit under every tiled window anyway)
     -WinKeys    Explorer gives up Win+R, so the Run box never opens over
                 vivac's menu, which the resident host opens on Win+R
+    -Toasts     other programs' notifications as vivac's cards at the top
+                right; Windows' banners at the bottom right turned off
+                (Windows Security keeps its own; lib/Toasts.psm1)
 
   Machine-wide (run elevated):
     -Firewall   every profile on, unsolicited inbound denied, outbound
@@ -50,7 +53,7 @@
 #>
 [CmdletBinding()]
 param(
-    [switch]$Session, [switch]$Idle, [switch]$Taskbar, [switch]$DesktopIcons, [switch]$WinKeys,
+    [switch]$Session, [switch]$Idle, [switch]$Taskbar, [switch]$DesktopIcons, [switch]$WinKeys, [switch]$Toasts,
     [switch]$Firewall, [switch]$Defender, [switch]$SecurityQuiet, [switch]$LockScreen, [switch]$AutoLogin, [switch]$Boot,
     [switch]$DryRun
 )
@@ -61,7 +64,7 @@ Import-Module (Join-Path $PSScriptRoot '..\lib\Apps.psm1') -Force
 [void](Import-VivacStrings (Read-VivacSettings)['language'])
 
 $restartExplorer = $false
-if (-not ($Session -or $Idle -or $Taskbar -or $DesktopIcons -or $WinKeys -or $Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot)) {
+if (-not ($Session -or $Idle -or $Taskbar -or $DesktopIcons -or $WinKeys -or $Toasts -or $Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot)) {
     Write-Host (T 'system.none_chosen')
     return
 }
@@ -190,6 +193,18 @@ if ($WinKeys) {
     }
 }
 
+# Notifications: each program's banner off, its notification still kept by
+# Windows, and vivac's resident host drawing it instead. What each program's
+# banner switch held is saved by lib/Toasts.psm1 itself (toast-banners.json),
+# since programs that notify later are switched by the host as they come.
+if ($Toasts) {
+    Write-Host (T 'system.toasts')
+    Import-Module (Join-Path $PSScriptRoot '..\lib\Toasts.psm1') -Force
+    Save-Original 'toasts' $true
+    $n = @(Enable-VivacToasts -DryRun:$DryRun).Count
+    Step (T 'system.toasts_step' @([string]$n))
+}
+
 if ($AutoLogin) {
     Write-Host (T 'system.autologin')
     # Microsoft accounts are kept to Windows Hello sign-in by this switch;
@@ -209,12 +224,14 @@ if ($AutoLogin) {
         if (-not (Test-Path -LiteralPath $pl)) { New-Item -Path $pl -Force | Out-Null }
         Set-ItemProperty -LiteralPath $pl -Name DevicePasswordLessBuildVersion -Value 0 -Type DWord
         # The host, at sign-in, before anything else of vivac: the screens
-        # are covered and the lock opens. Highest run level, so its keyboard
-        # hook also sees keys meant for elevated windows.
+        # are covered and the lock opens. At the normal level: an elevated
+        # task must not run a file the user can write, and everything opened
+        # from vivac's menu would inherit the elevation (the key guard,
+        # bin/vivac-keyguard.ps1, covers keys meant for elevated windows).
         $daemon = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-daemon.ps1'
         $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$daemon`" -LockAtStart"
         $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-        $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -RunLevel Highest -LogonType Interactive
+        $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -RunLevel Limited -LogonType Interactive
         $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -Priority 4
         Register-ScheduledTask -TaskPath '\vivac\' -TaskName 'lock-at-signin' -Action $action -Trigger $trigger -Principal $principal -Settings $set -Force | Out-Null
         # The password is yours to type, into Windows' own credential prompt,
