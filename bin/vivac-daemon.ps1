@@ -44,6 +44,15 @@ if (-not $created) { exit 0 }
 # a normal one can read neither its command line nor stop it; the id is left
 # here for scripts/deploy.ps1 (Restart-VivacDaemon) to find it by.
 $pidFile = Join-Path (Get-VivacPaths).State 'daemon.pid'
+# A verb that fails has nowhere to say so on screen; it says so here.
+function Write-DaemonLog([string]$Text) {
+    try {
+        $log = Join-Path (Get-VivacPaths).State 'daemon.log'
+        $dir = Split-Path -Parent $log
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        Add-Content -LiteralPath $log -Value ('{0}  {1}' -f (Get-Date -Format s), $Text) -Encoding UTF8
+    } catch { }
+}
 Write-VivacFile -Path $pidFile -Text "$PID`n"
 if ($LockAtStart) { Show-VivacLockCover }
 
@@ -97,7 +106,9 @@ function Invoke-Verb([string]$Verb) {
     }
     if ($Verb -eq 'lock') { Invoke-VivacLock; return }
     # Only ever queued by -LockAtStart: the lock, dressed as the greeter.
-    if ($Verb -eq 'greet') { Invoke-VivacLock -Greeter; return }
+    # Whatever happens to the greeter, the cover put up at start comes down:
+    # a sign-in must never end behind blank windows.
+    if ($Verb -eq 'greet') { try { Invoke-VivacLock -Greeter } finally { Hide-VivacLockCover }; return }
     if (@('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security') -notcontains $Verb) { return }
     $current = $open[$Verb]
     if ($current -and $current.IsVisible) { $current.Close(); return }
@@ -409,7 +420,7 @@ $timer.Add_Tick({
             # closing): see lib/VivacLoading.cs.
             $coming = $loadingVerbs -contains $verb -and -not ($open[$verb] -and $open[$verb].IsVisible)
             if ($coming) { Start-VivacLoading }
-            try { Invoke-Verb $verb } catch { }
+            try { Invoke-Verb $verb } catch { Write-DaemonLog "verb '$verb' failed: $_" }
             if ($coming) { try { [VivacLoading]::Hide() } catch { } }
         }
         if ($script:refreshApps -and -not ($open['menu'] -and $open['menu'].IsVisible)) {

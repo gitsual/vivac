@@ -44,9 +44,20 @@ if (-not $created) { exit 0 }
 # controls could be turned into a link that sends the write elsewhere).
 $log = Join-Path $env:ProgramData 'vivac\logs\keyguard.log'
 if (-not (Test-Path -LiteralPath (Split-Path -Parent $log))) { $log = Join-Path (Get-VivacPaths).State 'keyguard.log' }
+# A line that cannot be written there goes to Windows' Application event log
+# (source vivac-keyguard), with the reason, rather than nowhere: a guard that
+# fails in silence cannot be told from one that is fine.
 function Write-GuardLog([string]$Text) {
-    try { Add-Content -LiteralPath $log -Value ('{0}  {1}' -f (Get-Date -Format s), $Text) } catch { }
+    $line = '{0}  {1}' -f (Get-Date -Format s), $Text
+    try { [IO.File]::AppendAllText($log, $line + "`r`n") }
+    catch {
+        try {
+            if (-not [Diagnostics.EventLog]::SourceExists('vivac-keyguard')) { [Diagnostics.EventLog]::CreateEventSource('vivac-keyguard', 'Application') }
+            [Diagnostics.EventLog]::WriteEntry('vivac-keyguard', "$Text`r`n(could not write $log`: $($_.Exception.Message))", 'Warning')
+        } catch { }
+    }
 }
+Write-GuardLog "starting, pid $PID"
 
 Add-Type -TypeDefinition @'
 using System;
@@ -425,7 +436,9 @@ public static class VivacBarGuard {
     }
 }
 '@
+Write-GuardLog 'compiled'
 [VivacBarGuard]::Start()
+Write-GuardLog 'bar strip watch running'
 
 $settings = Read-VivacSettings
 # The Windows key is only vivac's with Win as the modifier; the bar's strip is

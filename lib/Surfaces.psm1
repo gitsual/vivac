@@ -1851,7 +1851,21 @@ function Invoke-VivacLock([switch]$Greeter) {
         try { Show-VivacLock -Greeter:$Greeter } finally { $script:LockShown = $false }
         return
     }
+    # Windows' own lock takes over: the cover must not stay behind it, or the
+    # desktop is hidden after the unlock.
+    Hide-VivacLockCover
     Start-Process rundll32.exe -ArgumentList 'user32.dll,LockWorkStation'
+}
+
+# Lock failures are the one thing the daemon cannot show on screen: they go
+# to a file next to its other state.
+function Write-VivacLockLog([string]$Text) {
+    try {
+        $log = Join-Path (Get-VivacPaths).State 'lock.log'
+        $dir = Split-Path -Parent $log
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        Add-Content -LiteralPath $log -Value ('{0}  {1}' -f (Get-Date -Format s), $Text) -Encoding UTF8
+    } catch { }
 }
 
 function Get-LockNative {
@@ -1922,6 +1936,12 @@ function Show-VivacLockCover {
             $w.Show()
             $w
         })
+}
+# Drops the cover without unlocking: when the lock itself could not be shown,
+# the desktop must not stay hidden behind blank windows.
+function Hide-VivacLockCover {
+    foreach ($w in $script:LockCover) { try { $w.Close() } catch { } }
+    $script:LockCover = @()
 }
 # The account to check a typed password against. After an automatic
 # sign-in, Winlogon names the spelling Windows accepted for it (a Microsoft
@@ -2154,7 +2174,10 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
   </Grid>
 </Window>
 "@
-    if ($Greeter) { $primaryXaml = Get-GreeterXaml $p }
+    # The greeter is dressing: if it cannot be built, the plain lock shows.
+    if ($Greeter) {
+        try { $primaryXaml = Get-GreeterXaml $p } catch { Write-VivacLockLog "greeter not built, plain lock instead: $_"; $Greeter = $false }
+    }
     $primary = [Windows.Markup.XamlReader]::Parse($primaryXaml)
     $clock = $primary.FindName('Clock'); $secret = $primary.FindName('Secret')
     $field = $primary.FindName('Field'); $status = $primary.FindName('Status'); $placeholder = $primary.FindName('Placeholder')
@@ -2168,7 +2191,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
     # The greeter's pictures: the theme's wallpaper behind everything, the
     # account's own picture in its circle.
     $backdrop = $null
-    if ($Greeter) {
+    if ($Greeter) { try {
         $wall = $null
         try { if (Get-Command Get-VivacWallpaper -ErrorAction SilentlyContinue) { $wall = Get-VivacWallpaper -Theme (Read-VivacTheme $settings['theme']) } } catch { }
         $backdrop = New-LockPicture $wall 1920
@@ -2193,7 +2216,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
             $brush.Stretch = 'UniformToFill'
             $primary.FindName('Avatar').Fill = $brush
         }
-    }
+    } catch { Write-VivacLockLog "greeter pictures left out: $_" } }
     # The card fades in when shown; a picture taken without showing it
     # (tests, previews) has it in place already.
     if ($NoShow) {
