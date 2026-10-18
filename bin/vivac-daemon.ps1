@@ -379,8 +379,6 @@ $script:clipWatch = New-Object VivacClipWatch
 try { Add-VivacClipboardEntry } catch { }
 ($w = Show-Clipboard -NoShow).Close()
 
-$timer = New-Object Windows.Threading.DispatcherTimer
-$timer.Interval = [TimeSpan]::FromMilliseconds(30)
 # Other programs' notifications, read once a second from Windows' record of
 # them and drawn as vivac's cards (lib/Toasts.psm1). Only once apply-system
 # -Toasts has turned Windows' banners off; until then this only keeps count.
@@ -389,6 +387,8 @@ $toastTimer.Interval = [TimeSpan]::FromSeconds(1)
 $toastTimer.Add_Tick({ try { Update-VivacToastWatch } catch { } })
 $toastTimer.Start()
 
+$timer = New-Object Windows.Threading.DispatcherTimer
+$timer.Interval = [TimeSpan]::FromMilliseconds(30)
 $timer.Add_Tick({
         if ([VivacKeys]::TakeMenu()) { $queue.Enqueue('menu') }
         if ([VivacKeys]::TakeClipboard()) { $queue.Enqueue('clipboard') }

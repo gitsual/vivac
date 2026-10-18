@@ -22,7 +22,9 @@ export function keepOpenWhileHovered(name) {
     try { localStorage.setItem(`popup.${name}.alive`, String(Date.now())); } catch {}
     const hover = since(`popup.${name}.hover`);
     if (inside || closing || hover < GRACE) return;
-    if (!Number.isFinite(hover) && Date.now() - opened < FIRST) return;
+    // A stamp older than this opening is a pill hovered some other time:
+    // this popup was not opened by a hover, so give the pointer time.
+    if (hover > 5000 && Date.now() - opened < FIRST) return;
     closing = true;
     try { localStorage.removeItem(`popup.${name}.alive`); } catch {}
     zebar.currentWidget().window.tauri.close();

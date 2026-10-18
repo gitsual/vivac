@@ -100,22 +100,32 @@ function drawWorkspaces(wm) {
     if (wins.length > shown.length) glyphs += `<span class="more">+${wins.length - shown.length}</span>`;
     html += `<button class="${cls.join(' ')}" data-ws="${n}">${n}${glyphs}</button>`;
   }
+  // Drawn again only when something shows differently: every provider's
+  // output calls this, several times a second, and a button replaced between
+  // the press and the release of a click loses the click.
   const el = document.getElementById('ws');
-  el.innerHTML = html;
-  el.querySelectorAll('button').forEach((b) =>
-    b.addEventListener('click', () => {
-      const ws = byName.get(b.dataset.ws);
-      if (ws?.hasFocus) restoreHidden(wm, ws);
-      else wm.runCommand(`focus --workspace ${b.dataset.ws}`);
-    }),
-  );
-  el.querySelectorAll('[data-win]').forEach((g) =>
-    g.addEventListener('click', (e) => {
-      e.stopPropagation();
-      focusWindow(wm, allWindows(wm).find((w) => w.id === g.dataset.win));
-    }),
-  );
+  if (el.innerHTML !== html) el.innerHTML = html;
 }
+
+// A workspace button goes there, as Win+number does; on the one already in
+// front it brings back windows that are all minimized. A window's glyph
+// brings that window to the front. Answered on the press, by the strip
+// itself, so it holds however often the buttons are drawn again.
+document.getElementById('ws').addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  const wm = providers.outputMap.glazewm;
+  if (!wm) return;
+  const glyph = e.target.closest('[data-win]');
+  if (glyph) {
+    focusWindow(wm, allWindows(wm).find((w) => w.id === glyph.dataset.win));
+    return;
+  }
+  const b = e.target.closest('button[data-ws]');
+  if (!b) return;
+  const ws = wm.allWorkspaces.find((w) => w.name === b.dataset.ws);
+  if (ws?.hasFocus) restoreHidden(wm, ws);
+  else wm.runCommand(`focus --workspace ${b.dataset.ws}`);
+});
 
 const allWindows = (wm) => wm.allWorkspaces.flatMap(windowsOf);
 async function focusWindow(wm, win) {
@@ -134,6 +144,27 @@ async function restoreHidden(wm, ws) {
   if (!wins.length || !wins.every(isMin)) return;
   for (const w of wins) await wm.runCommand('toggle-minimized', w.id);
   await wm.runCommand(`focus --container-id ${wins[wins.length - 1].id}`);
+}
+
+// A window that arrives maximized or fullscreen (File Explorer reopens the
+// way it was last closed, so do many programs) would sit in front of the
+// tiles, the only thing on its workspace with depth. Every window new to the
+// window manager in that state joins the tiling instead, on whichever
+// workspace it opened. Only on arrival: one made fullscreen afterwards, with
+// MOD+F, was meant to be.
+let knownWindows = null;
+function tileArrivals(wm) {
+  const wins = allWindows(wm);
+  if (knownWindows === null) {
+    knownWindows = new Set(wins.map((w) => w.id));
+    return;
+  }
+  for (const w of wins) {
+    if (knownWindows.has(w.id)) continue;
+    knownWindows.add(w.id);
+    if (w.state?.type === 'fullscreen') wm.runCommand('set-tiling', w.id);
+  }
+  if (knownWindows.size > 2000) knownWindows = new Set(wins.map((w) => w.id));
 }
 
 let lastWs;
@@ -442,6 +473,7 @@ function drawCenter(out) {
 function draw() {
   const out = providers.outputMap;
   if (out.glazewm) {
+    tileArrivals(out.glazewm);
     restoreOnArrival(out.glazewm);
     drawWorkspaces(out.glazewm);
     drawTitle(out.glazewm);
@@ -457,38 +489,64 @@ function draw() {
 // while the pointer is on the pill the bar stamps popup.<name>.hover, the
 // popup stamps popup.<name>.alive, and the popup closes itself once the
 // pointer is neither on the pill nor on it. Opening is delayed a little so
-// crossing the bar does not flash one open.
-const POPUPS = { clock: { widget: 'calendar', width: 300, height: 290 }, weather: { widget: 'forecast', width: 420, height: 440 } };
+// crossing the bar does not flash one open. The gauges (cpu, memory, disk,
+// gpu) open theirs the same way.
 const stamp = (key) => { try { localStorage.setItem(key, String(Date.now())); } catch {} };
 const fresh = (key, ms) => { try { return Date.now() - Number(localStorage.getItem(key) || 0) < ms; } catch { return false; } };
-for (const [id, p] of Object.entries(POPUPS)) {
-  const el = document.getElementById(id);
-  let beat = null;
-  let opener = null;
-  el.addEventListener('mouseenter', () => {
-    stamp(`popup.${p.widget}.hover`);
-    beat = setInterval(() => stamp(`popup.${p.widget}.hover`), 200);
-    opener = setTimeout(() => {
-      if (fresh(`popup.${p.widget}.alive`, 800)) return;
-      // Centred under the pill, kept on screen; the bar spans the monitor
-      // from its left edge, so the pill's place in the page is its place
-      // on the monitor.
-      const r = el.getBoundingClientRect();
-      const x = Math.max(8, Math.min(window.innerWidth - p.width - 8, Math.round(r.left + r.width / 2 - p.width / 2)));
-      stamp(`popup.${p.widget}.alive`);
-      zebar.startWidget(p.widget, {
-        anchor: 'top_left', offsetX: `${x}px`, offsetY: `${window.innerHeight - 2}px`,
-        width: `${p.width}px`, height: `${p.height}px`,
-        monitorSelection: { type: 'primary' },
-        dockToEdge: { enabled: false, edge: null, windowMargin: '0px' },
-      });
-    }, 250);
-  });
-  el.addEventListener('mouseleave', () => {
-    clearInterval(beat);
-    clearTimeout(opener);
-  });
+let hovered = null;
+let beat = null;
+let opener = null;
+function hover(widget) {
+  if (widget === hovered) return;
+  clearInterval(beat);
+  clearTimeout(opener);
+  hovered = widget;
+  if (!widget) return;
+  stamp(`popup.${widget}.hover`);
+  beat = setInterval(() => stamp(`popup.${widget}.hover`), 200);
+  opener = setTimeout(() => {
+    if (fresh(`popup.${widget}.alive`, 800)) return;
+    // Opened by preset, the path the CLI takes too: zebar 3.0.3's
+    // startWidget with a placement built here never opened a window. The
+    // presets in zpack.json sit each popup under its pill, which keeps its
+    // place because the middle column is centred on the screen.
+    stamp(`popup.${widget}.alive`);
+    zebar.startWidgetPreset(widget, 'default', {}).catch((e) => {
+      try { localStorage.setItem('popup.error', `${widget}: ${e?.message ?? e}`); } catch {}
+    });
+  }, 250);
 }
+for (const [id, widget] of [['clock', 'calendar'], ['weather', 'forecast']]) {
+  const el = document.getElementById(id);
+  el.addEventListener('mouseenter', () => hover(widget));
+  el.addEventListener('mouseleave', () => hover(null));
+}
+// The gauges are drawn again every few seconds, so their listeners would be
+// lost with them: the right block listens instead, and asks which pill is
+// under the pointer.
+const GAUGE_POPUPS = ['cpu', 'memory', 'disk', 'gpu'];
+const right = document.getElementById('right');
+right.addEventListener('mousemove', (e) => {
+  const p = e.target.closest?.('.pill');
+  hover(p ? GAUGE_POPUPS.find((k) => p.classList.contains(k)) ?? null : null);
+});
+right.addEventListener('mouseleave', () => hover(null));
+
+// The last two minutes of processor and memory use, for the graph in their
+// popups: a popup lives only while hovered, the bar all the time.
+const history = { cpu: [], memory: [] };
+let lastSample = 0;
+providers.onOutput(() => {
+  const out = providers.outputMap;
+  if (Date.now() - lastSample < 2000) return;
+  lastSample = Date.now();
+  for (const k of ['cpu', 'memory']) {
+    if (!out[k]) continue;
+    history[k].push(Math.round(out[k].usage));
+    if (history[k].length > 60) history[k].shift();
+  }
+  try { localStorage.setItem('gauge.history', JSON.stringify(history)); } catch {}
+});
 
 // Scrolling over the workspace strip walks them, as in the source bar.
 document.getElementById('ws').addEventListener('wheel', (e) => {

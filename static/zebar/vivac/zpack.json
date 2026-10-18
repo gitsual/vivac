@@ -10,7 +10,7 @@
     {
       "name": "bar",
       "htmlPath": "./index.html",
-      "zOrder": "normal",
+      "zOrder": "top_most",
       "shownInTaskbar": false,
       "focused": false,
       "resizable": false,
@@ -70,7 +70,7 @@
         {
           "name": "default",
           "anchor": "top_center",
-          "offsetX": "0px",
+          "offsetX": "-35px",
           "offsetY": "46px",
           "width": "300px",
           "height": "290px",
@@ -93,10 +93,122 @@
         {
           "name": "default",
           "anchor": "top_center",
-          "offsetX": "0px",
+          "offsetX": "100px",
           "offsetY": "46px",
           "width": "420px",
           "height": "440px",
+          "monitorSelection": { "type": "primary" }
+        }
+      ]
+    },
+    {
+      "name": "cpu",
+      "htmlPath": "./cpu.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": false,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
+      "caching": { "defaultDuration": 604800, "rules": [{ "urlRegex": "\\.(css|js|json)$", "duration": 0 }] },
+      "privileges": { "shellCommands": [
+          {
+            "program": "powershell.exe",
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-sysinfo\\.ps1 (-Top|-Gpu)$"
+          }
+        ] },
+      "presets": [
+        {
+          "name": "default",
+          "anchor": "top_right",
+          "offsetX": "-313px",
+          "offsetY": "46px",
+          "width": "340px",
+          "height": "380px",
+          "monitorSelection": { "type": "primary" }
+        }
+      ]
+    },
+    {
+      "name": "memory",
+      "htmlPath": "./memory.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": false,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
+      "caching": { "defaultDuration": 604800, "rules": [{ "urlRegex": "\\.(css|js|json)$", "duration": 0 }] },
+      "privileges": { "shellCommands": [
+          {
+            "program": "powershell.exe",
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-sysinfo\\.ps1 (-Top|-Gpu)$"
+          }
+        ] },
+      "presets": [
+        {
+          "name": "default",
+          "anchor": "top_right",
+          "offsetX": "-251px",
+          "offsetY": "46px",
+          "width": "340px",
+          "height": "360px",
+          "monitorSelection": { "type": "primary" }
+        }
+      ]
+    },
+    {
+      "name": "disk",
+      "htmlPath": "./disk.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": false,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
+      "caching": { "defaultDuration": 604800, "rules": [{ "urlRegex": "\\.(css|js|json)$", "duration": 0 }] },
+      "privileges": { "shellCommands": [
+          {
+            "program": "powershell.exe",
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-sysinfo\\.ps1 (-Top|-Gpu)$"
+          }
+        ] },
+      "presets": [
+        {
+          "name": "default",
+          "anchor": "top_right",
+          "offsetX": "-191px",
+          "offsetY": "46px",
+          "width": "340px",
+          "height": "330px",
+          "monitorSelection": { "type": "primary" }
+        }
+      ]
+    },
+    {
+      "name": "gpu",
+      "htmlPath": "./gpu.html",
+      "zOrder": "top_most",
+      "shownInTaskbar": false,
+      "focused": false,
+      "resizable": false,
+      "transparent": true,
+      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
+      "caching": { "defaultDuration": 604800, "rules": [{ "urlRegex": "\\.(css|js|json)$", "duration": 0 }] },
+      "privileges": { "shellCommands": [
+          {
+            "program": "powershell.exe",
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-sysinfo\\.ps1 (-Top|-Gpu)$"
+          }
+        ] },
+      "presets": [
+        {
+          "name": "default",
+          "anchor": "top_right",
+          "offsetX": "-128px",
+          "offsetY": "46px",
+          "width": "340px",
+          "height": "250px",
           "monitorSelection": { "type": "primary" }
         }
       ]

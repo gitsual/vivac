@@ -70,8 +70,11 @@ window_behavior:
     floating:
       centered: true
       shown_on_top: false
+    # A window that makes itself fullscreen, or is maximized, fills the work
+    # area, not the monitor: the bar stays in sight (the user's rule: no
+    # window covers it, Snipping Tool's own window included).
     fullscreen:
-      maximized: false
+      maximized: true
       shown_on_top: false
 
 # Ten numbered workspaces, as in the source; the tenth is reached with 0.

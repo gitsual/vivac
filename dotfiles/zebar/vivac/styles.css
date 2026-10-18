@@ -130,3 +130,33 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .fc-days .fc-pp { font-size: 11px; text-align: right; }
 .fc-text { color: #C0AD95; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fc-range { text-align: right; }
+
+/* The gauges' hover popups (cpu, memory, disk, gpu .html, all gauge.js):
+   one big reading, its bar in the gauge's colours, the last two minutes as
+   a line, then the detail as two columns. */
+.g-big { font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 6px; }
+.g-big .dim { font-size: 14px; font-weight: normal; }
+.g-bar { height: 8px; border-radius: 4px; background: rgba(67, 54, 63, 0.9); overflow: hidden; margin: 4px 0 8px 0; }
+.g-bar span { display: block; height: 100%; background: #6CA4B1; border-radius: 4px; }
+.g-bar.warning span { background: #E1777D; }
+.g-bar.critical span { background: #BD6161; }
+.g-bar.thin { height: 4px; }
+.g-spark { width: 100%; height: 40px; display: block; margin-bottom: 8px; }
+.g-spark .line { fill: none; stroke: #6CA4B1; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.g-spark .area { fill: rgba(108, 164, 177, 0.15); stroke: none; }
+.g-rows, .g-top { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 12px; }
+.g-top span:nth-child(odd) { color: #E8D5AB; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-top span:nth-child(even) { color: #C0AD95; text-align: right; }
+.g-wait { font-size: 12px; text-align: center; }
+.g-disks { display: flex; flex-direction: column; gap: 6px; }
+.g-disk-head { display: flex; justify-content: space-between; font-size: 12px; }
+.g-disk .g-bar { margin: 3px 0 0 0; }
+
+/* "Loading..." while a popup waits for its numbers: the same turning ring
+   as vivac's own surfaces (lib/VivacLoading.cs). */
+.spinner {
+  display: inline-block; width: 12px; height: 12px; margin-right: 8px; vertical-align: -1px;
+  border: 2px solid rgba(225, 119, 125, 0.25); border-top-color: #E1777D;
+  border-radius: 50%; animation: vivac-spin 0.9s linear infinite;
+}
+@keyframes vivac-spin { to { transform: rotate(360deg); } }
