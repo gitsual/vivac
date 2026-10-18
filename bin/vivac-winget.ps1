@@ -40,6 +40,11 @@ $data = Join-Path $env:ProgramData 'vivac\winget'
 $inbox = Join-Path $data 'inbox'
 $outbox = Join-Path $data 'out'
 $wingetFlags = @('--accept-source-agreements', '--accept-package-agreements', '--disable-interactivity')
+# "No applicable update": --all found nothing to do, which is not a failure.
+$nothingToDo = -1978335189
+# "Update not supported": the publisher updates it from inside the program
+# (Android Studio, say). Pinned, so winget stops listing it for ever.
+$selfUpdating = -1978334956
 
 function Get-WingetArgs([string]$Line) {
     # The one place a request becomes a command line.
@@ -56,6 +61,31 @@ function Get-WingetPath {
     $exe = Join-Path $pkg.InstallLocation 'winget.exe'
     if ($exe -notlike "$env:ProgramFiles\WindowsApps\*" -or -not (Test-Path -LiteralPath $exe)) { throw "vivac-winget: unexpected winget at $exe" }
     $exe
+}
+
+# The ids in winget's upgrade tables. --all leaves out the packages whose
+# manifest asks to be updated by name (RequireExplicitUpgrade: Android Studio,
+# say), listed in a table of their own, so an update of everything names
+# them one by one afterwards. The header is in the system's language: the id
+# is the second column, found by where the header's words start. Each id is
+# checked here, as it reaches a command line.
+function Get-WingetPendingIds([string]$Winget) {
+    $text = (& $Winget @('upgrade', '--accept-source-agreements', '--disable-interactivity') 2>$null | Out-String)
+    $lines = @($text -split "`n" | ForEach-Object { ($_.TrimEnd("`r") -split "`r")[-1].TrimEnd() })
+    $ids = @()
+    for ($i = 1; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -notmatch '^-{10,}$') { continue }
+        $starts = @([regex]::Matches($lines[$i - 1], '\S+') | ForEach-Object { $_.Index })
+        if ($starts.Count -lt 4) { continue }
+        for ($j = $i + 1; $j -lt $lines.Count; $j++) {
+            $line = $lines[$j]
+            if ($line.Length -le $starts[2]) { break }
+            $id = $line.Substring($starts[1], $starts[2] - $starts[1]).Trim()
+            if ($id -notmatch '^[\w.+-]+$') { break }
+            $ids += $id
+        }
+    }
+    @($ids | Select-Object -Unique)
 }
 
 function Test-NoReparse([string]$Path) {
@@ -92,10 +122,21 @@ if ($Run) {
                 $wa = Get-WingetArgs $line
                 $code = 87
                 if ($wa) {
-                    $all = $wa + @('--silent') + $wingetFlags
-                    & $winget @all 2>&1 | ForEach-Object { ([string]$_ -split "`r")[-1] } |
-                        Where-Object { $_ -match '\w' } | Out-File -LiteralPath "$base.log" -Append -Encoding utf8
-                    $code = $LASTEXITCODE
+                    $runs = @(, $wa)
+                    $code = 0
+                    for ($r = 0; $r -lt $runs.Count; $r++) {
+                        $all = $runs[$r] + @('--silent') + $wingetFlags
+                        & $winget @all 2>&1 | ForEach-Object { ([string]$_ -split "`r")[-1] } |
+                            Where-Object { $_ -match '\w' } | Out-File -LiteralPath "$base.log" -Append -Encoding utf8
+                        $rc = $LASTEXITCODE
+                        if ($rc -eq $selfUpdating -and $runs[$r] -contains '--id') {
+                            & $winget @('pin', 'add', '--id', $runs[$r][2], '--exact', '--source', 'winget', '--accept-source-agreements', '--disable-interactivity') 2>&1 |
+                                ForEach-Object { ([string]$_ -split "`r")[-1] } | Where-Object { $_ -match '\w' } | Out-File -LiteralPath "$base.log" -Append -Encoding utf8
+                        } elseif ($rc -notin 0, $nothingToDo) { $code = $rc }
+                        if ($r -eq 0 -and $line -eq 'upgrade') {
+                            foreach ($one in (Get-WingetPendingIds $winget)) { $runs += , @('upgrade', '--id', $one, '--exact', '--source', 'winget') }
+                        }
+                    }
                 } else { "rejected: only updates run without a prompt" | Out-File -LiteralPath "$base.log" -Append -Encoding utf8 }
                 [string]$code | Out-File -LiteralPath "$base.done" -Encoding ascii
             }
@@ -117,8 +158,18 @@ if ($Queue) {
         # Not elevated: the installer asks for elevation itself, if it needs it.
         $wa = @($Queue)
         if ($Id) { $wa += @('--id', $Id, '--exact', '--source', 'winget') } else { $wa += '--all' }
-        & (Get-WingetPath) @($wa + $wingetFlags)
-        exit $LASTEXITCODE
+        $winget = Get-WingetPath
+        & $winget @($wa + $wingetFlags)
+        $code = $LASTEXITCODE
+        if ($code -eq $nothingToDo) { $code = 0 }
+        if ($Queue -eq 'upgrade' -and -not $Id) {
+            foreach ($one in (Get-WingetPendingIds $winget)) {
+                & $winget @(@('upgrade', '--id', $one, '--exact', '--source', 'winget') + $wingetFlags)
+                if ($LASTEXITCODE -eq $selfUpdating) { & $winget pin add --id $one --exact --source winget --accept-source-agreements --disable-interactivity }
+                elseif ($LASTEXITCODE -notin 0, $nothingToDo) { $code = $LASTEXITCODE }
+            }
+        }
+        exit $code
     }
     $line = $Queue
     if ($Id) { $line = "$Queue $Id" }
