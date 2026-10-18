@@ -412,7 +412,15 @@ $timer.Add_Tick({
     })
 if ($LockAtStart) { $queue.Enqueue('greet') }
 $timer.Start()
-[Windows.Threading.Dispatcher]::Run()
-[VivacKeys]::Uninstall()
-Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
-$reader.Stop()
+# However the loop ends -- 'quit', or an exception no handler caught -- the
+# process ends with it. The pipe's runspace would otherwise keep it alive,
+# taking requests and doing nothing, and nothing would start a working one
+# (the key guard starts the host only when none is running).
+try { [Windows.Threading.Dispatcher]::Run() }
+finally {
+    try { [VivacKeys]::Uninstall() } catch { }
+    Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+    # Not $reader.Stop(): the reader sits in WaitForConnection, which a stop
+    # cannot interrupt; ending the process ends it.
+    [Environment]::Exit(0)
+}
