@@ -322,16 +322,22 @@ function usbPill(d) {
 }
 
 // The update icon, always there at the bar's right end: it opens vivac's
-// updates panel (lib/Updates.psm1). A badge counts what Windows Update has
-// waiting; the accent all over says Windows waits for a restart. The
-// programs winget can update are counted in the panel, not here: asking
-// winget takes seconds.
+// updates panel (lib/Updates.psm1). A badge counts what Windows Update and
+// winget have waiting, in the urgent colour with a shield when a security
+// update is among them; the accent all over says Windows waits for a restart.
 function updatesPill() {
   if (tray?.reboot) return `<button class="pill updates reboot" data-act="updates" title="${esc(config.labels.reboot)}"><span class="glyph">${G.restart}</span></button>`;
-  const n = updates?.count || 0;
-  if (!n) return `<button class="pill updates" data-act="updates" title="${esc(config.labels.updates_none)}"><span class="glyph">${G.update}</span></button>`;
-  const tip = `${config.labels.updates}: ${updates.titles.join(' \u00B7 ')}`;
-  return `<button class="pill updates pending" data-act="updates" title="${esc(tip)}"><span class="glyph">${G.update}</span><span class="badge">${n}</span></button>`;
+  const os = updates?.count || 0;
+  const apps = updates?.apps || 0;
+  const sec = updates?.security || 0;
+  if (!os && !apps) return `<button class="pill updates" data-act="updates" title="${esc(config.labels.updates_none)}"><span class="glyph">${G.update}</span></button>`;
+  const tip = [];
+  if (sec) tip.push(`${config.labels.updates_security}: ${sec}`);
+  if (os) tip.push(`${config.labels.updates}: ${updates.titles.join(' \u00B7 ')}`);
+  if (apps) tip.push(`${config.labels.updates_apps}: ${updates.appTitles.join(' \u00B7 ')}`);
+  const cls = sec ? 'pending security' : 'pending';
+  const glyph = sec ? G.shieldAlert : G.update;
+  return `<button class="pill updates ${cls}" data-act="updates" title="${esc(tip.join('\n'))}"><span class="glyph">${glyph}</span><span class="badge">${os + apps}</span></button>`;
 }
 
 // The right block reads in groups, left to right, with a rule between them:

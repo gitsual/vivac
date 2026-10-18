@@ -116,12 +116,17 @@ function Format-UpdateSize([double]$Bytes) {
 # A winget command in a Windows Terminal tab of its own, left open so its
 # outcome can be read. Ids are checked: they reach a command line.
 function Start-VivacWinget([string]$Id = '') {
-    $what = '--all'
-    if ($Id) {
-        if ($Id -notmatch '^[\w.+-]+$') { return }
-        $what = "--id $Id --exact"
+    if ($Id -and $Id -notmatch '^[\w.+-]+$') { return }
+    # Through the elevated task (scripts/register-winget.ps1) when it exists:
+    # no UAC prompt for each installer to stop at. Plain winget otherwise.
+    if (Get-ScheduledTask -TaskPath '\vivac\' -TaskName 'winget' -ErrorAction SilentlyContinue) {
+        $cmd = "& '$(Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-winget.ps1')' -Queue upgrade -Follow"
+        if ($Id) { $cmd += " -Id $Id" }
+    } else {
+        $what = '--all'
+        if ($Id) { $what = "--id $Id --exact" }
+        $cmd = "winget upgrade $what --accept-source-agreements --accept-package-agreements"
     }
-    $cmd = "winget upgrade $what --accept-source-agreements --accept-package-agreements"
     Start-Process -FilePath 'wt.exe' -ArgumentList @('-w', '0', 'new-tab', '--title', "`"$(T 'upd.terminal')`"", 'powershell.exe', '-NoProfile', '-NoExit', '-Command', $cmd)
 }
 

@@ -6,7 +6,9 @@
     -Status          one line of JSON: the Bluetooth radio, a restart Windows
                      Update is waiting for, and the resident antivirus that is
                      not Defender (Defender has its own shield)
-    -Updates         one line of JSON: how many updates are waiting
+    -Updates         one line of JSON: how many updates are waiting, from
+                     Windows Update (and how many of them are security
+                     ones) and from winget
     -Bluetooth       turns the Bluetooth radio on or off
     -Pair <address>  pairs with a Bluetooth device (12 hex digits), with
                      Windows' own prompt if it asks for a code, then a vivac
@@ -60,13 +62,36 @@ if ($Status) {
 }
 
 if ($Updates) {
-    $titles = @()
+    # A security update is one Windows Update files under Security or Critical
+    # Updates, or rates by severity; the bar draws those in the urgent colour.
+    $securityCategories = '0fa1201d-4330-4fa8-8ae9-b877473b6441', 'e6cf1350-c01b-414d-a61f-263d14d133b4'
+    $titles = @(); $security = @()
     try {
         $searcher = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher()
         $searcher.Online = $false
-        foreach ($u in $searcher.Search('IsInstalled=0 and IsHidden=0').Updates) { $titles += [string]$u.Title }
-    } catch { $titles = @() }
-    Write-Json ([ordered]@{ count = $titles.Count; titles = $titles })
+        foreach ($u in $searcher.Search('IsInstalled=0 and IsHidden=0').Updates) {
+            $titles += [string]$u.Title
+            $cats = @($u.Categories | ForEach-Object { [string]$_.CategoryID })
+            if ($u.MsrcSeverity -or @($cats | Where-Object { $securityCategories -contains $_ }).Count) { $security += [string]$u.Title }
+        }
+    } catch { $titles = @(); $security = @() }
+    # The programs winget can bring up to date, which the panel lists too:
+    # about two seconds more, read through the panel's own table parser.
+    $apps = @()
+    try {
+        Import-Module (Join-Path $root 'lib\Updates.psm1') -Force
+        $exe = Get-Command winget.exe -ErrorAction SilentlyContinue
+        if ($exe) {
+            $psi = New-Object Diagnostics.ProcessStartInfo $exe.Source, 'upgrade --accept-source-agreements --disable-interactivity'
+            $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+            $psi.RedirectStandardOutput = $true; $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
+            $proc = [Diagnostics.Process]::Start($psi)
+            $text = $proc.StandardOutput.ReadToEnd()
+            [void]$proc.WaitForExit(120000)
+            $apps = @(ConvertFrom-VivacWingetTable $text | ForEach-Object { "$($_.Name) $($_.Version) > $($_.Available)" })
+        }
+    } catch { $apps = @() }
+    Write-Json ([ordered]@{ count = $titles.Count; titles = $titles; security = $security.Count; apps = $apps.Count; appTitles = $apps })
     return
 }
 

@@ -81,6 +81,8 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   margin-left: 6px; padding: 0 6px; border-radius: 8px; font-size: 11px; font-weight: bold;
   background: #@COLOR_ACCENT@; color: #@COLOR_BG@;
 }
+.updates.security { color: #@COLOR_URGENT@; border-bottom-color: #@COLOR_URGENT@; }
+.updates.security .badge { background: #@COLOR_URGENT@; }
 .updates.reboot { background: #@COLOR_ACCENT@; color: #@COLOR_BG@; border-bottom: none; }
 .theme { color: #@COLOR_ACCENT@; border-bottom: none; padding: 3px 10px; }
 .power { background: #@COLOR_ACCENT@; color: #@COLOR_BG@; border-bottom: none; padding: 3px 10px; margin-left: 4px; }

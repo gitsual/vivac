@@ -59,7 +59,7 @@ function Get-MachineContext($Theme, $Settings, $Facts) {
     $tokens['WEATHER_JSON'] = $weather
     $tokens['PIPE_NAME'] = Get-VivacPipeName
     $labels = [ordered]@{}
-    foreach ($k in 'desktop', 'wired', 'no_link', 'not_connected', 'no_address', 'theme', 'power', 'bt_on', 'bt_off', 'eject', 'updates', 'updates_none', 'reboot', 'av_on', 'av_off',
+    foreach ($k in 'desktop', 'wired', 'no_link', 'not_connected', 'no_address', 'theme', 'power', 'bt_on', 'bt_off', 'eject', 'updates', 'updates_none', 'updates_apps', 'updates_security', 'reboot', 'av_on', 'av_off',
         'feels', 'humidity', 'wind', 'rain', 'next_hours', 'week', 'today', 'loading', 'forecast_unavailable',
         'wx_clear', 'wx_partly', 'wx_cloudy', 'wx_fog', 'wx_drizzle', 'wx_rain', 'wx_snow', 'wx_showers', 'wx_thunder') {
         $labels[$k] = Get-VivacString "bar.$k"
