@@ -91,9 +91,17 @@ function Initialize-VivacDataRoot([string]$User) {
     # not inherited from it, administrators and SYSTEM owning them and users
     # reading. Without delete rights on them the user cannot rename or swap
     # them either, whatever they may do in the folder around them.
+    #
+    # The permissions are set on the folder alone, and what is inside is
+    # then reset to inherit them. Not icacls /T with the grants: that strips
+    # inheritance from every file too, and (OI)(CI) grants mean nothing on a
+    # file, so files already there were left with no entry at all -- refused
+    # even to administrators. takeown first, so files left that way by an
+    # earlier run can be reset again.
     foreach ($d in $p.Logs, (Split-Path -Parent $p.Inbox)) {
-        & icacls.exe $d /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /T /C /Q | Out-Null
-        & icacls.exe $d /setowner '*S-1-5-32-544' /T /C /Q | Out-Null
+        & takeown.exe /F $d /A /R | Out-Null
+        & icacls.exe $d /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /C /Q | Out-Null
+        if (Get-ChildItem -LiteralPath $d -Force) { & icacls.exe (Join-Path $d '*') /reset /T /C /Q | Out-Null }
     }
     # The inbox: the user may add files there (and change the ones they
     # added), not delete or rename the folder itself.
