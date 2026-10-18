@@ -125,7 +125,7 @@ function draw(p, f) {
   el.innerHTML = html;
 }
 
-el.innerHTML = `<div class="popup-foot">${esc(L.loading)}</div>`;
+el.innerHTML = `<div class="popup-foot"><span class="spinner"></span>${esc(L.loading)}</div>`;
 try {
   const p = await place();
   draw(p, await forecast(p));

@@ -1302,6 +1302,27 @@ function Import-VivacAudio {
     Add-Type -TypeDefinition ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'VivacAudio.cs'))) -Language CSharp
 }
 
+# "Loading..." with a turning ring (lib/VivacLoading.cs), for the moment
+# between a key and the surface it opens: shown only if the surface is not on
+# screen within a moment, gone as soon as it is.
+function Import-VivacLoading {
+    if (-not ('VivacLoading' -as [type])) {
+        Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Xaml
+        $refs = @([Windows.Window].Assembly.Location, [Windows.Media.Brush].Assembly.Location,
+            [Windows.Threading.Dispatcher].Assembly.Location, [Windows.Markup.XamlReader].Assembly.Location,
+            [System.Xaml.XamlType].Assembly.Location)
+        Add-Type -TypeDefinition ([IO.File]::ReadAllText((Join-Path $PSScriptRoot 'VivacLoading.cs'))) -ReferencedAssemblies $refs -Language CSharp
+    }
+    $p = Get-Palette
+    [VivacLoading]::Init($p['COLOR_BG'], $p['COLOR_FG'], $p['COLOR_ACCENT'], (T 'surface.loading'))
+}
+function Start-VivacLoading {
+    try {
+        Import-VivacLoading
+        [VivacLoading]::Show()
+    } catch { }
+}
+
 function Get-SliderStyleXaml($p) {
     @"
 <Style TargetType="Slider">

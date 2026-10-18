@@ -130,6 +130,8 @@ foreach ($warm in (Show-Sound -NoShow), (Show-Menu -NoShow), (Show-Help -NoShow)
 # the next ones at once: asked here, the security surface opens like the rest.
 (Show-Security -NoShow).Close()
 (Show-Bluetooth -NoShow).Close()
+$loadingVerbs = @('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security')
+try { Import-VivacLoading } catch { }
 (Show-Network -NoShow).Close()
 (Show-Updates -NoShow).Close()
 $script:refreshApps = $false
@@ -403,7 +405,12 @@ $timer.Add_Tick({
         }
         $verb = $null
         while ($queue.TryDequeue([ref]$verb)) {
+            # "Loading..." for a surface on its way (not for one the key is
+            # closing): see lib/VivacLoading.cs.
+            $coming = $loadingVerbs -contains $verb -and -not ($open[$verb] -and $open[$verb].IsVisible)
+            if ($coming) { Start-VivacLoading }
             try { Invoke-Verb $verb } catch { }
+            if ($coming) { try { [VivacLoading]::Hide() } catch { } }
         }
         if ($script:refreshApps -and -not ($open['menu'] -and $open['menu'].IsVisible)) {
             $script:refreshApps = $false

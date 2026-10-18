@@ -28,6 +28,9 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+# Without the resident host a surface takes a couple of seconds more to
+# build: "Loading..." meanwhile, so the key does not look dead.
+if (@('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'security') -contains $Verb) { Start-VivacLoading }
 
 switch ($Verb) {
     'help'      { $pane = 'wm'; if ($Rest) { $pane = $Rest[0] }; Show-Help $pane }
