@@ -99,12 +99,13 @@ if (Test-Path -LiteralPath $sys) {
         }
     }
     if (& $has 'hide_icons') {
-        Write-Host '  [restore]   desktop icons'
+        Write-Host '  [restore]   desktop icons, task \vivac\tidy-desktop'
         if (-not $DryRun) {
             $adv = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
             if ($null -eq $o.hide_icons) { Remove-ItemProperty -LiteralPath $adv -Name HideIcons -ErrorAction SilentlyContinue }
             else { Set-ItemProperty -LiteralPath $adv -Name HideIcons -Value ([int]$o.hide_icons) -Type DWord }
             $restartExplorer = $true
+            [void](& (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-tidy-desktop.ps1') -Unregister)
         }
     }
     if (& $has 'disabled_hotkeys') {

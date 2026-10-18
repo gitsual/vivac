@@ -16,7 +16,9 @@
                 resident host so it does not slide back in at the screen
                 edge; the bar takes its place, with its own pills for what the tray held
     -DesktopIcons  no icons on the desktop (they show through translucent
-                terminals and sit under every tiled window anyway)
+                terminals and sit under every tiled window anyway), and the
+                shortcuts installers leave there moved into the Start menu,
+                where the launchers find them (bin/vivac-tidy-desktop.ps1)
     -WinKeys    Explorer gives up Win+R, so the Run box never opens over
                 vivac's menu, which the resident host opens on Win+R
     -Toasts     other programs' notifications as vivac's cards at the top
@@ -171,6 +173,10 @@ if ($DesktopIcons) {
         Set-ItemProperty -LiteralPath $adv -Name HideIcons -Value 1 -Type DWord
         $restartExplorer = $true
     }
+    # Hidden icons still pile up: installers keep dropping shortcuts there.
+    # The tidier moves them into the Start menu, where the launchers look.
+    Step (T 'system.desktop_tidy_step')
+    if (-not $DryRun) { [void](& (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-tidy-desktop.ps1') -Register) }
 }
 
 # Explorer registers Win+R for itself, and a hotkey it holds is answered even

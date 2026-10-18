@@ -21,6 +21,7 @@ try {
     New-Shortcut (Join-Path $start 'Vendor\Notepad.lnk') $exe
     New-Shortcut (Join-Path $desk 'Notepad.lnk') $exe
     New-Shortcut (Join-Path $desk 'Notepad file.lnk') $exe 'C:\notes.txt'
+    New-Shortcut (Join-Path $desk 'Gone.lnk') (Join-Path $dir 'uninstalled\gone.exe')
     Set-Content -LiteralPath (Join-Path $desk 'Game.url') -Value "[InternetShortcut]`r`nURL=steam://rungameid/480"
     Set-Content -LiteralPath (Join-Path $desk 'notes.txt') -Value 'mine'
     New-Item -ItemType Directory -Path (Join-Path $desk 'folder') | Out-Null
@@ -28,8 +29,8 @@ try {
 
     Case 'a dry run moves nothing' {
         $out = @(& $tidy @common -DryRun)
-        Assert-Equal 3 $out.Count 'one line per shortcut'
-        Assert-Equal 3 @(Get-ChildItem -LiteralPath $desk -File | Where-Object Extension -in '.lnk', '.url').Count
+        Assert-Equal 4 $out.Count 'one line per shortcut'
+        Assert-Equal 4 @(Get-ChildItem -LiteralPath $desk -File | Where-Object Extension -in '.lnk', '.url').Count
     }
 
     [void](& $tidy @common)
@@ -46,6 +47,10 @@ try {
     Case 'one it does not reach becomes a Start menu entry, arguments and URLs included' {
         Assert-True (Test-Path -LiteralPath (Join-Path $start 'Notepad file.lnk')) 'same program, other arguments'
         Assert-True (Test-Path -LiteralPath (Join-Path $start 'Game.url'))
+    }
+    Case 'one whose program is gone goes to the backup, never into the menu' {
+        Assert-True (Test-Path -LiteralPath (Join-Path $backup "$(Get-Date -Format 'yyyyMMdd')\Gone.lnk"))
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $start 'Gone.lnk'))) 'no dead entry in Start'
     }
     Case 'a second pass finds nothing to do' {
         Assert-Equal 0 @(& $tidy @common).Count

@@ -6,8 +6,10 @@
   Installers drop a shortcut on the desktop, which a tiling session never
   shows. This moves each .lnk and .url off the desktops: one the Start menu
   already reaches goes to a backup, and one it does not goes into the Start
-  menu first, so Flow Launcher and vivac's menu both still find it. Files
-  and folders on the desktop are never touched, and nothing is deleted.
+  menu first, so Flow Launcher and vivac's menu both still find it. One whose
+  program is gone (a desktop carried over from another install) goes to the
+  backup too: a dead entry in the menu is worse than none. Files and folders
+  on the desktop are never touched, and nothing is deleted.
 
     (none)       one pass now
     -Watch       stay resident and tidy whatever lands later, a few seconds
@@ -68,6 +70,14 @@ function Get-ShortcutKey([IO.FileInfo]$File) {
     $null
 }
 
+# A .lnk naming a file that is not there. One with no file target at all (a
+# Store app, a shell folder) cannot be judged and counts as alive.
+function Test-ShortcutBroken([IO.FileInfo]$File) {
+    if ($File.Extension -ne '.lnk') { return $false }
+    try { $t = $shell.CreateShortcut($File.FullName).TargetPath } catch { return $false }
+    [bool]($t -and -not (Test-Path -LiteralPath $t))
+}
+
 function Get-Shortcuts([string[]]$Dirs, [switch]$Recurse) {
     foreach ($d in $Dirs) {
         if (-not $d -or -not (Test-Path -LiteralPath $d -PathType Container)) { continue }
@@ -91,7 +101,9 @@ function Invoke-Tidy {
         # that name exists, in which case it is kept aside rather than lost.
         $dest = $stamp
         $why = 'in Start'
-        if (-not ($k -and $known.ContainsKey($k)) -and -not (Test-Path -LiteralPath (Join-Path $userStart $f.Name))) {
+        if (Test-ShortcutBroken $f) {
+            $why = 'program gone'
+        } elseif (-not ($k -and $known.ContainsKey($k)) -and -not (Test-Path -LiteralPath (Join-Path $userStart $f.Name))) {
             $dest = $userStart
             $why = 'added to Start'
         }
@@ -130,28 +142,40 @@ if ($Register) {
     if ($DryRun) { "would register $taskPath$taskName (Logon): conhost.exe $runner"; return }
     $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument $runner
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-    $settingsObj = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+    $settingsObj = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -RestartCount 5 -RestartInterval (New-TimeSpan -Minutes 1)
     Register-ScheduledTask -TaskPath $taskPath -TaskName $taskName -Action $action -Trigger $trigger -Settings $settingsObj -Force | Out-Null
     Start-ScheduledTask -TaskPath $taskPath -TaskName $taskName
     "registered $taskPath$taskName (Logon) and started it"
     return
 }
 
-Invoke-Tidy
-if (-not $Watch -or $DryRun) { return }
+if (-not $Watch -or $DryRun) { Invoke-Tidy; return }
+# Resident: one failed pass (a desktop not mounted yet) must not end it.
+try { Invoke-Tidy } catch { Write-TidyLog "pass failed: $($_.Exception.Message)" }
 
 # Installers write a shortcut and then sometimes rewrite it; a pass a few
-# seconds after the last change catches the final file, once.
-$watchers = foreach ($d in $Desktops) {
-    if (-not (Test-Path -LiteralPath $d -PathType Container)) { continue }
-    $w = New-Object IO.FileSystemWatcher $d
-    $w.IncludeSubdirectories = $false
-    $w.NotifyFilter = [IO.NotifyFilters]'FileName, LastWrite'
-    $w.EnableRaisingEvents = $true
-    foreach ($e in 'Created', 'Renamed', 'Changed') { [void](Register-ObjectEvent $w $e -SourceIdentifier "tidy-$e-$([guid]::NewGuid())") }
-    $w
+# seconds after the last change catches the final file, once. Change events
+# do not come from every desktop: one redirected to a WSL disk
+# (\\wsl.localhost\...) sends none, and one not mounted yet at sign-in cannot
+# be watched at all. So the desktops are also looked at every 15 s, which
+# only lists them; the full pass runs when a shortcut is there.
+$watched = @{}
+function Start-Watchers {
+    foreach ($d in $Desktops) {
+        if ($watched.ContainsKey($d) -or -not (Test-Path -LiteralPath $d -PathType Container)) { continue }
+        try {
+            $w = New-Object IO.FileSystemWatcher $d
+            $w.IncludeSubdirectories = $false
+            $w.NotifyFilter = [IO.NotifyFilters]'FileName, LastWrite'
+            $w.EnableRaisingEvents = $true
+            foreach ($e in 'Created', 'Renamed', 'Changed') { [void](Register-ObjectEvent $w $e -SourceIdentifier "tidy-$e-$([guid]::NewGuid())") }
+            $watched[$d] = $w
+        } catch { }
+    }
 }
+Start-Watchers
 $pending = $false
+$idle = 0
 while ($true) {
     $ev = Wait-Event -Timeout 5
     if ($ev) {
@@ -159,8 +183,14 @@ while ($true) {
         $pending = $true
         continue
     }
+    $idle++
+    if (-not $pending -and $idle -ge 3) {
+        $idle = 0
+        Start-Watchers
+        $pending = [bool]@(Get-Shortcuts $Desktops).Count
+    }
     if ($pending) {
         $pending = $false
-        Invoke-Tidy
+        try { Invoke-Tidy } catch { Write-TidyLog "pass failed: $($_.Exception.Message)" }
     }
 }
