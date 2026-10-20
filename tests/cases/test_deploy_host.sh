@@ -281,6 +281,17 @@ for sig in TERM HUP; do
 	! kill -0 "$(<"$sandbox/shim$sig/stow.pid")" 2>/dev/null || fail "$sig: the stow child outlived the deploy"
 done
 
+host="$sandbox/kill9"
+make_host "$host"
+before="$(snap "$host")"
+PATH="$sandbox/killbin:$PATH" hl "$host" >"$sandbox/k9.out" 2>&1 || true
+sleep 1
+[[ "$(snap "$host")" != "$before" ]] || fail 'kill -9: the deploy had not changed anything, the test proves nothing'
+root="$(find "$host/.local/state/vivac/backups" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+[[ -s "$root/MANIFEST" ]] || fail 'kill -9 left a backup without a MANIFEST'
+hl "$host" --rollback "$root" >/dev/null || fail 'rollback after a kill -9 failed'
+[[ "$(snap "$host")" == "$before" ]] || fail 'rollback after a kill -9 is not byte for byte'
+
 # --- the owner's hyprland.lua is a symlink into their own dotfiles --------------------------------------------------
 host="$sandbox/linked"
 make_host "$host"

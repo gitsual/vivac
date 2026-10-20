@@ -348,6 +348,17 @@ for key in "${overlay_keys[@]}"; do
 		cp -a -- "$overlay_state/$key" "$backup_root/.overlay-state/$key"
 	fi
 done
+# The MANIFEST is written BEFORE the first change, from the plan, and again at the end from what
+# really happened. After a kill -9 or a power cut --rollback still finds it: removing a path that was
+# absent before this run (or restoring a saved one) is right whether or not the run got to it.
+{
+	for path in "${absent[@]}"; do printf 'created\t%s\n' "$path"; done
+	for path in "${newdirs[@]}"; do printf 'newdir\t%s\n' "$path"; done
+	if $colour_state_new; then printf 'newtree\t%s\n' "$overlay_state"; fi
+	for key in "${overlay_keys[@]}"; do printf 'overlaystate\t%s\n' "$key"; done
+} >"$backup_root/MANIFEST.tmp"
+mv -- "$backup_root/MANIFEST.tmp" "$backup_root/MANIFEST"
+sync "$backup_root/MANIFEST" "$backup_root" 2>/dev/null || true
 for path in "${orphans[@]}"; do
 	save "$path"
 	rm -f -- "$HOME/$path"
