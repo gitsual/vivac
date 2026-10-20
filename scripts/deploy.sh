@@ -83,16 +83,16 @@ ensure_backup_root() {
 	backup_root_ready=true
 }
 
+# Plan first, change later: which package files already have something at their
+# place (so a backup will move them away), and which the protect list leaves alone.
+plan_kind=() plan_rel=() moving=()
 for package in "${selected[@]}"; do
 	package_root="$repo_root/dotfiles/$package"
 	while IFS= read -r -d '' source; do
 		relative="${source#"$package_root"/}"
 		target="$HOME/$relative"
 		if is_protected "$relative"; then
-			if [[ -e "$target" || -L "$target" ]]; then
-				if $dry_run; then verb='would skip (protected)'; else verb='skipped (protected)'; fi
-				printf '%s %s\n' "$verb" "$target"
-			fi
+			plan_kind+=(skip) plan_rel+=("$relative")
 			continue
 		fi
 		# Stow may link an entire parent directory. Compare canonical file
@@ -102,18 +102,69 @@ for package in "${selected[@]}"; do
 			continue
 		fi
 		if [[ -e "$target" || -L "$target" ]]; then
-			destination="$backup_root/$relative"
-			if $dry_run; then
-				printf 'would back up %s -> %s\n' "$target" "$destination"
-			else
-				ensure_backup_root
-				mkdir -p -- "$(dirname -- "$destination")"
-				mv -- "$target" "$destination"
-				printf 'backed up %s -> %s\n' "$target" "$destination"
-			fi
+			plan_kind+=(move) plan_rel+=("$relative")
+			moving+=("$relative")
 		fi
 	done < <(find "$package_root" -type f -print0)
+done
 
+ignores=()
+for path in "${protected[@]}"; do
+	# shellcheck disable=SC2001  # one class of characters, escaped for a regex
+	ignores+=("--ignore=^$(sed 's/[][\\.*^$+?(){}|]/\\&/g' <<<"$path")\$")
+done
+
+# Stow aborts every package on one conflict, after the backups have already moved
+# files. Ask it first (--simulate) and stop, with nothing touched, on any conflict
+# that moving a package file away would not clear.
+unresolved=()
+will_move() {
+	local path
+	for path in "${moving[@]}"; do
+		[[ "$path" == "$1" ]] && return 0
+	done
+	return 1
+}
+simulate_stow() {
+	local out line path found=false
+	out="$(stow --simulate --dir="$repo_root/dotfiles" --target="$HOME" --no-folding "${ignores[@]}" --restow "${selected[@]}" 2>&1)" && return 0
+	while IFS= read -r line; do
+		[[ "$line" == '  * '* ]] || continue
+		found=true
+		line="${line#  * }"
+		if [[ "$line" =~ \ over\ existing\ target\ (.+)\ since\  ]]; then path="${BASH_REMATCH[1]}"; else path="${line##*: }"; fi
+		will_move "$path" && continue
+		unresolved+=("$line")
+	done <<<"$out"
+	$found || unresolved+=("$out")
+	return 0
+}
+simulate_stow
+if ((${#unresolved[@]})); then
+	printf 'deploy: stow would abort on conflicts that a backup cannot clear; nothing was changed:\n' >&2
+	printf '  %s\n' "${unresolved[@]}" >&2
+	exit 1
+fi
+
+for i in "${!plan_kind[@]}"; do
+	relative="${plan_rel[i]}"
+	target="$HOME/$relative"
+	if [[ "${plan_kind[i]}" == skip ]]; then
+		if [[ -e "$target" || -L "$target" ]]; then
+			if $dry_run; then verb='would skip (protected)'; else verb='skipped (protected)'; fi
+			printf '%s %s\n' "$verb" "$target"
+		fi
+		continue
+	fi
+	destination="$backup_root/$relative"
+	if $dry_run; then
+		printf 'would back up %s -> %s\n' "$target" "$destination"
+	else
+		ensure_backup_root
+		mkdir -p -- "$(dirname -- "$destination")"
+		mv -- "$target" "$destination"
+		printf 'backed up %s -> %s\n' "$target" "$destination"
+	fi
 done
 
 if $dry_run; then
@@ -121,11 +172,6 @@ if $dry_run; then
 	exit 0
 fi
 
-ignores=()
-for path in "${protected[@]}"; do
-	# shellcheck disable=SC2001  # one class of characters, escaped for a regex
-	ignores+=("--ignore=^$(sed 's/[][\\.*^$+?(){}|]/\\&/g' <<<"$path")\$")
-done
 stow --dir="$repo_root/dotfiles" --target="$HOME" --no-folding "${ignores[@]}" --restow "${selected[@]}"
 printf 'deployed: %s\n' "${selected[*]}"
 

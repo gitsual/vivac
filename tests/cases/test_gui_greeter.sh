@@ -40,8 +40,9 @@ grep -Eq 'regreet|cage' <<<"$out" && fail '--desktop-login alone installs the GU
 grep -q 'tuigreet' "$repo_root/system/etc/greetd/config.toml" || fail 'the tuigreet config changed'
 
 # --- the selector adds exactly its manifest and asks apply-system for the greeter --------------------------
-listing() {
-	SYSROOT="$repo_root/tests/fixtures/laptop-intel/sysroot" LSPCI_CMD=false PACMAN_CMD=false \
+listing() { # HOME is the sandbox: bootstrap's dry run asks deploy.sh about the home it is given
+	mkdir -p -- "$sandbox/home"
+	HOME="$sandbox/home" SYSROOT="$repo_root/tests/fixtures/laptop-intel/sysroot" LSPCI_CMD=false PACMAN_CMD=false \
 		bash "$repo_root/scripts/bootstrap.sh" --dry-run --system "$@" 2>/dev/null
 }
 base="$(listing)"

@@ -209,12 +209,16 @@ if $dry_run; then
 	done
 	for path in "${orphans[@]}"; do printf 'would back up and remove %s\n' "$HOME/$path"; done
 	printf 'would write %s (the checkout: %s)\n' "$config/vivac/repo" "$repo_root"
-	"$repo_root/scripts/deploy.sh" --dry-run --no-theme "${protect_args[@]}" "${packages[@]}"
+	"$repo_root/scripts/deploy.sh" --dry-run --no-theme "${protect_args[@]}" "${packages[@]}" || die 'the stow simulation failed; nothing was changed'
 	for path in "${overlay[@]}"; do printf 'would recolour %s (%s)\n' "$HOME/$path" "$theme"; done
 	skipped_note
 	printf 'dry run: the staged config verified; nothing was changed\n'
 	exit 0
 fi
+
+# --- the stow simulation: still nothing touched -----------------------------------------------------------------
+# Stow aborts all packages on one conflict, so ask it before the first file moves.
+"$repo_root/scripts/deploy.sh" --dry-run --no-theme "${protect_args[@]}" "${packages[@]}" >/dev/null || die 'the stow simulation failed (see above); nothing was changed'
 
 # --- go live: every step below is undone by --rollback -------------------------------------------------------------
 # The stamp has to be unique: two deploys in one second must not share (and overwrite) a backup.

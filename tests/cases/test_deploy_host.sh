@@ -225,7 +225,9 @@ host="$sandbox/halfway"
 make_host "$host"
 before="$(snap "$host")"
 mkdir -p -- "$sandbox/failbin"
-printf '#!/bin/sh\necho "stow: simulated failure" >&2\nexit 1\n' >"$sandbox/failbin/stow"
+# The simulation (the pre-flight) passes; the real run is what fails.
+# shellcheck disable=SC2016  # the shim body is literal
+printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = --simulate ] && exec %s "$@"; done\necho "stow: simulated failure" >&2\nexit 1\n' "$(command -v stow)" >"$sandbox/failbin/stow"
 chmod +x "$sandbox/failbin/stow"
 rc=0
 out="$(PATH="$sandbox/failbin:$PATH" hl "$host" 2>&1)" || rc=$?
@@ -279,6 +281,25 @@ hl "$host" --without bogus >/dev/null 2>&1 && fail 'unknown package accepted'
 unknown_status=0
 hl "$host" --without bogus >/dev/null 2>&1 || unknown_status=$?
 [[ "$unknown_status" -eq 2 ]] || fail "an unknown package exits $unknown_status, not 2"
+
+# --- Stow is simulated before anything moves: a conflict a backup cannot resolve aborts untouched -----------
+# A FILE where the package needs a directory: no backup of a package file clears that.
+host="$sandbox/preflight"
+make_host "$host"
+printf 'not a directory\n' >"$host/.config/nwg-bar"
+before="$(snap "$host")"
+for flag in --dry-run ''; do
+	rc=0
+	# shellcheck disable=SC2086  # the flag is optional
+	out="$(hl "$host" $flag 2>&1)" || rc=$?
+	((rc != 0)) || fail "the deploy ($flag) went ahead over a conflict stow would abort on: $out"
+	grep -q 'nwg-bar' <<<"$out" || fail "the conflict list does not name .config/nwg-bar ($flag): $out"
+	grep -q 'nothing was changed' <<<"$out" || fail "no 'nothing was changed' ($flag): $out"
+	[[ "$(snap "$host")" == "$before" ]] || fail "the pre-flight ($flag) let the host change"
+	[[ -f "$host/.config/hypr/hyprland.lua" && ! -L "$host/.config/hypr/hyprland.lua" ]] || fail "hyprland.lua was moved ($flag)"
+done
+[[ "$(backups_in "$host")" -eq 0 ]] || fail 'the refused deploy left a backup directory'
+# Files that a backup DOES clear are not conflicts: the ordinary deploy above already proves that.
 
 # --- the rollback doc ----------------------------------------------------------------------------------------
 doc="$repo_root/docs/host-deploy.md"
