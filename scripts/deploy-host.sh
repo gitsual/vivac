@@ -5,7 +5,7 @@ set -Eeuo pipefail
 # without losing any of it.
 #
 #   scripts/deploy-host.sh [--dry-run] [--all]   verify, back up, deploy, recolour
-#   scripts/deploy-host.sh --rollback [BACKUP]   put the pre-deploy state back
+#   scripts/deploy-host.sh --rollback [BACKUP] [--force]   put the pre-deploy state back
 #
 # Order: preflight -> stage the render in a scratch HOME -> Hyprland --verify-config
 # on the staged config (the host's local.lua included) -> only then touch the host:
@@ -13,13 +13,17 @@ set -Eeuo pipefail
 # files. A failed or missing verifier changes nothing. Docs: docs/host-deploy.md.
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
+# shellcheck source=lib/kv.sh
+source "$repo_root/lib/kv.sh"
+# shellcheck source=lib/settings.sh
+source "$repo_root/lib/settings.sh"
 hyprland="${HYPRLAND_BIN:-Hyprland}"
 config="$HOME/.config"
 state="${XDG_STATE_HOME:-$HOME/.local/state}"
 # waybar, kitty, dunst, rofi and wofi are never packages here, not even with
 # --all: they are the owner's own layouts and only get the palette (colour overlay).
 packages=(hypr nvim ricer welcome)
-dry_run=false rollback=false backup_arg=''
+dry_run=false rollback=false force=false backup_arg=''
 
 die() {
 	printf 'deploy-host: %s\n' "$*" >&2
@@ -30,34 +34,73 @@ while (($#)); do
 	case "$1" in
 	--dry-run) dry_run=true ;;
 	--all) packages=(hypr nvim shell theme audio security automation ricer welcome) ;;
-	--rollback)
-		rollback=true
-		backup_arg="${2:-}"
-		[[ $# -lt 2 ]] || shift
-		;;
+	--rollback) rollback=true ;;
+	--force) force=true ;;
 	-h | --help)
 		sed -n '4,9p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
 		exit 0
 		;;
-	*) die "unknown option: $1" ;;
+	-*) die "unknown option: $1" ;;
+	*) backup_arg="$1" ;;
 	esac
 	shift
 done
+$rollback || [[ -z "$backup_arg" ]] || die "unexpected argument: $backup_arg"
 
 # --- rollback: backed-up files come back, created files and directories go ------------------------------
+# The MANIFEST is read as untrusted input: every line is checked before anything is removed.
+backup_has_content() { # a backup counts when the MANIFEST lists something or a file was saved
+	[[ -f "$1/MANIFEST" && ! -e "$1/ROLLED-BACK" ]] || return 1
+	[[ -s "$1/MANIFEST" ]] || [[ -n "$(find "$1" -mindepth 1 ! -name MANIFEST ! -name ROLLED-BACK -print -quit)" ]]
+}
 if $rollback; then
+	backups="$state/vivac/backups"
 	root="$backup_arg"
-	[[ -n "$root" ]] || root="$(find "$state/vivac/backups" -mindepth 2 -maxdepth 2 -name MANIFEST 2>/dev/null | LC_ALL=C sort | tail -n 1 | xargs -r dirname)"
-	[[ -f "$root/MANIFEST" ]] || die "no deploy-host backup to roll back (looked for ${root:-the newest} MANIFEST)"
+	if [[ -z "$root" ]]; then
+		while IFS= read -r candidate; do
+			if backup_has_content "$candidate"; then
+				root="$candidate"
+				break
+			fi
+		done < <(find "$backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | LC_ALL=C sort -r)
+		[[ -n "$root" ]] || die "no deploy-host backup with anything to roll back under $backups"
+		printf 'using the newest backup with something to undo: %s\n' "$root"
+	fi
+	[[ -f "$root/MANIFEST" ]] || die "no deploy-host backup to roll back (looked for $root/MANIFEST)"
+	root="$(cd -- "$root" && pwd -P)"
+	if ! $force; then
+		real_backups="$(cd -- "$backups" 2>/dev/null && pwd -P || true)"
+		[[ -n "$real_backups" && "$(dirname -- "$root")" == "$real_backups" ]] ||
+			die "refusing to roll back $root: it is not under $backups (--force to use it anyway)"
+	fi
+	overlay_state="$state/vivac/colour-overlay"
+	bad=''
+	while IFS=$'\t' read -r kind value; do
+		[[ -n "$kind" ]] || continue
+		case "$kind" in
+		created | newdir) [[ -n "$value" && "$value" != /* && ! "$value" =~ (^|/)\.\.(/|$) ]] || bad+="$kind $value; " ;;
+		newtree) [[ "$value" == "$overlay_state" ]] || bad+="$kind $value; " ;;
+		overlaystate) [[ -n "$value" && "$value" != */* && "$value" != . && "$value" != .. ]] || bad+="$kind $value; " ;;
+		*) bad+="$kind $value; " ;;
+		esac
+	done <"$root/MANIFEST"
+	[[ -z "$bad" ]] || die "refusing to roll back: the MANIFEST has lines that do not belong to this host (${bad%; }); nothing was changed"
 	while IFS=$'\t' read -r kind value; do
 		case "$kind" in
 		created) rm -f -- "$HOME/$value" ;;
 		newtree) rm -rf -- "$value" ;;
+		overlaystate)
+			rm -rf -- "${overlay_state:?}/$value"
+			if [[ -e "$root/.overlay-state/$value" ]]; then
+				mkdir -p -- "$overlay_state"
+				cp -a -- "$root/.overlay-state/$value" "$overlay_state/$value"
+			fi
+			;;
 		esac
 	done <"$root/MANIFEST"
 	while IFS= read -r -d '' saved; do
 		relative="${saved#"$root"/}"
-		[[ "$relative" != MANIFEST ]] || continue
+		case "$relative" in MANIFEST | ROLLED-BACK | .overlay-state/*) continue ;; esac
 		mkdir -p -- "$(dirname -- "$HOME/$relative")"
 		rm -f -- "$HOME/$relative"
 		cp -a -- "$saved" "$HOME/$relative"
@@ -65,6 +108,7 @@ if $rollback; then
 	awk -F'\t' '$1=="newdir"{print $2}' "$root/MANIFEST" | LC_ALL=C sort -r | while IFS= read -r dir; do
 		rmdir -- "$HOME/$dir" 2>/dev/null || true
 	done
+	: >"$root/ROLLED-BACK"
 	printf 'rolled back to the state before %s\n' "$root"
 	exit 0
 fi
@@ -84,10 +128,16 @@ fi
 stage="$(mktemp -d "${TMPDIR:-/tmp}/vivac-deploy-host.XXXXXX")"
 trap 'rm -rf -- "$stage"' EXIT
 staged="$stage/home"
+# The settings go through the repository's own reader (shape-checked, CR dropped),
+# so a theme name can never be a path and a CRLF file means what it says.
+if [[ -r "$settings" ]]; then LC_ALL=C tr -d '\r' <"$settings" >"$stage/settings"; fi
+settings_load "$stage/settings" || die 'the settings file is not valid (see above); nothing was changed'
+theme="$(settings_get theme)"
+[[ "$theme" == bad-romance || -f "$repo_root/data/themes/$theme.conf" ]] || die "the theme '$theme' is not in the catalogue; nothing was changed"
 mkdir -p -- "$staged/.config/hypr" "$staged/.config/vivac" "$stage/run"
 chmod 700 "$stage/run"
 HOME="$staged" XDG_CONFIG_HOME="$staged/.config" XDG_STATE_HOME="$staged/.state" \
-	FACTS_FILE="$facts" FACTS_OVERRIDE="$override" SETTINGS_FILE="$settings" \
+	FACTS_FILE="$facts" FACTS_OVERRIDE="$override" SETTINGS_FILE="$stage/settings" \
 	"$repo_root/scripts/render-config.sh" --deploy >/dev/null || die 'the render failed; nothing was changed'
 cp -- "$repo_root/dotfiles/hypr/.config/hypr/hyprland.lua" "$staged/.config/hypr/hyprland.lua"
 printf '%s\n' "$repo_root" >"$staged/.config/vivac/repo"
@@ -115,8 +165,6 @@ while read -r _ pattern _; do
 		if [[ -f "$file" && ! -L "$file" ]]; then overlay+=("${file#"$HOME"/}"); fi
 	done < <(compgen -G "$config/$pattern" || true)
 done <"$repo_root/data/colour-overlay.tsv"
-theme="$(sed -nE 's/^theme=(.*)$/\1/p' "$settings" 2>/dev/null | tail -n 1 || true)"
-theme="${theme:-bad-romance}"
 orphans=()
 for name in hardware input monitors; do
 	[[ ! -e "$config/hypr/generated/$name.conf" ]] || orphans+=(".config/hypr/generated/$name.conf")
@@ -136,8 +184,23 @@ if $dry_run; then
 fi
 
 # --- go live: every step below is undone by --rollback -------------------------------------------------------------
-backup_root="$state/vivac/backups/$(date -u +%Y%m%dT%H%M%SZ)"
-{ mkdir -p -- "$backup_root" && [[ -w "$backup_root" ]]; } || die "the backup directory $backup_root is not writable; nothing was changed"
+# The stamp has to be unique: two deploys in one second must not share (and overwrite) a backup.
+backups_dir="$state/vivac/backups"
+{ mkdir -p -- "$backups_dir" && [[ -w "$backups_dir" ]]; } || die "the backup directory $backups_dir is not writable; nothing was changed"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)" suffix='' attempt=0
+until mkdir -- "$backups_dir/$stamp$suffix" 2>/dev/null; do
+	attempt=$((attempt + 1))
+	((attempt < 100)) || die "cannot create a backup directory under $backups_dir; nothing was changed"
+	suffix="-$attempt"
+done
+backup_root="$backups_dir/$stamp$suffix"
+overlay_state="$state/vivac/colour-overlay"
+overlay_keys=()
+for path in "${overlay[@]}"; do
+	key="${HOME}/${path}"
+	key="${key#"$config"/}"
+	overlay_keys+=("${key//\//__}")
+done
 absent=() newdirs=()
 track() {
 	local relative="$1" dir
@@ -154,19 +217,50 @@ for package in "${packages[@]}"; do
 	while IFS= read -r file; do track "$file"; done < <(cd "$repo_root/dotfiles/$package" && find . -type f | sed 's|^\./||')
 done
 colour_state_new=false
-[[ -d "$state/vivac/colour-overlay" ]] || colour_state_new=true
+[[ -d "$overlay_state" ]] || colour_state_new=true
+
+# A backup entry that equals what is live now says nothing a rollback needs, and a
+# deploy with nothing left over keeps no backup at all: a later bare --rollback
+# must never land on an empty one.
+prune_backup() {
+	local saved relative live
+	while IFS= read -r -d '' saved; do
+		relative="${saved#"$backup_root"/}"
+		live="$HOME/$relative"
+		if [[ -L "$saved" ]]; then
+			[[ -L "$live" && "$(readlink -- "$saved")" == "$(readlink -- "$live")" ]] && rm -f -- "$saved"
+		elif [[ -f "$live" && ! -L "$live" ]] && cmp -s -- "$saved" "$live" && [[ "$(stat -c %a -- "$saved")" == "$(stat -c %a -- "$live")" ]]; then
+			rm -f -- "$saved"
+		fi
+	done < <(find "$backup_root" -path "$backup_root/.overlay-state" -prune -o \( -type f -o -type l \) ! -name MANIFEST -print0)
+	find "$backup_root" -mindepth 1 -type d -empty -delete
+}
 
 finish() {
-	local status=$? path
+	local status=$? path key
+	prune_backup || true
 	{
 		for path in "${absent[@]}"; do
 			[[ ! -e "$HOME/$path" && ! -L "$HOME/$path" ]] || printf 'created\t%s\n' "$path"
 		done
 		for path in "${newdirs[@]}"; do [[ ! -d "$HOME/$path" ]] || printf 'newdir\t%s\n' "$path"; done
-		if $colour_state_new && [[ -d "$state/vivac/colour-overlay" ]]; then printf 'newtree\t%s\n' "$state/vivac/colour-overlay"; fi
+		if $colour_state_new && [[ -d "$overlay_state" ]]; then printf 'newtree\t%s\n' "$overlay_state"; fi
+		for key in "${overlay_keys[@]}"; do
+			if [[ -d "$overlay_state/$key" && -d "$backup_root/.overlay-state/$key" ]] && diff -rq -- "$backup_root/.overlay-state/$key" "$overlay_state/$key" >/dev/null; then
+				rm -rf -- "${backup_root:?}/.overlay-state/$key"
+			elif [[ -e "$overlay_state/$key" || -e "$backup_root/.overlay-state/$key" ]]; then
+				printf 'overlaystate\t%s\n' "$key"
+			fi
+		done
 	} >"$backup_root/MANIFEST"
-	printf 'backup: %s\n' "$backup_root"
-	printf 'rollback: %s --rollback %s\n' "$repo_root/scripts/deploy-host.sh" "$backup_root"
+	find "$backup_root" -mindepth 1 -type d -empty -delete
+	if [[ ! -s "$backup_root/MANIFEST" && -z "$(find "$backup_root" -mindepth 1 ! -name MANIFEST -print -quit)" ]]; then
+		rm -rf -- "$backup_root"
+		printf 'nothing changed on the host; no backup kept\n'
+	else
+		printf 'backup: %s\n' "$backup_root"
+		printf 'rollback: %s --rollback %s\n' "$repo_root/scripts/deploy-host.sh" "$backup_root"
+	fi
 	rm -rf -- "$stage"
 	exit "$status"
 }
@@ -176,6 +270,13 @@ save() { # save RELATIVE — copy a host file into the backup, keeping mode and 
 	mkdir -p -- "$(dirname -- "$backup_root/$1")"
 	cp -a -- "$HOME/$1" "$backup_root/$1"
 }
+# The overlay's state decides whether it swaps or skips; it has to travel with the files it describes.
+for key in "${overlay_keys[@]}"; do
+	if [[ -d "$overlay_state/$key" ]]; then
+		mkdir -p -- "$backup_root/.overlay-state"
+		cp -a -- "$overlay_state/$key" "$backup_root/.overlay-state/$key"
+	fi
+done
 for path in "${orphans[@]}"; do
 	save "$path"
 	rm -f -- "$HOME/$path"
@@ -196,7 +297,8 @@ done
 	printf '%s\n' "$repo_root" >"$config/vivac/repo"
 }
 
-DEPLOY_BACKUP_ROOT="$backup_root" "$repo_root/scripts/deploy.sh" --no-theme "${protect_args[@]}" "${packages[@]}"
+# deploy.sh names its own backup directory; this script prints the one that matters.
+DEPLOY_BACKUP_ROOT="$backup_root" "$repo_root/scripts/deploy.sh" --no-theme "${protect_args[@]}" "${packages[@]}" | { grep -v '^backup: ' || true; }
 
 for path in "${overlay[@]}"; do [[ -e "$backup_root/$path" ]] || save "$path"; done
 "$repo_root/scripts/colour-overlay.sh" --apply "$theme" --config-dir "$config" || printf 'deploy-host: the colour overlay failed; the desktop is deployed\n' >&2

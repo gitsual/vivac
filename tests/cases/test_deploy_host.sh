@@ -134,6 +134,122 @@ for flag in '' --all; do
 		fail "the rollback did not restore the pre-deploy state ($flag)"
 	fi
 done
+# --- helpers for the cases below -----------------------------------------------------------------------------
+hl() { HYPRLAND_BIN="$sandbox/hyprland" run "$@"; }
+backup_of() { sed -n 's/^backup: //p' <<<"$1" | tail -n 1; }
+backups_in() { find "$1/.local/state/vivac/backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l; }
+
+# --- deploy twice, then a bare rollback: the first deploy's backup, not an empty second ---------------------
+host="$sandbox/twice"
+make_host "$host"
+before="$(snap "$host")"
+out="$(hl "$host")" || fail "first deploy failed: $out"
+first="$(backup_of "$out")"
+out="$(hl "$host")" || fail "second deploy failed: $out"
+[[ "$(backups_in "$host")" == 1 ]] || fail "a deploy that changed nothing kept a backup: $(find "$host/.local/state/vivac/backups" -mindepth 1 -maxdepth 1)"
+grep -qi 'nothing' <<<"$out" || fail "the no-op deploy did not say it changed nothing: $out"
+out="$(hl "$host" --rollback)" || fail "bare rollback failed: $out"
+grep -qF -- "$first" <<<"$out" || fail "the bare rollback did not name the backup it used: $out"
+[[ "$(snap "$host")" == "$before" ]] || fail 'deploy, deploy, bare rollback did not restore the pre-deploy host'
+# A second deploy that did change something is the newest with content; a rolled-back backup is not picked again.
+out="$(hl "$host")" || fail "re-deploy failed: $out"
+orphan=hardware
+printf 'old hyprlang again\n' >"$host/.config/hypr/generated/$orphan.conf"
+mid="$(snap "$host")"
+out="$(hl "$host")" || fail "deploy over a new orphan failed: $out"
+second="$(backup_of "$out")"
+[[ "$(backups_in "$host")" == 3 ]] || fail 'the changing deploy did not keep its own backup'
+out="$(hl "$host" --rollback)" || fail "rollback of the second deploy failed: $out"
+grep -qF -- "$second" <<<"$out" || fail 'bare rollback did not pick the newest backup with content'
+[[ "$(snap "$host")" == "$mid" ]] || fail 'rolling back the second deploy did not return to the state before it'
+out="$(hl "$host" --rollback)" || fail "second bare rollback failed: $out"
+grep -qF -- "$second" <<<"$out" && fail 'a backup that was already rolled back was picked again'
+
+# --- a MANIFEST is not trusted: nothing outside the host is deleted -------------------------------------------
+host="$sandbox/tamper"
+make_host "$host"
+out="$(hl "$host")" || fail "tamper fixture: deploy failed: $out"
+root="$(backup_of "$out")"
+cp -- "$root/MANIFEST" "$sandbox/MANIFEST.good"
+after="$(snap "$host")"
+mkdir -p -- "$sandbox/victim" "$sandbox/victim-dir"
+printf 'keep\n' >"$sandbox/victim/file" && printf 'keep\n' >"$sandbox/outside"
+for line in "newtree	$sandbox/victim" "created	../outside" "created	$sandbox/outside" "newdir	$sandbox/victim-dir" "newdir	../../$sandbox/victim-dir" "overlaystate	../../x" "frobnicate	x"; do
+	cp -- "$sandbox/MANIFEST.good" "$root/MANIFEST"
+	printf '%s\n' "$line" >>"$root/MANIFEST"
+	rc=0
+	out="$(hl "$host" --rollback "$root" 2>&1)" || rc=$?
+	((rc != 0)) || fail "a tampered MANIFEST was obeyed: $line"
+	grep -qi 'refus' <<<"$out" || fail "no explanation for the tampered line '$line': $out"
+	{ [[ -f "$sandbox/victim/file" && -f "$sandbox/outside" && -d "$sandbox/victim-dir" ]]; } || fail "a tampered MANIFEST deleted something outside the host: $line"
+	[[ "$(snap "$host")" == "$after" ]] || fail "a refused rollback changed the host: $line"
+done
+cp -- "$sandbox/MANIFEST.good" "$root/MANIFEST"
+# A backup that does not live under the state directory is refused unless forced.
+cp -a -- "$root" "$sandbox/elsewhere"
+out="$(hl "$host" --rollback "$sandbox/elsewhere" 2>&1)" && fail 'a backup outside the backups directory was accepted'
+grep -qi 'refus' <<<"$out" || fail "no explanation for the foreign backup root: $out"
+[[ "$(snap "$host")" == "$after" ]] || fail 'the refused foreign backup changed the host'
+hl "$host" --rollback "$sandbox/elsewhere" --force >/dev/null || fail '--force did not let a foreign backup root through'
+[[ "$(snap "$host")" != "$after" ]] || fail '--force rolled back nothing'
+
+# --- the theme comes through the settings reader, not through sed --------------------------------------------
+host="$sandbox/badtheme"
+make_host "$host"
+printf 'theme=../../x\n' >"$host/.config/vivac/settings"
+HYPRLAND_BIN="$sandbox/hyprland" refuses "$host" 'theme'
+host="$sandbox/crlf"
+make_host "$host"
+printf 'theme=carmen\r\n' >"$host/.config/vivac/settings"
+out="$(hl "$host")" || fail "a CRLF settings file broke the deploy: $out"
+grep -qi "$cbg" "$host/.config/waybar/style.css" || fail 'a CRLF theme line was not understood'
+
+# --- the colour overlay state is rolled back with the files ---------------------------------------------------
+host="$sandbox/overlaystate"
+make_host "$host"
+printf 'theme=carmen\n' >"$host/.config/vivac/settings"
+overlay_tool() { XDG_STATE_HOME="$host/.local/state" "$repo_root/scripts/colour-overlay.sh" --apply "$1" --config-dir "$host/.config" >"$sandbox/ov.out" 2>&1; }
+overlay_tool carmen || fail 'overlay fixture failed'
+printf 'theme=gatsby\n' >"$host/.config/vivac/settings"
+before="$(snap "$host")"
+out="$(hl "$host")" || fail "deploy over an existing overlay state failed: $out"
+root="$(backup_of "$out")"
+hl "$host" --rollback "$root" >/dev/null || fail 'rollback over an overlay state failed'
+[[ "$(snap "$host")" == "$before" ]] || fail 'rollback did not restore the colour overlay state'
+overlay_tool gatsby || fail 'overlay after rollback failed'
+grep -q 'skipped (edited)' "$sandbox/ov.out" && fail "after a rollback the overlay thinks the owner edited the file: $(<"$sandbox/ov.out")"
+grep -qi "$(tok "$repo_root/data/themes/gatsby.conf" COLOR_BG)" "$host/.config/waybar/style.css" || fail 'the overlay no longer applies after a rollback'
+
+# --- a deploy that dies half way tells how to come back, and coming back is exact --------------------------------
+host="$sandbox/halfway"
+make_host "$host"
+before="$(snap "$host")"
+mkdir -p -- "$sandbox/failbin"
+printf '#!/bin/sh\necho "stow: simulated failure" >&2\nexit 1\n' >"$sandbox/failbin/stow"
+chmod +x "$sandbox/failbin/stow"
+rc=0
+out="$(PATH="$sandbox/failbin:$PATH" hl "$host" 2>&1)" || rc=$?
+((rc != 0)) || fail 'a failing stow did not fail the deploy'
+grep -q -- '--rollback' <<<"$out" || fail "no rollback hint after a failed deploy: $out"
+root="$(backup_of "$out")"
+[[ -f "$root/MANIFEST" ]] || fail 'the failed deploy left no backup to roll back to'
+hl "$host" --rollback "$root" >/dev/null || fail 'rollback after a failed deploy failed'
+[[ "$(snap "$host")" == "$before" ]] || fail 'rollback after a half-way failure is not byte for byte'
+
+# --- the owner's hyprland.lua is a symlink into their own dotfiles --------------------------------------------------
+host="$sandbox/linked"
+make_host "$host"
+mkdir -p -- "$sandbox/owner-dotfiles"
+printf -- '-- owner dotfiles main config\n' >"$sandbox/owner-dotfiles/hyprland.lua"
+rm -- "$host/.config/hypr/hyprland.lua"
+ln -s "$sandbox/owner-dotfiles/hyprland.lua" "$host/.config/hypr/hyprland.lua"
+before="$(snap "$host")"
+out="$(hl "$host")" || fail "deploy over a symlinked hyprland.lua failed: $out"
+[[ "$(readlink -f -- "$host/.config/hypr/hyprland.lua")" == "$repo_root/dotfiles/hypr/.config/hypr/hyprland.lua" ]] || fail 'the symlinked hyprland.lua was not replaced'
+[[ "$(<"$sandbox/owner-dotfiles/hyprland.lua")" == '-- owner dotfiles main config' ]] || fail "the owner's dotfiles file was written through the link"
+hl "$host" --rollback "$(backup_of "$out")" >/dev/null || fail 'rollback over a symlinked hyprland.lua failed'
+[[ "$(snap "$host")" == "$before" ]] || fail 'the symlink (and its target) did not come back'
+
 # --- the rollback doc ----------------------------------------------------------------------------------------
 doc="$repo_root/docs/host-deploy.md"
 # shellcheck disable=SC2016,SC2088  # literal doc text: tildes, braces and backticks are not expanded
