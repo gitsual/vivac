@@ -35,6 +35,20 @@ run_gate() { HELP_TEMPLATE="$1" bash "$gate" >"$sandbox/out" 2>"$sandbox/err"; }
 run_gate "$good" || fail "gate rejected a complete Lua template: $(<"$sandbox/err")"
 grep -q 'every Hyprland bind annotated and registered' "$sandbox/out" || fail 'gate did not report success on the Lua template'
 
+# --- bind ids are canonical: the same key in any modifier order or case is one id ---------------------------
+lua_id() { bash -c 'source "$1"; help_lua_bind_id "$2"; printf "%s" "$HELP_LUA_ID"' _ "$repo_root/lib/help.sh" "$1"; }
+for spelling in 'SUPER + SHIFT + S' 'SHIFT + SUPER + S' 'shift + super + S' 'Super + Shift + S'; do
+	[[ "$(lua_id "hl.bind(\"$spelling\", f)")" == SUPER+SHIFT+S ]] || fail "'$spelling' is not SUPER+SHIFT+S: $(lua_id "hl.bind(\"$spelling\", f)")"
+done
+[[ "$(lua_id 'hl.bind("ALT + CTRL + SUPER + SHIFT + x", f)')" == SUPER+CTRL+ALT+SHIFT+x ]] || fail 'four modifiers are not in the live order'
+[[ "$(lua_id 'hl.bind("CONTROL + Return", f)')" == CTRL+Return ]] || fail 'CONTROL is not CTRL'
+[[ "$(lua_id 'hl.bind("XF86AudioMute", f)')" == XF86AudioMute ]] || fail 'a bare key changed'
+# The same owner bind, spelled in another order, still relocates the registry row.
+cp -- "$good" "$sandbox/reordered.lua.in"
+sed -i 's/SUPER + SHIFT + S"/SHIFT + SUPER + S"/' "$sandbox/reordered.lua.in"
+grep -q 'SHIFT + SUPER + S' "$sandbox/reordered.lua.in" || fail 'fixture has no SUPER + SHIFT + S bind to reorder'
+run_gate "$sandbox/reordered.lua.in" || fail "the gate rejected a bind spelled SHIFT + SUPER: $(<"$sandbox/err")"
+
 # --- an unannotated bind fails and is named -----------------------------------------------------------------
 cp -- "$good" "$sandbox/unannotated.lua.in"
 printf 'hl.bind("SUPER + Z", hl.dsp.no_op())\n' >>"$sandbox/unannotated.lua.in"

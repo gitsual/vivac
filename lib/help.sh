@@ -57,13 +57,26 @@ help_load_registry() {
 
 # help_bind_id MODS KEY — the registry id of a bind line: modifiers joined
 # with +, then the key. "SUPER SHIFT" S -> SUPER+SHIFT+S; "" F1 -> F1.
+# Modifiers are upper-cased and put in the order Hyprland reports them live
+# (SUPER, CTRL, ALT, SHIFT; CONTROL is CTRL), so a bind spelled "SHIFT + SUPER"
+# is the same id on every side that compares ids. Any other modifier word
+# follows, upper-cased, in the order it was written.
 help_bind_id() {
-	local mods="$1" key="$2" id=''
-	local -a parts
-	read -ra parts <<<"$mods"
-	((${#parts[@]})) && id="$(
+	local mods="$1" key="$2" id='' word canon
+	local -a parts ordered=()
+	read -ra parts <<<"${mods^^}"
+	for canon in SUPER CTRL ALT SHIFT; do
+		for word in "${parts[@]}"; do
+			[[ "$word" == CONTROL ]] && word=CTRL
+			[[ "$word" == "$canon" ]] && { ordered+=("$canon"); break; }
+		done
+	done
+	for word in "${parts[@]}"; do
+		case "$word" in SUPER | CTRL | CONTROL | ALT | SHIFT) ;; *) ordered+=("$word") ;; esac
+	done
+	((${#ordered[@]})) && id="$(
 		IFS=+
-		printf '%s+' "${parts[*]}"
+		printf '%s+' "${ordered[*]}"
 	)"
 	printf '%s%s' "$id" "$key"
 }
