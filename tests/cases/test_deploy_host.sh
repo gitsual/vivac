@@ -220,23 +220,26 @@ overlay_tool gatsby || fail 'overlay after rollback failed'
 grep -q 'skipped (edited)' "$sandbox/ov.out" && fail "after a rollback the overlay thinks the owner edited the file: $(<"$sandbox/ov.out")"
 grep -qi "$(tok "$repo_root/data/themes/gatsby.conf" COLOR_BG)" "$host/.config/waybar/style.css" || fail 'the overlay no longer applies after a rollback'
 
-# --- a deploy that dies half way tells how to come back, and coming back is exact --------------------------------
+# --- a deploy that dies half way puts the host back by itself -----------------------------------------------------
 host="$sandbox/halfway"
 make_host "$host"
 before="$(snap "$host")"
 mkdir -p -- "$sandbox/failbin"
-# The simulation (the pre-flight) passes; the real run is what fails.
+# The simulation (the pre-flight) passes; the real run is what fails, after the backups moved files.
 # shellcheck disable=SC2016  # the shim body is literal
 printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = --simulate ] && exec %s "$@"; done\necho "stow: simulated failure" >&2\nexit 1\n' "$(command -v stow)" >"$sandbox/failbin/stow"
 chmod +x "$sandbox/failbin/stow"
 rc=0
 out="$(PATH="$sandbox/failbin:$PATH" hl "$host" 2>&1)" || rc=$?
 ((rc != 0)) || fail 'a failing stow did not fail the deploy'
-grep -q -- '--rollback' <<<"$out" || fail "no rollback hint after a failed deploy: $out"
-root="$(backup_of "$out")"
-[[ -f "$root/MANIFEST" ]] || fail 'the failed deploy left no backup to roll back to'
-hl "$host" --rollback "$root" >/dev/null || fail 'rollback after a failed deploy failed'
-[[ "$(snap "$host")" == "$before" ]] || fail 'rollback after a half-way failure is not byte for byte'
+grep -q 'stow: simulated failure' <<<"$out" || fail "the failure is not shown: $out"
+grep -q 'rolled back automatically' <<<"$out" || fail "no word that the run rolled itself back: $out"
+[[ "$(snap "$host")" == "$before" ]] || fail 'the failed deploy did not leave the host byte for byte as it was'
+[[ -f "$host/.config/hypr/hyprland.lua" && ! -L "$host/.config/hypr/hyprland.lua" ]] || fail "the owner's hyprland.lua did not come back"
+root="$(sed -n 's/^backup: //p' <<<"$out" | tail -n 1)"
+[[ -z "$root" || -e "$root/ROLLED-BACK" ]] || fail 'the rolled-back backup is not marked, a bare --rollback would redo it'
+hl "$host" --rollback >/dev/null 2>&1 && fail 'a bare --rollback found something to undo after the automatic one'
+[[ "$(snap "$host")" == "$before" ]] || fail 'the bare --rollback after an automatic one changed the host'
 
 # --- the owner's hyprland.lua is a symlink into their own dotfiles --------------------------------------------------
 host="$sandbox/linked"

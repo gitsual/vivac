@@ -85,6 +85,45 @@ backup_has_content() { # a backup counts when the MANIFEST lists something or a 
 	[[ -f "$1/MANIFEST" && ! -e "$1/ROLLED-BACK" ]] || return 1
 	[[ -s "$1/MANIFEST" ]] || [[ -n "$(find "$1" -mindepth 1 ! -name MANIFEST ! -name ROLLED-BACK -print -quit)" ]]
 }
+# rollback_root ROOT: put back what ROOT/MANIFEST says this run changed. Returns 1, having
+# changed nothing, when the MANIFEST does not belong to this host.
+rollback_root() {
+	local root="$1" overlay_state="$state/vivac/colour-overlay" bad='' kind value saved relative dir
+	while IFS=$'\t' read -r kind value; do
+		[[ -n "$kind" ]] || continue
+		case "$kind" in
+		created | newdir) [[ -n "$value" && "$value" != /* && ! "$value" =~ (^|/)\.\.(/|$) ]] || bad+="$kind $value; " ;;
+		newtree) [[ "$value" == "$overlay_state" ]] || bad+="$kind $value; " ;;
+		overlaystate) [[ -n "$value" && "$value" != */* && "$value" != . && "$value" != .. ]] || bad+="$kind $value; " ;;
+		*) bad+="$kind $value; " ;;
+		esac
+	done <"$root/MANIFEST"
+	if [[ -n "$bad" ]]; then
+		printf 'deploy-host: refusing to roll back: the MANIFEST has lines that do not belong to this host (%s); nothing was changed\n' "${bad%; }" >&2
+		return 1
+	fi
+	while IFS=$'\t' read -r kind value; do
+		case "$kind" in
+		created) rm -f -- "$HOME/$value" || return 1 ;;
+		newtree) rm -rf -- "$value" || return 1 ;;
+		overlaystate)
+			rm -rf -- "${overlay_state:?}/$value" || return 1
+			if [[ -e "$root/.overlay-state/$value" ]]; then
+				mkdir -p -- "$overlay_state" && cp -a -- "$root/.overlay-state/$value" "$overlay_state/$value" || return 1
+			fi
+			;;
+		esac
+	done <"$root/MANIFEST"
+	while IFS= read -r -d '' saved; do
+		relative="${saved#"$root"/}"
+		case "$relative" in MANIFEST | ROLLED-BACK | .overlay-state/*) continue ;; esac
+		{ mkdir -p -- "$(dirname -- "$HOME/$relative")" && rm -f -- "$HOME/$relative" && cp -a -- "$saved" "$HOME/$relative"; } || return 1
+	done < <(find "$root" \( -type f -o -type l \) -print0)
+	awk -F'\t' '$1=="newdir"{print $2}' "$root/MANIFEST" | LC_ALL=C sort -r | while IFS= read -r dir; do
+		rmdir -- "$HOME/$dir" 2>/dev/null || true
+	done
+	: >"$root/ROLLED-BACK"
+}
 if $rollback; then
 	backups="$state/vivac/backups"
 	root="$backup_arg"
@@ -105,42 +144,7 @@ if $rollback; then
 		[[ -n "$real_backups" && "$(dirname -- "$root")" == "$real_backups" ]] ||
 			die "refusing to roll back $root: it is not under $backups (--force to use it anyway)"
 	fi
-	overlay_state="$state/vivac/colour-overlay"
-	bad=''
-	while IFS=$'\t' read -r kind value; do
-		[[ -n "$kind" ]] || continue
-		case "$kind" in
-		created | newdir) [[ -n "$value" && "$value" != /* && ! "$value" =~ (^|/)\.\.(/|$) ]] || bad+="$kind $value; " ;;
-		newtree) [[ "$value" == "$overlay_state" ]] || bad+="$kind $value; " ;;
-		overlaystate) [[ -n "$value" && "$value" != */* && "$value" != . && "$value" != .. ]] || bad+="$kind $value; " ;;
-		*) bad+="$kind $value; " ;;
-		esac
-	done <"$root/MANIFEST"
-	[[ -z "$bad" ]] || die "refusing to roll back: the MANIFEST has lines that do not belong to this host (${bad%; }); nothing was changed"
-	while IFS=$'\t' read -r kind value; do
-		case "$kind" in
-		created) rm -f -- "$HOME/$value" ;;
-		newtree) rm -rf -- "$value" ;;
-		overlaystate)
-			rm -rf -- "${overlay_state:?}/$value"
-			if [[ -e "$root/.overlay-state/$value" ]]; then
-				mkdir -p -- "$overlay_state"
-				cp -a -- "$root/.overlay-state/$value" "$overlay_state/$value"
-			fi
-			;;
-		esac
-	done <"$root/MANIFEST"
-	while IFS= read -r -d '' saved; do
-		relative="${saved#"$root"/}"
-		case "$relative" in MANIFEST | ROLLED-BACK | .overlay-state/*) continue ;; esac
-		mkdir -p -- "$(dirname -- "$HOME/$relative")"
-		rm -f -- "$HOME/$relative"
-		cp -a -- "$saved" "$HOME/$relative"
-	done < <(find "$root" \( -type f -o -type l \) -print0)
-	awk -F'\t' '$1=="newdir"{print $2}' "$root/MANIFEST" | LC_ALL=C sort -r | while IFS= read -r dir; do
-		rmdir -- "$HOME/$dir" 2>/dev/null || true
-	done
-	: >"$root/ROLLED-BACK"
+	rollback_root "$root" || exit 1
 	printf 'rolled back to the state before %s\n' "$root"
 	exit 0
 fi
@@ -294,6 +298,14 @@ finish() {
 	if [[ ! -s "$backup_root/MANIFEST" && -z "$(find "$backup_root" -mindepth 1 ! -name MANIFEST -print -quit)" ]]; then
 		rm -rf -- "$backup_root"
 		printf 'nothing changed on the host; no backup kept\n'
+	elif ((status != 0)); then
+		# Whatever stopped the run, the host must not stay half applied: undo this run's MANIFEST now.
+		printf 'deploy-host: failed (exit %s); undoing this run\n' "$status" >&2
+		if rollback_root "$backup_root"; then
+			printf 'deploy-host: the host is back to its state before this run (rolled back automatically); backup kept at %s\n' "$backup_root" >&2
+		else
+			printf 'deploy-host: the automatic rollback FAILED; run: %s --rollback %s\n' "$repo_root/scripts/deploy-host.sh" "$backup_root" >&2
+		fi
 	else
 		printf 'backup: %s\n' "$backup_root"
 		printf 'rollback: %s --rollback %s\n' "$repo_root/scripts/deploy-host.sh" "$backup_root"
@@ -339,4 +351,4 @@ skipped_note
 DEPLOY_BACKUP_ROOT="$backup_root" "$repo_root/scripts/deploy.sh" --no-theme "${protect_args[@]}" "${packages[@]}" | { grep -v '^backup: ' || true; }
 
 for path in "${overlay[@]}"; do [[ -e "$backup_root/$path" ]] || save "$path"; done
-"$repo_root/scripts/colour-overlay.sh" --apply "$theme" --config-dir "$config" || printf 'deploy-host: the colour overlay failed; the desktop is deployed\n' >&2
+"$repo_root/scripts/colour-overlay.sh" --apply "$theme" --config-dir "$config" || die 'the colour overlay failed'
