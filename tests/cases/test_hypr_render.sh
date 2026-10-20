@@ -25,6 +25,18 @@ render() {
 	printf '%s' "$home/.config/hypr/generated"
 }
 
+# lua_run DIR LABEL — run the three Lua fragments, leave the recording in $lua.
+lua_run() {
+	local dir="$1" label="$2" fragment
+	for fragment in hardware input monitors; do
+		[[ -f "$dir/$fragment.lua" ]] || fail "$label: $fragment.lua was not rendered"
+		# Lua modules, not hyprlang: no `key = value` or `env =` at line start.
+		grep -Eq '^[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*=' "$dir/$fragment.lua" && fail "$label: $fragment.lua carries hyprlang syntax"
+	done
+	lua="$(nvim -l "$repo_root/tests/lua/run_fragments.lua" "$dir/hardware.lua" "$dir/monitors.lua" "$dir/input.lua")" || fail "$label: the lua fragments do not run"
+}
+count_lua() { grep -Eic -- "$1" <<<"$lua" || true; }
+
 count() { grep -c -- "$2" "$1" || true; }
 
 for archetype in desktop-nvidia laptop-amd-hybrid laptop-intel vm-virtio headless-unknown; do
@@ -55,7 +67,30 @@ for archetype in desktop-nvidia laptop-amd-hybrid laptop-intel vm-virtio headles
 
 	# Guards are consumed, never rendered.
 	grep -q '@?' "$hardware" "$input" "$monitors" && fail "$archetype: a guard survived rendering"
+
+	# The Lua fragments sit beside them and say the same thing. They are run
+	# against a recording `hl`, so a fragment that parses but asks for the
+	# wrong thing fails here too.
+	lua_run "$out" "$archetype"
+	[[ "$(count_lua '^env .*nvidia')" -eq "$want_nvidia" ]] || fail "$archetype: lua fragments set $(count_lua '^env .*nvidia') nvidia variables, expected $want_nvidia"
+	[[ "$(count_lua 'no_hardware_cursors = true')" -eq "$want_cursor" ]] || fail "$archetype: lua software-cursor lines differ from $want_cursor"
+	[[ "$(count_lua 'touchpad = ')" -eq "$want_touchpad" ]] || fail "$archetype: lua touchpad blocks differ from $want_touchpad"
+	grep -Fq "scale = \"$(grep '^max_scale=' "$repo_root/tests/golden/$archetype/hardware-facts" | cut -d= -f2)\"" <<<"$lua" || fail "$archetype: lua monitor scale does not match the facts"
+	grep -Fq 'kb_layout = "es"' <<<"$lua" || fail "$archetype: lua input does not carry the layout"
+	[[ "$(count_lua '^autostart')" -eq 0 ]] || fail "$archetype: a daemon starts without the ime setting"
+	grep -Eiq 'amd|radeon|intel|i915' "$out/hardware.lua" && fail "$archetype: another vendor's lines in hardware.lua"
 done
+
+# A non-default layout and ime=fcitx5: the layout is the setting's, and fcitx5 adds three variables and one autostart entry, and nothing else.
+mkdir -p -- "$sandbox/ime"
+printf 'ime=fcitx5\nxkb_layout=us,es\n' >"$sandbox/ime.settings"
+HOME="$sandbox/ime" XDG_CONFIG_HOME="$sandbox/ime/.config" XDG_STATE_HOME="$sandbox/ime/.state" SETTINGS_FILE="$sandbox/ime.settings" \
+	FACTS_FILE="$repo_root/tests/golden/laptop-intel/hardware-facts" FACTS_OVERRIDE="$sandbox/none" \
+	bash "$renderer" --deploy >/dev/null || fail 'render with ime=fcitx5 failed'
+lua_run "$sandbox/ime/.config/hypr/generated" ime
+[[ "$(count_lua '^env (QT_IM_MODULE|XMODIFIERS|SDL_IM_MODULE)=')" -eq 3 ]] || fail 'ime=fcitx5: expected three input-method variables'
+grep -Fq 'kb_layout = "us,es"' <<<"$lua" || fail "layout: the setting did not reach input.lua: $lua"
+grep -Fxq 'autostart fcitx5=fcitx5 -d' <<<"$lua" || fail "ime=fcitx5: no autostart entry: $lua"
 
 # The committed hyprland.conf sources exactly the three generated fragments
 # and defines nothing they own.

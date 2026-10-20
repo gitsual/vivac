@@ -50,7 +50,7 @@ done
 # --- Hyprland sources exactly the fragments that exist, and every fragment is sourced
 hypr_conf="$repo_root/dotfiles/hypr/.config/hypr/hyprland.conf"
 mapfile -t sourced < <(sed -n 's|^source = ~/\.config/hypr/generated/||p' "$hypr_conf" | LC_ALL=C sort)
-mapfile -t fragments < <(find "$repo_root/render/hypr/generated" -type f -name '*.in' -printf '%f\n' 2>/dev/null | sed 's/\.in$//' | LC_ALL=C sort)
+mapfile -t fragments < <(find "$repo_root/render/hypr/generated" -type f -name '*.conf.in' -printf '%f\n' 2>/dev/null | sed 's/\.in$//' | LC_ALL=C sort)
 if [[ "${sourced[*]}" != "${fragments[*]}" ]]; then
 	problem "hyprland.conf sources [${sourced[*]}] but render/hypr/generated/ provides [${fragments[*]}]"
 fi

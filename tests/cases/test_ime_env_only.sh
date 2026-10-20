@@ -28,7 +28,7 @@ render none
 render fcitx5
 # diff exits 1 on a difference, which is the expected outcome here.
 changed="$(diff -rq "$sandbox/h-none/.config" "$sandbox/h-fcitx5/.config" | sed 's|.*/\.config/||; s| .*||' || true)"
-[[ "$changed" == 'hypr/generated/input.conf' ]] || fail "ime changed more than the input fragment: $changed"
+[[ "$changed" == $'hypr/generated/input.conf\nhypr/generated/input.lua' ]] || fail "ime changed more than the input fragment: $changed"
 added="$(diff "$sandbox/h-none/.config/hypr/generated/input.conf" "$sandbox/h-fcitx5/.config/hypr/generated/input.conf" | grep '^>' | sed 's/^> //' || true)"
 expected='env = QT_IM_MODULE,fcitx
 env = XMODIFIERS,@im=fcitx
@@ -54,4 +54,4 @@ extra="$(LC_ALL=C comm -13 <(tr ' ' '\n' <<<"${base#*: }" | LC_ALL=C sort) <(tr 
 [[ "$extra" == "$(grep -Ev '^[[:space:]]*(#|$)' "$repo_root/packages/ime.txt")" ]] || fail "--ime added something outside its manifest: $extra"
 grep -q fcitx <<<"$base" && fail 'the default bootstrap installs the input method'
 
-printf 'ime: env and daemon lines only, in input.conf only; setting closed; selector adds its manifest\n'
+printf 'ime: env and daemon lines only, in the input fragments only; setting closed; selector adds its manifest\n'
