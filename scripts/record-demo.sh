@@ -118,28 +118,31 @@ clear_desktop() {
 	done
 }
 
-# What a key binding actually runs, read out of the deployed config, with the
-# Hyprland variables ($terminal, $scripts) expanded from their own definitions
-# in the same file. A shot is then evidence about the binding rather than about
+# What a key binding actually runs, read out of the deployed hyprland.lua, with
+# the vivac names it is built from (terminal, scripts) read from the same file.
+# A shot is then evidence about the binding rather than about
 # a command repeated here that could drift away from it.
 bind_command() {
 	python - "$1" <<'BINDPY'
 import os, re, sys
 
 combo = sys.argv[1]
-conf = open(os.path.expanduser('~/.config/hypr/hyprland.conf')).read()
-variables = dict(re.findall(r'^\$(\w+)\s*=\s*(.+?)\s*$', conf, re.M))
+conf = open(os.path.expanduser('~/.config/hypr/hyprland.lua')).read()
+# vivac.terminal = "kitty" and the like: the names a command is built from.
+variables = dict(re.findall(r'^vivac\.(\w+)\s*=\s*"(.*)"\s*$', conf, re.M))
 
 
-def expand(text):
-    for _ in range(6):
-        grown = re.sub(
-            r'\$(\w+)',
-            lambda m: variables.get(m.group(1), os.environ.get(m.group(1), m.group(0))),
-            text)
-        if grown == text:
-            break
-        text = grown
+def evaluate(expression):
+    # A command is string literals and vivac.<name> joined by `..`.
+    text = ''
+    for piece in re.split(r'\s*\.\.\s*', expression.strip()):
+        literal = re.fullmatch(r'"([^"]*)"|\'([^\']*)\'|\[\[(.*)\]\]', piece)
+        if literal:
+            text += next(group for group in literal.groups() if group is not None)
+        elif piece.startswith('vivac.') and piece[6:] in variables:
+            text += variables[piece[6:]]
+        else:
+            raise SystemExit('cannot read the command ' + expression)
     return text
 
 
@@ -149,14 +152,13 @@ def keys(mods):
 
 wanted_mods, wanted_key = (part.strip() for part in combo.split(',', 1))
 for line in conf.splitlines():
-    if not re.match(r'\s*bind\s*=', line):
+    bound = re.match(r'hl\.bind\("([^"]+)",\s*hl\.dsp\.exec_cmd\((.*)\)\)\s*$', line)
+    if not bound:
         continue
-    fields = [field.strip() for field in line.split('=', 1)[1].split(',')]
-    if len(fields) < 4 or fields[2] != 'exec':
+    *mods, key = bound.group(1).split(' + ')
+    if keys(' '.join(mods)) != keys(wanted_mods) or key.lower() != wanted_key.lower():
         continue
-    if keys(fields[0]) != keys(wanted_mods) or fields[1].lower() != wanted_key.lower():
-        continue
-    print(expand(','.join(fields[3:])))
+    print(evaluate(bound.group(2)))
     break
 else:
     raise SystemExit('no exec binding for ' + combo)
@@ -358,7 +360,7 @@ say "SUPER + E opens the editor"
 press SUPER E
 sleep 7
 say "Here, on the template that renders the desktop around it"
-term nvim templates/hypr/.config/hypr/hyprland.conf.in
+term nvim templates/hypr/.config/hypr/hyprland.lua.in
 sleep 10
 say "Neovim wears the same palette, out of the same file"
 sleep 4
@@ -461,7 +463,7 @@ sleep 5
 # for: the recolour has to land on a populated screen, with the bar, the
 # borders, two terminals and an editor all turning together.
 clear_desktop
-term nvim templates/hypr/.config/hypr/hyprland.conf.in
+term nvim templates/hypr/.config/hypr/hyprland.lua.in
 sleep 6
 term ./scripts/palette-card.sh
 sleep 4
