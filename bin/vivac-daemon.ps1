@@ -54,7 +54,7 @@ function Write-DaemonLog([string]$Text) {
     } catch { }
 }
 Write-VivacFile -Path $pidFile -Text "$PID`n"
-if ($LockAtStart) { [void](Set-VivacLockMarker 'start'); Show-VivacLockCover }
+if ($LockAtStart) { [void](Set-VivacLockMarker 'start'); Show-VivacLockCover } else { Reset-VivacLockMarker }
 # The other OS's theme, location and language, when sharing is configured:
 # a process of its own, so a share that is not there yet delays nothing here.
 try { [void](Start-VivacSharedSync) } catch { Write-DaemonLog "shared settings pull failed to start: $_" }

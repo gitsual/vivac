@@ -416,6 +416,47 @@ try {
         Assert-True ($surf -notmatch 'Set-VivacLockMarker|Clear-VivacLockMarker') 'Surfaces touches the marker directly'
         Assert-True ($daemon -notmatch 'LockMarker\s*[^\r\n]*Write-VivacFile') 'the daemon writes the marker by hand'
     }
+    # ---- a stale marker must not outlive its session ------------------------
+    function Get-CreationTicks([int]$Id) { (Get-CimInstance Win32_Process -Filter "ProcessId=$Id").CreationDate.ToFileTimeUtc() }
+    Case 'a marker is live only for the very process that wrote it (a reused PID reads as stale)' {
+        $other = Start-Process powershell.exe -ArgumentList '-NoProfile', '-Command', 'Start-Sleep 120' -WindowStyle Hidden -PassThru
+        try {
+            $ticks = Get-CreationTicks $other.Id
+            [IO.File]::WriteAllText($marker, "$($other.Id) start $ticks`n")
+            Assert-Equal $other.Id (Get-VivacLockMarker).Pid 'the real owner was not recognised'
+            [IO.File]::WriteAllText($marker, "$($other.Id) start $($ticks - 36000000000)`n")
+            Assert-True ($null -eq (Get-VivacLockMarker)) 'a live process with another start time counted'
+            [IO.File]::WriteAllText($marker, "$($other.Id) start`n")
+            Assert-True ($null -eq (Get-VivacLockMarker)) 'a marker without a start time counted'
+            # Clearing a stale marker is allowed to anybody, even though its PID is not ours.
+            [IO.File]::WriteAllText($marker, "$($other.Id) start $($ticks - 36000000000)`n")
+            Clear-VivacLockMarker
+            Assert-True (-not (Test-Path -LiteralPath $marker)) 'a stale marker was kept'
+        } finally { Stop-Process -Id $other.Id -Force -ErrorAction SilentlyContinue }
+    }
+    Case 'our own marker round-trips with its start time' {
+        [void](Set-VivacLockMarker 'start')
+        try {
+            Assert-True ([IO.File]::ReadAllText($marker) -match "^$PID start \d+\s*$") 'the marker has no start time'
+            Assert-Equal $PID (Get-VivacLockMarker).Pid
+        } finally { Clear-VivacLockMarker }
+    }
+    Case 'a host started without -LockAtStart drops whatever marker it finds, and never throws doing so' {
+        $other = Start-Process powershell.exe -ArgumentList '-NoProfile', '-Command', 'Start-Sleep 120' -WindowStyle Hidden -PassThru
+        try {
+            [IO.File]::WriteAllText($marker, "$($other.Id) start $(Get-CreationTicks $other.Id)`n")
+            Reset-VivacLockMarker
+            Assert-True (-not (Test-Path -LiteralPath $marker)) 'the marker survived the start-up reset'
+        } finally { Stop-Process -Id $other.Id -Force -ErrorAction SilentlyContinue }
+        Use-UnwritableState { Reset-VivacLockMarker }
+        $daemon = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac-daemon.ps1'))
+        Assert-True ($daemon -match '(?s)if \(\$LockAtStart\) \{[^}]*Set-VivacLockMarker[^}]*\} else \{ Reset-VivacLockMarker \}') 'the daemon does not reset the marker when started without -LockAtStart'
+    }
+    Case 'the Linux-strict shapes anchor at the very end (a trailing newline is not valid)' {
+        Assert-True (-not (Test-VivacSharedValueValid 'language' "en`n")) 'language accepted a trailing newline'
+        Assert-True (-not (Test-VivacSharedValueValid 'theme' "cosmos`n")) 'theme accepted a trailing newline'
+        Assert-True (-not (Test-VivacSharedValueValid 'weather_location' "Lisbon`n")) 'location accepted a trailing newline'
+    }
     Remove-Item Env:VIVAC_APPLY_THEME, Env:VIVAC_DEPLOY
     # ---- a failed replace never costs the shared file ----------------------
     $vivacModule = Get-Module Vivac

@@ -272,9 +272,9 @@ function Get-VivacSharedKeys { $script:SharedKeys }
 # lib/settings.sh), case-sensitive. A value that passes the Windows checks
 # but not these must not reach a file Linux reads.
 $script:LinuxShapes = @{
-    theme            = '^[a-z][a-z0-9-]*$'
-    weather_location = '^[A-Za-z0-9_.,+-]+$'
-    language         = '^(auto|[a-z]{2,3})$'
+    theme            = '^[a-z][a-z0-9-]*\z'
+    weather_location = '^[A-Za-z0-9_.,+-]+\z'
+    language         = '^(auto|[a-z]{2,3})\z'
 }
 function Test-VivacSharedValueValid([string]$Key, [string]$Value) {
     $script:LinuxShapes.ContainsKey($Key) -and $Value -cmatch $script:LinuxShapes[$Key]
@@ -533,9 +533,20 @@ function Invoke-VivacSharedPull([double]$LockWaitSeconds = -1) {
 # None of the three throws: the marker is a courtesy to the pull, and the
 # lock it describes must run the same when the state directory cannot be
 # written (disk full, an antivirus lock, a bad ACL). A failure is logged.
+# The marker carries its writer's start time, so a PID the system has given to
+# another process since reads as stale. The time comes from WMI, which also
+# answers for a process above our integrity level (the host's).
+function Get-VivacProcessStart([int]$Id) {
+    try {
+        $p = Get-CimInstance Win32_Process -Filter "ProcessId=$Id" -ErrorAction Stop
+        if ($p) { return $p.CreationDate.ToFileTimeUtc() }
+    } catch { }
+    $null
+}
 function Set-VivacLockMarker([string]$Kind) {
     try {
-        Write-VivacFile -Path (Get-VivacPaths).LockMarker -Text "$PID $Kind`n"
+        $start = [Diagnostics.Process]::GetCurrentProcess().StartTime.ToFileTimeUtc()
+        Write-VivacFile -Path (Get-VivacPaths).LockMarker -Text "$PID $Kind $start`n"
         $true
     } catch {
         Write-VivacSharedLog "could not write the lock marker: $($_.Exception.Message)"
@@ -547,10 +558,14 @@ function Get-VivacLockMarker {
         $p = (Get-VivacPaths).LockMarker
         if (-not (Test-Path -LiteralPath $p)) { return $null }
         $text = ([IO.File]::ReadAllText($p)).Trim()
-        if ($text -notmatch '^(\d+) (start|lock)$') { return $null }
+        if ($text -notmatch '^(\d+) (start|lock) (\d+)$') { return $null }
         $id = [int]$Matches[1]
-        if (-not (Get-Process -Id $id -ErrorAction SilentlyContinue)) { return $null }
-        [pscustomobject]@{ Pid = $id; Kind = $Matches[2] }
+        $kind = $Matches[2]
+        $wrote = [long]$Matches[3]
+        $now = Get-VivacProcessStart $id
+        # Two seconds of slack: WMI rounds the creation time to microseconds.
+        if ($null -eq $now -or [Math]::Abs($now - $wrote) -gt 20000000) { return $null }
+        [pscustomobject]@{ Pid = $id; Kind = $kind }
     } catch { $null }
 }
 # Only the process that wrote the marker takes it down.
@@ -560,6 +575,14 @@ function Clear-VivacLockMarker {
         if ($m -and $m.Pid -ne $PID) { return }
         Remove-Item -LiteralPath (Get-VivacPaths).LockMarker -Force -ErrorAction SilentlyContinue
     } catch { Write-VivacSharedLog "could not clear the lock marker: $($_.Exception.Message)" }
+}
+
+# A host started without -LockAtStart holds no lock: whatever marker is there
+# is left over (power loss in the greeter, a killed host) and goes, whoever
+# wrote it. Never throws.
+function Reset-VivacLockMarker {
+    try { Remove-Item -LiteralPath (Get-VivacPaths).LockMarker -Force -ErrorAction SilentlyContinue }
+    catch { Write-VivacSharedLog "could not reset the lock marker: $($_.Exception.Message)" }
 }
 
 # Run Body (the lock) with the marker held: marked here unless a marker is
