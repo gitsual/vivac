@@ -273,6 +273,10 @@ public static class VivacKeys {
         Uninstall();
         return Install();
     }
+    // The input time (GetTickCount's clock) of the last key the hook was
+    // shown, injected or not: what VivacRawKeys is compared with.
+    private static int lastSeen = 0;
+    public static int LastSeen { get { return Thread.VolatileRead(ref lastSeen); } }
     public static bool TakeMenu() { return Interlocked.Exchange(ref menuPresses, 0) > 0; }
     public static bool TakeClipboard() { return Interlocked.Exchange(ref clipPresses, 0) > 0; }
     public static bool TakeLock() { return Interlocked.Exchange(ref lockPresses, 0) > 0; }
@@ -282,6 +286,7 @@ public static class VivacKeys {
     private static IntPtr Callback(int code, IntPtr wParam, IntPtr lParam) {
         if (code >= 0) {
             KbdLlHookStruct k = (KbdLlHookStruct)Marshal.PtrToStructure(lParam, typeof(KbdLlHookStruct));
+            Thread.VolatileWrite(ref lastSeen, unchecked((int)k.time));
             bool injected = (k.flags & 0x10) != 0;
             bool down = wParam == (IntPtr)0x100 || wParam == (IntPtr)0x104;
             bool up = wParam == (IntPtr)0x101 || wParam == (IntPtr)0x105;
@@ -378,6 +383,68 @@ $hookTimer.Add_Tick({
         }
     })
 $hookTimer.Start()
+
+# A dropped hook is also noticed at the first key it misses, so the key after
+# it works again. Raw input reports every key to this window as well, and
+# Windows never takes it away for being slow; a key it reports that the hook
+# was not shown (by its input time) means the hook is gone, and it is put
+# back there and then. Keys typed into an elevated window are not shown to
+# the hook either: those put it back at most every few seconds, harmlessly.
+Add-Type -ReferencedAssemblies System.Windows.Forms -TypeDefinition @'
+using System;
+using System.Threading;
+using System.Windows.Forms;
+using System.Runtime.InteropServices;
+public class VivacRawKeys : NativeWindow {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RawInputDevice { public ushort UsagePage, Usage; public uint Flags; public IntPtr Target; }
+    [DllImport("user32.dll", SetLastError = true)] private static extern bool RegisterRawInputDevices(RawInputDevice[] devices, uint count, uint size);
+    [DllImport("user32.dll")] private static extern int GetMessageTime();
+    private static int last = 0;
+    private static bool any = false;
+    public static int Last { get { return Thread.VolatileRead(ref last); } }
+    public static bool Any { get { return any; } }
+    public readonly bool Registered;
+    public VivacRawKeys() {
+        CreateParams cp = new CreateParams();
+        cp.Parent = new IntPtr(-3);
+        CreateHandle(cp);
+        // Generic desktop keyboard, delivered while this window is not in
+        // front (RIDEV_INPUTSINK).
+        RawInputDevice[] d = { new RawInputDevice { UsagePage = 1, Usage = 6, Flags = 0x100, Target = Handle } };
+        Registered = RegisterRawInputDevices(d, 1, (uint)Marshal.SizeOf(typeof(RawInputDevice)));
+    }
+    protected override void WndProc(ref Message m) {
+        // WM_INPUT; its message time is the key's input time, whenever this
+        // thread gets round to reading it.
+        if (m.Msg == 0x00FF) { Thread.VolatileWrite(ref last, GetMessageTime()); any = true; }
+        base.WndProc(ref m);
+    }
+}
+'@
+$script:rawKeys = New-Object VivacRawKeys
+if (-not $script:rawKeys.Registered) { Write-DaemonLog 'raw keyboard input could not be registered: a dropped hook waits for the half-minute check' }
+$script:hookFixedAt = [Environment]::TickCount - 10000
+$script:hookFixes = 0
+$script:rawFixedFor = 0
+$hookWatch = New-Object Windows.Threading.DispatcherTimer
+$hookWatch.Interval = [TimeSpan]::FromMilliseconds(250)
+$hookWatch.Add_Tick({
+        if (-not [VivacRawKeys]::Any) { return }
+        $now = [Environment]::TickCount
+        $raw = [VivacRawKeys]::Last
+        # A missed key puts the hook back once, not on every tick until the next key.
+        if ($raw -ne $script:rawFixedFor -and $raw - [VivacKeys]::LastSeen -gt 200 -and $now - $script:hookFixedAt -gt 3000) {
+            $script:rawFixedFor = $raw
+            $script:hookFixedAt = $now
+            $script:hookFixes++
+            if (-not [VivacKeys]::Reinstall()) { Write-DaemonLog 'the keyboard hook could not be put back' }
+            # Counted, not logged each time: an elevated window in front
+            # does this on every few seconds of typing.
+            if ($script:hookFixes -eq 1 -or $script:hookFixes % 100 -eq 0) { Write-DaemonLog "keyboard hook missed a key and was put back ($($script:hookFixes) so far)" }
+        }
+    })
+$hookWatch.Start()
 
 # vivac's volume indicator, built once and shown on each change.
 $script:osd = New-VivacVolumeOsd
