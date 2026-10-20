@@ -230,9 +230,10 @@ hl.window_rule({ name = "nm-connection-editor", match = { class = "^(nm-connecti
 hl.window_rule({ name = "vivac-welcome", match = { class = "^(vivac-welcome)$" }, float = true, center = true, size = "1100 700" })
 
 -- Started with the session, in this order, once the compositor is up.
--- The pull of the optional shared settings comes first (and does nothing when
--- none are configured), so a theme chosen on the other OS is in place before
--- the bar and the wallpaper read it.
+-- The pull of the optional shared settings (it does nothing when none are
+-- configured) is listed first, but every entry here starts at once, so it does
+-- not finish before the bar starts. That is fine: a theme it changes goes
+-- through apply-theme, which reloads the bar and the notifications itself.
 table.insert(vivac.autostart, { id = "sync-shared", cmd = "${VIVAC_REPO:-$HOME/vivac}/scripts/sync-shared-settings.sh --pull" })
 table.insert(vivac.autostart, { id = "waybar", cmd = "waybar" })
 table.insert(vivac.autostart, { id = "hypridle", cmd = "hypridle" })

@@ -50,8 +50,12 @@ grep -q '^monitor .*scale = "' <<<"$out" || fail 'the monitors fragment was not 
 grep -q '^config .*kb_layout = "es"' <<<"$out" || fail 'the input fragment was not loaded'
 has 'on hyprland.start' || fail 'no start handler registered'
 has 'start exec waybar' || fail 'waybar is not started with the session'
-# The shared-settings pull is the first thing the session runs, so the other
-# OS's theme is in place before the bar and the wallpaper read it.
+# The shared-settings pull is the first autostart entry, but hl.exec_cmd starts
+# every entry at once: nothing may claim, or depend on, the pull having finished
+# before the bar starts (a changed theme reloads the bar itself, through apply-theme).
+template="$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"
+grep -qiE 'comes first|is in place before' "$template" && fail 'the template still claims the pull finishes before the bar starts'
+grep -q 'reloads' <(grep -B4 'id = "sync-shared"' "$template") || fail 'the template does not say why the start order does not matter'
 # shellcheck disable=SC2016  # the ${...} is literal text the shell is meant to expand later
 [[ "$(grep -m1 '^start exec' <<<"$out")" == 'start exec ${VIVAC_REPO:-$HOME/vivac}/scripts/sync-shared-settings.sh --pull' ]] ||
 	fail "the first autostart entry is not the shared-settings pull: $(grep -m1 '^start exec' <<<"$out")"
