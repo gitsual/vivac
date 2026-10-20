@@ -350,5 +350,37 @@ try {
         Assert-Equal "theme=carmen`n" (Read-Bytes $f)
         Assert-Equal 0 (Get-Leftovers (Split-Path -Parent $f))
     }
+    # ---- what reaches the shared file must be valid for Linux too ----------
+    Case 'a shared key is stored lowercase, locally and in the shared file' {
+        Set-LocalSettings "shared_settings=$shared`n"
+        Write-Bytes $shared "x=1`n"
+        Set-VivacSetting language EN
+        Set-VivacSetting theme Bad-Romance
+        Set-VivacSetting weather_location AUTO
+        $s = Read-VivacSettings
+        Assert-Equal 'en' $s['language']
+        Assert-Equal 'bad-romance' $s['theme']
+        Assert-Equal 'auto' $s['weather_location']
+        Assert-Equal "x=1`nlanguage=en`ntheme=bad-romance`nweather_location=auto`n" (Read-Bytes $shared)
+    }
+    Case 'the Linux-strict shapes are case-sensitive' {
+        Assert-True (Test-VivacSharedValueValid 'language' 'en') 'en'
+        Assert-True (-not (Test-VivacSharedValueValid 'language' 'EN')) 'EN'
+        Assert-True (Test-VivacSharedValueValid 'language' 'auto') 'auto'
+        Assert-True (-not (Test-VivacSharedValueValid 'theme' 'Bad-Romance')) 'Bad-Romance'
+        Assert-True (Test-VivacSharedValueValid 'theme' 'bad-romance') 'bad-romance'
+        Assert-True (-not (Test-VivacSharedValueValid 'theme' '1abc')) '1abc'
+        Assert-True (Test-VivacSharedValueValid 'weather_location' '40.42,-3.70') 'lat,lon'
+        Assert-True (-not (Test-VivacSharedValueValid 'weather_location' 'a b')) 'space'
+    }
+    Case 'a value Linux would refuse stays local with a warning and never reaches the file or the queue' {
+        Write-Bytes $shared "x=1`n"
+        Remove-Item -LiteralPath $pending -Force -ErrorAction SilentlyContinue
+        $w = @(Send-VivacSharedKey 'language' 'EN' 3>&1)
+        Assert-Equal 1 $w.Count
+        Assert-True ("$($w[0])" -match 'language') 'the warning names the key'
+        Assert-Equal "x=1`n" (Read-Bytes $shared)
+        Assert-True (-not (Test-Path -LiteralPath $pending)) 'a refused value was queued'
+    }
 } finally { Remove-TempProfile $dir }
 Complete-Cases

@@ -237,6 +237,10 @@ function Assert-VivacSettingValid([string]$Key, [string]$Value) {
 # so every reader can trust what it reads. A shared key (see below) is also
 # sent to the shared file when one is configured.
 function Set-VivacSetting([string]$Key, [string]$Value) {
+    # A shared key is lowercase on both sides (Windows matching is
+    # case-insensitive, Linux's is not): normalised here, the local value and
+    # the shared one are the same string and the pull never "corrects" it.
+    if ($script:SharedKeys -contains $Key) { $Value = $Value.ToLowerInvariant() }
     Write-VivacLocalSetting $Key $Value
     if ($script:SharedKeys -contains $Key) { Send-VivacSharedKey $Key $Value }
 }
@@ -259,6 +263,18 @@ $script:Latin1 = [Text.Encoding]::GetEncoding(28591)
 $script:ReplaceFile = { param($Scratch, $Destination, $Backup) [IO.File]::Replace($Scratch, $Destination, $Backup) }
 
 function Get-VivacSharedKeys { $script:SharedKeys }
+
+# The Linux side's own shapes for the shared keys (settings_valid in its
+# lib/settings.sh), case-sensitive. A value that passes the Windows checks
+# but not these must not reach a file Linux reads.
+$script:LinuxShapes = @{
+    theme            = '^[a-z][a-z0-9-]*$'
+    weather_location = '^[A-Za-z0-9_.,+-]+$'
+    language         = '^(auto|[a-z]{2,3})$'
+}
+function Test-VivacSharedValueValid([string]$Key, [string]$Value) {
+    $script:LinuxShapes.ContainsKey($Key) -and $Value -cmatch $script:LinuxShapes[$Key]
+}
 
 # The shared file's path when sharing is configured, otherwise $null: no
 # sharing is the normal case, not an error.
@@ -376,6 +392,10 @@ function Enter-VivacSharedLock([double]$Seconds) {
 function Send-VivacSharedKey([string]$Key, [string]$Value) {
     $shared = Get-VivacSharedPath
     if (-not $shared) { return }
+    if (-not (Test-VivacSharedValueValid $Key $Value)) {
+        Write-Warning "settings: '$Value' is not a valid $Key for the shared file (the other OS would refuse it); $Key stays local"
+        return
+    }
     $folder = Split-Path -Parent $shared
     $problem = $null
     if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
