@@ -58,6 +58,17 @@ fragment("hardware")
 fragment("monitors")
 fragment("input")
 
+-- Where the checkout lives, for the programs started below. A checkout that is
+-- not at ~/vivac names itself in <config>/vivac/repo (scripts/deploy-host.sh).
+local repo_file = io.open(config_home .. "/vivac/repo")
+if repo_file then
+	local repo = repo_file:read("l")
+	repo_file:close()
+	if repo and repo ~= "" then
+		hl.env("VIVAC_REPO", repo)
+	end
+end
+
 hl.config({
 	general = {
 		gaps_in = 8,

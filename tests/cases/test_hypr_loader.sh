@@ -56,6 +56,21 @@ has 'start exec waybar' || fail 'waybar is not started with the session'
 [[ "$(grep -m1 '^start exec' <<<"$out")" == 'start exec ${VIVAC_REPO:-$HOME/vivac}/scripts/sync-shared-settings.sh --pull' ]] ||
 	fail "the first autostart entry is not the shared-settings pull: $(grep -m1 '^start exec' <<<"$out")"
 
+# --- the checkout location reaches the programs the session starts -------------------------------------------
+# The autostart pull expands ${VIVAC_REPO:-$HOME/vivac}. A checkout elsewhere is
+# named in $XDG_CONFIG_HOME/vivac/repo (the host deploy writes it); without the
+# file the environment is left alone.
+[[ "$(lines '^env VIVAC_REPO=')" -eq 0 ]] || fail 'VIVAC_REPO was set without a repo file'
+mkdir -p -- "$home/.config/vivac"
+printf '/somewhere/else/vivac\n' >"$home/.config/vivac/repo"
+load
+has 'env VIVAC_REPO=/somewhere/else/vivac' || fail "the repo file did not reach the environment: $(grep '^env VIVAC' <<<"$out")"
+: >"$home/.config/vivac/repo"
+load
+[[ "$(lines '^env VIVAC_REPO=')" -eq 0 ]] || fail 'an empty repo file set VIVAC_REPO'
+rm -- "$home/.config/vivac/repo"
+load
+
 # --- the fragments run again on every load: the Lua state may persist across a reload -------------------------
 load HL_STUB_RELOADS=2
 [[ "$(lines '^env GBM_BACKEND=')" -eq 2 ]] || fail "a reload did not re-run the hardware fragment: $(lines '^env GBM_BACKEND=') runs"
