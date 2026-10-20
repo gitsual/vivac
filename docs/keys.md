@@ -8,8 +8,8 @@ the browser, the shell, the editor and the system, kept short on purpose.
 
 ## hypr
 
-`F1`. Every bind in `templates/hypr/.config/hypr/hyprland.conf.in`, described
-by the `# @help:` line above it. A bind Hyprland reports at runtime that the
+`F1`. Every bind in `templates/hypr/.config/hypr/hyprland.lua.in`, described
+by the `-- @help:` line above it. A bind Hyprland reports at runtime that the
 registry does not know renders as `UNREGISTERED` rather than disappearing.
 
 ## browser

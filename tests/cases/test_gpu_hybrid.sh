@@ -77,8 +77,8 @@ mkdir -p -- "$home"
 HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_STATE_HOME="$sandbox/state" \
 	FACTS_FILE="$repo_root/tests/golden/laptop-amd-hybrid/hardware-facts" FACTS_OVERRIDE="$sandbox/none" \
 	bash "$repo_root/scripts/render-config.sh" --deploy >/dev/null || fail 'hybrid render failed'
-fragment="$home/.config/hypr/generated/hardware.conf"
+fragment="$home/.config/hypr/generated/hardware.lua"
 grep -q 'prime-run' "$fragment" || fail 'hybrid fragment: no PRIME guidance'
-grep -Eq '^env = .*nvidia' "$fragment" && fail 'hybrid fragment: NVIDIA environment set compositor-wide'
+grep -Eq '^hl\.env\(.*nvidia' "$fragment" && fail 'hybrid fragment: NVIDIA environment set compositor-wide'
 
 printf 'gpu hybrid: two stacks + PRIME, headers per kernel, Secure Boot warned, fragment clean\n'

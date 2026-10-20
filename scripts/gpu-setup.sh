@@ -26,8 +26,7 @@ source "$repo_root/lib/i18n.sh"
 facts_file="${FACTS_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/vivac/hardware-facts}"
 facts_override="${FACTS_OVERRIDE:-${XDG_CONFIG_HOME:-$HOME/.config}/vivac/hardware-facts.override}"
 backup_root="${XDG_STATE_HOME:-$HOME/.local/state}/vivac/backups"
-# The hyprlang and Lua fragments ship side by side until the hyprlang one goes.
-fragments=("${XDG_CONFIG_HOME:-$HOME/.config}/hypr/generated/hardware.lua" "${XDG_CONFIG_HOME:-$HOME/.config}/hypr/generated/hardware.conf")
+fragments=("${XDG_CONFIG_HOME:-$HOME/.config}/hypr/generated/hardware.lua")
 
 language="${VIVAC_LANG:-${LANG:-en}}"
 language="${language%%[._@]*}"
@@ -45,8 +44,8 @@ Usage: scripts/gpu-setup.sh [--dry-run | --apply] [--gpu FAMILY]
                     the facts also see that family, or FAMILY is generic
   --list            print every catalogue family and how it was verified
   --restore-config  put back the previous ~/.config/hypr/generated/hardware.lua
-                    and hardware.conf from their newest backups (each current
-                    one is backed up first); packages are left alone
+                    from its newest backup (the current one is backed up
+                    first); packages are left alone
 
 Facts come from scripts/hardware-facts.sh --emit (override: FACTS_FILE,
 FACTS_OVERRIDE). Packages from the AUR are listed, never installed here.

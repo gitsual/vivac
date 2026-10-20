@@ -188,8 +188,8 @@ render_output_path() {
 
 # render_deploy_output_path TEMPLATE — where a deploy-time template renders
 # to: the same path under the user's config directory, never the checkout.
-#   render/hypr/generated/monitors.conf.in
-#   -> $XDG_CONFIG_HOME/hypr/generated/monitors.conf
+#   render/hypr/generated/monitors.lua.in
+#   -> $XDG_CONFIG_HOME/hypr/generated/monitors.lua
 render_deploy_output_path() {
 	local template="$1"
 	template="${template#render/}"

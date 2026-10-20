@@ -41,16 +41,6 @@ printf 'x\n' >"$copy/dotfiles/extra/.config/extra/rc"
 expect_refusal 'an undeclared package' "differ from deploy.sh's list"
 rm -rf -- "$copy/dotfiles/extra"
 
-# --- a source line with no template behind it --------------------------------------
-printf 'source = ~/.config/hypr/generated/extra.conf\n' >>"$copy/dotfiles/hypr/.config/hypr/hyprland.conf"
-expect_refusal 'a sourced fragment nobody renders' 'provides ['
-sed -i '$d' "$copy/dotfiles/hypr/.config/hypr/hyprland.conf"
-
-# --- a template nothing sources ------------------------------------------------------
-printf '# orphan\n' >"$copy/render/hypr/generated/orphan.conf.in"
-expect_refusal 'a fragment hyprland.conf never sources' 'provides ['
-rm -- "$copy/render/hypr/generated/orphan.conf.in"
-
 # --- the Lua loader and the Lua fragments must name each other ---------------------------
 printf '# orphan\n' >"$copy/render/hypr/generated/orphan.lua.in"
 expect_refusal 'a Lua fragment hyprland.lua never loads' 'hyprland.lua loads ['
@@ -60,4 +50,4 @@ expect_refusal 'a loaded fragment nobody renders' 'hyprland.lua loads ['
 sed -i '$d' "$copy/dotfiles/hypr/.config/hypr/hyprland.lua"
 
 gate >/dev/null || fail 'the copy did not return to green'
-printf 'deploy integrity: 6 planted faults refused, clean copy accepted\n'
+printf 'deploy integrity: 4 planted faults refused, clean copy accepted\n'

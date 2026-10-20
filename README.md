@@ -477,7 +477,7 @@ history. `packages/aur.txt` stays empty and `wlogout` is never installed, both p
 
 ### Hardware profiles
 
-The portable Hyprland baseline does not force a GPU. `render/hypr/generated/hardware.conf.in`
+The portable Hyprland baseline does not force a GPU. `render/hypr/generated/hardware.lua.in`
 emits the NVIDIA Wayland environment only when the detected facts say NVIDIA is the sole GPU, and
 a software cursor on NVIDIA and virtual machines; every other machine gets an empty fragment. To
 change what was detected, write the corrected fact to
@@ -553,7 +553,7 @@ missing file means the source workstation's values):
 
 ```bash
 sudo -v && ./scripts/apply-system.sh --locale --keymap   # /etc/locale.conf + locale-gen, /etc/vconsole.conf
-./scripts/render-config.sh --deploy                       # kb_layout into ~/.config/hypr/generated/input.conf
+./scripts/render-config.sh --deploy                       # kb_layout into ~/.config/hypr/generated/input.lua
 ```
 
 A test pins the single-writer rule and another that `LC_ALL=C` is only ever pinned at parser call

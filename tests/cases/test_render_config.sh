@@ -37,14 +37,14 @@ hash_checkout >"$sandbox/before"
 # --- a dry run touches nothing -----------------------------------------------------
 run --dry-run >"$sandbox/dry.out" || fail 'dry run failed'
 grep -q "^would back up $home/.config/waybar/config" "$sandbox/dry.out" || fail 'dry run did not announce the backup'
-grep -q "^would write $home/.config/hypr/generated/monitors.conf" "$sandbox/dry.out" || fail 'dry run did not announce the render'
+grep -q "^would write $home/.config/hypr/generated/monitors.lua" "$sandbox/dry.out" || fail 'dry run did not announce the render'
 [[ -L "$home/.config/waybar/config" ]] || fail 'dry run replaced the existing file'
 [[ ! -e "$home/.config/hypr" ]] || fail 'dry run created output'
 [[ -z "$(backups waybar/config)" ]] || fail 'dry run wrote a backup'
 
 # --- a deploy writes into the config directory and nowhere else ----------------------
 run --deploy >"$sandbox/deploy.out" || fail 'deploy failed'
-for file in waybar/config hypr/generated/hardware.conf hypr/generated/monitors.conf hypr/generated/input.conf; do
+for file in waybar/config hypr/generated/hardware.lua hypr/generated/monitors.lua hypr/generated/input.lua; do
 	[[ -f "$home/.config/$file" && ! -L "$home/.config/$file" ]] || fail "not rendered as a regular file: $file"
 done
 hash_checkout >"$sandbox/after"
@@ -60,12 +60,12 @@ grep -q '^rendered ' "$sandbox/again.out" && fail 'second deploy rewrote an unch
 run --check-drift >/dev/null || fail 'fresh deploy reported drift'
 
 # --- a hand edit or a changed fact is drift, and --deploy repairs it -------------
-printf '%s\n' '# edited by hand' >>"$home/.config/hypr/generated/input.conf"
+printf '%s\n' '# edited by hand' >>"$home/.config/hypr/generated/input.lua"
 run --check-drift >/dev/null 2>&1 && fail 'drift check accepted a hand-edited render'
 printf 'has_battery=yes\n' >"$sandbox/override"
 run --deploy >/dev/null || fail 'repair deploy failed'
 grep -q '"battery"' "$home/.config/waybar/config" || fail 'the override did not reach the render'
-[[ "$(backups 'hypr/generated/input.conf' | wc -l)" -eq 1 ]] || fail 'the hand-edited file was not backed up before repair'
+[[ "$(backups 'hypr/generated/input.lua' | wc -l)" -eq 1 ]] || fail 'the hand-edited file was not backed up before repair'
 run --check-drift >/dev/null || fail 'drift remained after repair'
 
 # --- no facts is an error with guidance, not an empty render -------------------------
@@ -76,7 +76,7 @@ output="$(HOME="$home" XDG_STATE_HOME="$state" FACTS_FILE="$sandbox/absent" FACT
 
 # --- a committed template can never depend on the machine -------------------------------
 mkdir -p -- "$sandbox/templates/hypr/.config/hypr"
-cp -- "$repo_root/render/hypr/generated/hardware.conf.in" "$sandbox/templates/hypr/.config/hypr/hardware.conf.in"
+cp -- "$repo_root/render/hypr/generated/hardware.lua.in" "$sandbox/templates/hypr/.config/hypr/hardware.lua.in"
 if TEMPLATES_DIR="$sandbox/templates" RENDER_ROOT="$sandbox/out" bash "$repo_root/scripts/check-theme-drift.sh" --render >/dev/null 2>&1; then
 	fail 'the committed render path accepted a guarded template'
 fi

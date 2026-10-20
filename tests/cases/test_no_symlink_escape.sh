@@ -49,6 +49,6 @@ rm -- "$home/.config/hypr" "$home/.config/waybar"
 mkdir -p -- "$sandbox/elsewhere"
 ln -s -- "$sandbox/elsewhere" "$home/.config/hypr"
 run --deploy >/dev/null || fail 'a link outside the checkout was refused'
-[[ -f "$sandbox/elsewhere/generated/monitors.conf" ]] || fail 'render did not follow the harmless link'
+[[ -f "$sandbox/elsewhere/generated/monitors.lua" ]] || fail 'render did not follow the harmless link'
 
 printf 'symlink escape: refused for 2 links into the checkout, allowed elsewhere\n'

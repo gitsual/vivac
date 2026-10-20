@@ -38,24 +38,23 @@ grep -q $'^SUPER+Return\tOpen a terminal$' <<<"$out" || fail 'hypr pane: registe
 grep -q $'^SUPER+CTRL+Q\tUNREGISTERED$' <<<"$out" || fail "hypr pane: the overlay's bind is not marked UNREGISTERED: $out"
 grep -c 'UNREGISTERED' <<<"$out" | grep -qx 1 || fail 'hypr pane: registered live binds were marked too'
 registry_rows="$(grep -c $'\thypr\t' "$repo_root/data/help-registry.tsv")"
-((registry_rows == $(grep -Ec '^bind[lmer]* = ' "$repo_root/templates/hypr/.config/hypr/hyprland.conf.in"))) || fail 'registry hypr rows and template binds differ in count'
-((registry_rows == $(grep -Ec '^hl\.bind\("' "$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"))) || fail 'registry hypr rows and Lua template binds differ in count'
+((registry_rows == $(grep -Ec '^hl\.bind\("' "$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"))) || fail 'registry hypr rows and template binds differ in count'
 # Without a live list the pane is the registry alone, never empty.
 out="$(render hypr es)"
 ((registry_rows == $(wc -l <<<"$out"))) || fail 'hypr pane without a session: expected one row per registry entry'
 grep -q UNREGISTERED <<<"$out" && fail 'hypr pane without a session marked something UNREGISTERED'
 
 # --- the gate catches a bind added without its help line ----------------------------------------------------
-copy="$sandbox/template.conf.in"
-cp -- "$repo_root/templates/hypr/.config/hypr/hyprland.conf.in" "$copy"
-printf 'bind = SUPER, Z, exec, something-new\n' >>"$copy"
+copy="$sandbox/template.lua.in"
+cp -- "$repo_root/templates/hypr/.config/hypr/hyprland.lua.in" "$copy"
+printf 'hl.bind("SUPER + Z", hl.dsp.exec_cmd("something-new"))\n' >>"$copy"
 if HELP_TEMPLATE="$copy" bash "$repo_root/scripts/check-help-registry.sh" >/dev/null 2>"$sandbox/err"; then
 	fail 'gate accepted a bind with no help line'
 fi
 grep -q 'SUPER+Z has no' "$sandbox/err" || fail "gate did not name the bind: $(<"$sandbox/err")"
 # ...and a help line whose key vanished from the template.
-copy2="$sandbox/template2.conf.in"
-grep -v '^bind = SUPER, M, exit' "$repo_root/templates/hypr/.config/hypr/hyprland.conf.in" >"$copy2"
+copy2="$sandbox/template2.lua.in"
+grep -v '^hl\.bind("SUPER + M", ' "$repo_root/templates/hypr/.config/hypr/hyprland.lua.in" >"$copy2"
 if HELP_TEMPLATE="$copy2" bash "$repo_root/scripts/check-help-registry.sh" >/dev/null 2>"$sandbox/err"; then
 	fail 'gate accepted a registry row for a bind the template lost'
 fi

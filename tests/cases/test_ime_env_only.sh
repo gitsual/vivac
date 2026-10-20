@@ -28,14 +28,14 @@ render none
 render fcitx5
 # diff exits 1 on a difference, which is the expected outcome here.
 changed="$(diff -rq "$sandbox/h-none/.config" "$sandbox/h-fcitx5/.config" | sed 's|.*/\.config/||; s| .*||' || true)"
-[[ "$changed" == $'hypr/generated/input.conf\nhypr/generated/input.lua' ]] || fail "ime changed more than the input fragment: $changed"
-added="$(diff "$sandbox/h-none/.config/hypr/generated/input.conf" "$sandbox/h-fcitx5/.config/hypr/generated/input.conf" | grep '^>' | sed 's/^> //' || true)"
-expected='env = QT_IM_MODULE,fcitx
-env = XMODIFIERS,@im=fcitx
-env = SDL_IM_MODULE,fcitx
-exec-once = fcitx5 -d'
+[[ "$changed" == 'hypr/generated/input.lua' ]] || fail "ime changed more than the input fragment: $changed"
+added="$(diff "$sandbox/h-none/.config/hypr/generated/input.lua" "$sandbox/h-fcitx5/.config/hypr/generated/input.lua" | grep '^>' | sed 's/^> *//' || true)"
+expected='hl.env("QT_IM_MODULE", "fcitx")
+hl.env("XMODIFIERS", "@im=fcitx")
+hl.env("SDL_IM_MODULE", "fcitx")
+table.insert(vivac.autostart, { id = "fcitx5", cmd = "fcitx5 -d" })'
 [[ "$added" == "$expected" ]] || fail "ime=fcitx5 added other lines: $added"
-grep -v '^#' "$sandbox/h-none/.config/hypr/generated/input.conf" | grep -q fcitx && fail 'ime=none still sets up fcitx'
+grep -v '^--' "$sandbox/h-none/.config/hypr/generated/input.lua" | grep -q fcitx && fail 'ime=none still sets up fcitx'
 
 # --- the setting is closed: none or fcitx5 -------------------------------------------------------------
 printf 'ime=ibus\n' >"$sandbox/settings"

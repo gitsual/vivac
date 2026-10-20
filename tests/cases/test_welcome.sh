@@ -9,7 +9,7 @@ set -Eeuo pipefail
 
 repo_root="${REPO_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
 wizard="$repo_root/dotfiles/welcome/.local/bin/vivac-welcome"
-hypr="$repo_root/templates/hypr/.config/hypr/hyprland.conf.in"
+hypr="$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"
 # shellcheck source=lib/kv.sh
 source "$repo_root/lib/kv.sh"
 # shellcheck source=lib/settings.sh
@@ -82,7 +82,7 @@ settings_load "$settings_file" || fail 'the loader cannot read what the wizard w
 # second time, and floated so it is not tiled behind the bar on first sight.
 (($(grep -c 'vivac-welcome --first-run' "$hypr") == 1)) ||
 	fail 'the session does not start the wizard exactly once'
-grep -Fq 'windowrule = float on, match:class ^(vivac-welcome)$' "$hypr" ||
+grep -Fq 'match = { class = "^(vivac-welcome)$" }, float = true' "$hypr" ||
 	fail 'the wizard would be tiled like an ordinary window'
 grep -Fq 'welcome' "$repo_root/scripts/deploy.sh" || fail 'the wizard is never deployed'
 

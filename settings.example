@@ -8,8 +8,8 @@
 # Each axis has exactly one writer:
 #   locale      scripts/apply-system.sh --locale   -> /etc/locale.conf, /etc/locale.gen
 #   keymap      scripts/apply-system.sh --keymap   -> /etc/vconsole.conf
-#   xkb_layout  scripts/render-config.sh --deploy  -> ~/.config/hypr/generated/input.conf
-#   ime         scripts/render-config.sh --deploy  -> ~/.config/hypr/generated/input.conf
+#   xkb_layout  scripts/render-config.sh --deploy  -> ~/.config/hypr/generated/input.lua
+#   ime         scripts/render-config.sh --deploy  -> ~/.config/hypr/generated/input.lua
 #               (none or fcitx5; the packages come from bootstrap.sh --ime)
 #   theme       scripts/render-config.sh --deploy  -> every themed config
 #               (a name from data/themes/, or bad-romance for the default)

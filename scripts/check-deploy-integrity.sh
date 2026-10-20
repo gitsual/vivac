@@ -47,15 +47,8 @@ for template in "${templates[@]}"; do
 	done < <(find "$repo_root/dotfiles" -mindepth 2 -path "$repo_root/dotfiles/*/.config/$target" -print)
 done
 
-# --- Hyprland sources exactly the fragments that exist, and every fragment is sourced
-hypr_conf="$repo_root/dotfiles/hypr/.config/hypr/hyprland.conf"
-mapfile -t sourced < <(sed -n 's|^source = ~/\.config/hypr/generated/||p' "$hypr_conf" | LC_ALL=C sort)
-mapfile -t fragments < <(find "$repo_root/render/hypr/generated" -type f -name '*.conf.in' -printf '%f\n' 2>/dev/null | sed 's/\.in$//' | LC_ALL=C sort)
-if [[ "${sourced[*]}" != "${fragments[*]}" ]]; then
-	problem "hyprland.conf sources [${sourced[*]}] but render/hypr/generated/ provides [${fragments[*]}]"
-fi
-
-# The Lua loader says fragment("name") for exactly the Lua fragments that exist.
+# --- Hyprland loads exactly the fragments that exist, and every fragment is loaded
+# hyprland.lua says fragment("name") for exactly the fragments that exist.
 lua_conf="$repo_root/dotfiles/hypr/.config/hypr/hyprland.lua"
 mapfile -t loaded < <(sed -n 's/^fragment("\([a-z]*\)")$/\1/p' "$lua_conf" | LC_ALL=C sort)
 mapfile -t lua_fragments < <(find "$repo_root/render/hypr/generated" -type f -name '*.lua.in' -printf '%f\n' 2>/dev/null | sed 's/\.lua\.in$//' | LC_ALL=C sort)

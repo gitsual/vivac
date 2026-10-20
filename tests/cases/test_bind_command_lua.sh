@@ -5,7 +5,7 @@ set -Eeuo pipefail
 
 # capture-desktop.sh and record-demo.sh open each surface with the command its
 # key binding runs, read out of the deployed compositor config at run time.
-# That config is hyprland.lua now: both scripts read it, never hyprland.conf,
+# That config is hyprland.lua now: both scripts read it, never the old hyprlang config,
 # and their bind_command reads the same answer out of it for every key the
 # captures and the film press.
 
@@ -43,7 +43,7 @@ expected=(
 
 for script in capture-desktop record-demo; do
 	file="$repo_root/scripts/$script.sh"
-	grep -n 'hyprland\.conf' "$file" && fail "$script.sh still names hyprland.conf"
+	grep -n 'hyprland\.conf' "$file" && fail "$script.sh still names the hyprlang config"
 	grep -q 'hyprland\.lua' "$file" || fail "$script.sh does not read hyprland.lua"
 	# The reader is the Python in the BINDPY heredoc; run exactly that text.
 	sed -n "/<<'BINDPY'/,/^BINDPY\$/p" "$file" | sed '1d;$d' >"$sandbox/$script.py"

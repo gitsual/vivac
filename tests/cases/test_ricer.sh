@@ -8,7 +8,7 @@ set -Eeuo pipefail
 # carries the three stages.
 
 repo_root="${REPO_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
-template="$repo_root/templates/hypr/.config/hypr/hyprland.conf.in"
+template="$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"
 
 fail() {
 	printf '%s\n' "$1" >&2
@@ -24,9 +24,9 @@ grep -Fxq hypridle "$repo_root/packages/pacman.txt" || fail 'hypridle is not in 
 
 # --- beside, not instead: both power menus are bound, the rofi one to its own script -------------------
 # shellcheck disable=SC2016  # the literal $HOME is what the template says
-grep -Fxq 'bind = SUPER SHIFT, E, exec, $HOME/.config/rofi/power/powermenu.sh' "$template" || fail 'the rofi power menu bind changed'
+grep -Fq 'hl.bind("SUPER + SHIFT + E", hl.dsp.exec_cmd("$HOME/.config/rofi/power/powermenu.sh"))' "$template" || fail 'the rofi power menu bind changed'
 # shellcheck disable=SC2016  # the literal $HOME is what the template says
-grep -Fxq 'bind = SUPER SHIFT, Q, exec, $HOME/.local/bin/vivac-power' "$template" || fail 'the graphical power menu is not bound'
+grep -Fq 'hl.bind("SUPER + SHIFT + Q", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-power"))' "$template" || fail 'the graphical power menu is not bound'
 
 # Both menus are generated from the same table, in the session's language, and
 # neither decides what to run by reading a label back. The old rofi script
@@ -85,7 +85,7 @@ assert not any(b["label"].startswith("[") for b in bar), bar
 grep -Eq '#[0-9A-F]{6}' "$repo_root/dotfiles/ricer/.config/nwg-bar/style.css" || fail 'the rendered nwg-bar stylesheet carries no colour'
 
 # --- hypridle: started with the session, three stages in order ----------------------------------------------
-grep -Fxq 'exec-once = hypridle' "$template" || fail 'hypridle is not started with the session'
+grep -Fq '{ id = "hypridle", cmd = "hypridle" }' "$template" || fail 'hypridle is not started with the session'
 mapfile -t timeouts < <(awk '/^[[:space:]]*timeout =/ { print $3 }' "$repo_root/dotfiles/hypr/.config/hypr/hypridle.conf")
 [[ "${timeouts[*]}" == '300 600 1800' ]] || fail "hypridle stages are not lock, screen off, suspend in order: ${timeouts[*]}"
 grep -q 'lock_cmd' "$repo_root/dotfiles/hypr/.config/hypr/hypridle.conf" || fail 'hypridle has no lock command'

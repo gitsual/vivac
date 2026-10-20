@@ -7,7 +7,7 @@ set -Eeuo pipefail
 
 repo_root="${REPO_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
 picker="$repo_root/dotfiles/ricer/.local/bin/vivac-theme"
-template="$repo_root/templates/hypr/.config/hypr/hyprland.conf.in"
+template="$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"
 bar="$repo_root/render/waybar/config.in"
 
 fail() {
@@ -17,7 +17,7 @@ fail() {
 [[ -x "$picker" ]] || fail 'the theme picker is missing or not executable'
 
 # shellcheck disable=SC2016  # the literal $HOME is what the template says
-grep -Fxq 'bind = SUPER SHIFT, T, exec, $HOME/.local/bin/vivac-theme' "$template" ||
+grep -Fq 'hl.bind("SUPER + SHIFT + T", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-theme"))' "$template" ||
 	fail 'the theme picker has no key'
 grep -Fq 'SUPER+SHIFT+T	hypr	exec' "$repo_root/data/help-registry.tsv" ||
 	fail 'the theme picker is not in the help registry, so the help pane never mentions it'

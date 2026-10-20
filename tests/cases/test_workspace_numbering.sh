@@ -7,7 +7,7 @@ set -Eeuo pipefail
 # polled) on one or two monitors alike, and the strip is never blank.
 
 repo_root="${REPO_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)}"
-template="$repo_root/templates/hypr/.config/hypr/hyprland.conf.in"
+template="$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"
 sandbox="$(mktemp -d "${TMPDIR:-/tmp}/vivac-ws.XXXXXX")"
 trap 'rm -rf -- "$sandbox"' EXIT
 
@@ -18,14 +18,16 @@ fail() {
 
 # --- binds: 1..9 then 0 -> 10, in that order, for both switch and move ------------------------
 for dispatcher in workspace movetoworkspace; do
-	mapfile -t targets < <(grep -E "^bind = SUPER( SHIFT)?, [0-9], $dispatcher, [0-9]+$" "$template" | awk -F', ' '{print $4}')
+	dsp=hl\\.dsp\\.focus; [[ "$dispatcher" == workspace ]] || dsp=hl\\.dsp\\.window\\.move
+	mapfile -t targets < <(sed -nE "s/^hl\.bind\(\"SUPER( \+ SHIFT)? \+ [0-9]\", $dsp\(\{ workspace = ([0-9]+) \}\)\)\$/\2/p" "$template")
 	[[ "${targets[*]}" == '1 2 3 4 5 6 7 8 9 10' ]] || fail "$dispatcher binds are not 1..10 in order: ${targets[*]}"
-	[[ "$(grep -E "^bind = SUPER( SHIFT)?, 0, $dispatcher, " "$template" | awk -F', ' '{print $4}')" == 10 ]] || fail "$dispatcher: 0 does not map to 10"
+	[[ "$(sed -nE "s/^hl\.bind\(\"SUPER( \+ SHIFT)? \+ 0\", $dsp\(\{ workspace = ([0-9]+) \}\)\)\$/\2/p" "$template" | LC_ALL=C sort -u | tr '\n' ' ')" == '10 ' ]] || fail "$dispatcher: 0 does not map to 10"
 done
-grep -Eq '^bind = SUPER, bracketright, workspace, e\+1$' "$template" || fail 'no wraparound forward bind'
-grep -Eq '^bind = SUPER, bracketleft, workspace, e-1$' "$template" || fail 'no wraparound backward bind'
-grep -E '^bind = SUPER( SHIFT)?, [0-9], (move)?(to)?workspace, special' "$template" && fail 'a digit key targets a special workspace'
-grep -q '^exec-once = ~/.config/waybar/scripts/ws-refresh.sh$' "$template" || fail 'the workspace listener is not started with the session'
+grep -Fq 'hl.bind("SUPER + bracketright", hl.dsp.focus({ workspace = "e+1" }))' "$template" || fail 'no wraparound forward bind'
+grep -Fq 'hl.bind("SUPER + bracketleft", hl.dsp.focus({ workspace = "e-1" }))' "$template" || fail 'no wraparound backward bind'
+grep -E 'hl\.bind\("SUPER( \+ SHIFT)? \+ [0-9]".*workspace = "special' "$template" && fail 'a digit key targets a special workspace'
+# shellcheck disable=SC2016  # the literal $HOME is what the template says
+grep -Fq '{ id = "ws-refresh", cmd = "$HOME/.config/waybar/scripts/ws-refresh.sh" }' "$template" || fail 'the workspace listener is not started with the session'
 
 # --- Waybar: custom/ws replaces the built-in module, on 1 and 2 monitors alike --------------------
 for archetype in vm-virtio laptop-amd-hybrid; do

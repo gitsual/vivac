@@ -34,8 +34,7 @@ expect_one() {
 
 expect_one 'locale-gen' scripts/apply-system.sh
 expect_one '(^|[^A-Z_])KEYMAP=' scripts/apply-system.sh
-# Both fragment formats exist side by side until the hyprlang one is removed.
-expect_one '(^|[^x])kb_layout' $'render/hypr/generated/input.conf.in\nrender/hypr/generated/input.lua.in'
+expect_one '(^|[^x])kb_layout' render/hypr/generated/input.lua.in
 # The greeter's two axes: its process language and the layout cage hands it.
 expect_one 'XKB_DEFAULT_LAYOUT=' system/etc/greetd/config-gui.toml.in
 # LANG= is two axes with the same marker: the system locale (apply-system.sh
@@ -51,4 +50,4 @@ if grep -lE 'localectl set-|locale-gen|tee .*(locale|vconsole)' scripts/test-*.s
 	fail 'a verification script writes a language axis'
 fi
 
-printf 'axis single writer: locale-gen, KEYMAP -> apply-system.sh; kb_layout -> input.conf.in; greeter LANG and XKB_DEFAULT_LAYOUT -> config-gui.toml.in\n'
+printf 'axis single writer: locale-gen, KEYMAP -> apply-system.sh; kb_layout -> input.lua.in; greeter LANG and XKB_DEFAULT_LAYOUT -> config-gui.toml.in\n'

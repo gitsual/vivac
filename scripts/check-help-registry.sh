@@ -26,16 +26,12 @@ problem() {
 	status=1
 }
 
-# HELP_TEMPLATE names one template; by default every compositor template that
-# exists is read, the hyprlang one and the Lua one, and each must carry the
-# full set of annotated binds.
+# HELP_TEMPLATE names one template; by default the Lua compositor template is
+# read, and it must carry the full set of annotated binds.
 if [[ -n "${HELP_TEMPLATE:-}" ]]; then
 	templates=("$HELP_TEMPLATE")
 else
-	templates=()
-	for name in hyprland.conf.in hyprland.lua.in; do
-		[[ -f "$repo_root/templates/hypr/.config/hypr/$name" ]] && templates+=("$repo_root/templates/hypr/.config/hypr/$name")
-	done
+	templates=("$repo_root/templates/hypr/.config/hypr/hyprland.lua.in")
 fi
 
 i18n_load en "$repo_root/i18n"

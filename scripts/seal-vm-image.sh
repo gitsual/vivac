@@ -19,7 +19,7 @@ printf 'locale=%s\nkeymap=%s\nxkb_layout=%s\nime=fcitx5\n' \
 ./scripts/render-config.sh --deploy >/dev/null
 grep -Fxq "LANG=$IMAGE_LOCALE" /etc/locale.conf
 grep -Fxq "KEYMAP=$IMAGE_KEYMAP" /etc/vconsole.conf
-grep -Fxq "    kb_layout = $IMAGE_LAYOUT" "$HOME/.config/hypr/generated/input.conf"
+grep -Fq "kb_layout = \"$IMAGE_LAYOUT\"" "$HOME/.config/hypr/generated/input.lua"
 
 # The test guest logs straight in with no greeter, which is right for a gate
 # and wrong for a published image: whoever downloads this should meet the

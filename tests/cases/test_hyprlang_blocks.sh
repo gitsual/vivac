@@ -6,8 +6,8 @@ set -Eeuo pipefail
 # the config still loads, the option keeps its default, and nothing on screen
 # says so. It cost this desktop three settings at once. `hyprlock.conf` asked
 # for the palette as its background and for the cursor to be hidden, and drew a
-# black field with a cursor on it; `hyprland.conf` asked for preserve_split and
-# new_on_top, and `hyprctl getoption` answered 0 to both.
+# black field with a cursor on it; the compositor config (since ported to Lua) asked
+# for preserve_split and new_on_top, and `hyprctl getoption` answered 0 to both.
 #
 # Only Hyprlang files are checked. CSS and rofi's rasi are different languages
 # in which a one-line rule is ordinary and correct.

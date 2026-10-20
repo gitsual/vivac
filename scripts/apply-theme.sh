@@ -166,7 +166,7 @@ if $reload; then
 	# it starts first and catches up while the rest reloads.
 	#
 	# Tested with -f, not -x: both call sites run it through `bash` (here and
-	# hyprland.conf's `exec-once = bash $scripts/wallpaper.sh`), so the execute
+	# the wallpaper autostart entry of hyprland.lua), so the execute
 	# bit is a permission neither one needs. Guarding on -x meant that a file
 	# committed 644 -- which this one was -- silently disabled the wallpaper
 	# half of every theme switch, on every machine, with nothing reported.

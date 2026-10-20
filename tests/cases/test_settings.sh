@@ -44,14 +44,14 @@ settings_load "$sandbox/settings" 2>/dev/null && fail 'an upper-case XKB layout 
 # --- the committed example is a valid settings file ------------------------------------------
 settings_load "$repo_root/settings.example" || fail 'settings.example does not load'
 
-# --- xkb_layout reaches input.conf and nothing else ----------------------------------------
+# --- xkb_layout reaches input.lua and nothing else ----------------------------------------
 home="$sandbox/home"
 mkdir -p -- "$home"
 printf 'xkb_layout=fr\nkeymap=us\nlocale=C.UTF-8\n' >"$sandbox/settings"
 HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_STATE_HOME="$sandbox/state" SETTINGS_FILE="$sandbox/settings" \
 	FACTS_FILE="$repo_root/tests/golden/laptop-intel/hardware-facts" FACTS_OVERRIDE="$sandbox/none" \
 	bash "$repo_root/scripts/render-config.sh" --deploy >/dev/null || fail 'render with settings failed'
-grep -Fxq '    kb_layout = fr' "$home/.config/hypr/generated/input.conf" || fail 'xkb_layout did not reach input.conf'
+grep -Fq 'kb_layout = "fr"' "$home/.config/hypr/generated/input.lua" || fail 'xkb_layout did not reach input.lua'
 grep -rq 'C.UTF-8\|KEYMAP\|LANG' "$home/.config" && fail 'a system axis leaked into a user render'
 
 # --- apply-system reads the same file and touches only its two files (dry run) ------------
