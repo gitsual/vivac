@@ -4,7 +4,7 @@ set -Eeuo pipefail
 # Adopt the Lua desktop on a machine that already has a configuration of its own,
 # without losing any of it.
 #
-#   scripts/deploy-host.sh [--dry-run] [--all]   verify, back up, deploy, recolour
+#   scripts/deploy-host.sh [--dry-run] [--all] [--without PKG]...   verify, back up, deploy, recolour
 #   scripts/deploy-host.sh --rollback [BACKUP] [--force]   put the pre-deploy state back
 #
 # Order: preflight -> stage the render in a scratch HOME -> Hyprland --verify-config
@@ -24,6 +24,8 @@ state="${XDG_STATE_HOME:-$HOME/.local/state}"
 # --all: they are the owner's own layouts and only get the palette (colour overlay).
 packages=(hypr nvim ricer welcome)
 dry_run=false rollback=false force=false backup_arg=''
+default_packages=("${packages[@]}")
+without=()
 
 die() {
 	printf 'deploy-host: %s\n' "$*" >&2
@@ -34,6 +36,22 @@ while (($#)); do
 	case "$1" in
 	--dry-run) dry_run=true ;;
 	--all) packages=(hypr nvim shell theme audio security automation ricer welcome) ;;
+	--without)
+		(($# >= 2)) || {
+			printf 'deploy-host: --without needs a package name\n' >&2
+			exit 2
+		}
+		case " ${default_packages[*]} " in
+		*" $2 "*) ;;
+		*)
+			printf 'deploy-host: --without: unknown package %s (one of: %s)\n' "$2" "${default_packages[*]}" >&2
+			exit 2
+			;;
+		esac
+		[[ "$2" != hypr ]] || die '--without hypr is refused: the Hyprland config is the point of this deploy'
+		without+=("$2")
+		shift
+		;;
 	--rollback) rollback=true ;;
 	--force) force=true ;;
 	-h | --help)
@@ -46,6 +64,20 @@ while (($#)); do
 	shift
 done
 $rollback || [[ -z "$backup_arg" ]] || die "unexpected argument: $backup_arg"
+# Excluded packages are neither stowed nor backed up; the summary says so.
+if ((${#without[@]})); then
+	kept=()
+	for package in "${packages[@]}"; do
+		skip=false
+		for excluded in "${without[@]}"; do [[ "$package" != "$excluded" ]] || skip=true; done
+		$skip || kept+=("$package")
+	done
+	packages=("${kept[@]}")
+fi
+skipped_note() {
+	local excluded
+	for excluded in "${without[@]}"; do printf 'skipped: %s (--without)\n' "$excluded"; done
+}
 
 # --- rollback: backed-up files come back, created files and directories go ------------------------------
 # The MANIFEST is read as untrusted input: every line is checked before anything is removed.
@@ -179,6 +211,7 @@ if $dry_run; then
 	printf 'would write %s (the checkout: %s)\n' "$config/vivac/repo" "$repo_root"
 	"$repo_root/scripts/deploy.sh" --dry-run --no-theme "${protect_args[@]}" "${packages[@]}"
 	for path in "${overlay[@]}"; do printf 'would recolour %s (%s)\n' "$HOME/$path" "$theme"; done
+	skipped_note
 	printf 'dry run: the staged config verified; nothing was changed\n'
 	exit 0
 fi
@@ -298,6 +331,7 @@ done
 }
 
 # deploy.sh names its own backup directory; this script prints the one that matters.
+skipped_note
 DEPLOY_BACKUP_ROOT="$backup_root" "$repo_root/scripts/deploy.sh" --no-theme "${protect_args[@]}" "${packages[@]}" | { grep -v '^backup: ' || true; }
 
 for path in "${overlay[@]}"; do [[ -e "$backup_root/$path" ]] || save "$path"; done

@@ -250,13 +250,43 @@ out="$(hl "$host")" || fail "deploy over a symlinked hyprland.lua failed: $out"
 hl "$host" --rollback "$(backup_of "$out")" >/dev/null || fail 'rollback over a symlinked hyprland.lua failed'
 [[ "$(snap "$host")" == "$before" ]] || fail 'the symlink (and its target) did not come back'
 
+# --- --without: an excluded package is neither stowed nor backed up ------------------------------------------
+host="$sandbox/without"
+make_host "$host"
+mkdir -p -- "$host/.config/nvim/.git"
+printf 'ref: refs/heads/main\n' >"$host/.config/nvim/.git/HEAD"
+nvim_before="$(cd "$host/.config/nvim" && find . -printf '%p %y %m %l\n' | LC_ALL=C sort; find . -type f -exec sha256sum {} + | LC_ALL=C sort -k2)"
+out="$(hl "$host" --dry-run --without nvim)" || fail "dry run with --without failed: $out"
+grep -q 'skipped: nvim (--without)' <<<"$out" || fail "the dry run does not say nvim was skipped: $out"
+grep -q '/nvim/' <<<"$out" && fail "the dry run still mentions nvim files: $out"
+out="$(hl "$host" --without nvim)" || fail "deploy --without nvim failed: $out"
+grep -q 'skipped: nvim (--without)' <<<"$out" || fail "the summary does not say nvim was skipped: $out"
+[[ "$(cd "$host/.config/nvim" && find . -printf '%p %y %m %l\n' | LC_ALL=C sort; find . -type f -exec sha256sum {} + | LC_ALL=C sort -k2)" == "$nvim_before" ]] || fail '--without nvim touched ~/.config/nvim'
+[[ ! -e "$(backup_of "$out")/.config/nvim" ]] || fail '--without nvim backed up nvim'
+[[ "$(readlink -f -- "$host/.config/hypr/hyprland.lua")" == "$repo_root/dotfiles/hypr/.config/hypr/hyprland.lua" ]] || fail '--without nvim did not deploy hypr'
+hl "$host" --rollback "$(backup_of "$out")" >/dev/null || fail 'rollback after --without failed'
+host="$sandbox/without-refused"
+make_host "$host"
+for args in '--without hypr' '--without bogus' '--without' '--without hypr --without nvim'; do
+	before="$(snap "$host")"
+	# shellcheck disable=SC2086  # the words are the point
+	if out="$(hl "$host" $args 2>&1)"; then fail "the deploy went ahead with: $args"; fi
+	[[ "$(snap "$host")" == "$before" ]] || fail "'$args' changed the host"
+done
+out="$(hl "$host" --without hypr 2>&1 || true)"
+grep -q 'point of this deploy' <<<"$out" || fail "--without hypr gave no clear reason: $out"
+hl "$host" --without bogus >/dev/null 2>&1 && fail 'unknown package accepted'
+unknown_status=0
+hl "$host" --without bogus >/dev/null 2>&1 || unknown_status=$?
+[[ "$unknown_status" -eq 2 ]] || fail "an unknown package exits $unknown_status, not 2"
+
 # --- the rollback doc ----------------------------------------------------------------------------------------
 doc="$repo_root/docs/host-deploy.md"
 # shellcheck disable=SC2016,SC2088  # literal doc text: tildes, braces and backticks are not expanded
 for needle in 'deploy-host.sh --rollback' 'mv ~/.config/hypr/hyprland.lua{,.vivac}' '~/.local/state/vivac/backups/<stamp>' \
 	'MANIFEST' 'generated/{hardware,input,monitors}.conf' '.bashrc' 'screenshot.sh' 'hyprpaper.conf' 'ws-refresh.sh' \
 	'Only Lua-level breakage in `local.lua` is contained' 'Errors Hyprland records itself' \
-	'newest backup that has something to undo' 'keeps no backup' '--force'; do
+	'newest backup that has something to undo' 'keeps no backup' '--force' '--without nvim' '94afb84' '5e4eb8652b4776f139282a343f04a3a8c7f23cb0'; do
 	grep -qF -- "$needle" "$doc" || fail "docs/host-deploy.md does not say: $needle"
 done
 grep -q 'host-deploy.md' "$repo_root/README.md" || fail 'README.md does not point at docs/host-deploy.md'

@@ -31,6 +31,13 @@ one command undoes all of it.
 The checkout location goes to `~/.config/vivac/repo`; the session reads it, so
 the shared-settings pull at login finds this checkout even when it is not at `~/vivac`.
 
+`--without PKG` (repeatable; `nvim`, `ricer` or `welcome`) leaves a package out:
+it is not stowed and not backed up, and the output says `skipped: nvim (--without)`.
+`hypr` is refused, it is the point of the deploy; any other name exits 2. Use
+`--without nvim` today: the `avante.nvim` pin in `dotfiles/nvim` (lazy-lock, `94afb84`)
+fails to source in the VM, while the owner's working pin is
+`5e4eb8652b4776f139282a343f04a3a8c7f23cb0`. Known issue, to fix in a follow-up change.
+
 ## What it never touches
 
 | Left alone | Why |
