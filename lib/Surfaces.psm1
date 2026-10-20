@@ -1821,6 +1821,10 @@ function Show-Clipboard([switch]$NoShow, [hashtable]$Registry) {
 
 # ------------------------------------------------------------------- lock
 
+# Set before the first lock: under strict mode an unset one is an error, and
+# the greeter at sign-in failed on it.
+$script:LockShown = $false
+
 # Win+L: vivac's lock, the counterpart of the source's hyprlock -- the base
 # colour of the theme on every screen, a large clock, and a password field
 # outlined in the accent. It is drawn by the resident host, and a window is
