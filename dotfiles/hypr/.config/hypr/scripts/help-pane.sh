@@ -9,7 +9,8 @@
 # Runs from the stowed symlink: the registry, the tables and the libraries
 # are read from the checkout the symlink points into. Selecting a row acts
 # on the registry's action_value, never on the description: exec through
-# Hyprland's own exec dispatcher, dispatch through hyprctl, doc opens the
+# Hyprland's own exec dispatcher, dispatch through lib/hypr-ipc.sh (so it
+# works under hyprlang and Lua), doc opens the
 # file. A live bind Hyprland has that the registry lacks shows UNREGISTERED.
 set -Eeuo pipefail
 
@@ -19,6 +20,8 @@ repo_root="${HELP_REPO_ROOT:-$(cd -- "$(dirname -- "$self")/../../../../.." && p
 source "$repo_root/lib/kv.sh"
 # shellcheck source=lib/i18n.sh
 source "$repo_root/lib/i18n.sh"
+# shellcheck source=lib/hypr-ipc.sh
+source "$repo_root/lib/hypr-ipc.sh"
 # shellcheck source=lib/help.sh
 source "$repo_root/lib/help.sh"
 
@@ -77,10 +80,10 @@ id="${choice%% *}"
 key="$pane/$id"
 [[ -v HELP_TYPE["$key"] ]] || exit 0
 case "${HELP_TYPE["$key"]}" in
-exec) hyprctl dispatch exec -- "${HELP_VALUE["$key"]}" >/dev/null ;;
+exec) hypr_dispatch exec -- "${HELP_VALUE["$key"]}" >/dev/null ;;
 dispatch)
 	# shellcheck disable=SC2086  # the value is "dispatcher args" from the registry
-	hyprctl dispatch ${HELP_VALUE["$key"]} >/dev/null
+	hypr_dispatch ${HELP_VALUE["$key"]} >/dev/null
 	;;
 doc) xdg-open "$repo_root/${HELP_VALUE["$key"]%%#*}" ;;
 esac

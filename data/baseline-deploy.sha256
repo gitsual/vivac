@@ -11,11 +11,12 @@ d41c8a7443dca0a4871539a652020666549f453c6d6c10f10e49661e132d687b  dotfiles/audio
 48bf41bedb732183af62dd480869cb0df58b835218ecc2d9902c48d50904845d  dotfiles/automation/.config/systemd/user/workstation-task@.timer
 153439fa8e31f1565fadb2fe4b5bf5bd33a064619e2354bfe2c6c720d459b3cc  dotfiles/automation/.local/bin/workstation-task-runner
 0f37a2c826a582041b95bbc4d7391cd306512556875c3c4b93bbff15cf5e9f79  dotfiles/dunst/.config/dunst/dunstrc
-88b2f14bf2cc2f9077fdb92ddfa2a554a7bb14f03c2e76ab7f7270dfd6347582  dotfiles/hypr/.config/hypr/hypridle.conf
+675a3b616ec6bc42bf06674c4b11f3e9e6fc60562d99dc0f6f6d4d255d74be06  dotfiles/hypr/.config/hypr/hypridle.conf
 f81e2c5130f96306c6db634e7e5e6386f12b2029d489ebf876bca955123f2445  dotfiles/hypr/.config/hypr/hyprland.conf
 f6fb631aef275fc624a390f5b9281168497f596a92e9e687c0618c3674bc54e8  dotfiles/hypr/.config/hypr/hyprlock.conf
 9b1095378c7e948e8112b0f798b6be6a0279a758fd58570d7b06a0a3ef56e004  dotfiles/hypr/.config/hypr/hyprpaper.conf
-d41dfe4c49299ca46d658e81b2f9e39a51f8fe05fecd9758fc2c1fea7bfbd204  dotfiles/hypr/.config/hypr/scripts/help-pane.sh
+7e9935040c68504651ed755dc07a143e4ee66ab0a930b7f8394214844a465ee5  dotfiles/hypr/.config/hypr/scripts/dispatch.sh
+c39207e329b80fa483cf350784af110e889a25168325170de3ffbaff396e21ba  dotfiles/hypr/.config/hypr/scripts/help-pane.sh
 584b11b7333d31a8b07c2ea778646c772c8f74f8d6c5bd5660ab86073fcf6bbc  dotfiles/hypr/.config/hypr/scripts/screenshot.sh
 554e66cfef5cfc6dfe9bc1daee97990d562bcc66a187467dd887312f6127be0d  dotfiles/hypr/.config/hypr/scripts/wallpaper.sh
 050ce188c04d7546ab466d9378dafb147596e034c4d271a1909da53b2b5f2ec1  dotfiles/hypr/.local/share/wallpapers/bad-romance.png
@@ -45,10 +46,10 @@ f9522fbc197ec8a3fbc9c197bfeeb839f1a5e8307f8b5718f9db53c641a3686d  dotfiles/ricer
 4c02a7e36c8884fd36380eed7dad622c7d5e6bfd7237fb70ff6f08884d1dfe8d  dotfiles/ricer/.config/nwg-bar/icons/reboot.svg
 f83792888aaa59994790ed530bb7dafcda08e3a0f3f97774839c8a3faf4dec86  dotfiles/ricer/.config/nwg-bar/icons/suspend.svg
 a163273069081fc3949fea32ed15907e77e00d82a7e570456752ef280409d10c  dotfiles/ricer/.config/nwg-bar/style.css
-d52f21808ee161566cf9bb96e8d7cbd33f21adec5ae13b7ae8ca0bc032e79a85  dotfiles/ricer/.local/bin/vivac-power
+94b2ac85dc80ed87ddaffd4570d8cc3d43b953d8940f4f5d4d2c699743d3d3e0  dotfiles/ricer/.local/bin/vivac-power
 1530ca18fe9f48bb6571140ce9df0cf2e131ba08246c79e964e333a5642f4050  dotfiles/ricer/.local/bin/vivac-theme
 090766eccd45ca35ee79c791aeab3c383a6bbd1056b9d1c8ee15ca5dd7121f56  dotfiles/rofi/.config/rofi/config.rasi
-d5aaefc9a3507a3daafafb34b0e2028ed0b4aa7971a55536a50323fd1d93bae5  dotfiles/rofi/.config/rofi/power/powermenu.sh
+852b46dcb9070b41a43d3119cd6f14311f994c35e313956afba02ebdba28aa53  dotfiles/rofi/.config/rofi/power/powermenu.sh
 7052c1d2e4c778acbbcdafd72a91e444481be1ffef37c1e988281366081cc521  dotfiles/rofi/.config/rofi/themes/bad-romance.rasi
 b6859c9e44bd1c1c8c294c047f76ff4be949518764269cd7ba07dbfda7e56e9d  dotfiles/security/.config/systemd/user/clamav-home-scan.service
 a7f6d6e31fa8111b724b1b06d46311866ea490845b7377797fca481072550e6d  dotfiles/security/.config/systemd/user/clamav-home-scan.timer

@@ -68,7 +68,7 @@ icons="$runtime/icons"
 entries=(
 	'power.lock	lock	hyprlock'
 	'power.suspend	suspend	systemctl suspend'
-	'power.logout	log-out	hyprctl dispatch exit'
+	"power.logout	log-out	$HOME/.config/hypr/scripts/dispatch.sh exit"
 	'power.reboot	reboot	systemctl reboot'
 	'power.poweroff	power-off	systemctl poweroff'
 )

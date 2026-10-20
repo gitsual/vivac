@@ -76,6 +76,8 @@ export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export HYPRLAND_INSTANCE_SIGNATURE="$(find "$XDG_RUNTIME_DIR/hypr" -maxdepth 1 -mindepth 1 -type d -printf '%T@ %f\n' | sort -rn | head -1 | cut -d' ' -f2)"
 export WAYLAND_DISPLAY="$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-*' ! -name '*.lock' -printf '%f\n' | sort | head -1)"
 cd "$HOME/vivac"
+# Dispatch through the helper: a classic dispatch string fails under Lua.
+source ./lib/hypr-ipc.sh
 
 video=/tmp/vivac-demo.mkv
 cues=/tmp/vivac-demo.cues
@@ -168,7 +170,7 @@ spawn() {
 	local path=/tmp/vivac-demo-spawn.sh
 	printf '#!/usr/bin/env bash\nexport LANG=en_US.UTF-8\ncd "$HOME"\n%s\n' "$1" >"$path"
 	chmod +x "$path"
-	hyprctl dispatch exec -- "$path" >/dev/null
+	hypr_dispatch exec -- "$path" >/dev/null
 }
 
 # A binding whose action is a command: run what that binding runs.
@@ -180,7 +182,7 @@ press() { spawn "$(bind_command "$1,$2")"; }
 # about, and so a binding that moves keeps its line here honest.
 act() {
 	shift 2
-	hyprctl dispatch "$@" >/dev/null
+	hypr_dispatch "$@" >/dev/null
 }
 
 # A terminal that types. The command is real and its output is real; only the
@@ -203,7 +205,7 @@ chmod +x /tmp/vivac-demo-type
 
 # No quoting survives `hyprctl dispatch exec`, so every command a pane runs is
 # written in words a bare shell splits correctly.
-term() { hyprctl dispatch exec -- kitty --hold /tmp/vivac-demo-type "$@" >/dev/null; }
+term() { hypr_dispatch exec -- kitty --hold /tmp/vivac-demo-type "$@" >/dev/null; }
 
 # What a launcher would run for an application, read out of the application's
 # own desktop entry rather than repeated here, for the same reason bind_command

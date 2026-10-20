@@ -23,7 +23,7 @@
     "custom/theme",
     "custom/power"
   ],
-  "custom/ws": {"exec": "$HOME/.config/waybar/scripts/ws-render.sh", "return-type": "json", "signal": 1, "format": "{}", "on-scroll-up": "hyprctl dispatch workspace e-1", "on-scroll-down": "hyprctl dispatch workspace e+1"},
+  "custom/ws": {"exec": "$HOME/.config/waybar/scripts/ws-render.sh", "return-type": "json", "signal": 1, "format": "{}", "on-scroll-up": "$HOME/.config/hypr/scripts/dispatch.sh workspace e-1", "on-scroll-down": "$HOME/.config/hypr/scripts/dispatch.sh workspace e+1"},
   "hyprland/window": {"format": "{title}", "max-length": 60, "separate-outputs": true, "rewrite": {"": "󰇄 desktop"}},
   "hyprland/submap": {"format": "󰌌 {}", "tooltip": false},
   "clock": {"format": "󰥔 {:%H:%M  %a %d %b %Y}", "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"},

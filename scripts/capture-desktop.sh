@@ -102,6 +102,8 @@ export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export HYPRLAND_INSTANCE_SIGNATURE="$(find "$XDG_RUNTIME_DIR/hypr" -maxdepth 1 -mindepth 1 -type d -printf '%T@ %f\n' | sort -rn | head -1 | cut -d' ' -f2)"
 export WAYLAND_DISPLAY="$(find "$XDG_RUNTIME_DIR" -maxdepth 1 -name 'wayland-*' ! -name '*.lock' -printf '%f\n' | sort | head -1)"
 cd "$HOME/vivac"
+# Dispatch through the helper: a classic dispatch string fails under Lua.
+source ./lib/hypr-ipc.sh
 
 ./scripts/apply-theme.sh --theme "$THEME" >/dev/null
 
@@ -136,7 +138,7 @@ pane() {
 	local number="$1" body="$2" path="/tmp/vivac-pane-$1.sh"
 	printf '#!/usr/bin/env bash\nexport LANG=en_US.UTF-8\ncd "$HOME/vivac"\n%s\n' "$body" >"$path"
 	chmod +x "$path"
-	hyprctl dispatch exec -- kitty --hold "$path" >/dev/null
+	hypr_dispatch exec -- kitty --hold "$path" >/dev/null
 	sleep 4
 }
 first_window() {
@@ -158,7 +160,7 @@ sleep 6
 pane 3 './scripts/palette-card.sh'
 # Top left: the catalogue this desktop can wear, printed by the command the
 # menu itself uses, so the list on screen cannot drift from the list in data/.
-hyprctl dispatch focuswindow "address:$(first_window)" >/dev/null
+hypr_dispatch focuswindow "address:$(first_window)" >/dev/null
 sleep 1
 pane 1 './dotfiles/ricer/.local/bin/vivac-theme --print'
 
@@ -218,7 +220,7 @@ open_surface() {
 	local path=/tmp/vivac-surface.sh
 	printf '#!/usr/bin/env bash\nexport LANG=en_US.UTF-8\ncd "$HOME"\n%s\n' "$1" >"$path"
 	chmod +x "$path"
-	hyprctl dispatch exec -- "$path" >/dev/null
+	hypr_dispatch exec -- "$path" >/dev/null
 }
 
 case "${SURFACE:-}" in

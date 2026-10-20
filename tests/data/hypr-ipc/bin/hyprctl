@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fixture hyprctl for the IPC helper tests. Every call is recorded: one %q line
-# per call in $HYPR_STUB_DIR/calls, and the raw argument of the last `dispatch`
+# per call in $HYPR_STUB_DIR/calls, and the arguments (space-joined) of the last `dispatch`
 # in $HYPR_STUB_DIR/last_dispatch. `eval 'return true'` is the Lua-mode probe:
 # it answers ok when HYPR_STUB_LUA=1 and fails the way a hyprlang session does
 # otherwise.
@@ -18,7 +18,7 @@ eval)
 	fi
 	;;
 dispatch)
-	printf '%s' "${2-}" >"$dir/last_dispatch"
+	printf '%s' "${*:2}" >"$dir/last_dispatch"
 	printf 'ok\n'
 	;;
 *) exit 2 ;;

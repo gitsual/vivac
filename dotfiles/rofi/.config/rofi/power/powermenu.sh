@@ -26,7 +26,7 @@ i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
 icons="$("$HOME/.local/bin/vivac-power" --icons)"
 keys=(power.lock power.suspend power.logout power.reboot power.poweroff)
 files=(lock suspend log-out reboot power-off)
-commands=(hyprlock 'systemctl suspend' 'hyprctl dispatch exit' 'systemctl reboot' 'systemctl poweroff')
+commands=(hyprlock 'systemctl suspend' "$HOME/.config/hypr/scripts/dispatch.sh exit" 'systemctl reboot' 'systemctl poweroff')
 
 # rofi's dmenu mode takes a per-row icon after a US separator, which is how the
 # two menus end up showing the same drawing.
