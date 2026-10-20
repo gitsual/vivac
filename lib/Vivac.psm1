@@ -38,6 +38,8 @@ function Get-VivacPaths {
         Backups      = Join-Path (Join-Path $local 'vivac') 'backups'
         Manifest     = Join-Path (Join-Path $local 'vivac') 'deploy-manifest.tsv'
         Wallpapers   = Join-Path (Join-Path $local 'vivac') 'wallpapers'
+        SharedPending = Join-Path (Join-Path $local 'vivac') 'shared-pending'
+        SharedLock   = Join-Path (Join-Path $local 'vivac') 'shared-sync.lock'
     }
 }
 
@@ -196,12 +198,17 @@ $script:SettingDefaults = [ordered]@{
     theme            = 'bad-romance'
     mod              = 'lwin'
     weather_location = 'auto'
+    shared_settings  = 'none'
 }
 $script:SettingRules = @{
     language         = '^(es|en)$'
     mod              = '^(alt|lwin)$'
     # auto (Zebar estimates the place from the public IP), off, or lat,lon.
     weather_location = '^(auto|off|-?\d{1,2}(\.\d+)?,-?\d{1,3}(\.\d+)?)$'
+    # none, or the file shared with another OS: an absolute path (C:\x or
+    # C:/x) or one under the profile (~\x, ~/x). No characters Windows refuses
+    # in a name.
+    shared_settings  = '^(none|([A-Za-z]:[\\/]|~[\\/])[^\x00-\x1f"<>|*?]+)$'
 }
 
 function Read-VivacSettings {
@@ -215,16 +222,160 @@ function Read-VivacSettings {
     $settings
 }
 
-# The one writer of the settings file. A value is validated before it lands,
-# so every reader can trust what it reads.
-function Set-VivacSetting([string]$Key, [string]$Value) {
+# Throws unless Value is acceptable for Key: the one set of validators every
+# path into the settings file uses, local choices and shared ones alike.
+function Assert-VivacSettingValid([string]$Key, [string]$Value) {
     if (-not $script:SettingDefaults.Contains($Key)) { throw "vivac: unknown setting '$Key'" }
     if ($Key -eq 'theme') {
         if ((Get-VivacCatalogue) -notcontains $Value) { throw "vivac: no theme named '$Value'" }
     } elseif ($Value -notmatch $script:SettingRules[$Key]) {
         throw "vivac: '$Value' is not a valid value for $Key"
     }
+}
+
+# The one writer of the settings file. A value is validated before it lands,
+# so every reader can trust what it reads. A shared key (see below) is also
+# sent to the shared file when one is configured.
+function Set-VivacSetting([string]$Key, [string]$Value) {
+    Write-VivacLocalSetting $Key $Value
+    if ($script:SharedKeys -contains $Key) { Send-VivacSharedKey $Key $Value }
+}
+
+function Write-VivacLocalSetting([string]$Key, [string]$Value) {
+    Assert-VivacSettingValid $Key $Value
     Set-VivacKeyValue -Path (Get-VivacPaths).Settings -Key $Key -Value $Value
+}
+
+# ------------------------------------------------------------ shared settings
+
+# An optional flat key=value file another OS also reads (the Linux side of
+# vivac keeps the same contract). Only these keys travel; mod and the rest
+# are local, and any other key in the file belongs to the other OS: it is
+# ignored on read and kept on write. The file is handled as bytes (Latin-1
+# keeps every byte), so what this side did not write comes back unchanged.
+$script:SharedKeys = @('theme', 'weather_location', 'language')
+$script:Latin1 = [Text.Encoding]::GetEncoding(28591)
+
+function Get-VivacSharedKeys { $script:SharedKeys }
+
+# The shared file's path when sharing is configured, otherwise $null: no
+# sharing is the normal case, not an error.
+function Get-VivacSharedPath {
+    $raw = (Read-VivacSettings)['shared_settings']
+    if ($raw -eq 'none' -or $raw -notmatch $script:SettingRules['shared_settings']) { return $null }
+    if ($raw -match '^~[\\/]') {
+        $raw = Join-Path (Get-VivacPaths).Profile ($raw.Substring(2) -replace '/', '\')
+    }
+    $raw
+}
+
+# Lines of a shared file as another OS wrote it: a BOM and CR dropped, split
+# on LF only. A missing final newline is tolerated; a missing file has none.
+function Read-VivacSharedLines([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
+    $text = $script:Latin1.GetString([IO.File]::ReadAllBytes($Path))
+    if ($text.StartsWith("$([char]0xEF)$([char]0xBB)$([char]0xBF)")) { $text = $text.Substring(3) }
+    $text = $text -replace "[\r\x00]", ''
+    if ($text -eq '') { return @() }
+    $lines = $text.Split("`n")
+    if ($lines[$lines.Count - 1] -eq '') { $lines = $lines[0..($lines.Count - 2)] }
+    @($lines)
+}
+
+# Set one key of the shared file in place. Other lines and their order stay;
+# the new line is LF. A value already there writes nothing, and a missing
+# folder (a share that is away) is never created.
+function Write-VivacSharedKey([string]$Path, [string]$Key, [string]$Value) {
+    if (-not (Test-Path -LiteralPath (Split-Path -Parent $Path) -PathType Container)) { return }
+    $lines = @(Read-VivacSharedLines $Path)
+    $hits = @($lines | Where-Object { $_.StartsWith("$Key=", [StringComparison]::Ordinal) })
+    if ($hits.Count -eq 1 -and $hits[0] -ceq "$Key=$Value") { return }
+    $out = New-Object System.Collections.Generic.List[string]
+    $placed = $false
+    foreach ($line in $lines) {
+        if ($line.StartsWith("$Key=", [StringComparison]::Ordinal)) {
+            if (-not $placed) { $out.Add("$Key=$Value") }
+            $placed = $true
+        } else { $out.Add($line) }
+    }
+    if (-not $placed) { $out.Add("$Key=$Value") }
+    $scratch = "$Path.vivac-" + [guid]::NewGuid().ToString('N').Substring(0, 8)
+    try {
+        [IO.File]::WriteAllBytes($scratch, $script:Latin1.GetBytes((($out -join "`n") + "`n")))
+        if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($scratch, $Path, [NullString]::Value) }
+        else { [IO.File]::Move($scratch, $Path) }
+    } finally {
+        if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+# Changes the shared file could not take yet, one key per line in the state
+# directory. The pull sends the local value of a pending key instead of
+# taking the other OS's older one.
+function Get-VivacPendingKeys {
+    $p = (Get-VivacPaths).SharedPending
+    if (-not (Test-Path -LiteralPath $p)) { return @() }
+    @([IO.File]::ReadAllLines($p) | Where-Object { $_ })
+}
+function Test-VivacPending([string]$Key) { (Get-VivacPendingKeys) -contains $Key }
+function Add-VivacPending([string]$Key) {
+    if (Test-VivacPending $Key) { return }
+    $p = (Get-VivacPaths).SharedPending
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $p) | Out-Null
+    [IO.File]::AppendAllText($p, "$Key`n")
+}
+function Remove-VivacPending([string]$Key) {
+    $keep = @(Get-VivacPendingKeys | Where-Object { $_ -ne $Key })
+    $p = (Get-VivacPaths).SharedPending
+    if (-not (Test-Path -LiteralPath $p)) { return }
+    $text = ''
+    foreach ($k in $keep) { $text += "$k`n" }
+    Write-VivacFile -Path $p -Text $text
+}
+
+# Take the shared lock (an exclusive handle on a file in the state
+# directory, so a crashed holder frees it), waiting up to Seconds. $null when
+# it stayed busy.
+function Enter-VivacSharedLock([double]$Seconds) {
+    $path = (Get-VivacPaths).SharedLock
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+    $limit = [DateTime]::UtcNow.AddSeconds($Seconds)
+    while ($true) {
+        try { return New-Object IO.FileStream($path, 'OpenOrCreate', 'ReadWrite', 'None') }
+        catch [IO.IOException] {
+            if ([DateTime]::UtcNow -ge $limit) { return $null }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+}
+
+# The change path for a shared key. A shared file that cannot be written costs
+# a warning, never the local change, and the key stays pending until a pull
+# can send it. The warning comes once per key.
+function Send-VivacSharedKey([string]$Key, [string]$Value) {
+    $shared = Get-VivacSharedPath
+    if (-not $shared) { return }
+    $folder = Split-Path -Parent $shared
+    $problem = $null
+    if (-not (Test-Path -LiteralPath $folder -PathType Container)) {
+        $problem = "the shared folder $folder is not there; $Key stays local and is sent when it is"
+    } else {
+        $wait = 10
+        if ($env:VIVAC_SETTINGS_LOCK_WAIT) { $wait = [double]$env:VIVAC_SETTINGS_LOCK_WAIT }
+        $lock = Enter-VivacSharedLock $wait
+        if (-not $lock) { $problem = "the shared file $shared is busy; $Key stays local and is sent next time" }
+        else {
+            try {
+                Write-VivacSharedKey $shared $Key $Value
+                Remove-VivacPending $Key
+            } catch { $problem = "could not update the shared file $shared; $Key stays local and is sent next time" }
+            finally { $lock.Dispose() }
+        }
+    }
+    if ($problem) {
+        if (-not (Test-VivacPending $Key)) { Write-Warning "settings: $problem" }
+        Add-VivacPending $Key
+    }
 }
 
 # ---------------------------------------------------------------------- facts
