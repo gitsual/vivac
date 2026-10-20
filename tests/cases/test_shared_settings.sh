@@ -19,6 +19,7 @@ fail() {
 sandbox="$(mktemp -d "${TMPDIR:-/tmp}/vivac-shared.XXXXXX")"
 trap 'rm -rf -- "$sandbox"' EXIT
 mkdir -p "$sandbox/bin" "$sandbox/cfg/vivac" "$sandbox/shared"
+export XDG_STATE_HOME="$sandbox/state"
 local_file="$sandbox/cfg/vivac/settings"
 shared="$sandbox/shared/settings"
 calls="$sandbox/calls"
@@ -113,6 +114,94 @@ before="$(stamp "$local_file")"
 pull || fail 'a garbled file crashed the pull'
 [[ "$(stamp "$local_file")" == "$before" ]] || fail 'a garbled file changed local settings'
 
-# --- the pull is serialised --------------------------------------------------------------------------------------
-grep -q 'flock' "$sync" || fail 'the pull is not serialised'
+# --- a change made while the shared folder is away is kept and sent later -----------------------------------
+pending="$sandbox/state/vivac/shared-pending"
+offline="$sandbox/offline-share"
+rm -rf "$sandbox/state" "$offline"
+printf 'shared_settings=%s\ntheme=carmen\n' "$offline/settings" >"$local_file"
+settings_write "$local_file" theme cosmos 2>"$sandbox/err"
+[[ ! -e "$offline" ]] || fail 'the absent shared folder was created'
+grep -q '^theme=cosmos$' "$local_file" || fail 'the offline change did not reach the local file'
+grep -qx theme "$pending" || fail 'the skipped shared write was not recorded as pending'
+{ [[ "$(grep -c . "$sandbox/err")" == 1 ]] && grep -qi theme "$sandbox/err"; } || fail "expected exactly one warning naming the key: $(cat "$sandbox/err")"
+settings_write "$local_file" theme gatsby 2>"$sandbox/err"
+[[ ! -s "$sandbox/err" ]] || fail "the same key warned twice: $(cat "$sandbox/err")"
+[[ "$(grep -c theme "$pending")" == 1 ]] || fail 'the pending list holds a key twice'
+settings_write "$local_file" language es 2>/dev/null
+[[ "$(sort "$pending" | tr '\n' ' ')" == 'language theme ' ]] || fail "pending keys: $(cat "$pending")"
+# The share comes back with the other OS's older value: the local choice wins and is sent.
+mkdir -p "$offline"
+printf 'mod=lwin\ntheme=carmen\nlanguage=en\n' >"$offline/settings"
+pull || fail 'pull with pending keys failed'
+grep -q '^theme=gatsby$' "$local_file" || fail "the shared value overwrote a pending local key: $(cat "$local_file")"
+[[ "$(cat "$offline/settings")" == $'mod=lwin\ntheme=gatsby\nlanguage=es' ]] || fail "pending keys were not pushed: $(cat "$offline/settings")"
+[[ ! -s "$calls" ]] || fail "pushing pending keys reloaded the desktop: $(cat "$calls")"
+{ [[ ! -s "$pending" ]]; } || fail "pending was not cleared after the push: $(cat "$pending")"
+# Pending cleared: the next change by the other OS is taken like any other.
+printf 'mod=lwin\ntheme=cosmos\nlanguage=es\n' >"$offline/settings"
+pull
+grep -q '^theme=cosmos$' "$local_file" || fail 'after the push the shared file no longer wins'
+# A push that cannot be written keeps the key pending and keeps the local value.
+rm -f "$pending"
+printf 'shared_settings=%s\ntheme=carmen\n' "$offline/settings" >"$local_file"
+printf 'theme=cosmos\n' >"$offline/settings"
+printf 'theme\n' >"$pending"
+chmod 500 "$offline"
+pull
+chmod 700 "$offline"
+{ grep -q '^theme=carmen$' "$local_file" && grep -qx theme "$pending"; } || fail 'a failed push lost the pending key or took the shared value'
+pull
+[[ "$(cat "$offline/settings")" == 'theme=carmen' && ! -s "$pending" ]] || fail 'the pending key was not pushed once the folder was writable'
+# A pending key with the share present but no shared file yet creates it.
+printf 'theme\n' >"$pending"
+mkdir -p "$offline/fresh-dir"
+printf 'shared_settings=%s\ntheme=cosmos\n' "$offline/fresh-dir/settings" >"$local_file"
+pull
+[[ "$(cat "$offline/fresh-dir/settings")" == 'theme=cosmos' ]] || fail 'a pending key did not create the shared file'
+# An existing but empty folder (an unmounted mountpoint looks like this) cannot be told from a
+# present one: the write goes through. Only a MISSING folder is treated as away.
+rm -f "$pending"
+mkdir -p "$sandbox/mountpoint"
+printf 'shared_settings=%s\n' "$sandbox/mountpoint/settings" >"$local_file"
+settings_write "$local_file" theme carmen
+[[ "$(cat "$sandbox/mountpoint/settings")" == 'theme=carmen' && ! -e "$pending" ]] || fail 'an existing empty folder was treated as away'
+
+# --- the lock really excludes: a busy pull gives up, a busy write defers -----------------------------------
+lockfile="$sandbox/state/vivac/shared-sync.lock"
+mkdir -p "$sandbox/state/vivac" "$sandbox/lockshare"
+printf 'shared_settings=%s\ntheme=carmen\n' "$sandbox/lockshare/settings" >"$local_file"
+printf 'theme=cosmos\n' >"$sandbox/lockshare/settings"
+rm -f "$pending" "$sandbox/held"
+(
+	flock -x 9
+	: >"$sandbox/held"
+	sleep 6
+) 9>"$lockfile" &
+holder=$!
+until [[ -e "$sandbox/held" ]]; do sleep 0.1; done
+before="$(stamp "$local_file")"
+start=$SECONDS
+VIVAC_SYNC_LOCK_WAIT=1 pull || fail 'a pull that could not get the lock failed'
+((SECONDS - start < 5)) || fail 'the pull waited for the lock past its configured wait'
+{ [[ "$(stamp "$local_file")" == "$before" && ! -s "$calls" ]]; } || fail 'a pull without the lock changed settings or reloaded'
+VIVAC_SETTINGS_LOCK_WAIT=1 settings_write "$local_file" theme gatsby 2>"$sandbox/err"
+grep -q '^theme=gatsby$' "$local_file" || fail 'a busy lock lost the local change'
+[[ "$(cat "$sandbox/lockshare/settings")" == 'theme=cosmos' ]] || fail 'a write went through without holding the lock'
+grep -qx theme "$pending" || fail 'a write that could not lock was not recorded as pending'
+wait "$holder"
+pull
+[[ "$(cat "$sandbox/lockshare/settings")" == 'theme=gatsby' ]] || fail 'the deferred write was not sent after the lock was released'
+# Two session starts at once: the change is applied once.
+printf 'shared_settings=%s\ntheme=carmen\n' "$sandbox/lockshare/settings" >"$local_file"
+printf 'theme=cosmos\n' >"$sandbox/lockshare/settings"
+printf '#!/bin/sh\nsleep 1\necho apply >>"%s"\n' "$calls" >"$sandbox/bin/slowapply"
+chmod +x "$sandbox/bin/slowapply"
+: >"$calls"
+for _ in 1 2; do
+	PATH="$sandbox/bin:$PATH" HOME="$sandbox" XDG_CONFIG_HOME="$sandbox/cfg" XDG_STATE_HOME="$sandbox/state" \
+		APPLY_THEME="$sandbox/bin/slowapply" RENDER_CONFIG="$sandbox/bin/render" "$sync" --pull 2>/dev/null &
+done
+wait
+[[ "$(grep -c apply "$calls")" == 1 ]] || fail "two concurrent pulls applied the change $(grep -c apply "$calls") times"
+
 printf 'shared settings: write-through, pull, validation, absence silent\n'

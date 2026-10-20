@@ -168,17 +168,71 @@ settings_shared_write() {
 	mv -- "$temporary" "$path"
 }
 
+# --- changes the shared file could not take yet --------------------------------------------------
+# A shared write is skipped while its folder is away (an unmounted partition) or
+# while a pull holds the lock. The key is recorded in $state/vivac/shared-pending
+# so the next session-start pull sends the local value instead of taking the
+# other OS's older one. Callers need XDG_STATE_HOME or HOME.
+_settings_state_dir() { printf '%s' "${XDG_STATE_HOME:-$HOME/.local/state}/vivac"; }
+settings_pending_has() { grep -qxF -- "$1" "$(_settings_state_dir)/shared-pending" 2>/dev/null; }
+settings_pending_add() {
+	local dir file
+	dir="$(_settings_state_dir)" file="$dir/shared-pending"
+	settings_pending_has "$1" && return 0
+	mkdir -p -- "$dir" && printf '%s\n' "$1" >>"$file"
+}
+settings_pending_remove() {
+	local file temporary
+	file="$(_settings_state_dir)/shared-pending"
+	[[ -f "$file" ]] || return 0
+	temporary="$(mktemp -- "$file.XXXXXX")"
+	grep -vxF -- "$1" "$file" >"$temporary" || true
+	mv -- "$temporary" "$file"
+}
+
+# _settings_shared_push SHARED KEY VALUE — one shared write under the shared lock.
+# rc 3: the lock stayed busy. rc 4: the write failed. A pull that already holds
+# the lock says so in VIVAC_SHARED_LOCK_HELD, which its children inherit.
+_settings_shared_push() {
+	local shared="$1" key="$2" value="$3" dir rc=0
+	if [[ -n "${VIVAC_SHARED_LOCK_HELD:-}" ]]; then
+		settings_shared_write "$shared" "$key" "$value" || return 4
+		settings_pending_remove "$key"
+		return 0
+	fi
+	dir="$(_settings_state_dir)"
+	mkdir -p -- "$dir" || return 4
+	(
+		flock -w "${VIVAC_SETTINGS_LOCK_WAIT:-10}" 9 || exit 3
+		settings_shared_write "$shared" "$key" "$value" || exit 4
+		settings_pending_remove "$key"
+	) 9>"$dir/shared-sync.lock" || rc=$?
+	return "$rc"
+}
+
 # settings_write FILE KEY VALUE — the change path: the local file, then the
 # shared one for the shared keys when sharing is configured. A shared file
-# that cannot be written costs a warning, never the local change.
+# that cannot be written costs a warning, never the local change, and the key
+# stays pending until a pull can send it. The warning comes once per key.
 settings_write() {
-	local file="$1" key="$2" value="$3" shared candidate
+	local file="$1" key="$2" value="$3" shared candidate rc
 	settings_write_local "$file" "$key" "$value" || return 1
 	for candidate in "${SETTINGS_SHARED_KEYS[@]}"; do
 		[[ "$candidate" == "$key" ]] || continue
 		shared="$(settings_shared_path "$file")" || return 0
-		settings_shared_write "$shared" "$key" "$value" ||
-			printf 'settings: could not update the shared file %s\n' "$shared" >&2
+		if [[ ! -d "$(dirname -- "$shared")" ]]; then
+			settings_pending_has "$key" ||
+				printf 'settings: the shared folder %s is not there; %s stays local and is sent when it is\n' "$(dirname -- "$shared")" "$key" >&2
+			settings_pending_add "$key" || true
+			return 0
+		fi
+		rc=0
+		_settings_shared_push "$shared" "$key" "$value" || rc=$?
+		if ((rc)); then
+			settings_pending_has "$key" ||
+				printf 'settings: could not update the shared file %s; %s stays local and is sent next time\n' "$shared" "$key" >&2
+			settings_pending_add "$key" || true
+		fi
 	done
 	return 0
 }
