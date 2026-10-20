@@ -60,13 +60,18 @@ One command, from any TTY, restores the exact pre-deploy state: the old
 removes what the deploy created.
 
 ```bash
-scripts/deploy-host.sh --rollback          # newest backup, from the checkout
+scripts/deploy-host.sh --rollback          # the newest backup that has something to undo
 scripts/deploy-host.sh --rollback ~/.local/state/vivac/backups/<stamp>
 ```
 
 The backups live in `~/.local/state/vivac/backups/<stamp>/`, with the same
 layout as your home directory, plus a `MANIFEST` of what the deploy created.
-Nothing in them is ever deleted by vivac.
+Nothing in them is ever deleted by vivac. A deploy that finds the host already
+matching keeps no backup, so running it twice never hides the first backup behind
+an empty one; the bare `--rollback` prints which backup it used and skips one
+that was already rolled back. The `MANIFEST` is checked before anything is
+removed: a line that points outside your home, or a backup outside the backups
+directory, is refused (`--force` accepts a backup kept elsewhere).
 
 If the session does not start at all and you cannot run the script, from a TTY:
 
