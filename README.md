@@ -306,6 +306,15 @@ after 3 pulls is reported there on every pull from then on. A theme or location 
 is locked (the cover and greeter of an automatic sign-in, or the lock screen) is recorded and applied by the
 first pull after the unlock, since applying it restarts the host that holds the lock.
 
+The lock marker that drives this (`%LOCALAPPDATA%\vivac\session-locked`) records the host's PID and start time, so a
+PID the system reused reads as stale, and a host started without `-LockAtStart` deletes any marker it finds. Writing
+it can fail without consequence: the lock and the cover run the same, the failure goes to the log.
+
+Known gaps, left as they are: if `File.Replace` keeps failing on the share (a 9P-backed `C:\m2`) the key stays
+pending and is warned about, there is no non-atomic fallback; there are no toasts, the log is not rotated; a host
+restarted while a manual lock (not the start-up cover) is up comes back without that lock; values one side accepts
+and the other does not (place names, `language=auto`) are still just reported and skipped.
+
 ---
 
 ## ✅ Verification
