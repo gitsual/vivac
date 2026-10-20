@@ -12,7 +12,10 @@
 #
 # Sourced, not executed. Requires lib/kv.sh.
 
-SETTINGS_ALLOWED_KEYS=(locale keymap xkb_layout ime theme weather_location)
+SETTINGS_ALLOWED_KEYS=(locale keymap xkb_layout ime theme weather_location shared_settings language)
+# The only keys that may travel to the optional shared file. OS locale, keymap
+# and layout stay local: the other OS names them differently.
+SETTINGS_SHARED_KEYS=(theme weather_location language)
 declare -gA SETTINGS=()
 
 # settings_defaults — reset SETTINGS to the values the source workstation uses.
@@ -24,6 +27,8 @@ settings_defaults() {
 		[ime]=none
 		[theme]=bad-romance
 		[weather_location]=auto
+		[shared_settings]=none
+		[language]=auto
 	)
 }
 
@@ -39,6 +44,10 @@ settings_defaults() {
 #               place name or airport code, and is restricted to the characters
 #               a place name needs so the value cannot smuggle a second URL or
 #               a shell metacharacter into the module's command line.
+#   shared_settings
+#               none, or where the file shared with another OS lives: an
+#               absolute path or one under ~/
+#   language    auto (follow LANG) or a table name from i18n/
 settings_valid() {
 	local key="$1" value="$2"
 	case "$key" in
@@ -48,6 +57,8 @@ settings_valid() {
 	ime) [[ "$value" == none || "$value" == fcitx5 ]] ;;
 	theme) [[ "$value" =~ ^[a-z][a-z0-9-]*$ ]] ;;
 	weather_location) [[ "$value" =~ ^[A-Za-z0-9_.,+-]+$ ]] ;;
+	shared_settings) [[ "$value" == none || "$value" =~ ^(/|~/)[[:print:]]+$ ]] ;;
+	language) [[ "$value" == auto || "$value" =~ ^[a-z]{2,3}$ ]] ;;
 	*) return 1 ;;
 	esac
 }
@@ -88,13 +99,13 @@ settings_get() {
 	printf '%s' "${SETTINGS["$1"]}"
 }
 
-# settings_write FILE KEY VALUE — set one key, in place, atomically.
+# settings_write_local FILE KEY VALUE — set one key, in place, atomically.
 #
 # Validated first and refused if it does not hold: a settings file is read by
 # renderers that trust it, so the moment to reject a bad value is before it is
 # on disk, not when a stylesheet comes out malformed. The key is rewritten
 # rather than appended, so setting the same axis twice leaves one line.
-settings_write() {
+settings_write_local() {
 	local file="$1" key="$2" value="$3" temporary
 	settings_valid "$key" "$value" || {
 		printf 'settings: %s is not a valid %s\n' "$value" "$key" >&2
@@ -108,4 +119,66 @@ settings_write() {
 	printf '%s=%s\n' "$key" "$value" >>"$temporary"
 	LC_ALL=C sort -o "$temporary" "$temporary"
 	mv -- "$temporary" "$file"
+}
+
+# settings_shared_path FILE — print the shared file's path when FILE configures
+# one. Silent failure otherwise: no sharing is the normal case, not an error.
+settings_shared_path() {
+	local raw
+	raw="$(kv_get "$1" shared_settings 2>/dev/null)" || return 1
+	[[ "$raw" != none ]] && settings_valid shared_settings "$raw" || return 1
+	printf '%s' "${raw/#\~\//$HOME/}"
+}
+
+# settings_shared_write PATH KEY VALUE — set one key of the shared file in
+# place. The file is read by another OS, so its other lines (a `mod=` of the
+# Windows side, say) and their order are kept; CR and a BOM are dropped on
+# rewrite, the new line is LF. A value already there writes nothing, and a
+# missing folder (an unmounted partition) is never created.
+settings_shared_write() {
+	local path="$1" key="$2" value="$3" line temporary hit=0 same=0 first=1
+	local -a lines=()
+	[[ -d "$(dirname -- "$path")" ]] || return 0
+	if [[ -f "$path" ]]; then
+		while IFS= read -r line || [[ -n "$line" ]]; do
+			line="${line%$'\r'}"
+			((first)) && line="${line#$'\xef\xbb\xbf'}"
+			first=0
+			lines+=("$line")
+		done <"$path"
+	fi
+	for line in "${lines[@]}"; do
+		[[ "$line" == "$key="* ]] || continue
+		hit=$((hit + 1))
+		[[ "$line" == "$key=$value" ]] && same=1
+	done
+	((hit == 1 && same == 1)) && return 0
+	temporary="$(mktemp -- "$path.XXXXXX")"
+	hit=0
+	{
+		for line in "${lines[@]}"; do
+			if [[ "$line" == "$key="* ]]; then
+				((hit++)) || printf '%s=%s\n' "$key" "$value"
+			else
+				printf '%s\n' "$line"
+			fi
+		done
+		((hit)) || printf '%s=%s\n' "$key" "$value"
+	} >"$temporary"
+	mv -- "$temporary" "$path"
+}
+
+# settings_write FILE KEY VALUE — the change path: the local file, then the
+# shared one for the shared keys when sharing is configured. A shared file
+# that cannot be written costs a warning, never the local change.
+settings_write() {
+	local file="$1" key="$2" value="$3" shared candidate
+	settings_write_local "$file" "$key" "$value" || return 1
+	for candidate in "${SETTINGS_SHARED_KEYS[@]}"; do
+		[[ "$candidate" == "$key" ]] || continue
+		shared="$(settings_shared_path "$file")" || return 0
+		settings_shared_write "$shared" "$key" "$value" ||
+			printf 'settings: could not update the shared file %s\n' "$shared" >&2
+	done
+	return 0
 }

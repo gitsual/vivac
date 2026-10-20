@@ -17,9 +17,17 @@
 #               scripts/render-config.sh --deploy  -> the bar's weather module
 #               (auto lets wttr.in geolocate by IP; a place name or airport
 #               code asks about somewhere else)
+#   language    the language of the bar, the panes and the tour: auto follows LANG,
+#               or a table name from i18n/ (en, es). Shared.
+#   shared_settings
+#               none, or the path of a flat KV file another OS also reads
+#               (absolute, or under ~/). Only theme, weather_location and
+#               language travel through it; a missing folder disables sharing.
 locale=es_ES.UTF-8
 keymap=es
 xkb_layout=es
 ime=none
 theme=bad-romance
 weather_location=auto
+language=auto
+shared_settings=none

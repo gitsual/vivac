@@ -50,6 +50,11 @@ grep -q '^monitor .*scale = "' <<<"$out" || fail 'the monitors fragment was not 
 grep -q '^config .*kb_layout = "es"' <<<"$out" || fail 'the input fragment was not loaded'
 has 'on hyprland.start' || fail 'no start handler registered'
 has 'start exec waybar' || fail 'waybar is not started with the session'
+# The shared-settings pull is the first thing the session runs, so the other
+# OS's theme is in place before the bar and the wallpaper read it.
+# shellcheck disable=SC2016  # the ${...} is literal text the shell is meant to expand later
+[[ "$(grep -m1 '^start exec' <<<"$out")" == 'start exec ${VIVAC_REPO:-$HOME/vivac}/scripts/sync-shared-settings.sh --pull' ]] ||
+	fail "the first autostart entry is not the shared-settings pull: $(grep -m1 '^start exec' <<<"$out")"
 
 # --- the fragments run again on every load: the Lua state may persist across a reload -------------------------
 load HL_STUB_RELOADS=2
