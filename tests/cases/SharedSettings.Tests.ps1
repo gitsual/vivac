@@ -125,5 +125,123 @@ try {
         Assert-Equal "theme=carmen`n" (Read-Bytes $shared)
         Assert-True ((Read-Bytes $pending) -notmatch 'theme') 'theme is still pending'
     }
+    # ---- pull -------------------------------------------------------------
+    function Reset-Pull([string]$Local, $SharedText) {
+        Remove-Item -LiteralPath $pending -Force -ErrorAction SilentlyContinue
+        Set-LocalSettings $Local
+        if ($null -ne $SharedText) { Write-Bytes $shared $SharedText }
+        elseif (Test-Path -LiteralPath $shared) { Remove-Item -LiteralPath $shared -Force }
+    }
+    Case 'a pull with no sharing, no settings, or no shared file is silent and creates nothing' {
+        Reset-Pull '' $null
+        Assert-Equal 0 @(Invoke-VivacSharedPull 3>&1).Count
+        Set-LocalSettings "shared_settings=$shared`n"
+        Assert-Equal 0 @(Invoke-VivacSharedPull 3>&1).Count
+        Assert-True (-not (Test-Path -LiteralPath $shared)) 'the pull created the shared file'
+        Set-LocalSettings "shared_settings=$(Join-Path $dir 'nowhere\settings')`n"
+        Assert-Equal 0 @(Invoke-VivacSharedPull 3>&1).Count
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $dir 'nowhere'))) 'the pull created the folder'
+    }
+    Case 'the other OS changed the theme: applied, foreign and local keys untouched, shared file not written' {
+        Reset-Pull "shared_settings=$shared`ntheme=carmen`nmod=alt`n" "mod=lwin`r`ntheme=cosmos`r`nkeymap=us`r`n"
+        (Get-Item -LiteralPath $shared).LastWriteTimeUtc = [datetime]'2020-01-01'
+        $before = Stamp $shared
+        $r = @(Invoke-VivacSharedPull 3>&1)
+        Assert-Equal 'theme' ($r -join ',')
+        $s = Read-VivacSettings
+        Assert-Equal 'cosmos' $s['theme']
+        Assert-Equal 'alt' $s['mod']
+        Assert-Equal $before (Stamp $shared)
+    }
+    Case 'equal values change nothing' {
+        $p = (Get-VivacPaths).Settings
+        (Get-Item -LiteralPath $p).LastWriteTimeUtc = [datetime]'2020-01-01'
+        $before = Stamp $p
+        Assert-Equal 0 @(Invoke-VivacSharedPull 3>&1).Count
+        Assert-Equal $before (Stamp $p)
+    }
+    Case 'a BOM, CR and a missing final newline are read; the last of a repeated key wins' {
+        Reset-Pull "shared_settings=$shared`n" "$([char]0xEF)$([char]0xBB)$([char]0xBF)language=es`r`nlanguage=en`r`nweather_location=40.42,-3.70"
+        $r = @(Invoke-VivacSharedPull 3>&1)
+        Assert-Equal 'weather_location,language' ($r -join ',')
+        Assert-Equal 'en' (Read-VivacSettings)['language']
+        Assert-Equal '40.42,-3.70' (Read-VivacSettings)['weather_location']
+    }
+    Case 'an invalid shared value is reported and skipped, the others still land' {
+        Reset-Pull "shared_settings=$shared`ntheme=carmen`n" "theme=not-a-theme`nlanguage=xx`nweather_location=40.42,-3.70`n"
+        $out = @(Invoke-VivacSharedPull 3>&1)
+        $warnings = @($out | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        Assert-Equal 2 $warnings.Count
+        Assert-True (("$($warnings -join ' ')") -match 'theme' -and ("$($warnings -join ' ')") -match 'language') 'warnings name the keys'
+        $s = Read-VivacSettings
+        Assert-Equal 'carmen' $s['theme']
+        Assert-Equal '40.42,-3.70' $s['weather_location']
+    }
+    Case 'a garbled file does not crash the pull or change anything' {
+        Reset-Pull "shared_settings=$shared`ntheme=carmen`n" "$([char]0)$([char]0xFF)$([char]1)garbage`nno-equals`ntheme=$([char]1)`n=x`n"
+        $p = (Get-VivacPaths).Settings
+        (Get-Item -LiteralPath $p).LastWriteTimeUtc = [datetime]'2020-01-01'
+        $before = Stamp $p
+        $null = @(Invoke-VivacSharedPull 3>&1)
+        Assert-Equal $before (Stamp $p)
+    }
+    Case 'a change made while the share was away goes out first and the local value wins' {
+        $offline = Join-Path $dir 'offline-share'
+        $file = Join-Path $offline 'settings'
+        Set-LocalSettings "shared_settings=$file`ntheme=carmen`n"
+        Remove-Item -LiteralPath $pending -Force -ErrorAction SilentlyContinue
+        Set-VivacSetting theme gatsby 3>&1 | Out-Null
+        Set-VivacSetting language en 3>&1 | Out-Null
+        Assert-Equal "theme`nlanguage`n" (Read-Bytes $pending)
+        Write-Bytes $file "mod=lwin`ntheme=carmen`nlanguage=es`n"
+        $r = @(Invoke-VivacSharedPull 3>&1)
+        Assert-Equal 0 $r.Count 'pending keys are not reported as taken from the share'
+        Assert-Equal 'gatsby' (Read-VivacSettings)['theme']
+        Assert-Equal "mod=lwin`ntheme=gatsby`nlanguage=en`n" (Read-Bytes $file)
+        Assert-Equal '' (Read-Bytes $pending)
+        # Pending cleared: the other OS wins again.
+        Write-Bytes $file "theme=cosmos`n"
+        Assert-Equal 'theme' (@(Invoke-VivacSharedPull 3>&1) -join ',')
+        Assert-Equal 'cosmos' (Read-VivacSettings)['theme']
+    }
+    Case 'a pending key whose push fails keeps its local value and stays pending' {
+        $file = Join-Path $dir 'offline-share\settings'
+        Set-LocalSettings "shared_settings=$file`ntheme=carmen`n"
+        Write-Bytes $file "theme=cosmos`n"
+        [IO.File]::WriteAllText($pending, "theme`n")
+        (Get-Item -LiteralPath $file).IsReadOnly = $true
+        try { $null = @(Invoke-VivacSharedPull 3>&1) } finally { (Get-Item -LiteralPath $file).IsReadOnly = $false }
+        Assert-Equal 'carmen' (Read-VivacSettings)['theme']
+        Assert-Equal "theme`n" (Read-Bytes $pending)
+        Assert-Equal "theme=cosmos`n" (Read-Bytes $file)
+        $null = @(Invoke-VivacSharedPull 3>&1)
+        Assert-Equal "theme=carmen`n" (Read-Bytes $file)
+        Assert-Equal '' (Read-Bytes $pending)
+    }
+    Case 'a pending key with the share absent stays pending' {
+        $file = Join-Path $dir 'still-away\settings'
+        Set-LocalSettings "shared_settings=$file`ntheme=carmen`n"
+        [IO.File]::WriteAllText($pending, "theme`n")
+        Assert-Equal 0 @(Invoke-VivacSharedPull 3>&1).Count
+        Assert-Equal "theme`n" (Read-Bytes $pending)
+        Assert-True (-not (Test-Path -LiteralPath (Split-Path -Parent $file))) 'the folder was created'
+    }
+    Case 'a pending key creates the shared file when only the folder is there' {
+        $folder = Join-Path $dir 'fresh'
+        New-Item -ItemType Directory -Force -Path $folder | Out-Null
+        Set-LocalSettings "shared_settings=$folder\settings`ntheme=cosmos`n"
+        [IO.File]::WriteAllText($pending, "theme`n")
+        $null = @(Invoke-VivacSharedPull 3>&1)
+        Assert-Equal "theme=cosmos`n" (Read-Bytes "$folder\settings")
+    }
+    Case 'a pull that cannot get the lock gives up quietly and changes nothing' {
+        Reset-Pull "shared_settings=$shared`ntheme=carmen`n" "theme=cosmos`n"
+        $lockPath = (Get-VivacPaths).SharedLock
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $lockPath) | Out-Null
+        $held = New-Object IO.FileStream($lockPath, 'OpenOrCreate', 'ReadWrite', 'None')
+        try { $out = @(Invoke-VivacSharedPull -LockWaitSeconds 1 3>&1) } finally { $held.Dispose() }
+        Assert-Equal 0 $out.Count
+        Assert-Equal 'carmen' (Read-VivacSettings)['theme']
+    }
 } finally { Remove-TempProfile $dir }
 Complete-Cases

@@ -378,6 +378,53 @@ function Send-VivacSharedKey([string]$Key, [string]$Value) {
     }
 }
 
+# Sign-in: bring the other OS's choices in. Returns the keys it changed.
+# What the change path could not send (a share that was away) goes out first,
+# from the local value, and a key whose push failed keeps that value whatever
+# the share says. Then each shared key found in the file is validated like a
+# local choice and applied; one that fails is reported and skipped without
+# stopping the rest. Nothing is written back to the shared file for what was
+# taken from it. No sharing, no file, or a lock that stays busy is silence.
+function Invoke-VivacSharedPull([double]$LockWaitSeconds = -1) {
+    $shared = Get-VivacSharedPath
+    if (-not $shared) { return @() }
+    if ($LockWaitSeconds -lt 0) {
+        $LockWaitSeconds = 60
+        if ($env:VIVAC_SYNC_LOCK_WAIT) { $LockWaitSeconds = [double]$env:VIVAC_SYNC_LOCK_WAIT }
+    }
+    $lock = Enter-VivacSharedLock $LockWaitSeconds
+    if (-not $lock) { return @() }
+    $changed = New-Object System.Collections.Generic.List[string]
+    try {
+        $local = Read-VivacSettings
+        if (Test-Path -LiteralPath (Split-Path -Parent $shared) -PathType Container) {
+            foreach ($key in @(Get-VivacPendingKeys)) {
+                if ($script:SharedKeys -notcontains $key) { continue }
+                try { Write-VivacSharedKey $shared $key $local[$key]; Remove-VivacPending $key } catch { }
+            }
+        }
+        if (-not (Test-Path -LiteralPath $shared -PathType Leaf)) { return @() }
+        $incoming = @{}
+        try {
+            foreach ($line in (Read-VivacSharedLines $shared)) {
+                foreach ($key in $script:SharedKeys) {
+                    if ($line.StartsWith("$key=", [StringComparison]::Ordinal)) { $incoming[$key] = $line.Substring($key.Length + 1) }
+                }
+            }
+        } catch { return @() }
+        foreach ($key in $script:SharedKeys) {
+            if (-not $incoming.ContainsKey($key) -or (Test-VivacPending $key)) { continue }
+            $value = $incoming[$key]
+            try { Assert-VivacSettingValid $key $value }
+            catch { Write-Warning "sync-shared-settings: ignoring $key in ${shared}: '$value' is not valid"; continue }
+            if ($value -ceq $local[$key]) { continue }
+            Write-VivacLocalSetting $key $value
+            $changed.Add($key)
+        }
+    } finally { $lock.Dispose() }
+    $changed.ToArray()
+}
+
 # ---------------------------------------------------------------------- facts
 
 # Facts describe what the machine is. The detected file is written by
