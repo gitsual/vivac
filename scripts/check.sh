@@ -87,7 +87,8 @@ stage 'default profile baseline'
 # Skipped with a notice where Hyprland is not installed; the VM gate runs it
 # for real on a guest that has it.
 stage 'hyprland config verification'
-"$repo_root/scripts/verify-hypr-config.sh"
+hypr_verify_log="$(mktemp)"
+"$repo_root/scripts/verify-hypr-config.sh" | tee "$hypr_verify_log"
 
 stage 'selector registry'
 "$repo_root/scripts/check-selectors.sh"
@@ -122,3 +123,6 @@ stage 'deployment integrity'
 "$repo_root/scripts/check-deploy-integrity.sh"
 
 printf '%s\n' 'all repository checks passed'
+# A skipped Hyprland verification is not a pass for the config: say so last.
+if grep -q 'NOT VERIFIED' "$hypr_verify_log"; then grep '^!!!' "$hypr_verify_log"; fi
+rm -f -- "$hypr_verify_log"

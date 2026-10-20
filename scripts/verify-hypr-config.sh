@@ -22,6 +22,10 @@ config="${HYPR_LUA:-$repo_root/dotfiles/hypr/.config/hypr/hyprland.lua}"
 
 if ! command -v "$hyprland" >/dev/null; then
 	printf 'hyprland verify: %s not installed; skipped\n' "$hyprland"
+	printf '%s\n' \
+		'!!! WARNING: hyprland.lua and every generated config are NOT VERIFIED on this machine.' \
+		'!!! A passing check.sh here proves nothing about whether Hyprland loads them.' \
+		'!!! Run the VM gate (scripts/test-vm.sh) or install Hyprland and run this stage again.'
 	exit 0
 fi
 

@@ -20,6 +20,12 @@ fail() {
 # --- no Hyprland: a notice, success, nothing rendered -----------------------------------------------------------
 out="$(HYPRLAND_BIN="$sandbox/no-such-hyprland" bash "$verify" 2>&1)" || fail "the stage failed without Hyprland: $out"
 grep -q 'not installed; skipped' <<<"$out" || fail "no skip notice without Hyprland: $out"
+# Skipping must not look like passing: the notice is loud and says what is unproven.
+{ grep -q 'WARNING' <<<"$out" && grep -q 'NOT VERIFIED' <<<"$out" && grep -qi 'vm gate' <<<"$out"; } ||
+	fail "the skip notice is not loud enough: $out"
+[[ "$(wc -l <<<"$out")" -ge 3 ]] || fail 'the skip notice is a single easy-to-miss line'
+# check.sh repeats it after the last stage, where "all repository checks passed" would bury it.
+grep -q 'NOT VERIFIED' "$repo_root/scripts/check.sh" || fail 'check.sh does not repeat the notice at the end'
 
 # --- a stub Hyprland records what it is asked ---------------------------------------------------------------------
 cat >"$sandbox/hyprland" <<'STUB'
