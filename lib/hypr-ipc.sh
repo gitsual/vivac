@@ -57,11 +57,12 @@ hypr_ipc_mode() {
 }
 
 # The long-bracket string for an arbitrary command: the level is raised until
-# the closing sequence cannot occur inside it. A leading newline is dropped by
+# the closing sequence cannot occur inside it, nor form at its end ("x]==" plus
+# the closing "]==]" would close early). A leading newline is dropped by
 # Lua, so one more is added to keep the command byte for byte.
 _hypr_ipc_long_string() {
 	local text="$1" level='==' lead=''
-	while [[ "$text" == *"]${level}]"* ]]; do level+='='; done
+	while [[ "$text]" == *"]${level}]"* ]]; do level+='='; done
 	[[ "$text" == $'\n'* ]] && lead=$'\n'
 	printf '[%s[%s%s]%s]' "$level" "$lead" "$text" "$level"
 }

@@ -101,6 +101,8 @@ quote_roundtrip "printf '%s' \"quoted\" \\ back"
 quote_roundtrip $'line one\nline two'
 quote_roundtrip $'\nleading newline'
 quote_roundtrip 'tail ]'
+quote_roundtrip 'x]=='
+quote_roundtrip 'x]===]=='
 
 # --- rc 2: unknown dispatcher or malformed argument, nothing reaches hyprctl --------------------------------
 reset_stub
