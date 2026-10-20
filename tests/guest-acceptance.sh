@@ -60,7 +60,10 @@ gpu_restore="$(./scripts/gpu-setup.sh --restore-config --dry-run)"
 grep -q '^would restore' <<<"$gpu_restore"
 # The input method reaches the compositor through the input fragment only,
 # and CJK and emoji resolve by code point to installed fonts.
-grep -Fxq 'hl.env("QT_IM_MODULE", "fcitx")' "$HOME/.config/hypr/generated/input.lua"
+# The renderer keeps one leading space on template-guarded lines (so a privacy
+# scan does not mistake a guard marker for an email): match with or without it.
+fragment_has() { grep -Fxq -e "$2" -e " $2" "$1"; }
+fragment_has "$HOME/.config/hypr/generated/input.lua" 'hl.env("QT_IM_MODULE", "fcitx")'
 grep -Fq '{ id = "fcitx5", cmd = "fcitx5 -d" }' "$HOME/.config/hypr/generated/input.lua"
 # A bare "! grep" is exempt from errexit, so these negative assertions state
 # the failure explicitly: finding the needle is the failure.
