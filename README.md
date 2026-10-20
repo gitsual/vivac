@@ -287,6 +287,18 @@ the help pane.
 | `scripts\hardware-facts.ps1` | What was detected; correct it in `%APPDATA%\vivac\hardware-facts.override` |
 | `scripts\make-readme-assets.ps1` | Every image on this page, again, from this tree |
 | `bin\vivac.ps1 welcome` | The first-run wizard again |
+| `scripts\sync-shared-settings.ps1 -Pull` | Take in the shared choices now (see below) |
+
+### Sharing choices with the Linux side
+
+Optional, off by default. Set `shared_settings=C:\m2\vivac-shared\settings` (or `~\...`) in
+`%APPDATA%\vivac\settings` and the theme, weather location and language follow the same flat file the Linux
+vivac reads (`~/m2/vivac-shared/settings`). `mod` and everything else stay local; other keys in the file are
+the other OS's and are kept as they are. A local change is written through at once, under a lock; if the
+folder is not there yet it is queued and sent at the next sign-in, when the resident host runs
+`scripts\sync-shared-settings.ps1 -Pull` in the background (it waits up to 90 s for the share) and takes in
+what the other side changed. Values this side cannot use (a Linux place name as the location, `language=auto`)
+are reported and skipped. Use a real drive path: a mapped or `subst` drive is not available to every process.
 
 ---
 
