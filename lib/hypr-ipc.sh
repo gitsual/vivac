@@ -36,15 +36,21 @@ hypr_ipc_mode() {
 			fi
 		fi
 	fi
+	# Only a definite answer is cached: exactly `ok` is Lua, an "unknown request"
+	# style reply is a hyprlang compositor. A timeout, an empty reply or a socket
+	# error says nothing about the config language, so this call falls back to
+	# classic and the next one asks again.
 	mode=classic
-	if command -v hyprctl >/dev/null 2>&1 &&
-		[[ "$(timeout "${HYPR_IPC_TIMEOUT:-5}" hyprctl eval 'return true' 2>&1)" == ok ]]; then
-		mode=lua
+	local reply='' definite=false
+	if command -v hyprctl >/dev/null 2>&1; then
+		reply="$(timeout "${HYPR_IPC_TIMEOUT:-5}" hyprctl eval 'return true' 2>&1)" || true
+		if [[ "$reply" == ok ]]; then
+			mode=lua definite=true
+		elif [[ "$reply" == *[Uu]nknown\ request* || "$reply" == *[Ii]nvalid\ request* ]]; then
+			definite=true
+		fi
 	fi
-	# Cached only where there is a live instance to key it by, and only when
-	# hyprctl could answer at all: no answer is not evidence of hyprlang.
-	if [[ -n "$cache" ]] && command -v hyprctl >/dev/null 2>&1 &&
-		mkdir -p -- "${cache%/*}" 2>/dev/null; then
+	if $definite && [[ -n "$cache" ]] && mkdir -p -- "${cache%/*}" 2>/dev/null; then
 		printf '%s\n' "$mode" >"$cache.$$" 2>/dev/null && mv -f -- "$cache.$$" "$cache" 2>/dev/null || true
 	fi
 	printf '%s\n' "$mode"

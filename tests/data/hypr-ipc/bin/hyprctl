@@ -10,6 +10,13 @@ printf '%q ' "$@" >>"$dir/calls"
 printf '\n' >>"$dir/calls"
 case "${1:-}" in
 eval)
+	# HYPR_STUB_EVAL picks a non-answer: timeout (hangs), socket (cannot
+	# connect), empty (no output). Unset, HYPR_STUB_LUA decides.
+	case "${HYPR_STUB_EVAL:-}" in
+	timeout) exec sleep 30 ;;
+	socket) printf "Couldn't connect to /run/user/1000/hypr/x/.socket.sock. (3)\n" && exit 1 ;;
+	empty) exit 0 ;;
+	esac
 	if [[ "${HYPR_STUB_LUA:-0}" == 1 ]]; then
 		printf 'ok\n'
 	else

@@ -146,6 +146,25 @@ reset_stub
 [[ "$(VIVAC_HYPR_IPC_MODE=lua bash -c 'source "$1"; hypr_ipc_mode' _ "$lib")" == lua ]] || fail 'VIVAC_HYPR_IPC_MODE=lua is ignored'
 [[ "$(VIVAC_HYPR_IPC_MODE=classic bash -c 'source "$1"; hypr_ipc_mode' _ "$lib")" == classic ]] || fail 'VIVAC_HYPR_IPC_MODE=classic is ignored'
 
+# --- only a definite answer is cached: no answer is not evidence of hyprlang --------------------------------
+cache_files() { find "$XDG_RUNTIME_DIR" -name 'hypr-ipc-mode.*' 2>/dev/null | wc -l; }
+for eval_mode in timeout socket empty; do
+	reset_stub
+	start=$SECONDS
+	got="$(HYPR_STUB_EVAL=$eval_mode HYPR_IPC_TIMEOUT=1 HYPRLAND_INSTANCE_SIGNATURE=flaky call hypr_ipc_mode)"
+	[[ "$got" == classic ]] || fail "$eval_mode: this call should fall back to classic, got $got"
+	((SECONDS - start <= 4)) || fail "$eval_mode: the probe was not bounded"
+	[[ "$(cache_files)" == 0 ]] || fail "$eval_mode: a non-answer was cached: $(find "$XDG_RUNTIME_DIR" -name 'hypr-ipc-mode.*')"
+	# the next call asks again, and a real answer is then cached
+	got="$(HYPR_STUB_LUA=1 HYPRLAND_INSTANCE_SIGNATURE=flaky call hypr_ipc_mode)"
+	[[ "$got" == lua ]] || fail "$eval_mode: the retry did not reach lua, got $got"
+	[[ "$(<"$XDG_RUNTIME_DIR/vivac/hypr-ipc-mode.flaky")" == lua ]] || fail "$eval_mode: the definite answer was not cached"
+done
+# an unknown-request reply from a hyprlang compositor is definite
+reset_stub
+[[ "$(HYPR_STUB_LUA=0 HYPRLAND_INSTANCE_SIGNATURE=hl call hypr_ipc_mode)" == classic ]] || fail 'hyprlang reply is not classic'
+[[ "$(<"$XDG_RUNTIME_DIR/vivac/hypr-ipc-mode.hl")" == classic ]] || fail 'the hyprlang answer was not cached'
+
 # --- no hyprctl: fails fast with a message ------------------------------------------------------------------------
 start=$SECONDS
 rc=0
