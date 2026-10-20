@@ -100,4 +100,11 @@ if HELP_LOCAL_EXAMPLE="$sandbox/bad-example.lua" bash "$repo_root/scripts/check-
 fi
 grep -q 'help.hypr.no_such_label' "$sandbox/err" || fail "the gate did not name the label: $(<"$sandbox/err")"
 
+# --- the import checklist exists and names the pieces it relies on ---------------------------------------------------
+doc="$repo_root/docs/local-overlay.md"
+[[ -f "$doc" ]] || fail 'docs/local-overlay.md does not exist'
+for needle in 'local.lua.example' 'hl.unbind' '-- @help:' 'lua/local/init.lua' 'pcall(require, "local")' 'verify-config'; do
+	grep -Fq -- "$needle" "$doc" || fail "docs/local-overlay.md does not mention $needle"
+done
+
 printf 'local overlay: example parses, 5 keys relocated after the base, F1 follows them, odd local.lua keeps the defaults\n'

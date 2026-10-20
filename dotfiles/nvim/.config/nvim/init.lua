@@ -35,3 +35,7 @@ require "nvchad.autocmds"
 vim.schedule(function()
   require "mappings"
 end)
+
+-- The owner's own additions, if any, live in lua/local/init.lua. vivac never
+-- ships that file; a missing or failing one must not stop the editor.
+pcall(require, "local")
