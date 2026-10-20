@@ -313,5 +313,42 @@ try {
         Assert-True ($daemon -match 'Start-VivacSharedSync') 'the daemon does not start the pull'
     }
     Remove-Item Env:VIVAC_APPLY_THEME, Env:VIVAC_DEPLOY
+    # ---- a failed replace never costs the shared file ----------------------
+    $vivacModule = Get-Module Vivac
+    function Set-ReplaceSeam([scriptblock]$Body) { & $vivacModule { param($b) $script:ReplaceFile = $b } $Body }
+    function Reset-ReplaceSeam { & $vivacModule { $script:ReplaceFile = { param($s, $d, $b) [IO.File]::Replace($s, $d, $b) } } }
+    function Get-Leftovers([string]$Folder) { @(Get-ChildItem -LiteralPath $Folder -Force | Where-Object { $_.Name -ne 'settings' }).Count }
+    Case 'a replace that deletes the destination after making the backup restores the old file' {
+        $f = Join-Path $dir 'replace\settings'
+        Write-Bytes $f "theme=cosmos`nx=1`n"
+        # What ReplaceFileW does on error 1177: the destination is moved to the backup and the scratch never lands.
+        Set-ReplaceSeam { param($s, $d, $b) [IO.File]::Move($d, $b); throw (New-Object IO.IOException 'unable to move the replacement (1177)') }
+        try { Assert-Throws { Write-VivacSharedKey $f 'theme' 'gatsby' } '1177' } finally { Reset-ReplaceSeam }
+        Assert-Equal "theme=cosmos`nx=1`n" (Read-Bytes $f)
+        Assert-Equal 0 (Get-Leftovers (Split-Path -Parent $f))
+    }
+    Case 'a replace that deletes the destination without a backup puts the new content there' {
+        $f = Join-Path $dir 'replace\settings'
+        Write-Bytes $f "theme=cosmos`nx=1`n"
+        Set-ReplaceSeam { param($s, $d, $b) Remove-Item -LiteralPath $d -Force; throw (New-Object IO.IOException 'unable to move the replacement (1177)') }
+        try { Assert-Throws { Write-VivacSharedKey $f 'theme' 'gatsby' } '1177' } finally { Reset-ReplaceSeam }
+        Assert-True (Test-Path -LiteralPath $f) 'the shared file is gone'
+        Assert-Equal "theme=gatsby`nx=1`n" (Read-Bytes $f)
+        Assert-Equal 0 (Get-Leftovers (Split-Path -Parent $f))
+    }
+    Case 'a replace that fails and leaves the destination alone keeps it and cleans up' {
+        $f = Join-Path $dir 'replace\settings'
+        Write-Bytes $f "theme=cosmos`n"
+        Set-ReplaceSeam { param($s, $d, $b) throw (New-Object IO.IOException 'sharing violation') }
+        try { Assert-Throws { Write-VivacSharedKey $f 'theme' 'gatsby' } 'sharing' } finally { Reset-ReplaceSeam }
+        Assert-Equal "theme=cosmos`n" (Read-Bytes $f)
+        Assert-Equal 0 (Get-Leftovers (Split-Path -Parent $f))
+    }
+    Case 'a successful replace leaves no backup behind' {
+        $f = Join-Path $dir 'replace\settings'
+        Write-VivacSharedKey $f 'theme' 'carmen'
+        Assert-Equal "theme=carmen`n" (Read-Bytes $f)
+        Assert-Equal 0 (Get-Leftovers (Split-Path -Parent $f))
+    }
 } finally { Remove-TempProfile $dir }
 Complete-Cases

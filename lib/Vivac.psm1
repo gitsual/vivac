@@ -255,6 +255,8 @@ function Write-VivacLocalSetting([string]$Key, [string]$Value) {
 # keeps every byte), so what this side did not write comes back unchanged.
 $script:SharedKeys = @('theme', 'weather_location', 'language')
 $script:Latin1 = [Text.Encoding]::GetEncoding(28591)
+# The one call that swaps the new content in; a seam so a test can make it fail.
+$script:ReplaceFile = { param($Scratch, $Destination, $Backup) [IO.File]::Replace($Scratch, $Destination, $Backup) }
 
 function Get-VivacSharedKeys { $script:SharedKeys }
 
@@ -299,13 +301,32 @@ function Write-VivacSharedKey([string]$Path, [string]$Key, [string]$Value) {
         } else { $out.Add($line) }
     }
     if (-not $placed) { $out.Add("$Key=$Value") }
-    $scratch = "$Path.vivac-" + [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $tag = [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $scratch = "$Path.vivac-$tag"
+    $backup = "$Path.vivac-bak-$tag"
     try {
         [IO.File]::WriteAllBytes($scratch, $script:Latin1.GetBytes((($out -join "`n") + "`n")))
-        if (Test-Path -LiteralPath $Path) { [IO.File]::Replace($scratch, $Path, [NullString]::Value) }
-        else { [IO.File]::Move($scratch, $Path) }
+        if (Test-Path -LiteralPath $Path) {
+            try { & $script:ReplaceFile $scratch $Path $backup }
+            catch {
+                # ReplaceFileW can fail after it has already taken the
+                # destination away (error 1177). The shared file is the other
+                # OS's too: put the old content back, or failing that the new,
+                # before reporting the failure.
+                if (-not (Test-Path -LiteralPath $Path)) {
+                    if (Test-Path -LiteralPath $backup) { [IO.File]::Move($backup, $Path) }
+                    elseif (Test-Path -LiteralPath $scratch) { [IO.File]::Move($scratch, $Path) }
+                }
+                throw
+            }
+        } else { [IO.File]::Move($scratch, $Path) }
     } finally {
-        if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Force -ErrorAction SilentlyContinue }
+        # Only once the destination is known to exist.
+        if (Test-Path -LiteralPath $Path) {
+            foreach ($leftover in $scratch, $backup) {
+                if (Test-Path -LiteralPath $leftover) { Remove-Item -LiteralPath $leftover -Force -ErrorAction SilentlyContinue }
+            }
+        }
     }
 }
 
