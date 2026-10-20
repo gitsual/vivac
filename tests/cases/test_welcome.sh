@@ -39,6 +39,8 @@ output="$(HOME="$sandbox" XDG_STATE_HOME="$sandbox/state" VIVAC_REPO="$repo_root
 grep -Fq 'step_language >/dev/null' "$wizard" || fail 'the wizard never asks which language to speak'
 sed -n '/^step_language()/,/^}/p' "$wizard" | grep -Fq 'setting_write locale' ||
 	fail 'the language step changes nothing the system will read'
+sed -n '/^step_language()/,/^}/p' "$wizard" | grep -Fq 'setting_write language' ||
+	fail 'the chosen language never reaches the language setting, so it cannot be shared'
 sed -n '/^step_language()/,/^}/p' "$wizard" | grep -Fq 'i18n_load' ||
 	fail 'the wizard keeps speaking the old language after the answer'
 language_line="$(grep -n 'step_language >/dev/null' "$wizard" | head -1 | cut -d: -f1)"
@@ -68,12 +70,16 @@ grep -Fq 'data/themes' "$wizard" || fail 'the wizard does not read the catalogue
 # already there: the second answer replaces the first rather than joining it.
 settings_file="$sandbox/.config/vivac/settings"
 mkdir -p -- "$(dirname -- "$settings_file")"
-printf 'theme=bad-romance\nxkb_layout=us\n' >"$settings_file"
+mkdir -p -- "$sandbox/shared"
+printf 'theme=bad-romance\nxkb_layout=us\nshared_settings=%s\n' "$sandbox/shared/settings" >"$settings_file"
+printf 'mod=lwin\n' >"$sandbox/shared/settings"
 HOME="$sandbox" XDG_CONFIG_HOME="$sandbox/.config" VIVAC_REPO="$repo_root" \
-	bash -c 'source "$0"; settings_file="$1"; setting_write xkb_layout fr; setting_write theme metropolis' \
-	<(sed -n '/^setting_write()/,/^}/p' "$wizard") "$settings_file" ||
+	bash -c 'source "$2/lib/kv.sh"; source "$2/lib/settings.sh"; source "$0"; settings_file="$1"; setting_write xkb_layout fr; setting_write theme metropolis; setting_write language en' \
+	<(sed -n '/^setting_write()/,/^}/p' "$wizard") "$settings_file" "$repo_root" ||
 	fail 'setting_write failed on an existing file'
 (($(grep -c '^xkb_layout=' "$settings_file") == 1)) || fail 'setting_write duplicated a key'
+[[ "$(cat "$sandbox/shared/settings")" == $'mod=lwin\ntheme=metropolis\nlanguage=en' ]] ||
+	fail "the wizard's answers did not reach the shared file as the other OS expects: $(tr '\n' ' ' <"$sandbox/shared/settings")"
 settings_load "$settings_file" || fail 'the loader cannot read what the wizard wrote'
 [[ "${SETTINGS[xkb_layout]}" == fr ]] || fail "the loader read xkb_layout=${SETTINGS[xkb_layout]}, not fr"
 [[ "${SETTINGS[theme]}" == metropolis ]] || fail "the loader read theme=${SETTINGS[theme]}, not metropolis"

@@ -42,8 +42,9 @@ fi
 source "$repo/lib/kv.sh"
 # shellcheck source=lib/i18n.sh
 source "$repo/lib/i18n.sh"
-language="${VIVAC_LANG:-${LANG:-en}}"
-language="${language%%[._@]*}"
+# shellcheck source=lib/settings.sh
+source "$repo/lib/settings.sh"
+language="$(i18n_session_language "$settings_file")"
 i18n_load "$language" "${I18N_DIR:-$repo/i18n}" 2>/dev/null ||
 	i18n_load en "${I18N_DIR:-$repo/i18n}"
 
@@ -180,14 +181,10 @@ choose() {
 
 # ------------------------------------------------------------------ settings
 
+# Answers go through lib/settings.sh, the same writer the theme picker uses, so
+# the shared keys (language, theme) reach the file the other OS reads.
 setting_write() {
-	local key="$1" value="$2" temporary
-	mkdir -p -- "$(dirname -- "$settings_file")"
-	temporary="$(mktemp)"
-	[[ -f "$settings_file" ]] && grep -vE "^$key=" "$settings_file" >"$temporary"
-	printf '%s=%s\n' "$key" "$value" >>"$temporary"
-	LC_ALL=C sort -o "$temporary" "$temporary"
-	mv -- "$temporary" "$settings_file"
+	settings_write "$settings_file" "$@"
 }
 
 # ------------------------------------------------------------------- content
@@ -264,6 +261,7 @@ step_language() {
 		"$(t welcome.language.subtitle)" \
 		"$(t welcome.language.hint)" '' "${languages[@]}")"
 	setting_write locale "${locales[$chosen]}"
+	setting_write language "$chosen"
 	mkdir -p -- "$state_dir"
 	if ! (cd "$repo" && ./scripts/apply-system.sh --locale) >"$locale_log" 2>&1; then
 		preview_note="$(t welcome.language.failed "$locale_log")"

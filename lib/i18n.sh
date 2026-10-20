@@ -84,3 +84,28 @@ i18n_format() {
 	printf '%s' "$text"
 	return "$status"
 }
+
+# i18n_session_language [SETTINGS_FILE] — the language a program should speak:
+# VIVAC_LANG (one run), then the `language` setting unless it is auto, then
+# LANG, then the reference. A table name is two or three lower-case letters;
+# a garbled setting or LANG (C, POSIX) is skipped, a VIVAC_LANG that is not a
+# name means the reference outright, and an unreadable settings file is never
+# an error. Callers load the result with i18n_load.
+i18n_session_language() {
+	local file="${1:-${SETTINGS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/vivac/settings}}" candidate
+	if [[ -n "${VIVAC_LANG:-}" ]]; then
+		candidate="${VIVAC_LANG%%[._@]*}"
+		[[ "$candidate" =~ ^[a-z]{2,3}$ ]] || candidate="$I18N_REFERENCE"
+		printf '%s' "$candidate"
+		return 0
+	fi
+	for candidate in "$(kv_get "$file" language 2>/dev/null || true)" "${LANG:-}"; do
+		[[ "$candidate" == auto ]] && continue
+		candidate="${candidate%%[._@]*}"
+		if [[ "$candidate" =~ ^[a-z]{2,3}$ ]]; then
+			printf '%s' "$candidate"
+			return 0
+		fi
+	done
+	printf '%s' "$I18N_REFERENCE"
+}

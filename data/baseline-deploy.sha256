@@ -65,5 +65,5 @@ ac81224fc768b751e3c5ac3b10ff1c8ef6c6f8b00ab7fd075b40d9dfbc9417ec  dotfiles/wayba
 ff8a9bc3e5ea8b4f7bed7d58b31552511db9b438b67740c233032a1b81efe63c  dotfiles/waybar/.config/waybar/scripts/ws-render.sh
 ca4bc90e66fdda4c6f231e5751bc54e5eaa07eaaad0bdc27007a9635ef6b467b  dotfiles/waybar/.config/waybar/style.css
 d92b7d39cd2f0ded3acd33a61edf70a3d9d9fdef9f95c4929cf9bf4d483abc31  dotfiles/waybar/.config/waybar/workspace-icons.json
-9536bb64e3f90cbae800680a7841bc225cf80321eb91376e5f8e5b16c43cd8d7  dotfiles/welcome/.local/bin/vivac-welcome
+b716454b9108b0f4a8d8c13081a1e6277d3e5d29c1b6f27264fc4ff50f009a83  dotfiles/welcome/.local/bin/vivac-welcome
 16e0f8c1f5ed428ec0c8da4e8775f7c3ae967171ab62f337dc365c076514a411  dotfiles/wofi/.config/wofi/style.css

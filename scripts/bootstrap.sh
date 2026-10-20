@@ -16,11 +16,10 @@ for detector in chassis power input net thermal graphics kernels display; do
 done
 selectors_load "${SELECTORS_FILE:-$repo_root/data/selectors.tsv}"
 
-# Messages follow the session locale (the --locale axis sets it system-wide);
-# VIVAC_LANG overrides for one run. C and POSIX mean the reference table.
-language="${VIVAC_LANG:-${LANG:-en}}"
-language="${language%%[_.@]*}"
-[[ "$language" =~ ^[a-z]{2,3}$ ]] || language=en
+# Messages follow the `language` setting, else the session locale (the
+# --locale axis sets it system-wide); VIVAC_LANG overrides for one run. C and
+# POSIX mean the reference table.
+language="$(i18n_session_language)"
 i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null || i18n_load en "${I18N_DIR:-$repo_root/i18n}"
 
 dry_run=false

@@ -28,8 +28,7 @@ facts_override="${FACTS_OVERRIDE:-${XDG_CONFIG_HOME:-$HOME/.config}/vivac/hardwa
 backup_root="${XDG_STATE_HOME:-$HOME/.local/state}/vivac/backups"
 fragments=("${XDG_CONFIG_HOME:-$HOME/.config}/hypr/generated/hardware.lua")
 
-language="${VIVAC_LANG:-${LANG:-en}}"
-language="${language%%[._@]*}"
+language="$(i18n_session_language)"
 i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null || i18n_load en "${I18N_DIR:-$repo_root/i18n}"
 
 usage() {
