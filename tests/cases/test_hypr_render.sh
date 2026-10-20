@@ -100,4 +100,28 @@ for fragment in hardware monitors input; do
 done
 grep -Eq '^(monitor|input|env = (LIBVA|GBM|__GLX|NVIDIA))' "$committed" && fail 'hyprland.conf still carries machine-specific configuration'
 
-printf 'hypr: generated fragments verified on 5 archetypes\n'
+# --- the Lua template and its committed render --------------------------------------------------------------
+template="$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"
+lua_committed="$repo_root/dotfiles/hypr/.config/hypr/hyprland.lua"
+[[ -f "$template" && -f "$lua_committed" ]] || fail 'hyprland.lua.in or its committed render is missing'
+printf 'local chunk, err = loadfile(_G.arg[1])\nif not chunk then io.stderr:write(err, "\\n") os.exit(1) end\n' >"$sandbox/parse.lua"
+nvim -l "$sandbox/parse.lua" "$lua_committed" || fail 'the committed hyprland.lua does not parse'
+grep -Eq '@[A-Z][A-Z0-9_]*(:[a-z]+)?@' "$lua_committed" && fail 'the committed hyprland.lua still has a placeholder'
+grep -Fq "rgb($(grep '^COLOR_ACCENT=' "$repo_root/data/theme.conf" | cut -d= -f2))" "$lua_committed" || fail 'the border does not wear the theme accent'
+
+# The five keys the base keeps (the owner relocates them in local.lua, not here).
+for default in 'SUPER + R:rofi -show drun' 'SUPER + D:dmenu_run' 'SUPER + L:hyprlock' 'SUPER + SHIFT + Q:vivac-power' 'F2:--pane browser'; do
+	grep -F -- "hl.bind(\"${default%%:*}\"," "$lua_committed" | grep -Fq -- "${default#*:}" || fail "default key ${default%%:*} is not bound to ${default#*:}"
+done
+
+# No key twice: the second bind would shadow or double the first.
+twice="$(sed -n 's/^hl\.bind("\([^"]*\)",.*/\1/p' "$lua_committed" | LC_ALL=C sort | uniq -d)"
+[[ -z "$twice" ]] || fail "keys bound more than once: $twice"
+
+# Drift: the committed render is the template rendered with the theme.
+scratch="$sandbox/drift"
+mkdir -p -- "$scratch"
+(cd "$repo_root" && RENDER_ROOT="$scratch" bash scripts/check-theme-drift.sh --render >/dev/null)
+cmp -s "$scratch/dotfiles/hypr/.config/hypr/hyprland.lua" "$lua_committed" || fail 'hyprland.lua drifted from its template'
+
+printf 'hypr: generated fragments verified on 5 archetypes, hyprland.lua keeps the five default keys\n'

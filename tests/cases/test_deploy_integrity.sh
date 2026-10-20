@@ -51,5 +51,13 @@ printf '# orphan\n' >"$copy/render/hypr/generated/orphan.conf.in"
 expect_refusal 'a fragment hyprland.conf never sources' 'provides ['
 rm -- "$copy/render/hypr/generated/orphan.conf.in"
 
+# --- the Lua loader and the Lua fragments must name each other ---------------------------
+printf '# orphan\n' >"$copy/render/hypr/generated/orphan.lua.in"
+expect_refusal 'a Lua fragment hyprland.lua never loads' 'hyprland.lua loads ['
+rm -- "$copy/render/hypr/generated/orphan.lua.in"
+printf 'fragment("extra")\n' >>"$copy/dotfiles/hypr/.config/hypr/hyprland.lua"
+expect_refusal 'a loaded fragment nobody renders' 'hyprland.lua loads ['
+sed -i '$d' "$copy/dotfiles/hypr/.config/hypr/hyprland.lua"
+
 gate >/dev/null || fail 'the copy did not return to green'
-printf 'deploy integrity: 4 planted faults refused, clean copy accepted\n'
+printf 'deploy integrity: 6 planted faults refused, clean copy accepted\n'

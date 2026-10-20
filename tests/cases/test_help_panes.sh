@@ -39,6 +39,7 @@ grep -q $'^SUPER+CTRL+Q\tUNREGISTERED$' <<<"$out" || fail "hypr pane: the overla
 grep -c 'UNREGISTERED' <<<"$out" | grep -qx 1 || fail 'hypr pane: registered live binds were marked too'
 registry_rows="$(grep -c $'\thypr\t' "$repo_root/data/help-registry.tsv")"
 ((registry_rows == $(grep -Ec '^bind[lmer]* = ' "$repo_root/templates/hypr/.config/hypr/hyprland.conf.in"))) || fail 'registry hypr rows and template binds differ in count'
+((registry_rows == $(grep -Ec '^hl\.bind\("' "$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"))) || fail 'registry hypr rows and Lua template binds differ in count'
 # Without a live list the pane is the registry alone, never empty.
 out="$(render hypr es)"
 ((registry_rows == $(wc -l <<<"$out"))) || fail 'hypr pane without a session: expected one row per registry entry'
