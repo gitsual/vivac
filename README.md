@@ -458,6 +458,12 @@ location:
 
 `scripts/bootstrap.sh` runs both steps after Stow.
 
+On a machine that already has its own Hyprland, Waybar and shell setup, do not use
+`deploy.sh --all`. `scripts/deploy-host.sh` verifies the new config with Hyprland first,
+backs up what it replaces, leaves `.bashrc` and your Waybar scripts alone, only recolours
+your Waybar, kitty, dunst, rofi and wofi files, and `--rollback` undoes it in one command:
+see [docs/host-deploy.md](docs/host-deploy.md).
+
 ### Optional package sets
 
 `bootstrap.sh --list-selectors` prints the optional package sets and whether each applies to this

@@ -12,6 +12,10 @@ the browser, the shell, the editor and the system, kept short on purpose.
 by the `-- @help:` line above it. A bind Hyprland reports at runtime that the
 registry does not know renders as `UNREGISTERED` rather than disappearing.
 
+A key you moved in your own `~/.config/hypr/local.lua` shows where you put it
+when a `-- @help:` line sits above the bind (`docs/local-overlay.md`); the host
+deploy that installs the Lua config is described in `docs/host-deploy.md`.
+
 ## browser
 
 `F2`. Tabs, the address bar and find-in-page, as Firefox and Chromium ship

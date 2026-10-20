@@ -134,4 +134,14 @@ for flag in '' --all; do
 		fail "the rollback did not restore the pre-deploy state ($flag)"
 	fi
 done
+# --- the rollback doc ----------------------------------------------------------------------------------------
+doc="$repo_root/docs/host-deploy.md"
+# shellcheck disable=SC2016,SC2088  # literal doc text: tildes, braces and backticks are not expanded
+for needle in 'deploy-host.sh --rollback' 'mv ~/.config/hypr/hyprland.lua{,.vivac}' '~/.local/state/vivac/backups/<stamp>' \
+	'MANIFEST' 'generated/{hardware,input,monitors}.conf' '.bashrc' 'screenshot.sh' 'hyprpaper.conf' 'ws-refresh.sh' \
+	'Only Lua-level breakage in `local.lua` is contained' 'Errors Hyprland records itself'; do
+	grep -qF -- "$needle" "$doc" || fail "docs/host-deploy.md does not say: $needle"
+done
+grep -q 'host-deploy.md' "$repo_root/README.md" || fail 'README.md does not point at docs/host-deploy.md'
+grep -q 'host-deploy.md' "$repo_root/docs/keys.md" || fail 'docs/keys.md does not point at docs/host-deploy.md'
 printf 'host deploy: refusals, dry run, protect list, backups, VIVAC_REPO and rollback verified\n'
