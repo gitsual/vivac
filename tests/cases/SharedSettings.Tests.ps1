@@ -243,5 +243,75 @@ try {
         Assert-Equal 0 $out.Count
         Assert-Equal 'carmen' (Read-VivacSettings)['theme']
     }
+    # ---- the sign-in script and its hook -----------------------------------
+    $sync = Join-Path $root 'scripts\sync-shared-settings.ps1'
+    $calls = Join-Path $dir 'calls.txt'
+    foreach ($tool in 'apply', 'deploy') {
+        Set-Content -LiteralPath (Join-Path $dir "$tool.ps1") -Value "Add-Content -LiteralPath '$calls' -Value (('$tool ' + (`$args -join ' ')).Trim())"
+    }
+    $env:VIVAC_APPLY_THEME = Join-Path $dir 'apply.ps1'
+    $env:VIVAC_DEPLOY = Join-Path $dir 'deploy.ps1'
+    function Invoke-Sync([string[]]$Arguments) {
+        Remove-Item -LiteralPath $calls -Force -ErrorAction SilentlyContinue
+        $out = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $sync @Arguments 2>&1
+        $script:SyncExit = $LASTEXITCODE
+        $script:SyncOut = "$out"
+        if (Test-Path -LiteralPath $calls) { (Get-Content -LiteralPath $calls) -join '|' } else { '' }
+    }
+    Case 'the script wants -Pull and nothing else' {
+        Invoke-Sync @() | Out-Null
+        Assert-Equal 2 $script:SyncExit
+        Invoke-Sync @('-Pull', 'extra') | Out-Null
+        Assert-Equal 2 $script:SyncExit
+    }
+    Case 'no sharing configured: silent, exit 0, nothing runs' {
+        Reset-Pull '' $null
+        Assert-Equal '' (Invoke-Sync @('-Pull'))
+        Assert-Equal 0 $script:SyncExit
+        Assert-Equal '' $script:SyncOut
+    }
+    Case 'a theme change re-applies the theme once; equal values run nothing' {
+        Reset-Pull "shared_settings=$shared`ntheme=carmen`n" "theme=cosmos`n"
+        Assert-Equal 'apply' (Invoke-Sync @('-Pull'))
+        Assert-Equal 0 $script:SyncExit
+        Assert-Equal 'cosmos' (Read-VivacSettings)['theme']
+        Assert-Equal '' (Invoke-Sync @('-Pull'))
+    }
+    Case 'a location change redeploys the bar; a language change reloads nothing' {
+        Write-Bytes $shared "theme=cosmos`nweather_location=40.42,-3.70`n"
+        Assert-Equal 'deploy -Package zebar' (Invoke-Sync @('-Pull'))
+        Write-Bytes $shared "language=en`n"
+        Assert-Equal '' (Invoke-Sync @('-Pull'))
+        Assert-Equal 'en' (Read-VivacSettings)['language']
+    }
+    Case 'a bad shared value does not fail the script' {
+        Write-Bytes $shared "theme=nope`n"
+        Assert-Equal '' (Invoke-Sync @('-Pull'))
+        Assert-Equal 0 $script:SyncExit
+        Assert-True ($script:SyncOut -match 'theme') 'the warning reaches the output'
+    }
+    Case 'an absent share is waited for, up to -WaitForShare, and never created' {
+        $late = Join-Path $dir 'late'
+        Set-LocalSettings "shared_settings=$late\settings`ntheme=carmen`n"
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        Assert-Equal '' (Invoke-Sync @('-Pull', '-WaitForShare', '2'))
+        Assert-Equal 0 $script:SyncExit
+        Assert-True ($watch.Elapsed.TotalSeconds -ge 1.8) 'it did not wait'
+        Assert-True (-not (Test-Path -LiteralPath $late)) 'the folder was created'
+    }
+    Case 'a share that shows up while waiting is pulled' {
+        $late = Join-Path $dir 'late'
+        $job = Start-Job -ArgumentList $late -ScriptBlock { param($d) Start-Sleep -Seconds 2; New-Item -ItemType Directory -Path $d | Out-Null; [IO.File]::WriteAllText("$d\settings", "theme=cosmos`n") }
+        try { $r = Invoke-Sync @('-Pull', '-WaitForShare', '20') } finally { Wait-Job $job | Out-Null; Remove-Job $job }
+        Assert-Equal 'apply' $r
+        Assert-Equal 'cosmos' (Read-VivacSettings)['theme']
+    }
+    Case 'the host starts the pull only when sharing is configured' {
+        Set-LocalSettings "theme=cosmos`n"
+        Assert-True ($null -eq (Start-VivacSharedSync)) 'a process started with sharing off'
+        $daemon = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac-daemon.ps1'))
+        Assert-True ($daemon -match 'Start-VivacSharedSync') 'the daemon does not start the pull'
+    }
+    Remove-Item Env:VIVAC_APPLY_THEME, Env:VIVAC_DEPLOY
 } finally { Remove-TempProfile $dir }
 Complete-Cases

@@ -425,6 +425,16 @@ function Invoke-VivacSharedPull([double]$LockWaitSeconds = -1) {
     $changed.ToArray()
 }
 
+# Start the sign-in pull in a process of its own, hidden, so the caller (the
+# resident host) never waits on a share that may be away. Nothing starts when
+# sharing is off.
+function Start-VivacSharedSync {
+    if (-not (Get-VivacSharedPath)) { return $null }
+    $script = Join-Path $script:Root 'scripts\sync-shared-settings.ps1'
+    Start-Process -FilePath 'powershell.exe' -WindowStyle Hidden -PassThru -ArgumentList @(
+        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$script`"", '-Pull', '-WaitForShare', '90')
+}
+
 # ---------------------------------------------------------------------- facts
 
 # Facts describe what the machine is. The detected file is written by
