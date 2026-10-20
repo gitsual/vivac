@@ -68,6 +68,23 @@ help_bind_id() {
 	printf '%s%s' "$id" "$key"
 }
 
+# help_lua_bind_id LINE — read one line of a Lua Hyprland config. The key of a
+# bind must be a literal on its own line, `hl.bind("SUPER + SHIFT + S", ...)`
+# starting in column 0, so it can be read without running Lua. rc 0: a literal
+# bind, its registry id in HELP_LUA_ID. rc 1: not a bind (comments included).
+# rc 2: a bind whose key is built, indented or nested; callers refuse it.
+help_lua_bind_id() {
+	local line="$1" spec
+	local -a parts
+	HELP_LUA_ID=''
+	[[ "$line" != --* && "$line" == *'hl.bind('* ]] || return 1
+	[[ "$line" =~ ^hl\.bind\(\"([A-Za-z0-9_:\ +]+)\"\, ]] || return 2
+	spec="${BASH_REMATCH[1]// + / }"
+	read -ra parts <<<"$spec"
+	((${#parts[@]})) || return 2
+	HELP_LUA_ID="$(help_bind_id "${parts[*]:0:${#parts[@]}-1}" "${parts[-1]}")"
+}
+
 # help_live_bind_ids JSON_FILE — the ids of every bind Hyprland reports,
 # derived from its modmask in the same order the registry uses.
 help_live_bind_ids() {
