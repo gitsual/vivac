@@ -26,7 +26,8 @@ i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
 icons="$("$HOME/.local/bin/vivac-power" --icons)"
 keys=(power.lock power.suspend power.logout power.reboot power.poweroff)
 files=(lock suspend log-out reboot power-off)
-commands=(hyprlock 'systemctl suspend' "$HOME/.config/hypr/scripts/dispatch.sh exit" 'systemctl reboot' 'systemctl poweroff')
+# shellcheck disable=SC2016  # $HOME is expanded by the bash -c that runs the command
+commands=(hyprlock 'systemctl suspend' '"$HOME/.config/hypr/scripts/dispatch.sh" exit' 'systemctl reboot' 'systemctl poweroff')
 
 # rofi's dmenu mode takes a per-row icon after a US separator, which is how the
 # two menus end up showing the same drawing.
@@ -40,4 +41,5 @@ menu() {
 chosen="$(menu | rofi -dmenu -i -show-icons -format i -p "$(i18n_get power.title)")" || exit 0
 [[ "$chosen" =~ ^[0-9]+$ ]] || exit 0
 ((chosen < ${#commands[@]})) || exit 0
-exec ${commands[$chosen]}
+# bash -c keeps the quoting inside each command, so a $HOME with a space survives.
+exec bash -c "${commands[$chosen]}"

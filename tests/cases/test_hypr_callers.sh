@@ -54,9 +54,41 @@ grep -Fq 'hypr/scripts/dispatch.sh workspace e+1' "$repo_root/render/waybar/conf
 idle="$repo_root/dotfiles/hypr/.config/hypr/hypridle.conf"
 [[ "$(grep -c 'hypr/scripts/dispatch.sh dpms on' "$idle")" == 2 ]] || fail 'hypridle: both dpms on calls must use the wrapper'
 [[ "$(grep -c 'hypr/scripts/dispatch.sh dpms off' "$idle")" == 1 ]] || fail 'hypridle: the dpms off call must use the wrapper'
-grep -Fq 'hypr/scripts/dispatch.sh exit' "$repo_root/dotfiles/rofi/.config/rofi/power/powermenu.sh" || fail 'the rofi power menu logs out directly'
-bar="$(VIVAC_REPO="$repo_root" HOME="$repo_root" "$repo_root/dotfiles/ricer/.local/bin/vivac-power" --lang en --print)"
-grep -Fq 'hypr/scripts/dispatch.sh exit' <<<"$bar" || fail 'the graphical power menu logs out directly'
+grep -Fq 'hypr/scripts/dispatch.sh' "$repo_root/dotfiles/rofi/.config/rofi/power/powermenu.sh" || fail 'the rofi power menu logs out directly'
+
+# --- log out from both power menus when $HOME contains a space ---------------------------------------------------
+# nwg-bar runs the "exec" string with exec.Command(strings.Split(cmd, " ")...):
+# no shell, so no $HOME, no quotes, and a space in a path splits it in two; a "="
+# starts an environment assignment and a "%" truncates the command
+# (github.com/nwg-piotr/nwg-bar, tools.go launch()). The test replays exactly that.
+spaced="$sandbox/with space"
+mkdir -p "$spaced/.config/hypr/scripts" "$spaced/.local/bin" "$sandbox/run"
+ln -s "$wrapper" "$spaced/.config/hypr/scripts/dispatch.sh"
+logged_out() { [[ -f "$HYPR_STUB_DIR/last_dispatch" && "$(<"$HYPR_STUB_DIR/last_dispatch")" == 'hl.dsp.exit()' ]]; }
+
+: >"$HYPR_STUB_DIR/calls"
+rm -f -- "$HYPR_STUB_DIR/last_dispatch"
+bar="$(VIVAC_REPO="$repo_root" HOME="$spaced" XDG_RUNTIME_DIR="$sandbox/run" "$repo_root/dotfiles/ricer/.local/bin/vivac-power" --lang en --print)"
+logout_exec="$(python3 -c '
+import json, sys
+print([b["exec"] for b in json.loads(sys.stdin.read())][2])' <<<"$bar")"
+[[ "$logout_exec" != *=* && "$logout_exec" != *%* && "$logout_exec" != *'$'* ]] || fail "the logout exec string is not safe for nwg-bar: $logout_exec"
+IFS=' ' read -r -a nwg_argv <<<"$logout_exec"
+[[ "${nwg_argv[0]}" == /* && -x "${nwg_argv[0]}" ]] || fail "nwg-bar would not find an executable in: $logout_exec"
+PATH="$stub_bin:$PATH" VIVAC_HYPR_IPC_MODE=lua HOME="$spaced" "${nwg_argv[@]}" || fail 'the graphical logout failed with a space in HOME'
+logged_out || fail 'the graphical logout did not dispatch exit with a space in HOME'
+
+: >"$HYPR_STUB_DIR/calls"
+rm -f -- "$HYPR_STUB_DIR/last_dispatch"
+printf '#!/usr/bin/env bash\nprintf "%%s\\n" /nonexistent-icons\n' >"$spaced/.local/bin/vivac-power"
+chmod +x "$spaced/.local/bin/vivac-power"
+printf '#!/usr/bin/env bash\ncat >/dev/null\nprintf "2\\n"\n' >"$sandbox/bin-rofi-index"
+mkdir -p "$sandbox/rofibin"
+mv -- "$sandbox/bin-rofi-index" "$sandbox/rofibin/rofi"
+chmod +x "$sandbox/rofibin/rofi"
+PATH="$sandbox/rofibin:$stub_bin:$PATH" VIVAC_HYPR_IPC_MODE=lua VIVAC_REPO="$repo_root" HOME="$spaced" LANG=en_US.UTF-8 \
+	bash "$repo_root/dotfiles/rofi/.config/rofi/power/powermenu.sh" || fail 'the rofi logout failed with a space in HOME'
+logged_out || fail 'the rofi logout did not dispatch exit with a space in HOME'
 
 # --- help-pane: activating a row dispatches in the session language of the compositor -------------------------
 mkdir -p "$sandbox/bin"

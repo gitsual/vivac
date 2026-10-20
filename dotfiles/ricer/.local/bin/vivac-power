@@ -65,10 +65,16 @@ icons="$runtime/icons"
 # label key, icon file, command. The command is a literal here and never comes
 # from a table, so a translation can change what a button says and can never
 # change what it does.
+#
+# nwg-bar does not run the string through a shell: it splits it on single spaces
+# and hands the pieces to exec.Command (nwg-bar tools.go, launch()). There is no
+# $HOME, no quoting, and a space in a path cuts it in two. So an entry whose path
+# can carry a space is a small launcher written under the runtime directory, and
+# the entry is that launcher's path alone.
 entries=(
 	'power.lock	lock	hyprlock'
 	'power.suspend	suspend	systemctl suspend'
-	"power.logout	log-out	$HOME/.config/hypr/scripts/dispatch.sh exit"
+	"power.logout	log-out	$runtime/logout"
 	'power.reboot	reboot	systemctl reboot'
 	'power.poweroff	power-off	systemctl poweroff'
 )
@@ -83,8 +89,19 @@ json_escape() {
 	printf '%s' "$text"
 }
 
+# The logout launcher: the dispatcher path is quoted here, once, for a shell.
+write_logout_launcher() {
+	local launcher="$runtime/logout" scratch
+	mkdir -p -- "$runtime"
+	scratch="$(mktemp -- "$launcher.XXXXXX")"
+	printf '#!/usr/bin/env bash\nexec %q exit\n' "$HOME/.config/hypr/scripts/dispatch.sh" >"$scratch"
+	chmod +x "$scratch"
+	mv -T -- "$scratch" "$launcher"
+}
+
 generate() {
 	local first=true key icon command label
+	write_logout_launcher
 	printf '[\n'
 	for entry in "${entries[@]}"; do
 		IFS=$'\t' read -r key icon command <<<"$entry"
