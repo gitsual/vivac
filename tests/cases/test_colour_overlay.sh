@@ -112,6 +112,40 @@ run gatsby || fail 'an edited file made the run fail'
 grep -qi 'kitty' "$sandbox/err" || fail 'no warning for the skipped file'
 grep -qiF "$gbg" "$cfg/dunst/dunstrc" || fail 'one skipped file stopped the others'
 
+# --rebase: the owner's edited file becomes the new starting point. The edit
+# stays, the palette is applied over it, and the guard stops warning.
+rm -rf "$sandbox/cfg5" "$sandbox/state5" && cp -a "$sandbox/orig" "$sandbox/cfg5"
+rebase() { XDG_STATE_HOME="$sandbox/state5" "$overlay" --apply "$1" --config-dir "$sandbox/cfg5" "${@:2}" >/dev/null 2>"$sandbox/err5"; }
+rebase carmen || fail 'rebase fixture: carmen failed'
+printf 'opacity 0.9\n' >>"$sandbox/cfg5/kitty/kitty.conf"
+rebase gatsby
+grep -qi 'edited' "$sandbox/err5" || fail 'rebase fixture: the edit guard did not warn before --rebase'
+{ grep -qF 'opacity 0.9' "$sandbox/cfg5/kitty/kitty.conf" && grep -qiF "$(tok "$c" TERMINAL_BG)" "$sandbox/cfg5/kitty/kitty.conf"; } || fail 'rebase fixture: the guard did not skip the edited file'
+rebase gatsby --rebase || fail '--rebase failed'
+[[ ! -s "$sandbox/err5" ]] || fail "--rebase still warned: $(<"$sandbox/err5")"
+grep -qF 'opacity 0.9' "$sandbox/cfg5/kitty/kitty.conf" || fail '--rebase lost the owner edit'
+grep -qiF "$(tok "$g" TERMINAL_BG)" "$sandbox/cfg5/kitty/kitty.conf" || fail '--rebase did not apply the palette over the edited file'
+rebase carmen || fail 'after --rebase the next switch failed'
+{ grep -qF 'opacity 0.9' "$sandbox/cfg5/kitty/kitty.conf" && grep -qiF "$(tok "$c" TERMINAL_BG)" "$sandbox/cfg5/kitty/kitty.conf"; } || fail 'after --rebase the file is not switchable again'
+
+# An interruption between writing `pristine` and `last` must not wedge the file:
+# the next run starts over from the file as it is, and one bad file does not
+# stop the others; the run still ends non-zero and names the failure.
+rm -rf "$sandbox/cfg6" "$sandbox/state6" && cp -a "$sandbox/orig" "$sandbox/cfg6"
+one() { XDG_STATE_HOME="$sandbox/state6" "$overlay" --apply "$1" --config-dir "$sandbox/cfg6" >"$sandbox/out6" 2>"$sandbox/err6"; }
+one carmen || fail 'interruption fixture: carmen failed'
+cp -- "$sandbox/orig/kitty/kitty.conf" "$sandbox/cfg6/kitty/kitty.conf"
+rm -f -- "$sandbox/state6/vivac/colour-overlay/kitty__kitty.conf/last"
+chmod 000 "$sandbox/cfg6/dunst/dunstrc"
+rc=0
+one gatsby || rc=$?
+chmod 600 "$sandbox/cfg6/dunst/dunstrc"
+grep -qiF "$(tok "$g" TERMINAL_BG)" "$sandbox/cfg6/kitty/kitty.conf" || fail "a missing 'last' wedged the file: $(<"$sandbox/err6")"
+grep -qiF "$gbg" "$sandbox/cfg6/wofi/style.css" || fail 'files after the failing one were skipped'
+((rc != 0)) || fail 'an unreadable file did not make the run fail'
+grep -q 'dunst' "$sandbox/err6" || fail 'the failure summary does not name the file'
+one gatsby || fail 'the run is not repeatable after the failure was fixed'
+
 # Absent targets are skipped without creating anything; symlinks (a stowed,
 # repository-owned file) are not owner files and are never written through.
 rm -rf "$sandbox/cfg2" && cp -a "$sandbox/orig" "$sandbox/cfg2" && rm -rf "$sandbox/state2"

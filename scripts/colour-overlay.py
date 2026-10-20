@@ -101,6 +101,14 @@ def write_atomic(target, content):
     Path(tmp.name).replace(target)
 
 
+def write_state(path, content):
+    """State files are replaced whole: a crash leaves the old file or the new one."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=path.parent, prefix=path.name + ".", delete=False) as tmp:
+        tmp.write(content)
+    Path(tmp.name).replace(path)
+
+
 def apply_file(target, keydir, palettes, chosen, prefer, rebase):
     if target.is_symlink():
         return "skipped (symlink, not an owner file)"
@@ -110,11 +118,16 @@ def apply_file(target, keydir, palettes, chosen, prefer, rebase):
         shutil.rmtree(keydir, ignore_errors=True)
     current = target.read_bytes()
     pristine, last = keydir / "pristine", keydir / "last"
+    if pristine.exists() and not last.exists():
+        # An interrupted first run: no swap was ever confirmed, so the file as it
+        # is now is the starting point (the backup still holds the first bytes).
+        shutil.rmtree(keydir / "pristine", ignore_errors=True)
+        pristine.unlink(missing_ok=True)
     if pristine.exists():
-        if sha(current) != last.read_text().strip():
+        source = pristine.read_bytes()
+        if sha(current) not in (last.read_text().strip(), sha(source)):
             print(f"colour-overlay: warning: {target} was edited since the last swap; skipped (use --rebase)", file=sys.stderr)
             return "skipped (edited)"
-        source = pristine.read_bytes()
     else:
         source = current
     base = detect_base(source, palettes)
@@ -127,9 +140,11 @@ def apply_file(target, keydir, palettes, chosen, prefer, rebase):
         backup = keydir / time.strftime("backup-%Y%m%dT%H%M%S")
         backup.mkdir(parents=True, exist_ok=True)
         shutil.copy2(target, backup / target.name)
-        pristine.write_bytes(current)
+        write_state(pristine, current)
+    # `last` is written before the file: whichever write is cut short, the file
+    # on disk is either the pristine bytes or the bytes `last` names.
+    write_state(last, (sha(result) + "\n").encode())
     write_atomic(target, result)
-    last.write_text(sha(result) + "\n")
     return "applied"
 
 
@@ -142,6 +157,7 @@ def main():
     palettes = catalogue(args.data)
     chosen = read_palette(args.theme_file)
     config = Path(args.config_dir)
+    failures = []
     for line in Path(args.map).read_text().splitlines():
         if not line.strip() or line.startswith("#"):
             continue
@@ -150,8 +166,17 @@ def main():
         for target in matches:
             relative = target.relative_to(config)
             keydir = Path(args.state) / str(relative).replace("/", "__")
-            outcome = apply_file(target, keydir, palettes, chosen, prefer, args.rebase)
+            try:
+                outcome = apply_file(target, keydir, palettes, chosen, prefer, args.rebase)
+            except OSError as error:
+                failures.append(str(relative))
+                print(f"colour-overlay: error: {relative}: {error}", file=sys.stderr)
+                continue
             print(f"colour-overlay: {tool}: {relative}: {outcome}")
+    if failures:
+        print(f"colour-overlay: {len(failures)} file(s) failed: {', '.join(failures)}", file=sys.stderr)
+        return 1
+    return 0
 
 
-main()
+sys.exit(main())
