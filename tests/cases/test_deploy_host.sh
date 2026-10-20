@@ -331,7 +331,7 @@ doc="$repo_root/docs/host-deploy.md"
 for needle in 'deploy-host.sh --rollback' 'mv ~/.config/hypr/hyprland.lua{,.vivac}' '~/.local/state/vivac/backups/<stamp>' \
 	'MANIFEST' 'generated/{hardware,input,monitors}.conf' '.bashrc' 'screenshot.sh' 'hyprpaper.conf' 'ws-refresh.sh' \
 	'Only Lua-level breakage in `local.lua` is contained' 'Errors Hyprland records itself' \
-	'newest backup that has something to undo' 'keeps no backup' '--force' '--without nvim' '94afb84' '5e4eb8652b4776f139282a343f04a3a8c7f23cb0'; do
+	'newest backup that has something to undo' 'keeps no backup' '--force' '--without nvim' 'stow --simulate' 'rolled back automatically' 'symlink to a directory elsewhere' '94afb84' '5e4eb8652b4776f139282a343f04a3a8c7f23cb0'; do
 	grep -qF -- "$needle" "$doc" || fail "docs/host-deploy.md does not say: $needle"
 done
 grep -q 'host-deploy.md' "$repo_root/README.md" || fail 'README.md does not point at docs/host-deploy.md'

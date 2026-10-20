@@ -60,6 +60,17 @@ notification. Errors Hyprland records itself, such as a bind with an unknown
 key name or a misspelt config key in `local.lua`, make `--verify-config` fail,
 and the deploy stops with Hyprland's own message. Fix the line and run again.
 
+## Conflicts, failures and symlinked directories
+
+Before the first file moves, `deploy-host.sh` runs `stow --simulate` for every
+selected package; a conflict that a backup cannot clear (a file where a package
+needs a directory) aborts with the list and the host untouched. If anything fails
+after the first change, the run rolls itself back from its own `MANIFEST` and says
+so (`rolled back automatically`); the backup is kept, marked as rolled back. A
+top-level directory of your home that is a symlink to a directory elsewhere
+(`~/.local` on another disk, say) stays as it is: the links land in the directory
+it points at, and the rollback removes exactly those.
+
 ## Rollback
 
 One command, from any TTY, restores the exact pre-deploy state: the old
