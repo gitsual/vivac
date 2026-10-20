@@ -14,7 +14,9 @@ return {
       "MunifTanjim/nui.nvim",
       "hrsh7th/nvim-cmp",
       "nvim-telescope/telescope.nvim",
-      "nvim-tree/nvim-web-devicons", 
+      "nvim-tree/nvim-web-devicons",
+      -- avante's :Avante command parser (required since Oct 2026)
+      { "ColinKennedy/mega.cmdparse", dependencies = { "ColinKennedy/mega.logging" } },
       {
         "HakonHarnes/img-clip.nvim",
         event = "VeryLazy",
