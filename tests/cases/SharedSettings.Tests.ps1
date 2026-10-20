@@ -457,6 +457,56 @@ try {
         Assert-True (-not (Test-VivacSharedValueValid 'theme' "cosmos`n")) 'theme accepted a trailing newline'
         Assert-True (-not (Test-VivacSharedValueValid 'weather_location' "Lisbon`n")) 'location accepted a trailing newline'
     }
+    # ---- the marker check stays off WMI, and WMI trouble is never "stale" ---
+    function Set-WmiSeam([scriptblock]$Body) { & (Get-Module Vivac | Select-Object -First 1) { param($b) $script:QueryProcessStart = $b } $Body }
+    function Reset-WmiSeam { & (Get-Module Vivac | Select-Object -First 1) { $script:QueryProcessStart = { param($Id) $p = Get-CimInstance Win32_Process -Filter "ProcessId=$Id" -OperationTimeoutSec 2 -ErrorAction Stop; if ($p) { $p.CreationDate.ToFileTimeUtc() } } } }
+    Case 'our own marker, and a missing one, are decided without asking WMI' {
+        $script:wmi = 0
+        Set-WmiSeam { param($Id) $script:wmi++; throw 'WMI is hung' }
+        try {
+            Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+            Assert-True ($null -eq (Get-VivacLockMarker)) 'a marker from nowhere'
+            [void](Set-VivacLockMarker 'start')
+            Assert-Equal $PID (Get-VivacLockMarker).Pid 'our own marker was not recognised'
+            Clear-VivacLockMarker
+            Assert-True (-not (Test-Path -LiteralPath $marker)) 'our own marker was not cleared'
+            $ticks = [Diagnostics.Process]::GetCurrentProcess().StartTime.ToFileTimeUtc()
+            [IO.File]::WriteAllText($marker, "$PID start $($ticks - 36000000000)`n")
+            Assert-True ($null -eq (Get-VivacLockMarker)) 'our PID with another start time counted'
+            Assert-Equal 0 $script:wmi 'WMI was asked'
+        } finally { Reset-WmiSeam; Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue }
+    }
+    Case 'another live process whose start time WMI cannot give is live, never stale' {
+        $other = Start-Process powershell.exe -ArgumentList '-NoProfile', '-Command', 'Start-Sleep 120' -WindowStyle Hidden -PassThru
+        try {
+            [IO.File]::WriteAllText($marker, "$($other.Id) start 1234567890`n")
+            foreach ($seam in { param($Id) throw 'timed out' }, { param($Id) $null }) {
+                Set-WmiSeam $seam
+                Assert-Equal $other.Id (Get-VivacLockMarker).Pid 'WMI trouble made a live process read as stale'
+            }
+            Set-WmiSeam { param($Id) 99999999999 }
+            Assert-True ($null -eq (Get-VivacLockMarker)) 'a definite start-time mismatch was not stale'
+        } finally { Reset-WmiSeam; Stop-Process -Id $other.Id -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue }
+    }
+    Case 'a PID that is not running is stale without asking WMI' {
+        $script:wmi = 0
+        Set-WmiSeam { param($Id) $script:wmi++; 1 }
+        try {
+            [IO.File]::WriteAllText($marker, "2147483000 start 1234567890`n")
+            Assert-True ($null -eq (Get-VivacLockMarker)) 'a dead PID counted'
+            Assert-Equal 0 $script:wmi 'WMI was asked about a dead PID'
+        } finally { Reset-WmiSeam; Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue }
+    }
+    Case 'the real WMI query is bounded to 2 seconds' {
+        $v = [IO.File]::ReadAllText((Join-Path $root 'lib\Vivac.psm1'))
+        Assert-True ($v -match 'Get-CimInstance[^\r\n]*-OperationTimeoutSec 2') 'the CIM query has no timeout'
+    }
+    Case 'the host writes its pid file without letting a failure reach the cover' {
+        $daemon = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac-daemon.ps1'))
+        Assert-True ($daemon -match 'try \{ Write-VivacFile -Path \$pidFile[^\r\n]*\} catch \{[^\r\n]*Write-DaemonLog') 'the pid file write is unguarded'
+        $at = $daemon.IndexOf('Write-VivacFile -Path $pidFile')
+        Assert-True ($at -gt 0 -and $at -lt $daemon.IndexOf('Show-VivacLockCover }')) 'the pid file is no longer written before the cover'
+    }
     Remove-Item Env:VIVAC_APPLY_THEME, Env:VIVAC_DEPLOY
     # ---- a failed replace never costs the shared file ----------------------
     $vivacModule = Get-Module Vivac

@@ -309,6 +309,8 @@ first pull after the unlock, since applying it restarts the host that holds the 
 The lock marker that drives this (`%LOCALAPPDATA%\vivac\session-locked`) records the host's PID and start time, so a
 PID the system reused reads as stale, and a host started without `-LockAtStart` deletes any marker it finds. Writing
 it can fail without consequence: the lock and the cover run the same, the failure goes to the log.
+The host's own marker is checked without WMI; for another process WMI is asked with a 2 s limit, and no answer counts as
+live, never stale. The pid file is guarded the same way.
 
 Known gaps, left as they are: if `File.Replace` keeps failing on the share (a 9P-backed `C:\m2`) the key stays
 pending and is warned about, there is no non-atomic fallback; there are no toasts, the log is not rotated; a host

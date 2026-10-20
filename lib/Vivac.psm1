@@ -534,13 +534,18 @@ function Invoke-VivacSharedPull([double]$LockWaitSeconds = -1) {
 # lock it describes must run the same when the state directory cannot be
 # written (disk full, an antivirus lock, a bad ACL). A failure is logged.
 # The marker carries its writer's start time, so a PID the system has given to
-# another process since reads as stale. The time comes from WMI, which also
-# answers for a process above our integrity level (the host's).
+# another process since reads as stale. The time of another process comes from
+# WMI, which also answers for one above our integrity level (the host's), and
+# is bounded to 2 seconds: this runs next to the greeter. The query is a seam
+# so a test can make it fail.
+$script:QueryProcessStart = {
+    param($Id)
+    $p = Get-CimInstance Win32_Process -Filter "ProcessId=$Id" -OperationTimeoutSec 2 -ErrorAction Stop
+    if ($p) { $p.CreationDate.ToFileTimeUtc() }
+}
+# $null when WMI threw, timed out or had no answer: unknown, not "gone".
 function Get-VivacProcessStart([int]$Id) {
-    try {
-        $p = Get-CimInstance Win32_Process -Filter "ProcessId=$Id" -ErrorAction Stop
-        if ($p) { return $p.CreationDate.ToFileTimeUtc() }
-    } catch { }
+    try { $t = & $script:QueryProcessStart $Id; if ($null -ne $t) { return [long]$t } } catch { }
     $null
 }
 function Set-VivacLockMarker([string]$Kind) {
@@ -562,9 +567,17 @@ function Get-VivacLockMarker {
         $id = [int]$Matches[1]
         $kind = $Matches[2]
         $wrote = [long]$Matches[3]
-        $now = Get-VivacProcessStart $id
-        # Two seconds of slack: WMI rounds the creation time to microseconds.
-        if ($null -eq $now -or [Math]::Abs($now - $wrote) -gt 20000000) { return $null }
+        # Two seconds of slack: the creation time is rounded differently by
+        # the two sources. Our own start time needs no WMI; another process
+        # must be running, and only a start time that WMI actually gives and
+        # that differs makes it stale: no answer is "unknown", so live.
+        if ($id -eq $PID) {
+            $now = [Diagnostics.Process]::GetCurrentProcess().StartTime.ToFileTimeUtc()
+        } else {
+            if (-not (Get-Process -Id $id -ErrorAction SilentlyContinue)) { return $null }
+            $now = Get-VivacProcessStart $id
+        }
+        if ($null -ne $now -and [Math]::Abs($now - $wrote) -gt 20000000) { return $null }
         [pscustomobject]@{ Pid = $id; Kind = $kind }
     } catch { $null }
 }

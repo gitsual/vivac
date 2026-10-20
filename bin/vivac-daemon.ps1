@@ -53,7 +53,9 @@ function Write-DaemonLog([string]$Text) {
         Add-Content -LiteralPath $log -Value ('{0}  {1}' -f (Get-Date -Format s), $Text) -Encoding UTF8
     } catch { }
 }
-Write-VivacFile -Path $pidFile -Text "$PID`n"
+# A failure here must not keep the cover from going up: the pid file only
+# helps deploy find this host.
+try { Write-VivacFile -Path $pidFile -Text "$PID`n" } catch { Write-DaemonLog "could not write the pid file: $_" }
 if ($LockAtStart) { [void](Set-VivacLockMarker 'start'); Show-VivacLockCover } else { Reset-VivacLockMarker }
 # The other OS's theme, location and language, when sharing is configured:
 # a process of its own, so a share that is not there yet delays nothing here.
