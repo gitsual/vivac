@@ -150,6 +150,9 @@ if ($Register) {
 }
 
 if (-not $Watch -or $DryRun) { Invoke-Tidy; return }
+# The watcher was found gone after a sign-in with nothing in the log: whatever
+# ends it from here on says so first.
+trap { Write-TidyLog "watcher stopped: $($_.Exception.Message)"; break }
 # Resident: one failed pass (a desktop not mounted yet) must not end it.
 try { Invoke-Tidy } catch { Write-TidyLog "pass failed: $($_.Exception.Message)" }
 
@@ -186,8 +189,10 @@ while ($true) {
     $idle++
     if (-not $pending -and $idle -ge 3) {
         $idle = 0
-        Start-Watchers
-        $pending = [bool]@(Get-Shortcuts $Desktops).Count
+        try {
+            Start-Watchers
+            $pending = [bool]@(Get-Shortcuts $Desktops).Count
+        } catch { Write-TidyLog "look failed: $($_.Exception.Message)" }
     }
     if ($pending) {
         $pending = $false
