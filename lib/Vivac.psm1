@@ -530,23 +530,45 @@ function Invoke-VivacSharedPull([double]$LockWaitSeconds = -1) {
 # automatic sign-in, kind 'start', or the lock screen, kind 'lock') it leaves
 # "PID kind" here. Anything that would restart the host, a theme applied from
 # the shared file for one, reads it first. A marker of a dead process is stale.
+# None of the three throws: the marker is a courtesy to the pull, and the
+# lock it describes must run the same when the state directory cannot be
+# written (disk full, an antivirus lock, a bad ACL). A failure is logged.
 function Set-VivacLockMarker([string]$Kind) {
-    Write-VivacFile -Path (Get-VivacPaths).LockMarker -Text "$PID $Kind`n"
+    try {
+        Write-VivacFile -Path (Get-VivacPaths).LockMarker -Text "$PID $Kind`n"
+        $true
+    } catch {
+        Write-VivacSharedLog "could not write the lock marker: $($_.Exception.Message)"
+        $false
+    }
 }
 function Get-VivacLockMarker {
-    $p = (Get-VivacPaths).LockMarker
-    if (-not (Test-Path -LiteralPath $p)) { return $null }
-    try { $text = ([IO.File]::ReadAllText($p)).Trim() } catch { return $null }
-    if ($text -notmatch '^(\d+) (start|lock)$') { return $null }
-    $id = [int]$Matches[1]
-    if (-not (Get-Process -Id $id -ErrorAction SilentlyContinue)) { return $null }
-    [pscustomobject]@{ Pid = $id; Kind = $Matches[2] }
+    try {
+        $p = (Get-VivacPaths).LockMarker
+        if (-not (Test-Path -LiteralPath $p)) { return $null }
+        $text = ([IO.File]::ReadAllText($p)).Trim()
+        if ($text -notmatch '^(\d+) (start|lock)$') { return $null }
+        $id = [int]$Matches[1]
+        if (-not (Get-Process -Id $id -ErrorAction SilentlyContinue)) { return $null }
+        [pscustomobject]@{ Pid = $id; Kind = $Matches[2] }
+    } catch { $null }
 }
 # Only the process that wrote the marker takes it down.
 function Clear-VivacLockMarker {
-    $m = Get-VivacLockMarker
-    if ($m -and $m.Pid -ne $PID) { return }
-    Remove-Item -LiteralPath (Get-VivacPaths).LockMarker -Force -ErrorAction SilentlyContinue
+    try {
+        $m = Get-VivacLockMarker
+        if ($m -and $m.Pid -ne $PID) { return }
+        Remove-Item -LiteralPath (Get-VivacPaths).LockMarker -Force -ErrorAction SilentlyContinue
+    } catch { Write-VivacSharedLog "could not clear the lock marker: $($_.Exception.Message)" }
+}
+
+# Run Body (the lock) with the marker held: marked here unless a marker is
+# already held (the start-up cover's), and let go afterwards however Body ends.
+# Body runs whether or not the marker could be written.
+function Invoke-VivacWithLockMarker([string]$Kind, [scriptblock]$Body) {
+    $marked = $false
+    if (-not (Get-VivacLockMarker)) { $marked = Set-VivacLockMarker $Kind }
+    try { & $Body } finally { if ($marked) { Clear-VivacLockMarker } }
 }
 
 # Shared changes that need a desktop reload (theme, location) and arrived while

@@ -318,7 +318,7 @@ try {
     Case 'the lock marker names its daemon and what kind of lock it is, and goes stale with it' {
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
         Assert-True ($null -eq (Get-VivacLockMarker)) 'a marker from nowhere'
-        Set-VivacLockMarker 'start'
+        [void](Set-VivacLockMarker 'start')
         $m = Get-VivacLockMarker
         Assert-Equal $PID $m.Pid
         Assert-Equal 'start' $m.Kind
@@ -331,7 +331,7 @@ try {
     Case 'while the session is locked a theme from the pull is recorded, not applied; unlocking applies it once' {
         Reset-Pull "shared_settings=$shared`ntheme=carmen`n" "theme=cosmos`n"
         Remove-Item -LiteralPath $deferred -Force -ErrorAction SilentlyContinue
-        Set-VivacLockMarker 'start'
+        [void](Set-VivacLockMarker 'start')
         try { Assert-Equal '' (Invoke-Sync @('-Pull')) } finally { Clear-VivacLockMarker }
         Assert-Equal 0 $script:SyncExit
         Assert-Equal 'cosmos' (Read-VivacSettings)['theme']
@@ -342,7 +342,7 @@ try {
     }
     Case 'a deferred location waits too; a language needs no reload and is never deferred' {
         Write-Bytes $shared "theme=cosmos`nweather_location=40.42,-3.70`nlanguage=en`n"
-        Set-VivacLockMarker 'lock'
+        [void](Set-VivacLockMarker 'lock')
         try { Assert-Equal '' (Invoke-Sync @('-Pull')) } finally { Clear-VivacLockMarker }
         Assert-Equal 'en' (Read-VivacSettings)['language']
         Assert-Equal "weather_location`n" (Read-Bytes $deferred)
@@ -365,7 +365,56 @@ try {
         Assert-True ($daemon -match 'Clear-VivacLockMarker') 'the marker is never cleared'
         Assert-True ($daemon -match 'Resume-SharedSync') 'a deferred pull is never resumed'
         $surf = [IO.File]::ReadAllText((Join-Path $root 'lib\Surfaces.psm1'))
-        Assert-True ($surf -match "Set-VivacLockMarker 'lock'") 'a manual lock is not marked'
+        Assert-True ($surf -match "Invoke-VivacWithLockMarker 'lock'") 'a manual lock is not marked'
+    }
+    # ---- the marker must never get in the way of the lock ------------------
+    function Use-UnwritableState([scriptblock]$Body) {
+        # A file where the state directory should be: nothing can be created under it.
+        $bad = Join-Path $dir 'unwritable'
+        New-Item -ItemType Directory -Force -Path $bad | Out-Null
+        [IO.File]::WriteAllText((Join-Path $bad 'vivac'), 'not a directory')
+        $was = $env:VIVAC_LOCALAPPDATA
+        $env:VIVAC_LOCALAPPDATA = $bad
+        try { & $Body } finally { $env:VIVAC_LOCALAPPDATA = $was }
+    }
+    Case 'a marker that cannot be written, read or removed never throws' {
+        Use-UnwritableState {
+            Assert-True (-not (Set-VivacLockMarker 'start')) 'reported success'
+            Assert-True ($null -eq (Get-VivacLockMarker)) 'read a marker from nowhere'
+            Clear-VivacLockMarker
+        }
+    }
+    Case 'the lock runs the same when the marker cannot be written, and a failing lock still lets go' {
+        Use-UnwritableState {
+            $ran = $false
+            $r = Invoke-VivacWithLockMarker 'lock' { $script:ran = $true; 42 }
+            Assert-True $script:ran 'the lock did not run'
+            Assert-Equal 42 $r
+            Assert-Throws { Invoke-VivacWithLockMarker 'lock' { throw 'the lock failed' } } 'the lock failed'
+        }
+    }
+    Case 'with a writable state the marker is held during the lock and gone after, even when it fails' {
+        Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+        $script:during = $null
+        Invoke-VivacWithLockMarker 'lock' { $script:during = Get-VivacLockMarker }
+        Assert-Equal 'lock' $script:during.Kind
+        Assert-True ($null -eq (Get-VivacLockMarker)) 'the marker outlived the lock'
+        Assert-Throws { Invoke-VivacWithLockMarker 'lock' { throw 'boom' } } 'boom'
+        Assert-True ($null -eq (Get-VivacLockMarker)) 'the marker outlived a failed lock'
+    }
+    Case 'a lock inside the start-up cover leaves the cover marker alone' {
+        [void](Set-VivacLockMarker 'start')
+        try {
+            Invoke-VivacWithLockMarker 'lock' { }
+            Assert-Equal 'start' (Get-VivacLockMarker).Kind
+        } finally { Clear-VivacLockMarker }
+    }
+    Case 'the daemon and the lock surface go through the guarded marker calls only' {
+        $daemon = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac-daemon.ps1'))
+        $surf = [IO.File]::ReadAllText((Join-Path $root 'lib\Surfaces.psm1'))
+        Assert-True ($surf -match "Invoke-VivacWithLockMarker 'lock'") 'Surfaces does not use the guarded wrapper'
+        Assert-True ($surf -notmatch 'Set-VivacLockMarker|Clear-VivacLockMarker') 'Surfaces touches the marker directly'
+        Assert-True ($daemon -notmatch 'LockMarker\s*[^\r\n]*Write-VivacFile') 'the daemon writes the marker by hand'
     }
     Remove-Item Env:VIVAC_APPLY_THEME, Env:VIVAC_DEPLOY
     # ---- a failed replace never costs the shared file ----------------------
