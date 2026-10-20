@@ -265,6 +265,28 @@ $script:SharedKeys = @('theme', 'weather_location', 'language')
 $script:Latin1 = [Text.Encoding]::GetEncoding(28591)
 # The one call that swaps the new content in; a seam so a test can make it fail.
 $script:ReplaceFile = { param($Scratch, $Destination, $Backup) [IO.File]::Replace($Scratch, $Destination, $Backup) }
+# A share that has no ReplaceFileW (\\wsl.localhost, where C:\m2 points) still
+# renames over a file atomically, which is what the Linux side does with mv.
+if (-not ('VivacRename' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+public static class VivacRename {
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool MoveFileEx(string from, string to, int flags);
+    // MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH
+    public static void Over(string from, string to) {
+        if (!MoveFileEx(from, to, 0x1 | 0x8)) throw new Win32Exception(Marshal.GetLastWin32Error());
+    }
+}
+'@
+}
+function Test-VivacNotSupported($ErrorRecord) {
+    $e = $ErrorRecord.Exception
+    while ($e.InnerException) { $e = $e.InnerException }
+    ($e.HResult -band 0xFFFF) -eq 50
+}
 
 function Get-VivacSharedKeys { $script:SharedKeys }
 
@@ -329,6 +351,12 @@ function Write-VivacSharedKey([string]$Path, [string]$Key, [string]$Value) {
         if (Test-Path -LiteralPath $Path) {
             try { & $script:ReplaceFile $scratch $Path $backup }
             catch {
+                # ERROR_NOT_SUPPORTED: the share cannot replace, so nothing was
+                # touched; rename the scratch over the file instead.
+                if ((Test-VivacNotSupported $_) -and (Test-Path -LiteralPath $Path) -and (Test-Path -LiteralPath $scratch)) {
+                    [VivacRename]::Over($scratch, $Path)
+                    return
+                }
                 # ReplaceFileW can fail after it has already taken the
                 # destination away (error 1177). The shared file is the other
                 # OS's too: put the old content back, or failing that the new,
