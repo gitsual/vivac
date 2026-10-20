@@ -9,7 +9,8 @@
 #   - every hardware archetype, with no local.lua;
 #   - a local.lua that raises and one that does not parse: the vivac config must
 #     still verify, because the loader contains the owner's mistakes;
-#   - an owner-style local.lua that unbinds vivac keys and binds others.
+#   - an owner-style local.lua that unbinds vivac keys and binds others;
+#   - the shipped local.lua.example, as the owner would copy it.
 # Without Hyprland the stage prints a notice and passes.
 #
 # HYPRLAND_BIN names the binary (tests use a stub); HYPR_LUA the file to verify.
@@ -61,6 +62,7 @@ hl.bind("SUPER + A", hl.dsp.exec_cmd("rofi -show drun"))
 hl.unbind("F2")
 hl.bind("SUPER + F2", hl.dsp.exec_cmd(vivac.scripts .. "/help-pane.sh --pane browser"))
 vivac.autostart_set("hypridle", false)'
+verify example-overlay desktop-nvidia "$(<"$repo_root/dotfiles/hypr/.config/hypr/local.lua.example")"
 
 ((status == 0)) || exit 1
 printf 'hyprland verify: %d configs accepted\n' "$count"

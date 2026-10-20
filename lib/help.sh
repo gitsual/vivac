@@ -85,6 +85,66 @@ help_lua_bind_id() {
 	HELP_LUA_ID="$(help_bind_id "${parts[*]:0:${#parts[@]}-1}" "${parts[-1]}")"
 }
 
+# help_local_binds FILE — the owner's relocated binds. One line per literal
+# `hl.bind("MODS + KEY", ...)` that has a `-- @help: <pane> <label_key>` line
+# directly above it: "pane<TAB>label_key<TAB>bind_id". Anything else (a built
+# key, an indented bind, a blank line between, unparsable Lua) is skipped, the
+# same shapes the repo gate refuses in the template. rc 1: file unreadable.
+help_local_binds() {
+	local file="$1" line previous='' rc
+	[[ -r "$file" ]] || return 1
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		rc=0
+		help_lua_bind_id "$line" || rc=$?
+		if ((rc == 0)) && [[ "$previous" =~ ^--\ @help:\ ([a-z]+)\ ([a-z0-9_.]+)$ ]]; then
+			printf '%s\t%s\t%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "$HELP_LUA_ID"
+		fi
+		previous="$line"
+	done <"$file"
+}
+
+# help_lua_parses FILE — does the file parse as Lua? Hyprland would not load
+# an unparsable local.lua, so its keys are not bound and must not be shown.
+# Uses the first Lua interpreter at hand (luajit, lua, nvim); with none, the
+# file is taken as parsing, because the line reader above is all that is left.
+help_lua_parses() {
+	local interpreter
+	for interpreter in luajit lua lua5.4 nvim; do
+		command -v "$interpreter" >/dev/null || continue
+		case "$interpreter" in
+		nvim) nvim -l /dev/stdin "$1" <<<'assert(loadfile(arg[1]))' >/dev/null 2>&1 ;;
+		*) HELP_LUA_FILE="$1" "$interpreter" -e 'assert(loadfile(os.getenv("HELP_LUA_FILE")))' >/dev/null 2>&1 ;;
+		esac
+		return
+	done
+}
+
+# help_apply_local FILE — show the owner's keys. Each relocated bind renames
+# the registry row of the same pane and label to the new bind id, in place
+# (so the pane lists it where the default was, and picking it runs the same
+# registry action). A label with no row, or a key some row already owns, is
+# ignored. A missing or unreadable file changes nothing.
+help_apply_local() {
+	local pane label id key index from
+	[[ -r "$1" ]] && help_lua_parses "$1" || return 0
+	while IFS=$'\t' read -r pane label id; do
+		[[ ! -v HELP_PANE["$pane/$id"] ]] || continue
+		from=''
+		for key in "${HELP_ROWS[@]}"; do
+			[[ "${HELP_PANE["$key"]}" == "$pane" && "${HELP_LABEL["$key"]}" == "$label" ]] && from="$key"
+		done
+		[[ -n "$from" ]] || continue
+		for index in "${!HELP_ROWS[@]}"; do
+			[[ "${HELP_ROWS[index]}" == "$from" ]] && HELP_ROWS[index]="$pane/$id"
+		done
+		HELP_PANE["$pane/$id"]="${HELP_PANE["$from"]}"
+		HELP_TYPE["$pane/$id"]="${HELP_TYPE["$from"]}"
+		HELP_VALUE["$pane/$id"]="${HELP_VALUE["$from"]}"
+		HELP_LABEL["$pane/$id"]="${HELP_LABEL["$from"]}"
+		unset 'HELP_PANE[$from]' 'HELP_TYPE[$from]' 'HELP_VALUE[$from]' 'HELP_LABEL[$from]'
+	done < <(help_local_binds "$1")
+}
+
 # help_live_bind_ids JSON_FILE — the ids of every bind Hyprland reports,
 # derived from its modmask in the same order the registry uses.
 help_live_bind_ids() {

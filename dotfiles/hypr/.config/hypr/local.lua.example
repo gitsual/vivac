@@ -1,0 +1,44 @@
+-- vivac local.lua example. Copy it to ~/.config/hypr/local.lua and edit.
+--
+-- local.lua is yours: the installer never creates, overwrites or deletes it.
+-- Hyprland loads it after everything vivac defines, so what you write here
+-- wins. A mistake inside it is logged and announced, and vivac's own config
+-- stays in effect.
+--
+-- Taking a key that vivac already binds: hl.unbind() it, then bind it again.
+-- Put "-- @help: <pane> <label_key>" on the line right above a one-line
+-- hl.bind("MODS + KEY", ...) and the F1 pane lists the new key for that
+-- feature instead of the default. The label is the one vivac uses for the
+-- default key (see data/help-registry.tsv). Keep the key a plain string: a
+-- built or indented key is not read.
+--
+-- vivac.terminal, vivac.scripts and vivac.autostart are available here.
+
+-- Launcher: SUPER+R becomes SUPER+A, which frees SUPER+R for another program.
+hl.unbind("SUPER + R")
+-- @help: hypr help.hypr.launcher
+hl.bind("SUPER + A", hl.dsp.exec_cmd("rofi -show drun"))
+
+-- dmenu: SUPER+D becomes SUPER+SHIFT+D.
+hl.unbind("SUPER + D")
+-- @help: hypr help.hypr.dmenu
+hl.bind("SUPER + SHIFT + D", hl.dsp.exec_cmd("dmenu_run"))
+
+-- Screen lock: SUPER+L becomes SUPER+SHIFT+L.
+hl.unbind("SUPER + L")
+-- @help: hypr help.hypr.lock
+hl.bind("SUPER + SHIFT + L", hl.dsp.exec_cmd("hyprlock"))
+
+-- Power bar: SUPER+SHIFT+Q becomes SUPER+SHIFT+P.
+hl.unbind("SUPER + SHIFT + Q")
+-- @help: hypr help.hypr.power_bar
+hl.bind("SUPER + SHIFT + P", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-power"))
+
+-- Browser help pane: F2 becomes SUPER+F2, so applications keep a bare F2.
+hl.unbind("F2")
+-- @help: hypr help.hypr.help_browser
+hl.bind("SUPER + F2", hl.dsp.exec_cmd(vivac.scripts .. "/help-pane.sh --pane browser"))
+
+-- Autostart: replace the command of an entry, or remove it with false. The
+-- ids are listed in the autostart block of hyprland.lua.
+-- vivac.autostart_set("hypridle", false)

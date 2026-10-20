@@ -12,6 +12,8 @@
 # Hyprland's own exec dispatcher, dispatch through lib/hypr-ipc.sh (so it
 # works under hyprlang and Lua), doc opens the
 # file. A live bind Hyprland has that the registry lacks shows UNREGISTERED.
+# The hypr pane shows the keys the owner's ~/.config/hypr/local.lua moved:
+# "-- @help: <pane> <label_key>" above a literal hl.bind renames that row.
 set -Eeuo pipefail
 
 self="$(readlink -f -- "${BASH_SOURCE[0]}")"
@@ -39,7 +41,7 @@ while (($#)); do
 		;;
 	--plain) plain=true ;;
 	-h | --help)
-		sed -n '2,15p' "$self"
+		sed -n '2,17p' "$self"
 		exit 0
 		;;
 	*)
@@ -56,6 +58,8 @@ done
 language="${language%%[._@]*}"
 i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null || i18n_load en "${I18N_DIR:-$repo_root/i18n}"
 help_load_registry "${HELP_REGISTRY:-$repo_root/data/help-registry.tsv}"
+# The owner's relocated keys, from "-- @help:" lines in local.lua.
+[[ "$pane" != hypr ]] || help_apply_local "${HELP_LOCAL_LUA:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/local.lua}"
 
 live=''
 if [[ "$pane" == hypr ]]; then

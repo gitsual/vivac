@@ -39,13 +39,14 @@ export STUB_LOG="$sandbox/log"
 
 out="$(HYPRLAND_BIN="$sandbox/hyprland" bash "$verify" 2>&1)" || fail "the stage failed against an accepting Hyprland: $out"
 calls="$(grep -c '^call ' "$STUB_LOG")"
-((calls == 8)) || fail "expected 8 verifications (5 archetypes, 2 broken local.lua, 1 owner override), saw $calls"
+((calls == 9)) || fail "expected 9 verifications (5 archetypes, 2 broken local.lua, 1 owner override, 1 shipped example), saw $calls"
 grep -Eq '^call --verify-config -c .*/hypr/hyprland\.lua \| fragments=3 \| local=none$' "$STUB_LOG" || fail "no clean verification of hyprland.lua with its three fragments: $(<"$STUB_LOG")"
 [[ "$(grep -c 'local=none' "$STUB_LOG")" -eq 5 ]] || fail 'the five archetypes must be verified without a local.lua'
 grep -q 'local=error("owner mistake")' "$STUB_LOG" || fail 'the runtime-error local.lua was not verified'
 grep -q 'local=this is = not lua' "$STUB_LOG" || fail 'the syntax-error local.lua was not verified'
 grep -q 'local=hl.unbind("SUPER + R")' "$STUB_LOG" || fail 'the owner-style override was not verified'
-grep -q 'hyprland verify: 8 configs accepted' <<<"$out" || fail "no summary: $out"
+grep -q 'local=-- vivac local.lua example' "$STUB_LOG" || fail 'the shipped local.lua.example was not verified'
+grep -q 'hyprland verify: 9 configs accepted' <<<"$out" || fail "no summary: $out"
 
 # --- a Hyprland that refuses one case fails the stage and names it ---------------------------------------------
 out="$(STUB_FAIL_ON='unbind' HYPRLAND_BIN="$sandbox/hyprland" bash "$verify" 2>&1)" && fail 'the stage passed while Hyprland refused a config'
@@ -63,4 +64,4 @@ else
 	real='(real Hyprland not installed here)'
 fi
 
-printf 'hypr verify: skip notice, 8 staged configs, refusal named %s\n' "$real"
+printf 'hypr verify: skip notice, 9 staged configs, refusal named %s\n' "$real"

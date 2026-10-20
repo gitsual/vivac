@@ -93,6 +93,26 @@ for template in "${templates[@]}"; do
 	done
 done
 
+# The shipped local.lua.example is read with the parser the F1 pane uses on the
+# owner's local.lua: every annotation must name a label a registry row of that
+# pane carries (the key itself is the owner's to choose), and the example must
+# show at least one relocation.
+example="${HELP_LOCAL_EXAMPLE:-$repo_root/dotfiles/hypr/.config/hypr/local.lua.example}"
+if [[ -r "$example" ]]; then
+	moved=0
+	while IFS=$'\t' read -r pane label id; do
+		moved=$((moved + 1))
+		found=false
+		for row in "${HELP_ROWS[@]}"; do
+			[[ "${HELP_PANE["$row"]}" == "$pane" && "${HELP_LABEL["$row"]}" == "$label" ]] && found=true
+		done
+		$found || problem "${example##*/}: bind $id is annotated $pane $label, which no registry row carries"
+	done < <(help_local_binds "$example")
+	((moved > 0)) || problem "${example##*/}: no annotated bind to show the pattern"
+else
+	problem "cannot read the local.lua example ${example##*/}"
+fi
+
 for row in "${HELP_ROWS[@]}"; do
 	[[ -v I18N_TEXT["${HELP_LABEL["$row"]}"] ]] || problem "$row: label ${HELP_LABEL["$row"]} is not in i18n/en.conf"
 	case "${HELP_TYPE["$row"]}" in
