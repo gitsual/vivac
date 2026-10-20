@@ -54,7 +54,7 @@ function Write-DaemonLog([string]$Text) {
     } catch { }
 }
 Write-VivacFile -Path $pidFile -Text "$PID`n"
-if ($LockAtStart) { Show-VivacLockCover }
+if ($LockAtStart) { Set-VivacLockMarker 'start'; Show-VivacLockCover }
 # The other OS's theme, location and language, when sharing is configured:
 # a process of its own, so a share that is not there yet delays nothing here.
 try { [void](Start-VivacSharedSync) } catch { Write-DaemonLog "shared settings pull failed to start: $_" }
@@ -101,17 +101,22 @@ $pending = $reader.BeginInvoke()
 # those only live while that function is on the stack. The modal loop keeps
 # pumping this thread's timer, so the pipe is still served while one is open.
 $open = @{}
+# A theme or location that came in from the shared file while a lock was up is
+# waiting; the session is open again, so the pull that applies it runs now.
+function Resume-SharedSync {
+    try { if (@(Get-VivacDeferredKeys).Count) { [void](Start-VivacSharedSync) } } catch { Write-DaemonLog "shared settings resume failed: $_" }
+}
 function Invoke-Verb([string]$Verb) {
     if ($Verb -eq 'quit') {
         foreach ($w in @($open.Values)) { try { $w.Close() } catch { } }
         [Windows.Threading.Dispatcher]::CurrentDispatcher.InvokeShutdown()
         return
     }
-    if ($Verb -eq 'lock') { Invoke-VivacLock; return }
+    if ($Verb -eq 'lock') { try { Invoke-VivacLock } finally { Resume-SharedSync }; return }
     # Only ever queued by -LockAtStart: the lock, dressed as the greeter.
     # Whatever happens to the greeter, the cover put up at start comes down:
     # a sign-in must never end behind blank windows.
-    if ($Verb -eq 'greet') { try { Invoke-VivacLock -Greeter } finally { Hide-VivacLockCover }; return }
+    if ($Verb -eq 'greet') { try { Invoke-VivacLock -Greeter } finally { Hide-VivacLockCover; Clear-VivacLockMarker; Resume-SharedSync }; return }
     if (@('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security') -notcontains $Verb) { return }
     $current = $open[$Verb]
     if ($current -and $current.IsVisible) { $current.Close(); return }
@@ -441,6 +446,7 @@ try { [Windows.Threading.Dispatcher]::Run() }
 finally {
     try { [VivacKeys]::Uninstall() } catch { }
     Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
+    try { Clear-VivacLockMarker } catch { }
     # Not $reader.Stop(): the reader sits in WaitForConnection, which a stop
     # cannot interrupt; ending the process ends it.
     [Environment]::Exit(0)

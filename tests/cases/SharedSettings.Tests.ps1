@@ -312,6 +312,61 @@ try {
         $daemon = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac-daemon.ps1'))
         Assert-True ($daemon -match 'Start-VivacSharedSync') 'the daemon does not start the pull'
     }
+    # ---- a locked session is not disturbed ---------------------------------
+    $marker = (Get-VivacPaths).LockMarker
+    $deferred = (Get-VivacPaths).SharedDeferred
+    Case 'the lock marker names its daemon and what kind of lock it is, and goes stale with it' {
+        Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+        Assert-True ($null -eq (Get-VivacLockMarker)) 'a marker from nowhere'
+        Set-VivacLockMarker 'start'
+        $m = Get-VivacLockMarker
+        Assert-Equal $PID $m.Pid
+        Assert-Equal 'start' $m.Kind
+        Clear-VivacLockMarker
+        Assert-True ($null -eq (Get-VivacLockMarker)) 'the marker was not cleared'
+        [IO.File]::WriteAllText($marker, "2147483000 start`n")
+        Assert-True ($null -eq (Get-VivacLockMarker)) 'a marker of a dead process counted'
+        Remove-Item -LiteralPath $marker -Force
+    }
+    Case 'while the session is locked a theme from the pull is recorded, not applied; unlocking applies it once' {
+        Reset-Pull "shared_settings=$shared`ntheme=carmen`n" "theme=cosmos`n"
+        Remove-Item -LiteralPath $deferred -Force -ErrorAction SilentlyContinue
+        Set-VivacLockMarker 'start'
+        try { Assert-Equal '' (Invoke-Sync @('-Pull')) } finally { Clear-VivacLockMarker }
+        Assert-Equal 0 $script:SyncExit
+        Assert-Equal 'cosmos' (Read-VivacSettings)['theme']
+        Assert-Equal "theme`n" (Read-Bytes $deferred)
+        Assert-Equal 'apply' (Invoke-Sync @('-Pull')) 'the deferred theme was not applied after the unlock'
+        Assert-True (-not (Test-Path -LiteralPath $deferred)) 'the deferred list was not cleared'
+        Assert-Equal '' (Invoke-Sync @('-Pull'))
+    }
+    Case 'a deferred location waits too; a language needs no reload and is never deferred' {
+        Write-Bytes $shared "theme=cosmos`nweather_location=40.42,-3.70`nlanguage=en`n"
+        Set-VivacLockMarker 'lock'
+        try { Assert-Equal '' (Invoke-Sync @('-Pull')) } finally { Clear-VivacLockMarker }
+        Assert-Equal 'en' (Read-VivacSettings)['language']
+        Assert-Equal "weather_location`n" (Read-Bytes $deferred)
+        Assert-Equal 'deploy -Package zebar' (Invoke-Sync @('-Pull'))
+    }
+    Case 'the daemon is relaunched with -LockAtStart exactly when it had it' {
+        Import-Module (Join-Path $root 'lib\Apps.psm1') -Force
+        $with = @(Get-VivacDaemonLaunch 'C:\x\vivac-daemon.ps1' $true)
+        $without = @(Get-VivacDaemonLaunch 'C:\x\vivac-daemon.ps1' $false)
+        Assert-True ($with -contains '-LockAtStart') 'dropped'
+        Assert-True ($without -notcontains '-LockAtStart') 'added'
+        Assert-Equal ($without.Count + 1) $with.Count
+        Assert-Equal '-File' $with[6]
+        $apps = [IO.File]::ReadAllText((Join-Path $root 'lib\Apps.psm1'))
+        Assert-True ($apps -match 'Get-VivacLockMarker' -and $apps -match 'Get-VivacDaemonLaunch \$script') 'Restart-VivacDaemon does not consult the lock marker'
+    }
+    Case 'the daemon marks its lock, clears it, and resumes a deferred pull' {
+        $daemon = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac-daemon.ps1'))
+        Assert-True ($daemon -match "Set-VivacLockMarker 'start'") 'the start lock is not marked'
+        Assert-True ($daemon -match 'Clear-VivacLockMarker') 'the marker is never cleared'
+        Assert-True ($daemon -match 'Resume-SharedSync') 'a deferred pull is never resumed'
+        $surf = [IO.File]::ReadAllText((Join-Path $root 'lib\Surfaces.psm1'))
+        Assert-True ($surf -match "Set-VivacLockMarker 'lock'") 'a manual lock is not marked'
+    }
     Remove-Item Env:VIVAC_APPLY_THEME, Env:VIVAC_DEPLOY
     # ---- a failed replace never costs the shared file ----------------------
     $vivacModule = Get-Module Vivac

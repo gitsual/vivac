@@ -114,8 +114,20 @@ function Send-VivacVerb([string]$Verb, [int]$TimeoutMs = 1000) {
 # runs at that level, is asked to. The new host is started through GlazeWM
 # too when GlazeWM is running, so it gets the same level: from there its
 # keyboard hook also sees the keys typed into administrator windows.
+# The command line the host is started with. -LockAtStart is what makes it
+# put up the cover and greeter, so a restart of one that holds them keeps it.
+function Get-VivacDaemonLaunch([string]$Script, [bool]$LockAtStart) {
+    $launch = @('conhost.exe', '--headless', 'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $Script)
+    if ($LockAtStart) { $launch += '-LockAtStart' }
+    $launch
+}
+
 function Restart-VivacDaemon([switch]$StartIfStopped) {
+    Import-Module (Join-Path $PSScriptRoot 'Vivac.psm1')
     $running = @(Get-VivacDaemonProcess)
+    # Read before the old host goes: it is the one that wrote the marker.
+    $marker = Get-VivacLockMarker
+    $keepLock = [bool]($marker -and $marker.Kind -eq 'start' -and (@($running | ForEach-Object { $_.Id }) -contains $marker.Pid))
     if (-not $running.Count -and -not $StartIfStopped) { return $false }
     if ($running.Count) {
         [void](Send-VivacVerb 'quit')
@@ -127,11 +139,11 @@ function Restart-VivacDaemon([switch]$StartIfStopped) {
         }
     }
     $script = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-daemon.ps1'
-    $launch = @('conhost.exe', '--headless', 'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $script)
+    $launch = @(Get-VivacDaemonLaunch $script $keepLock)
     if (Test-VivacAppRunning 'glazewm') {
         [void](Invoke-GlazeWM (@('command', 'shell-exec') + $launch))
     } else {
-        Start-Process -FilePath $launch[0] -ArgumentList ($launch[1..6] + "`"$script`"") -WindowStyle Hidden | Out-Null
+        Start-Process -FilePath $launch[0] -ArgumentList (@($launch[1..6]) + "`"$script`"" + @($launch | Select-Object -Skip 8)) -WindowStyle Hidden | Out-Null
     }
     $true
 }

@@ -1848,7 +1848,11 @@ function Invoke-VivacLock([switch]$Greeter) {
     } catch { }
     if (('VivacKeys' -as [type]) -and ($script:LockShown -ne $true)) {
         $script:LockShown = $true
-        try { Show-VivacLock -Greeter:$Greeter } finally { $script:LockShown = $false }
+        # The host's start-up cover already holds the marker ('start'); only
+        # a lock of its own is marked here.
+        $marked = -not (Get-VivacLockMarker)
+        if ($marked) { Set-VivacLockMarker 'lock' }
+        try { Show-VivacLock -Greeter:$Greeter } finally { $script:LockShown = $false; if ($marked) { Clear-VivacLockMarker } }
         return
     }
     # Windows' own lock takes over: the cover must not stay behind it, or the

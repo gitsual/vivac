@@ -40,6 +40,8 @@ function Get-VivacPaths {
         Wallpapers   = Join-Path (Join-Path $local 'vivac') 'wallpapers'
         SharedPending = Join-Path (Join-Path $local 'vivac') 'shared-pending'
         SharedLock   = Join-Path (Join-Path $local 'vivac') 'shared-sync.lock'
+        LockMarker   = Join-Path (Join-Path $local 'vivac') 'session-locked'
+        SharedDeferred = Join-Path (Join-Path $local 'vivac') 'shared-apply-pending'
         SharedLog    = Join-Path (Join-Path $local 'vivac') 'shared-sync.log'
         SharedPendingPulls = Join-Path (Join-Path $local 'vivac') 'shared-pending-pulls'
     }
@@ -522,6 +524,44 @@ function Invoke-VivacSharedPull([double]$LockWaitSeconds = -1) {
         }
     } finally { $lock.Dispose() }
     $changed.ToArray()
+}
+
+# While the resident host holds a lock (the cover and greeter it puts up at an
+# automatic sign-in, kind 'start', or the lock screen, kind 'lock') it leaves
+# "PID kind" here. Anything that would restart the host, a theme applied from
+# the shared file for one, reads it first. A marker of a dead process is stale.
+function Set-VivacLockMarker([string]$Kind) {
+    Write-VivacFile -Path (Get-VivacPaths).LockMarker -Text "$PID $Kind`n"
+}
+function Get-VivacLockMarker {
+    $p = (Get-VivacPaths).LockMarker
+    if (-not (Test-Path -LiteralPath $p)) { return $null }
+    try { $text = ([IO.File]::ReadAllText($p)).Trim() } catch { return $null }
+    if ($text -notmatch '^(\d+) (start|lock)$') { return $null }
+    $id = [int]$Matches[1]
+    if (-not (Get-Process -Id $id -ErrorAction SilentlyContinue)) { return $null }
+    [pscustomobject]@{ Pid = $id; Kind = $Matches[2] }
+}
+# Only the process that wrote the marker takes it down.
+function Clear-VivacLockMarker {
+    $m = Get-VivacLockMarker
+    if ($m -and $m.Pid -ne $PID) { return }
+    Remove-Item -LiteralPath (Get-VivacPaths).LockMarker -Force -ErrorAction SilentlyContinue
+}
+
+# Shared changes that need a desktop reload (theme, location) and arrived while
+# the session was locked: applied by the first pull after the unlock.
+function Get-VivacDeferredKeys {
+    $p = (Get-VivacPaths).SharedDeferred
+    if (-not (Test-Path -LiteralPath $p)) { return @() }
+    @([IO.File]::ReadAllLines($p) | Where-Object { $_ })
+}
+function Set-VivacDeferredKeys([string[]]$Keys) {
+    $p = (Get-VivacPaths).SharedDeferred
+    if (-not $Keys) { Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue; return }
+    $text = ''
+    foreach ($k in $Keys) { $text += "$k`n" }
+    Write-VivacFile -Path $p -Text $text
 }
 
 # Start the sign-in pull in a process of its own, hidden, so the caller (the

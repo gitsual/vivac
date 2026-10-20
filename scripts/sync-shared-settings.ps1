@@ -46,8 +46,19 @@ try {
     if (-not $applyTheme) { $applyTheme = Join-Path $PSScriptRoot 'apply-theme.ps1' }
     $deploy = $env:VIVAC_DEPLOY
     if (-not $deploy) { $deploy = Join-Path $PSScriptRoot 'deploy.ps1' }
-    if ($changed -contains 'theme') { & $applyTheme }
-    elseif ($changed -contains 'weather_location') { & $deploy -Package zebar }
+    # Theme and location need the desktop reloaded, which restarts the resident
+    # host. While it holds the lock (the cover and greeter of an automatic
+    # sign-in, or the lock screen) that would kill the lock: the change waits,
+    # recorded, for the first pull after the unlock.
+    $reload = @(@($changed) + @(Get-VivacDeferredKeys) | Where-Object { $_ -in 'theme', 'weather_location' } | Select-Object -Unique)
+    if ($reload.Count -and (Get-VivacLockMarker)) {
+        Set-VivacDeferredKeys $reload
+        Write-VivacSharedLog "session is locked: $($reload -join ', ') applied after the unlock"
+    } else {
+        Set-VivacDeferredKeys @()
+        if ($reload -contains 'theme') { & $applyTheme }
+        elseif ($reload -contains 'weather_location') { & $deploy -Package zebar }
+    }
 } catch {
     [Console]::Error.WriteLine("sync-shared-settings: $_")
 }
