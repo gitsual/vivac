@@ -304,6 +304,27 @@ done
 [[ "$(backups_in "$host")" -eq 0 ]] || fail 'the refused deploy left a backup directory'
 # Files that a backup DOES clear are not conflicts: the ordinary deploy above already proves that.
 
+# --- ~/.local is an absolute symlink to a directory on another disk (the owner's real layout) -----------------
+host="$sandbox/symlocal"
+make_host "$host"
+mkdir -p -- "$sandbox/ext"
+mv -- "$host/.local" "$sandbox/ext/.local"
+mkdir -p -- "$sandbox/ext/.local/share/elsewhere"
+printf 'kept\n' >"$sandbox/ext/.local/share/elsewhere/file"
+ln -s -- "$sandbox/ext/.local" "$host/.local"
+before="$(snap "$host")" ext_before="$(snap "$sandbox/ext")"
+out="$(hl "$host" --dry-run 2>&1)" || fail "dry run over a symlinked .local failed: $out"
+grep -q 'would stow: hypr nvim ricer welcome' <<<"$out" || fail "the dry run does not plan the stow: $out"
+[[ "$(snap "$host")" == "$before" && "$(snap "$sandbox/ext")" == "$ext_before" ]] || fail 'the dry run changed a host with a symlinked .local'
+out="$(hl "$host" 2>&1)" || fail "deploy over a symlinked .local failed: $out"
+[[ -L "$host/.local" && "$(readlink -- "$host/.local")" == "$sandbox/ext/.local" ]] || fail 'the .local symlink itself was changed'
+[[ -L "$sandbox/ext/.local/bin/vivac-welcome" && "$(readlink -f -- "$host/.local/bin/vivac-welcome")" == "$repo_root/dotfiles/welcome/.local/bin/vivac-welcome" ]] || fail 'the links did not land in the directory behind the symlink'
+[[ "$(readlink -f -- "$host/.config/hypr/hyprland.lua")" == "$repo_root/dotfiles/hypr/.config/hypr/hyprland.lua" ]] || fail 'hyprland.lua was not deployed next to a symlinked .local'
+[[ "$(<"$sandbox/ext/.local/share/elsewhere/file")" == kept ]] || fail 'a file behind the symlink was lost'
+hl "$host" --rollback "$(backup_of "$out")" >/dev/null || fail 'rollback over a symlinked .local failed'
+[[ "$(snap "$host")" == "$before" ]] || fail 'rollback did not restore the host with a symlinked .local'
+[[ "$(snap "$sandbox/ext")" == "$ext_before" ]] || fail 'rollback left the directory behind the symlink different (links or directories remain)'
+
 # --- the rollback doc ----------------------------------------------------------------------------------------
 doc="$repo_root/docs/host-deploy.md"
 # shellcheck disable=SC2016,SC2088  # literal doc text: tildes, braces and backticks are not expanded

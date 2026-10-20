@@ -108,10 +108,24 @@ for package in "${selected[@]}"; do
 	done < <(find "$package_root" -type f -print0)
 done
 
-ignores=()
-for path in "${protected[@]}"; do
+regex_escape() {
 	# shellcheck disable=SC2001  # one class of characters, escaped for a regex
-	ignores+=("--ignore=^$(sed 's/[][\\.*^$+?(){}|]/\\&/g' <<<"$path")\$")
+	sed 's/[][\\.*^$+?(){}|]/\\&/g' <<<"$1"
+}
+ignores=()
+for path in "${protected[@]}"; do ignores+=("--ignore=^$(regex_escape "$path")\$"); done
+
+# A top-level directory of the home that is itself a symlink (.local pointing at
+# another disk) is not Stow's to manage: it refuses it as "not owned by stow" and
+# aborts every package. Leave that symlink alone and stow the package's subtree of
+# it straight into the directory it points at.
+linked=() linked_tops=()
+for package in "${selected[@]}"; do
+	while IFS= read -r top; do
+		[[ -L "$HOME/$top" && -d "$HOME/$top" ]] || continue
+		linked+=("$package"$'\t'"$top")
+		[[ " ${linked_tops[*]} " == *" $top "* ]] || linked_tops+=("$top")
+	done < <(find "$repo_root/dotfiles/$package" -mindepth 1 -maxdepth 1 -type d -printf '%f\n')
 done
 
 # Stow aborts every package on one conflict, after the backups have already moved
@@ -125,21 +139,39 @@ will_move() {
 	done
 	return 1
 }
-simulate_stow() {
-	local out line path found=false
-	out="$(stow --simulate --dir="$repo_root/dotfiles" --target="$HOME" --no-folding "${ignores[@]}" --restow "${selected[@]}" 2>&1)" && return 0
+stow_one() { # stow_one PREFIX stow-args... : PREFIX turns a path under a subtree target into a home path
+	local prefix="$1" out line path found=false
+	shift
+	if ! $simulating; then
+		stow "$@"
+		return
+	fi
+	out="$(stow --simulate "$@" 2>&1)" && return 0
 	while IFS= read -r line; do
 		[[ "$line" == '  * '* ]] || continue
 		found=true
 		line="${line#  * }"
 		if [[ "$line" =~ \ over\ existing\ target\ (.+)\ since\  ]]; then path="${BASH_REMATCH[1]}"; else path="${line##*: }"; fi
-		will_move "$path" && continue
+		will_move "$prefix$path" && continue
 		unresolved+=("$line")
 	done <<<"$out"
 	$found || unresolved+=("$out")
 	return 0
 }
-simulate_stow
+stow_all() {
+	local pair package top path main=("${ignores[@]}") sub
+	for top in "${linked_tops[@]}"; do main+=("--ignore=^$(regex_escape "$top")\$"); done
+	stow_one '' --dir="$repo_root/dotfiles" --target="$HOME" --no-folding "${main[@]}" --restow "${selected[@]}"
+	for pair in "${linked[@]}"; do
+		package="${pair%%$'\t'*}" top="${pair#*$'\t'}" sub=()
+		for path in "${protected[@]}"; do
+			[[ "$path" != "$top"/* ]] || sub+=("--ignore=^$(regex_escape "${path#"$top"/}")\$")
+		done
+		stow_one "$top/" --dir="$repo_root/dotfiles/$package" --target="$(readlink -f -- "$HOME/$top")" --no-folding "${sub[@]}" --restow "$top"
+	done
+}
+simulating=true
+stow_all
 if ((${#unresolved[@]})); then
 	printf 'deploy: stow would abort on conflicts that a backup cannot clear; nothing was changed:\n' >&2
 	printf '  %s\n' "${unresolved[@]}" >&2
@@ -172,7 +204,8 @@ if $dry_run; then
 	exit 0
 fi
 
-stow --dir="$repo_root/dotfiles" --target="$HOME" --no-folding "${ignores[@]}" --restow "${selected[@]}"
+simulating=false
+stow_all
 printf 'deployed: %s\n' "${selected[*]}"
 
 # Restowing points every themed file back at the committed default render, and
