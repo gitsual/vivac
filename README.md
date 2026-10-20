@@ -300,6 +300,12 @@ folder is not there yet it is queued and sent at the next sign-in, when the resi
 what the other side changed. Values this side cannot use (a Linux place name as the location, `language=auto`)
 are reported and skipped. Use a real drive path: a mapped or `subst` drive is not available to every process.
 
+Shared values are kept lowercase (the Linux side refuses anything else). The sign-in pull runs unseen, so what
+it ignores or cannot send is written to `%LOCALAPPDATA%\vivac\shared-sync.log`, and a key that is still pending
+after 3 pulls is reported there on every pull from then on. A theme or location that arrives while the session
+is locked (the cover and greeter of an automatic sign-in, or the lock screen) is recorded and applied by the
+first pull after the unlock, since applying it restarts the host that holds the lock.
+
 ---
 
 ## ✅ Verification
