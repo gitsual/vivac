@@ -1,0 +1,6 @@
+waybar	waybar/style.css	COLOR_
+kitty	kitty/kitty.conf	TERMINAL_
+dunst	dunst/dunstrc	COLOR_
+rofi	rofi/*.rasi	COLOR_
+rofi	rofi/*/*.rasi	COLOR_
+wofi	wofi/style.css	COLOR_
