@@ -266,7 +266,13 @@ public static class VivacKeys {
         pump.Join(2000);
         pump = null;
     }
-    public static bool Reinstall() { Uninstall(); return Install(); }
+    // Not while the key is held: a hook put back mid-combination would lose
+    // the state of it.
+    public static bool Reinstall() {
+        if (winDown) return hook != IntPtr.Zero;
+        Uninstall();
+        return Install();
+    }
     public static bool TakeMenu() { return Interlocked.Exchange(ref menuPresses, 0) > 0; }
     public static bool TakeClipboard() { return Interlocked.Exchange(ref clipPresses, 0) > 0; }
     public static bool TakeLock() { return Interlocked.Exchange(ref lockPresses, 0) > 0; }
@@ -356,13 +362,19 @@ Import-VivacAudio
 [VivacKeys]::TakeVolume = $true
 [void][VivacKeys]::Install()
 $script:glazePid = @(Get-Process glazewm -ErrorAction SilentlyContinue | Where-Object { $_.Path -notmatch '\\cli\\' } | ForEach-Object { $_.Id }) -join ','
+# The hook is also put back every half minute, as the key guard does with its
+# own: Windows drops a low-level hook without a word if it is ever slow to
+# answer (a garbage collection of this process pauses its thread too), and
+# Win+R then did nothing until the next sign-in.
+$script:hookTicks = 0
 $hookTimer = New-Object Windows.Threading.DispatcherTimer
 $hookTimer.Interval = [TimeSpan]::FromSeconds(3)
 $hookTimer.Add_Tick({
+        $script:hookTicks++
         $now = @(Get-Process glazewm -ErrorAction SilentlyContinue | Where-Object { $_.Path -notmatch '\\cli\\' } | ForEach-Object { $_.Id }) -join ','
-        if ($now -ne $script:glazePid) {
+        if ($now -ne $script:glazePid -or $script:hookTicks % 10 -eq 0) {
             $script:glazePid = $now
-            [void][VivacKeys]::Reinstall()
+            if (-not [VivacKeys]::Reinstall()) { Write-DaemonLog 'the keyboard hook could not be put back' }
         }
     })
 $hookTimer.Start()
