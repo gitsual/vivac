@@ -241,6 +241,46 @@ root="$(sed -n 's/^backup: //p' <<<"$out" | tail -n 1)"
 hl "$host" --rollback >/dev/null 2>&1 && fail 'a bare --rollback found something to undo after the automatic one'
 [[ "$(snap "$host")" == "$before" ]] || fail 'the bare --rollback after an automatic one changed the host'
 
+# --- a signal, or a kill -9, mid-stow --------------------------------------------------------------------------
+# Shims for the REAL stow only (the pre-flight simulation passes): "term" sleeps so the test can signal the
+# deploy while stow runs; "kill9" SIGKILLs deploy-host itself, so no trap can run.
+mkdir -p -- "$sandbox/slowbin" "$sandbox/killbin"
+# shellcheck disable=SC2016  # the shim bodies are literal
+{
+	printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = --simulate ] && exec %s "$@"; done\n' "$(command -v stow)"
+	printf 'echo $$ >"$SHIM_DIR/stow.pid"\ntouch "$SHIM_DIR/started"\nexec sleep 60\n'
+} >"$sandbox/slowbin/stow"
+# shellcheck disable=SC2016
+{
+	printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = --simulate ] && exec %s "$@"; done\n' "$(command -v stow)"
+	printf 'p=$PPID\nwhile [ "$p" -gt 1 ]; do\n'
+	printf '  case "$(tr "\\0" " " </proc/$p/cmdline)" in *deploy-host.sh*) kill -9 "$p"; break ;; esac\n'
+	printf '  p=$(cut -d" " -f4 /proc/$p/stat)\ndone\nexit 1\n'
+} >"$sandbox/killbin/stow"
+chmod +x "$sandbox/slowbin/stow" "$sandbox/killbin/stow"
+
+# INT is not in the list: a job started with & by a non-interactive shell (this test) has SIGINT ignored.
+for sig in TERM HUP; do
+	host="$sandbox/sig$sig"
+	make_host "$host"
+	before="$(snap "$host")"
+	mkdir -p -- "$sandbox/shim$sig"
+	SHIM_DIR="$sandbox/shim$sig" PATH="$sandbox/slowbin:$PATH" HYPRLAND_BIN="$sandbox/hyprland" HOME="$host" \
+		XDG_STATE_HOME="$host/.local/state" XDG_CONFIG_HOME="$host/.config" "$deploy" >"$sandbox/sig.out" 2>&1 &
+	pid=$!
+	for _ in $(seq 100); do [[ -e "$sandbox/shim$sig/started" ]] && break; sleep 0.1; done
+	[[ -e "$sandbox/shim$sig/started" ]] || fail "$sig: stow never started: $(<"$sandbox/sig.out")"
+	[[ "$(snap "$host")" != "$before" ]] || fail "$sig: the deploy had not changed anything yet, the test proves nothing"
+	kill -"$sig" "$pid"
+	rc=0
+	wait "$pid" || rc=$?
+	((rc != 0)) || fail "$sig: the deploy reported success after the signal"
+	grep -q 'rolled back automatically' "$sandbox/sig.out" || fail "$sig: no word that the run rolled itself back: $(<"$sandbox/sig.out")"
+	grep -q '^backup: ' "$sandbox/sig.out" && fail "$sig: the success summary was printed"
+	[[ "$(snap "$host")" == "$before" ]] || fail "$sig: the host is not byte for byte as it was"
+	! kill -0 "$(<"$sandbox/shim$sig/stow.pid")" 2>/dev/null || fail "$sig: the stow child outlived the deploy"
+done
+
 # --- the owner's hyprland.lua is a symlink into their own dotfiles --------------------------------------------------
 host="$sandbox/linked"
 make_host "$host"

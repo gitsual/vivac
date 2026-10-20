@@ -277,8 +277,26 @@ prune_backup() {
 	find "$backup_root" -mindepth 1 -type d -empty -delete
 }
 
+# The one child that may outlive a signal: deploy.sh (and the stow under it) or the overlay.
+# It gets its own session, so finish can stop the whole group, and the wait below is
+# interrupted at once by a trapped signal (a foreground child would hold the trap back).
+child=''
+run_child() {
+	local rc=0
+	setsid "$@" &
+	child=$!
+	wait "$child" || rc=$?
+	child=''
+	return "$rc"
+}
+
 finish() {
 	local status=$? path key
+	trap '' INT TERM HUP
+	if [[ -n "$child" ]]; then
+		kill -TERM -- "-$child" 2>/dev/null || true
+		wait "$child" 2>/dev/null || true
+	fi
 	prune_backup || true
 	{
 		for path in "${absent[@]}"; do
@@ -314,6 +332,10 @@ finish() {
 	exit "$status"
 }
 trap finish EXIT
+# A signal must end in the EXIT trap with a non-zero status, or the run would look like a success.
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 save() { # save RELATIVE — copy a host file into the backup, keeping mode and links
 	mkdir -p -- "$(dirname -- "$backup_root/$1")"
@@ -348,7 +370,10 @@ done
 
 # deploy.sh names its own backup directory; this script prints the one that matters.
 skipped_note
-DEPLOY_BACKUP_ROOT="$backup_root" "$repo_root/scripts/deploy.sh" --no-theme "${protect_args[@]}" "${packages[@]}" | { grep -v '^backup: ' || true; }
+deploy_rc=0
+DEPLOY_BACKUP_ROOT="$backup_root" run_child "$repo_root/scripts/deploy.sh" --no-theme "${protect_args[@]}" "${packages[@]}" >"$stage/deploy.out" || deploy_rc=$?
+grep -v '^backup: ' "$stage/deploy.out" || true
+((deploy_rc == 0)) || exit "$deploy_rc"
 
 for path in "${overlay[@]}"; do [[ -e "$backup_root/$path" ]] || save "$path"; done
-"$repo_root/scripts/colour-overlay.sh" --apply "$theme" --config-dir "$config" || die 'the colour overlay failed'
+run_child "$repo_root/scripts/colour-overlay.sh" --apply "$theme" --config-dir "$config" || die 'the colour overlay failed'
