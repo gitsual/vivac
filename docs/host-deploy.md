@@ -66,7 +66,8 @@ Before the first file moves, `deploy-host.sh` runs `stow --simulate` for every
 selected package; a conflict that a backup cannot clear (a file where a package
 needs a directory) aborts with the list and the host untouched. If anything fails
 after the first change, the run rolls itself back from its own `MANIFEST` and says
-so (`rolled back automatically`); the backup is kept, marked as rolled back. A
+so (`rolled back automatically`); the backup is kept, marked as rolled back. A failed
+colour overlay counts as a failure, and so do SIGTERM, SIGHUP and Ctrl-C. The `MANIFEST` is written before the first change, so even after a `kill -9` or a power cut `--rollback` finds it. A
 top-level directory of your home that is a symlink to a directory elsewhere
 (`~/.local` on another disk, say) stays as it is: the links land in the directory
 it points at, and the rollback removes exactly those.
