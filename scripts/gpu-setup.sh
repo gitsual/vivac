@@ -26,7 +26,8 @@ source "$repo_root/lib/i18n.sh"
 facts_file="${FACTS_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/vivac/hardware-facts}"
 facts_override="${FACTS_OVERRIDE:-${XDG_CONFIG_HOME:-$HOME/.config}/vivac/hardware-facts.override}"
 backup_root="${XDG_STATE_HOME:-$HOME/.local/state}/vivac/backups"
-fragment="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/generated/hardware.conf"
+# The hyprlang and Lua fragments ship side by side until the hyprlang one goes.
+fragments=("${XDG_CONFIG_HOME:-$HOME/.config}/hypr/generated/hardware.lua" "${XDG_CONFIG_HOME:-$HOME/.config}/hypr/generated/hardware.conf")
 
 language="${VIVAC_LANG:-${LANG:-en}}"
 language="${language%%[._@]*}"
@@ -43,9 +44,9 @@ Usage: scripts/gpu-setup.sh [--dry-run | --apply] [--gpu FAMILY]
   --gpu FAMILY      use FAMILY instead of the detected one; refused (exit 3) unless
                     the facts also see that family, or FAMILY is generic
   --list            print every catalogue family and how it was verified
-  --restore-config  put back the previous ~/.config/hypr/generated/hardware.conf
-                    from the newest backup (the current one is backed up first);
-                    packages are left alone
+  --restore-config  put back the previous ~/.config/hypr/generated/hardware.lua
+                    and hardware.conf from their newest backups (each current
+                    one is backed up first); packages are left alone
 
 Facts come from scripts/hardware-facts.sh --emit (override: FACTS_FILE,
 FACTS_OVERRIDE). Packages from the AUR are listed, never installed here.
@@ -96,29 +97,36 @@ if [[ "$mode" == list ]]; then
 fi
 
 if [[ "$mode" == restore ]]; then
-	relative="${fragment#"$HOME"/}"
-	newest=''
-	for stamp in "$backup_root"/*/; do
-		[[ -f "$stamp$relative" ]] && newest="$stamp$relative"
+	# Each fragment comes back from its own newest backup. Restoring acts unless
+	# --dry-run is asked for: it moves files, and the file each one replaces is
+	# kept under a new backup stamp, so nothing is lost.
+	restored=0
+	for fragment in "${fragments[@]}"; do
+		relative="${fragment#"$HOME"/}"
+		newest=''
+		for stamp in "$backup_root"/*/; do
+			[[ -f "$stamp$relative" ]] && newest="$stamp$relative"
+		done
+		[[ -n "$newest" ]] || continue
+		restored=$((restored + 1))
+		if $dry_asked; then
+			printf 'would restore %s from %s\n' "$fragment" "$newest"
+			continue
+		fi
+		if [[ -e "$fragment" ]]; then
+			keep="$backup_root/$(date -u +%Y%m%dT%H%M%SZ)/$relative"
+			mkdir -p -- "$(dirname -- "$keep")"
+			cp -a -- "$fragment" "$keep"
+		fi
+		mkdir -p -- "$(dirname -- "$fragment")"
+		cp -a -- "$newest" "$fragment"
+		printf 'restored %s from %s\n' "$fragment" "$newest"
 	done
-	[[ -n "$newest" ]] || {
-		printf 'gpu-setup: no backup of %s under %s\n' "$fragment" "$backup_root" >&2
+	((restored)) || {
+		printf 'gpu-setup: no backup of %s under %s\n' "${fragments[*]}" "$backup_root" >&2
 		exit 1
 	}
-	# Restoring acts unless --dry-run is asked for: it moves one file, and the
-	# file it replaces is kept under a new backup stamp, so nothing is lost.
-	if $dry_asked; then
-		printf 'would restore %s from %s\n' "$fragment" "$newest"
-		exit 0
-	fi
-	if [[ -e "$fragment" ]]; then
-		keep="$backup_root/$(date -u +%Y%m%dT%H%M%SZ)/$relative"
-		mkdir -p -- "$(dirname -- "$keep")"
-		cp -a -- "$fragment" "$keep"
-	fi
-	mkdir -p -- "$(dirname -- "$fragment")"
-	cp -a -- "$newest" "$fragment"
-	printf 'restored %s from %s\n' "$fragment" "$newest"
+	$dry_asked && exit 0
 	printf 'Not undone here: installed packages (pacman -Rns), the initramfs (mkinitcpio -P) and kernel parameters.\n'
 	exit 0
 fi

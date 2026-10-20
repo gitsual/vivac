@@ -71,18 +71,26 @@ grep -q "^nvidia_open .*observed on the author's workstation" <<<"$out" || fail 
 grep -q '^virtio .*VM gate' <<<"$out" || fail '--list: virtio status wrong'
 grep -q '^intel_i915 .*untested on hardware' <<<"$out" || fail '--list: intel_i915 status wrong'
 
-# --- --restore-config puts back the newest backup of the fragment, and only that ------------------
+# --- --restore-config puts back the newest backup of each fragment, and only those ----------------
+# Both formats are restored while they ship side by side. Content is compared
+# byte for byte: a trailing newline or a NUL must not be normalised away.
 backups="$sandbox/h/.local/state/vivac/backups"
-mkdir -p -- "$backups/20260101T000000Z/.config/hypr/generated" "$backups/20260102T000000Z/.config/hypr/generated" \
-	"$sandbox/h/.config/hypr/generated"
-printf 'old\n' >"$backups/20260101T000000Z/.config/hypr/generated/hardware.conf"
-printf 'newer\n' >"$backups/20260102T000000Z/.config/hypr/generated/hardware.conf"
-printf 'current\n' >"$sandbox/h/.config/hypr/generated/hardware.conf"
+generated="$sandbox/h/.config/hypr/generated"
+mkdir -p -- "$backups/20260101T000000Z/.config/hypr/generated" "$backups/20260102T000000Z/.config/hypr/generated" "$generated"
+printf 'old lua\n' >"$backups/20260101T000000Z/.config/hypr/generated/hardware.lua"
+printf 'newer lua\0no newline' >"$backups/20260102T000000Z/.config/hypr/generated/hardware.lua"
+printf 'old conf\n' >"$backups/20260101T000000Z/.config/hypr/generated/hardware.conf"
+printf 'current lua\n' >"$generated/hardware.lua"
+printf 'current conf\n' >"$generated/hardware.conf"
 out="$(run --restore-config --dry-run)" || fail 'restore dry run failed'
-[[ "$out" == would\ restore* && "$(<"$sandbox/h/.config/hypr/generated/hardware.conf")" == current ]] || fail "restore dry run touched the fragment: $out"
+[[ "$out" == would\ restore* && "$(<"$generated/hardware.lua")" == 'current lua' && "$(<"$generated/hardware.conf")" == 'current conf' ]] || fail "restore dry run touched a fragment: $out"
 out="$(run --restore-config)" || fail 'restore failed'
 [[ "$out" == *'Not undone here: installed packages'* ]] || fail "restore does not say what it leaves alone: $out"
-[[ "$(<"$sandbox/h/.config/hypr/generated/hardware.conf")" == newer ]] || fail 'restore did not pick the newest backup'
+cmp -s "$generated/hardware.lua" "$backups/20260102T000000Z/.config/hypr/generated/hardware.lua" || fail 'restore did not put back hardware.lua byte for byte from the newest backup'
+[[ "$(<"$generated/hardware.conf")" == 'old conf' ]] || fail 'restore did not put back hardware.conf from the only backup that has it'
+# What was replaced is kept under a new stamp, so a restore can be undone.
+kept="$(printf '%s\n' "$backups"/*/.config/hypr/generated/hardware.lua | wc -l)"
+((kept == 3)) || fail "restore did not keep the replaced hardware.lua ($kept copies)"
 status=0
 rm -rf -- "$backups"
 run --restore-config >/dev/null 2>&1 || status=$?
