@@ -94,6 +94,27 @@ printf 'require("not_a_module")\n' >"$hypr/local.lua"
 load
 grep -q '^log vivac: local.lua failed.*not_a_module' <<<"$out" || fail 'a missing module inside local.lua was taken for a missing local.lua'
 
+# Hyprland ships debug.disable_logs, so the print above reaches no log: the failure
+# is also appended, with a timestamp, to $XDG_STATE_HOME/vivac/local-lua.log.
+state="$sandbox/persist-state"
+local_log="$state/vivac/local-lua.log"
+printf 'error("owner mistake")\n' >"$hypr/local.lua"
+load XDG_STATE_HOME="$state"
+[[ -f "$local_log" ]] || fail 'a broken local.lua left no local-lua.log'
+grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9:]{8}.* vivac: local.lua failed.*owner mistake' "$local_log" || fail "the log line has no timestamp or message: $(<"$local_log")"
+has "final $registry_rows" || fail 'logging the failure cost vivac binds'
+load XDG_STATE_HOME="$state"
+[[ "$(wc -l <"$local_log")" -eq 2 ]] || fail 'the log is not appended to'
+# A state directory that cannot be written never fails the config.
+printf 'not a directory' >"$sandbox/blocked"
+load XDG_STATE_HOME="$sandbox/blocked"
+has "final $registry_rows" || fail 'an unwritable state directory cost vivac binds'
+grep -q '^notify .*local.lua' <<<"$out" || fail 'the notification was lost when the log could not be written'
+# No state variable: the default is under HOME/.local/state.
+load XDG_STATE_HOME=
+[[ -f "$home/.local/state/vivac/local-lua.log" ]] || fail 'the default state directory is not HOME/.local/state'
+rm -rf -- "$home/.local/state"
+
 # --- owner wins: hl.unbind, then rebind; the last chunk is local.lua --------------------------------------------
 cat >"$hypr/local.lua" <<'LOCAL'
 hl.unbind("SUPER + R")

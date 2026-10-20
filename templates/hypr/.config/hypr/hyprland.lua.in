@@ -273,7 +273,21 @@ if owner then
 		end
 	end
 	if failure then
-		print("vivac: local.lua failed: " .. tostring(failure))
-		pcall(hl.notification.create, { text = "vivac: local.lua failed, see the Hyprland log", timeout = 10000 })
+		local message = "vivac: local.lua failed: " .. tostring(failure)
+		print(message)
+		-- Hyprland ships debug.disable_logs, so the print reaches no log: keep the
+		-- failure where the owner can read it. Never allowed to fail the config.
+		pcall(function()
+			local state_home = os.getenv("XDG_STATE_HOME")
+			if not state_home or state_home == "" then
+				state_home = os.getenv("HOME") .. "/.local/state"
+			end
+			local directory = state_home .. "/vivac"
+			os.execute("mkdir -p -- '" .. directory:gsub("'", "'\\''") .. "'")
+			local file = assert(io.open(directory .. "/local-lua.log", "a"))
+			file:write(os.date("%Y-%m-%d %H:%M:%S"), " ", message, "\n")
+			file:close()
+		end)
+		pcall(hl.notification.create, { text = "vivac: local.lua failed, see ~/.local/state/vivac/local-lua.log", timeout = 10000 })
 	end
 end
