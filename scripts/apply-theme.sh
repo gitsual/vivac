@@ -137,6 +137,14 @@ if [[ "$theme" != "$default_theme" ]]; then
 		rest="${relative#*/}"
 		[[ "$rest" == .* ]] || continue
 		target="$HOME/${rest%.in}"
+		# A regular file here is the owner's: the manifest was undone above, so
+		# nothing of ours can be left at this path. Writing over it would replace
+		# their layout with ours, and undoing it later would delete it. It gets
+		# the palette's colours from the colour overlay instead.
+		if [[ -e "$target" && ! -L "$target" ]]; then
+			printf 'apply-theme: %s is not a vivac file; left to the colour overlay\n' "$target" >&2
+			continue
+		fi
 		link=''
 		[[ -L "$target" ]] && link="$(readlink -- "$target")"
 		mkdir -p -- "$(dirname -- "$target")"
@@ -154,6 +162,11 @@ if [[ "$theme" != "$default_theme" ]]; then
 		written=$((written + 1))
 	done < <(find "$templates_dir" -type f -name '*.in' | LC_ALL=C sort)
 fi
+
+# Owner-structured configs keep their own layout and take only the colours, the
+# default palette included (it is how a switch back restores the originals).
+"$repo_root/scripts/colour-overlay.sh" --apply "$theme" --config-dir "$HOME/.config" >/dev/null ||
+	printf 'apply-theme: the colour overlay failed; owner configs keep their colours\n' >&2
 
 # The machine-specific renders carry palette tokens too (the bar's colours),
 # and they read the theme straight out of the settings file written above.
