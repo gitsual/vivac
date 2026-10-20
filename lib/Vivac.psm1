@@ -40,6 +40,8 @@ function Get-VivacPaths {
         Wallpapers   = Join-Path (Join-Path $local 'vivac') 'wallpapers'
         SharedPending = Join-Path (Join-Path $local 'vivac') 'shared-pending'
         SharedLock   = Join-Path (Join-Path $local 'vivac') 'shared-sync.lock'
+        SharedLog    = Join-Path (Join-Path $local 'vivac') 'shared-sync.log'
+        SharedPendingPulls = Join-Path (Join-Path $local 'vivac') 'shared-pending-pulls'
     }
 }
 
@@ -362,12 +364,62 @@ function Add-VivacPending([string]$Key) {
     [IO.File]::AppendAllText($p, "$Key`n")
 }
 function Remove-VivacPending([string]$Key) {
+    Clear-VivacPendingAge $Key
     $keep = @(Get-VivacPendingKeys | Where-Object { $_ -ne $Key })
     $p = (Get-VivacPaths).SharedPending
     if (-not (Test-Path -LiteralPath $p)) { return }
     $text = ''
     foreach ($k in $keep) { $text += "$k`n" }
     Write-VivacFile -Path $p -Text $text
+}
+
+# The pull runs in a hidden process nobody reads, so what goes wrong in it is
+# written here: one line per event, in the state directory.
+function Write-VivacSharedLog([string]$Text) {
+    try {
+        $log = (Get-VivacPaths).SharedLog
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null
+        [IO.File]::AppendAllText($log, ('{0}  {1}{2}' -f (Get-Date -Format s), $Text, "`n"))
+    } catch { }
+}
+
+# How many pulls in a row ended with a key still pending (one "key count" line
+# each). From PendingWarnAfter on, every pull says so, once per key.
+$script:PendingWarnAfter = 3
+function Read-VivacPendingAges {
+    $ages = [ordered]@{}
+    $p = (Get-VivacPaths).SharedPendingPulls
+    if (Test-Path -LiteralPath $p) {
+        foreach ($line in [IO.File]::ReadAllLines($p)) {
+            if ($line -match '^(\S+) (\d+)$') { $ages[$Matches[1]] = [int]$Matches[2] }
+        }
+    }
+    $ages
+}
+function Write-VivacPendingAges($Ages) {
+    $text = ''
+    foreach ($k in $Ages.Keys) { $text += "$k $($Ages[$k])`n" }
+    Write-VivacFile -Path (Get-VivacPaths).SharedPendingPulls -Text $text
+}
+function Clear-VivacPendingAge([string]$Key) {
+    $ages = Read-VivacPendingAges
+    if ($ages.Contains($Key)) { $ages.Remove($Key); Write-VivacPendingAges $ages }
+}
+function Step-VivacPendingAges {
+    $ages = Read-VivacPendingAges
+    $pendingNow = @(Get-VivacPendingKeys)
+    foreach ($k in @($ages.Keys)) { if ($pendingNow -notcontains $k) { $ages.Remove($k) } }
+    foreach ($k in $pendingNow) {
+        $n = 1
+        if ($ages.Contains($k)) { $n = $ages[$k] + 1 }
+        $ages[$k] = $n
+        if ($n -ge $script:PendingWarnAfter) {
+            $msg = "$k has stayed pending for $n pulls: the shared file has not taken the local value yet"
+            Write-Warning "sync-shared-settings: $msg"
+            Write-VivacSharedLog $msg
+        }
+    }
+    Write-VivacPendingAges $ages
 }
 
 # Take the shared lock (an exclusive handle on a file in the state
@@ -441,9 +493,11 @@ function Invoke-VivacSharedPull([double]$LockWaitSeconds = -1) {
         if (Test-Path -LiteralPath (Split-Path -Parent $shared) -PathType Container) {
             foreach ($key in @(Get-VivacPendingKeys)) {
                 if ($script:SharedKeys -notcontains $key) { continue }
-                try { Write-VivacSharedKey $shared $key $local[$key]; Remove-VivacPending $key } catch { }
+                try { Write-VivacSharedKey $shared $key $local[$key]; Remove-VivacPending $key }
+                catch { Write-VivacSharedLog "could not send $key to ${shared}: $($_.Exception.Message); it stays pending" }
             }
         }
+        Step-VivacPendingAges
         if (-not (Test-Path -LiteralPath $shared -PathType Leaf)) { return @() }
         $incoming = @{}
         try {
@@ -452,12 +506,16 @@ function Invoke-VivacSharedPull([double]$LockWaitSeconds = -1) {
                     if ($line.StartsWith("$key=", [StringComparison]::Ordinal)) { $incoming[$key] = $line.Substring($key.Length + 1) }
                 }
             }
-        } catch { return @() }
+        } catch { Write-VivacSharedLog "could not read ${shared}: $($_.Exception.Message)"; return @() }
         foreach ($key in $script:SharedKeys) {
             if (-not $incoming.ContainsKey($key) -or (Test-VivacPending $key)) { continue }
             $value = $incoming[$key]
             try { Assert-VivacSettingValid $key $value }
-            catch { Write-Warning "sync-shared-settings: ignoring $key in ${shared}: '$value' is not valid"; continue }
+            catch {
+                Write-Warning "sync-shared-settings: ignoring $key in ${shared}: '$value' is not valid"
+                Write-VivacSharedLog "ignoring $key in ${shared}: '$value' is not valid"
+                continue
+            }
             if ($value -ceq $local[$key]) { continue }
             Write-VivacLocalSetting $key $value
             $changed.Add($key)

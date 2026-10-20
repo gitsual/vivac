@@ -382,5 +382,49 @@ try {
         Assert-Equal "x=1`n" (Read-Bytes $shared)
         Assert-True (-not (Test-Path -LiteralPath $pending)) 'a refused value was queued'
     }
+    # ---- the pull runs unseen: what goes wrong is logged -------------------
+    $log = (Get-VivacPaths).SharedLog
+    $pulls = (Get-VivacPaths).SharedPendingPulls
+    function Clear-PullState { foreach ($f in $log, $pending, $pulls) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } }
+    Case 'a push that fails in the pull is logged with the key and the reason' {
+        Clear-PullState
+        $file = Join-Path $dir 'logshare\settings'
+        Set-LocalSettings "shared_settings=$file`ntheme=carmen`n"
+        Write-Bytes $file "theme=cosmos`n"
+        [IO.File]::WriteAllText($pending, "theme`n")
+        (Get-Item -LiteralPath $file).IsReadOnly = $true
+        try { $null = @(Invoke-VivacSharedPull 3>&1) } finally { (Get-Item -LiteralPath $file).IsReadOnly = $false }
+        Assert-True (Test-Path -LiteralPath $log) 'no log was written'
+        $text = [IO.File]::ReadAllText($log)
+        Assert-True ($text -match 'theme' -and $text -match 'could not send') "the log does not say what failed: $text"
+    }
+    Case 'a shared value the pull ignores is logged too' {
+        Clear-PullState
+        Set-LocalSettings "shared_settings=$shared`ntheme=carmen`n"
+        Write-Bytes $shared "language=xx`n"
+        $null = @(Invoke-VivacSharedPull 3>&1)
+        $text = [IO.File]::ReadAllText($log)
+        Assert-True ($text -match 'ignoring language' -and $text -match 'not valid') "missing: $text"
+    }
+    Case 'a key that stays pending across 3 pulls is warned about, then every pull; a push resets it' {
+        Clear-PullState
+        $file = Join-Path $dir 'never-there\settings'
+        Set-LocalSettings "shared_settings=$file`ntheme=carmen`n"
+        [IO.File]::WriteAllText($pending, "theme`n")
+        foreach ($n in 1, 2) {
+            $w = @(Invoke-VivacSharedPull 3>&1 | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+            Assert-Equal 0 $w.Count "pull $n warned too early"
+        }
+        $w = @(Invoke-VivacSharedPull 3>&1 | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        Assert-Equal 1 $w.Count 'pull 3 did not warn'
+        Assert-True ("$($w[0])" -match 'theme' -and "$($w[0])" -match '3') 'the warning names the key and the count'
+        Assert-True ([IO.File]::ReadAllText($log) -match 'theme.*3 pulls') 'the log has no record of it'
+        $w = @(Invoke-VivacSharedPull 3>&1 | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+        Assert-Equal 1 $w.Count 'pull 4 stopped warning'
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $file) | Out-Null
+        $null = @(Invoke-VivacSharedPull 3>&1)
+        Assert-Equal "theme=carmen`n" (Read-Bytes $file)
+        Assert-True ((-not (Test-Path -LiteralPath $pulls)) -or ((Read-Bytes $pulls) -notmatch 'theme')) 'the count was not reset'
+    }
 } finally { Remove-TempProfile $dir }
 Complete-Cases
