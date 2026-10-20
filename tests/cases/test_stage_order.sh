@@ -13,10 +13,12 @@ line_of() { grep -n "^stage '$1'" "$check" | head -n1 | cut -d: -f1; }
 render="$(line_of 'committed renders and theme drift')"
 manifest="$(line_of 'asset manifest')"
 baseline="$(line_of 'default profile baseline')"
+verify="$(line_of 'hyprland config verification')"
 
 [[ -n "$render" ]] || { printf 'check.sh has no render stage\n' >&2; exit 1; }
 [[ -n "$manifest" ]] || { printf 'check.sh has no asset manifest stage\n' >&2; exit 1; }
 [[ -n "$baseline" ]] || { printf 'check.sh has no baseline stage\n' >&2; exit 1; }
+[[ -n "$verify" ]] || { printf 'check.sh has no hyprland config verification stage\n' >&2; exit 1; }
 
 ((render < manifest)) || {
 	printf 'stage order: render (line %d) must precede asset manifest (line %d)\n' "$render" "$manifest" >&2
@@ -25,6 +27,12 @@ baseline="$(line_of 'default profile baseline')"
 # The baseline compares deployable bytes, which are render output too.
 ((render < baseline)) || {
 	printf 'stage order: render (line %d) must precede default profile baseline (line %d)\n' "$render" "$baseline" >&2
+	exit 1
+}
+
+# Hyprland verifies the committed hyprland.lua, which is render output too.
+((render < verify)) || {
+	printf 'stage order: render (line %d) must precede hyprland config verification (line %d)\n' "$render" "$verify" >&2
 	exit 1
 }
 

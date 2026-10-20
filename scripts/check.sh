@@ -84,6 +84,11 @@ fi
 stage 'default profile baseline'
 "$repo_root/scripts/freeze-baseline.sh"
 
+# Skipped with a notice where Hyprland is not installed; the VM gate runs it
+# for real on a guest that has it.
+stage 'hyprland config verification'
+"$repo_root/scripts/verify-hypr-config.sh"
+
 stage 'selector registry'
 "$repo_root/scripts/check-selectors.sh"
 

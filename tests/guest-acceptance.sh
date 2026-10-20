@@ -19,7 +19,7 @@ printf 'locale=es_ES.UTF-8\nkeymap=%s\nxkb_layout=fr\nime=fcitx5\n' "$CONSOLE_KE
 grep -Fxq 'LANG=es_ES.UTF-8' /etc/locale.conf
 LC_ALL=C locale -a | grep -Fxq 'es_ES.utf8'
 grep -Fxq "KEYMAP=$CONSOLE_KEYMAP" /etc/vconsole.conf
-grep -Fxq '    kb_layout = fr' "$HOME/.config/hypr/generated/input.conf"
+grep -Fxq 'hl.config({ input = { kb_layout = "fr", follow_mouse = 1 } })' "$HOME/.config/hypr/generated/input.lua"
 ./scripts/test-neovim.sh
 ./scripts/apply-system.sh --dry-run --desktop-login --vm
 # The graphical greeter is rendered, not installed (the guest keeps its
@@ -30,10 +30,19 @@ grep -q 'LANG=es_ES.UTF-8 XKB_DEFAULT_LAYOUT=fr cage -s -- regreet' <<<"$greeter
 pacman -Qq greetd-regreet cage >/dev/null
 mkdir -p /tmp/vivac-runtime
 chmod 700 /tmp/vivac-runtime
-XDG_RUNTIME_DIR=/tmp/vivac-runtime Hyprland --verify-config -c "$HOME/.config/hypr/hyprland.conf"
+XDG_RUNTIME_DIR=/tmp/vivac-runtime Hyprland --verify-config -c "$HOME/.config/hypr/hyprland.lua"
 for fragment in hardware monitors input; do
-  test -f "$HOME/.config/hypr/generated/$fragment.conf"
-  test ! -L "$HOME/.config/hypr/generated/$fragment.conf"
+  test -f "$HOME/.config/hypr/generated/$fragment.lua"
+  test ! -L "$HOME/.config/hypr/generated/$fragment.lua"
+done
+# The owner's local.lua is contained: one that raises and one that does not
+# parse both still verify, and neither is left behind in the guest.
+for broken in 'error("owner mistake")' 'this is = not lua ('; do
+  printf '%s\n' "$broken" >"$HOME/.config/hypr/local.lua"
+  verified=0
+  XDG_RUNTIME_DIR=/tmp/vivac-runtime Hyprland --verify-config -c "$HOME/.config/hypr/hyprland.lua" || verified=$?
+  rm -f "$HOME/.config/hypr/local.lua"
+  test "$verified" -eq 0
 done
 python -m json.tool "$HOME/.config/waybar/config" >/dev/null
 ./scripts/render-config.sh --check-drift
@@ -45,17 +54,17 @@ gpu_list="$(./scripts/gpu-setup.sh --list)"
 grep -q '^virtio .*VM gate' <<<"$gpu_list"
 ./scripts/gpu-setup.sh --apply
 # A re-render over a changed fragment leaves a backup; the restore finds it.
-printf '# local edit\n' >>"$HOME/.config/hypr/generated/hardware.conf"
+printf -- '-- local edit\n' >>"$HOME/.config/hypr/generated/hardware.lua"
 ./scripts/render-config.sh --deploy >/dev/null
 gpu_restore="$(./scripts/gpu-setup.sh --restore-config --dry-run)"
 grep -q '^would restore' <<<"$gpu_restore"
 # The input method reaches the compositor through the input fragment only,
 # and CJK and emoji resolve by code point to installed fonts.
-grep -Fxq 'env = QT_IM_MODULE,fcitx' "$HOME/.config/hypr/generated/input.conf"
-grep -Fxq 'exec-once = fcitx5 -d' "$HOME/.config/hypr/generated/input.conf"
+grep -Fxq 'hl.env("QT_IM_MODULE", "fcitx")' "$HOME/.config/hypr/generated/input.lua"
+grep -Fq '{ id = "fcitx5", cmd = "fcitx5 -d" }' "$HOME/.config/hypr/generated/input.lua"
 # A bare "! grep" is exempt from errexit, so these negative assertions state
 # the failure explicitly: finding the needle is the failure.
-grep -rq fcitx "$HOME/.config/hypr/generated/hardware.conf" "$HOME/.config/hypr/generated/monitors.conf" "$HOME/.config/waybar/config" && exit 1
+grep -rq fcitx "$HOME/.config/hypr/generated/hardware.lua" "$HOME/.config/hypr/generated/monitors.lua" "$HOME/.config/waybar/config" && exit 1
 command -v fcitx5 >/dev/null
 fc-match -f '%{family}\n' ':charset=4e2d' | grep -q CJK
 fc-match -f '%{family}\n' ':charset=3042' | grep -q CJK
@@ -73,7 +82,7 @@ test -L "$HOME/.config/hypr/hypridle.conf"
 test -L "$HOME/.config/nwg-bar/style.css"
 test -L "$HOME/.config/nwg-bar/icons/power-off.svg"
 "$HOME/.local/bin/vivac-power" --print | python -c 'import json,sys; assert len(json.load(sys.stdin)) == 5'
-grep -Fxq 'exec-once = hypridle' "$HOME/.config/hypr/hyprland.conf"
+grep -Fq '{ id = "hypridle"' "$HOME/.config/hypr/hyprland.lua"
 # The workspace strip and the help panes work through the stowed scripts
 # with no session behind them: ten numbers, and every registered key.
 strip="$(WS_CACHE=/nonexistent "$HOME/.config/waybar/scripts/ws-render.sh" | python -c 'import json,sys; print(json.load(sys.stdin)["text"])')"
