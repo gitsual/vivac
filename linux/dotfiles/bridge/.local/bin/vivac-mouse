@@ -1,0 +1,490 @@
+#!/usr/bin/env python3
+"""vivac mouse: one keyboard and mouse for two machines, through lan-mouse.
+
+    vivac-mouse enable [--dry-run]     write lan-mouse's config and start it, now and at every login
+    vivac-mouse disable [--dry-run]    stop it, and keep it stopped at login
+    vivac-mouse toggle [--dry-run]     enable when off, disable when on (the bridge menu)
+    vivac-mouse status                 on or off, the other machine, the fingerprints
+    vivac-mouse config --peer HOST --side left|right|top|bottom [--fingerprint FP] [--port N] [--dry-run]
+                                       where the other machine is, seen from this one
+    vivac-mouse trust FP [--dry-run]   accept the other machine's certificate fingerprint
+    vivac-mouse fingerprint            print this machine's certificate fingerprint
+    vivac-mouse pair                   print what the other machine needs: fingerprint, name, side
+    vivac-mouse resume                 what login runs: start lan-mouse if it was left enabled
+    vivac-mouse available              exit 0 when lan-mouse is installed
+
+docs/bridge.md at the root of the product, "One keyboard and mouse". lan-mouse
+does the work (UDP 4242, DTLS); vivac only writes its config.toml from
+${XDG_STATE_HOME:-~/.local/state}/vivac/mouse.conf and runs `lan-mouse daemon`
+as the user service vivac-mouse.service, and only while it is enabled. Each
+side lists the other's certificate fingerprint; lan-mouse refuses any other.
+LAN_MOUSE names a lan-mouse binary other than the one on PATH. Python
+standard library only.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import hashlib
+import ipaddress
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+from pathlib import Path
+
+DEFAULT_PORT = 4242
+SIDES = ("left", "right", "top", "bottom")
+OPPOSITE = {"left": "right", "right": "left", "top": "bottom", "bottom": "top"}
+UNIT = "vivac-mouse.service"
+HOSTNAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,62})(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}))*")
+PEM_BLOCK = re.compile(r"-----BEGIN ([A-Z0-9_ ]+)-----\s*(.*?)\s*-----END \1-----", re.S)
+SELF = Path(__file__).resolve()
+
+
+# --- where things are ------------------------------------------------------------------------
+
+
+def repo_root() -> Path:
+    """The checkout this file is stowed from: dotfiles/bridge/.local/bin/ is four up."""
+    return Path(os.environ.get("VIVAC_REPO") or SELF.parents[4])
+
+
+def state_dir() -> Path:
+    return Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "vivac"
+
+
+def config_home() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+
+
+def conf_path() -> Path:
+    return state_dir() / "mouse.conf"
+
+
+def lan_mouse_dir() -> Path:
+    """Where lan-mouse keeps config.toml and its certificate, lan-mouse.pem."""
+    return config_home() / "lan-mouse"
+
+
+def lan_mouse() -> str | None:
+    wanted = os.environ.get("LAN_MOUSE")
+    if wanted:
+        return wanted if os.access(wanted, os.X_OK) else None
+    return shutil.which("lan-mouse")
+
+
+def read_kv(path: Path) -> dict[str, str]:
+    """A flat KEY=value file, read as data: comments, blank and malformed lines skipped,
+    CR dropped, %XX decoded as lib/kv.sh writes it. Never raises."""
+    values: dict[str, str] = {}
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return values
+    for line in text.lstrip("﻿").splitlines():
+        line = line.rstrip("\r")
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", key):
+            values[key] = re.sub(r"%([0-9A-Fa-f]{2})", lambda m: chr(int(m.group(1), 16)), value)
+    return values
+
+
+# --- the session's language (lib/i18n.sh, same tables, same rules) -----------------------------
+
+
+def session_language() -> str:
+    """VIVAC_LANG, then the language setting unless auto, then LANG, then English."""
+    short = re.compile(r"[a-z]{2,3}")
+    wanted = os.environ.get("VIVAC_LANG")
+    if wanted:
+        candidate = re.split(r"[._@]", wanted)[0]
+        return candidate if short.fullmatch(candidate) else "en"
+    settings = Path(os.environ.get("SETTINGS_FILE") or config_home() / "vivac" / "settings")
+    for candidate in (read_kv(settings).get("language", ""), os.environ.get("LANG", "")):
+        if candidate == "auto":
+            continue
+        candidate = re.split(r"[._@]", candidate)[0]
+        if short.fullmatch(candidate):
+            return candidate
+    return "en"
+
+
+class Text:
+    """i18n/<lang>.conf over i18n/en.conf; placeholders {1}, {2}... replaced as plain text."""
+
+    def __init__(self) -> None:
+        directory = Path(os.environ.get("I18N_DIR") or repo_root() / "i18n")
+        self.reference = read_kv(directory / "en.conf")
+        language = session_language()
+        self.table = read_kv(directory / f"{language}.conf") if language != "en" else {}
+
+    def get(self, key: str, *args: object) -> str:
+        if key in self.table:
+            text = self.table[key]
+        elif key in self.reference:
+            text = self.reference[key] if not self.table else "[en] " + self.reference[key]
+        else:
+            return f"[{key}]"
+        for index, arg in enumerate(args, 1):
+            text = text.replace("{%d}" % index, str(arg))
+        return text
+
+
+TEXT = Text()
+
+
+def say(key: str, *args: object) -> None:
+    print(TEXT.get(key, *args), flush=True)
+
+
+def complain(key: str, *args: object) -> None:
+    print("vivac-mouse: " + TEXT.get(key, *args), file=sys.stderr, flush=True)
+
+
+# --- what is checked before it reaches a file -------------------------------------------------
+
+
+def clean_fingerprint(text: str) -> str | None:
+    """A SHA-256 fingerprint as lan-mouse writes it (32 lowercase hex pairs joined by
+    colons), from any case, with or without the colons. None when it is not one."""
+    digits = re.sub(r"[\s:]", "", text).lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", digits):
+        return None
+    return ":".join(digits[index : index + 2] for index in range(0, 64, 2))
+
+
+def clean_peer(text: str) -> str | None:
+    """A host name or an IP address, nothing that could break out of a TOML string."""
+    text = text.strip()
+    try:
+        return str(ipaddress.ip_address(text))
+    except ValueError:
+        pass
+    return text if len(text) <= 253 and HOSTNAME.fullmatch(text) else None
+
+
+def clean_port(text: str) -> int | None:
+    return int(text) if re.fullmatch(r"[0-9]{1,5}", text) and 0 < int(text) <= 65535 else None
+
+
+# --- the certificate --------------------------------------------------------------------------
+
+
+def fingerprint_of_pem(text: str) -> str | None:
+    """What lan-mouse shows as this machine's fingerprint: SHA-256 of the DER bytes of
+    the first CERTIFICATE block in lan-mouse.pem (the private key block beside it is
+    skipped and never read further), lowercase hex pairs joined by colons."""
+    for label, body in PEM_BLOCK.findall(text):
+        if label != "CERTIFICATE":
+            continue
+        try:
+            der = base64.b64decode("".join(body.split()), validate=True)
+        except (binascii.Error, ValueError):
+            return None
+        return clean_fingerprint(hashlib.sha256(der).hexdigest())
+    return None
+
+
+def own_fingerprint() -> str | None:
+    try:
+        text = (lan_mouse_dir() / "lan-mouse.pem").read_text(encoding="ascii", errors="replace")
+    except OSError:
+        return None
+    return fingerprint_of_pem(text)
+
+
+# --- mouse.conf and config.toml -------------------------------------------------------------------
+
+
+def load() -> dict[str, str]:
+    values = read_kv(conf_path())
+    settings = {"enabled": "yes" if values.get("enabled") == "yes" else "no"}
+    peer = clean_peer(values.get("peer", ""))
+    if peer:
+        settings["peer"] = peer
+    if values.get("side") in SIDES:
+        settings["side"] = values["side"]
+    fingerprint = clean_fingerprint(values.get("fingerprint", ""))
+    if fingerprint:
+        settings["fingerprint"] = fingerprint
+    settings["port"] = str(clean_port(values.get("port", "")) or DEFAULT_PORT)
+    return settings
+
+
+def render_conf(settings: dict[str, str]) -> str:
+    lines = ["# vivac mouse (docs/bridge.md): what vivac-mouse writes lan-mouse's config.toml from.\n"]
+    for key in ("enabled", "peer", "side", "fingerprint", "port"):
+        if key in settings:
+            lines.append(f"{key}={settings[key]}\n")
+    return "".join(lines)
+
+
+def render_toml(settings: dict[str, str]) -> str:
+    """lan-mouse's config.toml, all of it: every value was checked on the way in, so
+    each goes between quotes as it is. Top-level keys first, as TOML wants."""
+    out = [
+        "# lan-mouse, as vivac-mouse writes it from ~/.local/state/vivac/mouse.conf.\n",
+        "# vivac-mouse config and vivac-mouse trust change it; edits here are replaced.\n",
+        "\n",
+        f"port = {settings.get('port', DEFAULT_PORT)}\n",
+    ]
+    if "fingerprint" in settings:
+        out += [
+            "\n",
+            "# the only certificate accepted for incoming input\n",
+            "[authorized_fingerprints]\n",
+            f'"{settings["fingerprint"]}" = "{settings.get("peer", "vivac peer")}"\n',
+        ]
+    if "peer" in settings and "side" in settings:
+        try:
+            ipaddress.ip_address(settings["peer"])
+            where = f'ips = ["{settings["peer"]}"]\n'
+        except ValueError:
+            where = f'hostname = "{settings["peer"]}"\n'
+        out += [
+            "\n",
+            "# the other machine, and the edge of this screen it sits beyond\n",
+            "[[clients]]\n",
+            f'position = "{settings["side"]}"\n',
+            where,
+            f"port = {settings.get('port', DEFAULT_PORT)}\n",
+            "activate_on_startup = true\n",
+        ]
+    return "".join(out)
+
+
+def write_file(path: Path, text: str, mode: int) -> None:
+    """Replace PATH with TEXT atomically, with MODE."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    scratch = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    descriptor = os.open(scratch, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    os.chmod(scratch, mode)
+    os.replace(scratch, path)
+
+
+def save(settings: dict[str, str], dry_run: bool) -> None:
+    """mouse.conf, then config.toml from it. A config.toml vivac did not write (the
+    default lan-mouse makes on its first start, or one written by hand) is kept
+    once beside it as config.toml.vivac-backup."""
+    toml_path = lan_mouse_dir() / "config.toml"
+    if dry_run:
+        say("mouse.would_write", toml_path)
+        sys.stdout.write(render_toml(settings))
+        return
+    write_file(conf_path(), render_conf(settings), 0o600)
+    backup = toml_path.with_name("config.toml.vivac-backup")
+    try:
+        old = toml_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        old = None
+    if old is not None and "vivac-mouse" not in old and not backup.exists():
+        shutil.copy2(toml_path, backup)
+    write_file(toml_path, render_toml(settings), 0o644)
+
+
+# --- the service ------------------------------------------------------------------------------
+
+
+def systemctl(*arguments: str, dry_run: bool = False) -> bool:
+    command = ["systemctl", "--user", *arguments]
+    if dry_run:
+        say("mouse.would_run", " ".join(command))
+        return True
+    if not shutil.which("systemctl"):
+        return False
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    return subprocess.run(command, check=False, **quiet).returncode == 0
+
+
+def start(dry_run: bool) -> bool:
+    # The user manager started before the compositor: lan-mouse needs its display.
+    names = [name for name in ("WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", "HYPRLAND_INSTANCE_SIGNATURE") if os.environ.get(name)]
+    if names:
+        systemctl("import-environment", *names, dry_run=dry_run)
+    return systemctl("restart", UNIT, dry_run=dry_run)
+
+
+def enable(dry_run: bool) -> int:
+    if not lan_mouse():
+        complain("mouse.no_binary")
+        return 1
+    settings = load()
+    settings["enabled"] = "yes"
+    save(settings, dry_run)
+    if not start(dry_run):
+        complain("mouse.no_start")
+        return 1
+    if "peer" not in settings or "fingerprint" not in settings:
+        say("mouse.on_unpaired")
+        return 0
+    say("mouse.on", settings["peer"], settings.get("side", "?"))
+    return 0
+
+
+def disable(dry_run: bool) -> int:
+    settings = load()
+    settings["enabled"] = "no"
+    if dry_run:
+        say("mouse.would_write", conf_path())
+    else:
+        write_file(conf_path(), render_conf(settings), 0o600)
+    systemctl("stop", UNIT, dry_run=dry_run)
+    say("mouse.off")
+    return 0
+
+
+def resume() -> int:
+    """At login: start lan-mouse when it was left on, and say nothing otherwise."""
+    if load()["enabled"] != "yes" or not lan_mouse():
+        return 0
+    return 0 if start(False) else 1
+
+
+# --- verbs ------------------------------------------------------------------------------------
+
+
+def configure(arguments: list[str], dry_run: bool) -> int:
+    options: dict[str, str] = {}
+    words = list(arguments)
+    while words:
+        flag = words.pop(0)
+        if flag not in ("--peer", "--side", "--fingerprint", "--port") or not words:
+            return usage()
+        options[flag[2:]] = words.pop(0)
+    if "peer" not in options or "side" not in options:
+        return usage()
+    settings = load()
+    peer = clean_peer(options["peer"])
+    if peer is None:
+        complain("mouse.bad_peer", options["peer"])
+        return 2
+    if options["side"] not in SIDES:
+        complain("mouse.bad_side", options["side"])
+        return 2
+    settings["peer"], settings["side"] = peer, options["side"]
+    if "fingerprint" in options:
+        fingerprint = clean_fingerprint(options["fingerprint"])
+        if fingerprint is None:
+            complain("mouse.bad_fingerprint")
+            return 2
+        settings["fingerprint"] = fingerprint
+    if "port" in options:
+        port = clean_port(options["port"])
+        if port is None:
+            complain("mouse.bad_port", options["port"])
+            return 2
+        settings["port"] = str(port)
+    save(settings, dry_run)
+    if not dry_run:
+        say("mouse.configured", peer, options["side"])
+    # A running lan-mouse reads its config at start only.
+    if settings["enabled"] == "yes":
+        start(dry_run)
+    return 0
+
+
+def trust(arguments: list[str], dry_run: bool) -> int:
+    if len(arguments) != 1:
+        return usage()
+    fingerprint = clean_fingerprint(arguments[0])
+    if fingerprint is None:
+        complain("mouse.bad_fingerprint")
+        return 2
+    settings = load()
+    settings["fingerprint"] = fingerprint
+    save(settings, dry_run)
+    if not dry_run:
+        say("mouse.trusted", fingerprint)
+    if settings["enabled"] == "yes":
+        start(dry_run)
+    return 0
+
+
+def fingerprint() -> int:
+    mine = own_fingerprint()
+    if mine is None:
+        complain("mouse.no_certificate", lan_mouse_dir() / "lan-mouse.pem")
+        return 1
+    print(mine)
+    return 0
+
+
+def pair() -> int:
+    """What to type on the other machine. The side there is the opposite of the side
+    here: when the other machine is on the right of this one, this one is on its left."""
+    mine = own_fingerprint()
+    if mine is None:
+        complain("mouse.no_certificate", lan_mouse_dir() / "lan-mouse.pem")
+        return 1
+    settings = load()
+    name = socket.gethostname()
+    side = OPPOSITE.get(settings.get("side", ""), "SIDE")
+    say("mouse.pair_this", name, mine)
+    say("mouse.pair_other")
+    print(f"  vivac-mouse config --peer {name} --side {side} --fingerprint {mine}")
+    print(f"  bin\\vivac-mouse.ps1 config -Peer {name} -Side {side} -Fingerprint {mine}")
+    if side == "SIDE":
+        say("mouse.pair_side")
+    return 0
+
+
+def status() -> int:
+    settings = load()
+    running = shutil.which("systemctl") is not None and systemctl("is-active", "--quiet", UNIT)
+    say("mouse.status_on" if settings["enabled"] == "yes" else "mouse.status_off", "active" if running else "inactive")
+    if not lan_mouse():
+        say("mouse.no_binary")
+    if "peer" in settings and "side" in settings:
+        say("mouse.status_peer", settings["peer"], settings["side"], settings["port"])
+    else:
+        say("mouse.status_peer_none")
+    say("mouse.status_trusted", settings.get("fingerprint", "-"))
+    say("mouse.status_mine", own_fingerprint() or "-")
+    return 0
+
+
+def usage() -> int:
+    print(__doc__.split("\n\n")[1], file=sys.stderr)
+    return 2
+
+
+def main(arguments: list[str]) -> int:
+    if not arguments or arguments[0] in ("-h", "--help"):
+        print(__doc__.split("\n\n")[1])
+        return 0 if arguments else 2
+    dry_run = "--dry-run" in arguments
+    rest = [word for word in arguments[1:] if word != "--dry-run"]
+    command = arguments[0]
+    if command == "enable" and not rest:
+        return enable(dry_run)
+    if command == "disable" and not rest:
+        return disable(dry_run)
+    if command == "toggle" and not rest:
+        return disable(dry_run) if load()["enabled"] == "yes" else enable(dry_run)
+    if command == "config":
+        return configure(rest, dry_run)
+    if command == "trust":
+        return trust(rest, dry_run)
+    if command == "fingerprint" and not rest:
+        return fingerprint()
+    if command == "pair" and not rest:
+        return pair()
+    if command == "status" and not rest:
+        return status()
+    if command == "resume" and not rest:
+        return resume()
+    if command == "available" and not rest:
+        return 0 if lan_mouse() else 1
+    return usage()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

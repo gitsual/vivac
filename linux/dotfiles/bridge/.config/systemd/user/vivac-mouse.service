@@ -1,0 +1,14 @@
+[Unit]
+Description=vivac mouse: this keyboard and mouse on the other machine (lan-mouse)
+# Started by vivac-mouse enable, and at login by vivac-mouse resume while it
+# stays enabled; never by the user manager on its own, which runs before the
+# compositor and has no display to capture from.
+ConditionPathExists=%S/vivac/mouse.conf
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/lan-mouse daemon
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes

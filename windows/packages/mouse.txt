@@ -1,0 +1,4 @@
+# The shared mouse (docs/bridge.md at the product root, "One keyboard and
+# mouse"): lan-mouse, a portable zip winget unpacks and links as lan-mouse.exe
+# under %LOCALAPPDATA%\Microsoft\WinGet\Links, where bin/vivac-mouse.ps1 finds it.
+feschber.LanMouse

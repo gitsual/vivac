@@ -4,9 +4,10 @@
 #
 #   --print   list the menu's rows, one per line, and exit
 #
-# The drop tray in both directions, the clipboard to the paired machine, and
-# Restart in Windows when the firmware has an entry for it. As in the power
-# menu, the action is chosen by position and never by the label it printed.
+# The drop tray in both directions, the clipboard to the paired machine, the
+# shared mouse on or off, and Restart in Windows when the firmware has an entry
+# for it. As in the power menu, the action is chosen by position and never by
+# the label it printed.
 set -Eeuo pipefail
 
 self="$(readlink -f -- "${BASH_SOURCE[0]}")"
@@ -25,6 +26,15 @@ i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
 bin="$(dirname -- "$self")"
 keys=(drop.title drop.send link.send_clip)
 commands=('vivac-drop --open-in' 'vivac-drop --open-out' 'vivac-link send-clip')
+# The shared mouse, once lan-mouse is installed; the row says what it is now.
+if "$bin/vivac-mouse" available 2>/dev/null; then
+	if grep -qx 'enabled=yes' "${XDG_STATE_HOME:-$HOME/.local/state}/vivac/mouse.conf" 2>/dev/null; then
+		keys+=(mouse.menu_on)
+	else
+		keys+=(mouse.menu_off)
+	fi
+	commands+=('vivac-mouse toggle')
+fi
 if "$bin/vivac-reboot-other" --available 2>/dev/null; then
 	keys+=(power.reboot_windows)
 	commands+=(vivac-reboot-other)
@@ -44,10 +54,12 @@ chosen="$(menu | rofi -dmenu -i -format i -p "$(i18n_get bridge.title)")" || exi
 [[ "$chosen" =~ ^[0-9]+$ ]] || exit 0
 ((chosen < ${#commands[@]})) || exit 0
 read -r -a words <<<"${commands[$chosen]}"
-if [[ "${words[0]}" == vivac-link ]]; then
+if [[ "${words[0]}" == vivac-link || "${words[0]}" == vivac-mouse ]]; then
 	# What send-clip says goes on screen: a menu has no terminal to print it in.
 	output="$("$bin/${words[0]}" "${words[@]:1}" 2>&1)" || true
-	command -v notify-send >/dev/null && notify-send --app-name=vivac -- "$(i18n_get link.title)" "$output"
+	title=link.title
+	[[ "${words[0]}" == vivac-mouse ]] && title=mouse.title
+	command -v notify-send >/dev/null && notify-send --app-name=vivac -- "$(i18n_get "$title")" "$output"
 	exit 0
 fi
 exec "$bin/${words[0]}" "${words[@]:1}"

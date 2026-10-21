@@ -72,7 +72,7 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Editor
 ```
 
 `bootstrap.ps1` installs the base packages with winget (plus the optional
-sets you ask for: `-Editor`, `-Desktop`, `-Security`; `-ListSelectors` says
+sets you ask for: `-Editor`, `-Desktop`, `-Security`, `-Mouse`; `-ListSelectors` says
 which apply here), detects the hardware, deploys every configuration, starts
 GlazeWM and opens the first-run wizard.
 
@@ -121,7 +121,7 @@ ornament it has not earned fails the build.
 - **🔒 A lock that wears the theme.** `Win+L`; an empty Enter asks Windows Hello, Ctrl+Alt+Del hands over to Windows' own lock. AltGr works in the password field, so `@ # | \ [ ] { } €` type on any layout.
 - **📋 A clipboard history that stays in memory.** `Win+V`, never written to disk.
 - **🖥️ A bar that only shows what the machine has — and never goes blank.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts. It loads nothing from the network, and a watcher brings it back if it dies or comes up empty; see [The bar](#-the-bar).
-- **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it. See [the bridge](../docs/bridge.md).
+- **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it, and `bin\vivac-mouse.ps1` lends it this keyboard and mouse (lan-mouse). See [the bridge](../docs/bridge.md).
 - **🛡️ UAC left whole.** Nothing elevated runs a file you can change without elevation; see [What it asks of Windows](#-what-it-asks-of-windows).
 - **✅ 19 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
 
@@ -292,6 +292,7 @@ put back by uninstall:
 | `-LockScreen` | the theme's wallpaper on the lock and sign-in screens |
 | `-Firewall` · `-Defender` · `-SecurityQuiet` | every firewall profile on; PUA blocking and cloud protection; Windows Security without its tray icon (threat alerts stay Windows' own) |
 | `-Boot` | GRUB's menu and the boot logo in the theme |
+| `-Mouse` | the shared mouse (lan-mouse) reachable from the other machine: UDP 4242 in, private networks and the local subnet only |
 
 **UAC stays whole.** A few things run elevated without a prompt — updating installed programs through
 winget, the key guard that keeps the Windows key vivac's in front of an administrator's window — and a
@@ -404,7 +405,7 @@ tests/       The gates, fixtures, golden files and the off-screen surface render
 | [Mapping](docs/mapping.md) | Every part of the source and what it became here — or why it did not carry over |
 | [Keys](docs/keys.md) | The help registry, for readers without a session |
 | [The Linux half](../linux/README.md) | The Arch Linux workstation this is pitched from |
-| [The bridge](../docs/bridge.md) | What the two halves do together: shared choices, restart into the other system, the drop tray, vivac link |
+| [The bridge](../docs/bridge.md) | What the two halves do together: shared choices, restart into the other system, the drop tray, vivac link, one keyboard and mouse |
 
 ## 📄 License
 

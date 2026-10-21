@@ -40,8 +40,10 @@ the only writers of those files in this repository.
 --bridge is the system half of the bridge with Windows (docs/bridge.md at the
 root of the product): the sudoers rule that lets wheel set the firmware's
 BootNext for "Restart in Windows", UFW rules that open the vivac link port
-(TCP and UDP 47321) to the local IPv4 subnets only, and the user's
-vivac-link service, which stays idle until the machine is paired.
+(TCP and UDP 47321) and the shared mouse's port (lan-mouse, UDP 4242) to the
+local IPv4 subnets only, and the user's vivac-link service, which stays idle
+until the machine is paired. lan-mouse itself runs only once vivac-mouse
+enable asks for it.
 USAGE
 }
 
@@ -214,7 +216,7 @@ if $bridge; then
 		sudo install -Dm440 -o root -g root -- "$sudoers_source" /etc/sudoers.d/vivac-bootnext
 	fi
 	mapfile -t subnets < <(local_subnets)
-	((${#subnets[@]})) || printf '%s\n' 'no IPv4 network is up: the vivac link port stays closed; run --bridge again once connected'
+	((${#subnets[@]})) || printf '%s\n' 'no IPv4 network is up: the vivac link and mouse ports stay closed; run --bridge again once connected'
 	for subnet in "${subnets[@]}"; do
 		for protocol in tcp udp; do
 			if $dry_run; then
@@ -223,6 +225,12 @@ if $bridge; then
 				sudo ufw allow proto "$protocol" from "$subnet" to any port 47321 comment 'vivac link'
 			fi
 		done
+		# The shared mouse: lan-mouse's input and its DTLS handshake, UDP only.
+		if $dry_run; then
+			printf 'would allow udp 4242 from %s in UFW (vivac mouse)\n' "$subnet"
+		else
+			sudo ufw allow proto udp from "$subnet" to any port 4242 comment 'vivac mouse'
+		fi
 	done
 fi
 

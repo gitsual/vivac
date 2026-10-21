@@ -9,6 +9,7 @@
 Set-StrictMode -Version 2.0
 Import-Module (Join-Path $PSScriptRoot 'Vivac.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Bridge.psm1')
+Import-Module (Join-Path $PSScriptRoot 'Mouse.psm1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $script:VivacEntry = Join-Path $root 'bin\vivac.ps1'
@@ -902,6 +903,12 @@ function Get-VivacMenuEntries {
         $e.Add((New-MenuEntry 'session' (T 'bridge.drop_out') 'bridge' 'drop-out' $false 0xE898))
     }
     if (Test-Path -LiteralPath (Get-VivacLinkConfPath)) { $e.Add((New-MenuEntry 'session' (T 'bridge.link_clip') 'bridge' 'link-clip' $false 0xE8C8)) }
+    # The shared mouse, once lan-mouse is installed; the row says what it is now.
+    if (Find-VivacLanMouse) {
+        $mouseKey = 'bridge.mouse_off'
+        if ((Read-VivacMouseConf).enabled -eq 'yes') { $mouseKey = 'bridge.mouse_on' }
+        $e.Add((New-MenuEntry 'session' (T $mouseKey) 'bridge' 'mouse-toggle' $false 0xE962))
+    }
     $e
 }
 
@@ -927,6 +934,7 @@ function Invoke-BridgeAction([string]$Id) {
             Start-Process explorer.exe -ArgumentList "`"$folder`""
         }
         'link-clip' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-link.ps1`"", 'send-clip', '-Notify') }
+        'mouse-toggle' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-mouse.ps1`"", 'toggle', '-Notify') }
     }
 }
 
