@@ -110,6 +110,14 @@ Case 'the launcher theme only builds on base styles the installed Flow Launcher 
     $missing = @($ours | Where-Object { -not $known.ContainsKey($_) } | Sort-Object -Unique)
     Assert-True (-not $missing.Count) "not in Flow Launcher $($installed.Name): $($missing -join ', ')"
 }
+# Inside the product (windows\ next to shared\), the palettes both systems use
+# are copies of shared\data\; a copy edited here instead of there fails.
+Case 'the shared data matches shared\ (inside the product)' {
+    $sync = Join-Path (Split-Path -Parent $root) 'shared\sync.ps1'
+    if (-not (Test-Path -LiteralPath $sync)) { Write-Host '  (not inside the product: skipped)'; return }
+    $out = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $sync -Check 2>&1
+    Assert-Equal 0 $LASTEXITCODE ($out -join '; ')
+}
 Case 'the committed renders under dotfiles/ match their templates (no drift)' {
     $theme = Read-VivacTheme (Get-VivacDefaultTheme)
     $expected = @{}

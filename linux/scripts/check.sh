@@ -65,6 +65,11 @@ if find . \( -path ./.git -o -path ./.vm-test -o -path ./.vm-image -o -path ./di
 	exit 1
 fi
 
+stage 'shared data matches shared/'
+# Inside the product (linux/ next to shared/), the palettes both systems use
+# are copies of shared/data/; a copy edited here instead of there fails.
+if [[ -f ../shared/sync.sh ]]; then bash ../shared/sync.sh --check; else printf '%s\n' 'not inside the product; skipped'; fi
+
 # Renders are checked before the asset manifest on purpose: the manifest hashes
 # rendered bytes, and hashing before rendering would pass on stale output.
 # tests/cases/test_stage_order.sh asserts this ordering.
