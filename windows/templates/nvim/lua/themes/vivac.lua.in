@@ -1,0 +1,80 @@
+-- The editor's palette, rendered like every other themed surface.
+--
+-- NvChad ships a catalogue of base46 themes and picking the nearest one to the
+-- desktop would have been a mood, not a derivation: its hexes exist in no
+-- corpus here, and it would drift the moment a palette changed. So the theme
+-- is generated instead. base46 looks a custom theme up as `themes.<name>` in
+-- the user's own config, which is exactly where scripts/deploy.ps1 puts this file.
+--
+-- Two rules hold the mapping honest. Nothing invents a hue: every value below
+-- is a palette token or one of the sanctioned derivations of one, so a colour
+-- with no cause cannot reach the editor either. And the editor sits on
+-- TERMINAL_BG rather than COLOR_BG, because it lives inside the terminal --
+-- the warm chrome of the desktop is for borders and bars, not for text read
+-- for hours.
+--
+-- Hex is written upper-case here, unfiltered: the derived shades come out of
+-- render_scale_channels that way and a file that mixed the two notations for
+-- the same kind of value would look like two authors.
+
+local M = {}
+
+M.base_30 = {
+	white = "#@TERMINAL_FG@",
+	darker_black = "#@TERMINAL_BG:dark@",
+	black = "#@TERMINAL_BG@",
+	black2 = "#@COLOR_SURFACE:dim@",
+	one_bg = "#@COLOR_SURFACE@",
+	one_bg2 = "#@COLOR_SURFACE_ALT@",
+	one_bg3 = "#@COLOR_BORDER_INACTIVE:dim@",
+	grey = "#@COLOR_BORDER_INACTIVE@",
+	grey_fg = "#@COLOR_FG_DIM:dim@",
+	grey_fg2 = "#@COLOR_FG_DIM@",
+	light_grey = "#@COLOR_FG_DIM@",
+	line = "#@COLOR_SURFACE_ALT@",
+	statusline_bg = "#@COLOR_SURFACE:dim@",
+	lightbg = "#@COLOR_SURFACE@",
+	pmenu_bg = "#@COLOR_ACCENT@",
+	folder_bg = "#@COLOR_INFO@",
+
+	-- The semantic half. A palette carries one colour per meaning, not one per
+	-- name base46 happens to use, so several of these names share a token on
+	-- purpose: red is what the desktop calls urgent, green is what it calls ok.
+	red = "#@COLOR_URGENT@",
+	green = "#@COLOR_OK@",
+	vibrant_green = "#@COLOR_OK@",
+	teal = "#@COLOR_OK:dim@",
+	blue = "#@COLOR_INFO@",
+	nord_blue = "#@COLOR_INFO:dim@",
+	cyan = "#@COLOR_INFO@",
+	yellow = "#@COLOR_MUTED@",
+	sun = "#@COLOR_MUTED@",
+	orange = "#@COLOR_ACCENT@",
+	purple = "#@COLOR_ACCENT@",
+	dark_purple = "#@COLOR_ACCENT:dim@",
+	pink = "#@COLOR_ACCENT@",
+	baby_pink = "#@COLOR_ACCENT:dim@",
+}
+
+M.base_16 = {
+	base00 = "#@TERMINAL_BG@",
+	base01 = "#@COLOR_SURFACE:dim@",
+	base02 = "#@COLOR_SURFACE@",
+	base03 = "#@COLOR_BORDER_INACTIVE@",
+	base04 = "#@COLOR_FG_DIM@",
+	base05 = "#@TERMINAL_FG@",
+	base06 = "#@COLOR_FG@",
+	base07 = "#@COLOR_FG@",
+	base08 = "#@COLOR_URGENT@",
+	base09 = "#@COLOR_MUTED@",
+	base0A = "#@COLOR_MUTED@",
+	base0B = "#@COLOR_OK@",
+	base0C = "#@COLOR_INFO@",
+	base0D = "#@COLOR_INFO@",
+	base0E = "#@COLOR_ACCENT@",
+	base0F = "#@COLOR_ACCENT:dim@",
+}
+
+M.type = "dark"
+
+return M

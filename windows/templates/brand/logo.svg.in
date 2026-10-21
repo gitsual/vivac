@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The banner, rendered from the palette like every other themed surface.
+     The mark is the wallpaper shrunk into a coin: the same moon, halo, stars
+     and two ridges that templates/wallpaper/base.svg.in draws at 3840px, in
+     the circle the status bar already uses for the theme button.
+
+     There is no background rectangle. The banner is read on the README, and
+     GitHub paints that page white or black depending on the reader, so the
+     field is transparent and the wordmark takes the accent rather than the
+     foreground: accent is the one token in every palette that carries enough
+     chroma to hold against both. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650 280" width="650" height="280" role="img" aria-label="vivac">
+  <defs>
+    <radialGradient id="halo"><stop stop-color="#@COLOR_ACCENT@" stop-opacity=".30"/><stop offset="1" stop-color="#@COLOR_ACCENT@" stop-opacity="0"/></radialGradient>
+    <linearGradient id="moon" x2=".7" y2="1"><stop stop-color="#@COLOR_FG@"/><stop offset="1" stop-color="#@COLOR_ACCENT@"/></linearGradient>
+    <linearGradient id="sky" x2="1" y2="1"><stop stop-color="#@COLOR_BG:darker@"/><stop offset=".55" stop-color="#@COLOR_BG@"/><stop offset="1" stop-color="#@COLOR_SURFACE_ALT@"/></linearGradient>
+    <linearGradient id="ridge" x2=".5" y2="1"><stop stop-color="#@COLOR_SURFACE_ALT:dim@"/><stop offset="1" stop-color="#@COLOR_SURFACE:dark@"/></linearGradient>
+    <linearGradient id="front" x2="0" y2="1"><stop stop-color="#@COLOR_SURFACE:dark@"/><stop offset="1" stop-color="#@COLOR_BG:darker@"/></linearGradient>
+    <clipPath id="coin"><circle cx="120" cy="140" r="82"/></clipPath>
+  </defs>
+
+  <g clip-path="url(#coin)">
+    <circle cx="120" cy="140" r="82" fill="url(#sky)"/>
+    <ellipse cx="150" cy="116" rx="74" ry="62" fill="url(#halo)"/>
+    <g fill="#@COLOR_FG@" opacity=".45"><circle cx="78" cy="94" r="1.7"/><circle cx="104" cy="78" r="2"/><circle cx="186" cy="100" r="1.7"/><circle cx="66" cy="130" r="1.4"/></g>
+    <circle cx="150" cy="116" r="26" fill="url(#moon)"/>
+    <path d="M38 176 76 152 106 172 150 128 184 166 202 154v68H38Z" fill="url(#ridge)"/>
+    <path d="m150 128 34 38-26-11-8 5z" fill="#@COLOR_ACCENT@" opacity=".25"/>
+    <path d="M38 200 82 184 124 204 170 178 202 196v26H38Z" fill="url(#front)"/>
+  </g>
+  <circle cx="120" cy="140" r="82" fill="none" stroke="#@COLOR_ACCENT@" stroke-width="4"/>
+  <circle cx="120" cy="140" r="102" fill="none" stroke="#@COLOR_ACCENT@" stroke-width="1.5" opacity="0.35"/>
+
+  <text x="264" y="162" font-family="JetBrains Mono, JetBrainsMono Nerd Font, ui-monospace, monospace"
+        font-size="86" font-weight="700" letter-spacing="-2" fill="#@COLOR_ACCENT@">vivac</text>
+  <text x="268" y="204" font-family="JetBrains Mono, JetBrainsMono Nerd Font, ui-monospace, monospace"
+        font-size="20" letter-spacing="4" fill="#@COLOR_MUTED@">rebuild it from nothing</text>
+</svg>

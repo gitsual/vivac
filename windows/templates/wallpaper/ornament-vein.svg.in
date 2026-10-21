@@ -1,0 +1,11 @@
+  <!-- Veta — a mineral seam: useful body in contact with the natural. -->
+  <g stroke="#@COLOR_ACCENT@" fill="none" opacity="0.34">
+    <path d="M0 1180 L 480 1120 L 760 1220 L 1180 1080 L 1560 1160 L 1980 1020" stroke-width="4"/>
+    <path d="M1980 1020 L 2420 1120 L 2760 1000 L 3180 1100 L 3560 980 L 3840 1060" stroke-width="4"/>
+    <path d="M480 1120 L 520 1340 L 700 1460" stroke-width="2"/>
+    <path d="M2760 1000 L 2820 1240 L 3000 1340" stroke-width="2"/>
+  </g>
+  <g fill="#@COLOR_MUTED@" opacity="0.5">
+    <circle cx="1180" cy="1080" r="11"/><circle cx="1980" cy="1020" r="14"/>
+    <circle cx="2760" cy="1000" r="11"/><circle cx="3560" cy="980" r="12"/>
+  </g>

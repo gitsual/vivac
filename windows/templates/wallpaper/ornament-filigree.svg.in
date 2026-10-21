@@ -1,0 +1,13 @@
+  <!-- Filigrana — the worn edge of an old frame, never bright chrome. -->
+  <g stroke="#@COLOR_ACCENT@" fill="none" opacity="0.30" stroke-width="3">
+    <path d="M300 300 C 520 180 760 180 980 300 C 760 420 520 420 300 300 Z"/>
+    <path d="M300 300 C 420 520 420 760 300 980"/>
+    <path d="M980 300 C 1100 520 1100 760 980 980"/>
+    <path d="M300 980 C 520 1100 760 1100 980 980"/>
+    <circle cx="640" cy="640" r="126"/>
+    <circle cx="640" cy="640" r="188"/>
+  </g>
+  <g stroke="#@COLOR_MUTED@" fill="none" opacity="0.26" stroke-width="2">
+    <path d="M3540 1560 C 3320 1440 3080 1440 2860 1560 C 3080 1680 3320 1680 3540 1560 Z"/>
+    <circle cx="3200" cy="1560" r="78"/>
+  </g>

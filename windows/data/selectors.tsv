@@ -1,0 +1,9 @@
+# id	manifest	predicate	flag	label_key
+# The optional package sets bootstrap.ps1 can install on top of the base
+# profile. The predicate is written over hardware facts with the grammar of
+# lib/Vivac.psm1 (key=value key!=value key~word, && and ||); empty means any
+# machine. A selector whose predicate fails is not offered, and asking for it
+# explicitly fails with the reason -- never a silent no-op.
+editor	packages/editor.txt		-Editor	selector.editor
+desktop	packages/desktop.txt		-Desktop	selector.desktop
+security	packages/security.txt		-Security	selector.security

@@ -1,0 +1,162 @@
+/* The bar's stylesheet, rendered from the palette like every themed surface.
+   The shapes are the source bar's: a rounded strip with an accent rule under
+   it, gauges as pills with a muted underline, the power button in the accent. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: transparent; overflow: hidden; }
+body {
+  font-family: "JetBrainsMono Nerd Font", "JetBrainsMono NF", "Cascadia Code", monospace;
+  font-size: 13px;
+  color: #@COLOR_FG@;
+  user-select: none;
+  cursor: default;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+/* Three columns, the outer two equal, so the clock sits at the middle of the
+   screen whatever is either side of it. Left clips its title rather than
+   push into the clock; the gauges hug the right edge. */
+.bar {
+  position: absolute; inset: 6px 15px 6px 15px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center; gap: 8px;
+  background: rgba(@COLOR_BG:rgb@, 0.95);
+  border-radius: 12px;
+  border-bottom: 3px solid #@COLOR_ACCENT@;
+  padding: 0 6px;
+}
+.left, .center, .right { display: flex; align-items: center; gap: 4px; }
+.left { min-width: 0; overflow: hidden; }
+.right { justify-content: flex-end; }
+/* The rule between groups on the right: a thin muted line, not a pill. */
+.sep { width: 1px; height: 18px; margin: 0 4px; background: #@COLOR_MUTED@; opacity: 0.6; }
+.glyph { margin-right: 6px; }
+.ws { display: flex; gap: 2px; flex: 0 0 auto; }
+.ws-item {
+  padding: 3px 9px; border-radius: 10px; white-space: nowrap;
+  background: rgba(@COLOR_SURFACE:rgb@, 0.7);
+  border-bottom: 2px solid transparent;
+}
+.ws-item .glyph { margin: 0 0 0 6px; }
+.ws-item .glyph.minimized { color: #@COLOR_MUTED@; }
+.ws-item .glyph:hover { color: #@COLOR_ACCENT@; }
+.ws-item .more { margin-left: 6px; color: #@COLOR_FG_DIM@; font-size: 11px; }
+.ws-item.empty { color: #@COLOR_MUTED@; }
+.ws-item.displayed { border-bottom-color: #@COLOR_MUTED@; }
+.ws-item.focused { border-bottom-color: #@COLOR_ACCENT@; color: #@COLOR_FG@; }
+.ws-item:hover { background: rgba(@COLOR_SURFACE_ALT:rgb@, 0.9); }
+/* The focused window's title is context, not a reading: it recedes and
+   carries no border, so it does not read as another gauge. */
+.title { color: #@COLOR_FG_DIM@; padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title.empty { color: #@COLOR_MUTED@; }
+.pill {
+  display: flex; align-items: center; white-space: nowrap;
+  background: rgba(@COLOR_SURFACE:rgb@, 0.7);
+  padding: 3px 9px; margin: 0 1px; border-radius: 10px;
+  border-bottom: 2px solid #@COLOR_MUTED@;
+}
+.net { color: #@COLOR_INFO@; }
+.net .glyph { margin-right: 0; }
+.net.disconnected { color: #@COLOR_MUTED@; }
+.net.linked { color: #@COLOR_ACCENT@; }
+.cpu.high, .gpu.critical, .battery.critical { color: #@COLOR_URGENT@; border-bottom-color: #@COLOR_URGENT@; }
+.battery.warning { color: #@COLOR_ACCENT@; }
+/* The shield recedes while all is well, as the clock does; it only speaks
+   up, in the accent or the urgent colour, when something needs a look. */
+.security { color: #@COLOR_FG_DIM@; }
+.security.warning { color: #@COLOR_ACCENT@; border-bottom-color: #@COLOR_ACCENT@; }
+.security.critical { color: #@COLOR_URGENT@; border-bottom-color: #@COLOR_URGENT@; }
+.weather { color: #@COLOR_FG_DIM@; }
+.audio.muted { color: #@COLOR_MUTED@; }
+/* What the tray answered for: the same rule as the shield. A radio that is
+   off recedes; a restart waiting speaks up. */
+.bluetooth.off { color: #@COLOR_FG_DIM@; }
+.net { cursor: pointer; }
+.usb:hover, .bluetooth:hover, .updates:hover, .net:hover { filter: brightness(1.15); }
+/* The update icon closes the bar at its right end: receding while all is
+   up to date, a count in the accent when something waits, the accent all
+   over when Windows waits for a restart. */
+.updates { color: #@COLOR_FG_DIM@; margin-left: 4px; padding: 3px 10px; }
+.updates .glyph { margin-right: 0; }
+.updates.pending { color: #@COLOR_FG@; border-bottom-color: #@COLOR_ACCENT@; }
+.updates .badge {
+  margin-left: 6px; padding: 0 6px; border-radius: 8px; font-size: 11px; font-weight: bold;
+  background: #@COLOR_ACCENT@; color: #@COLOR_BG@;
+}
+.updates.security { color: #@COLOR_URGENT@; border-bottom-color: #@COLOR_URGENT@; }
+.updates.security .badge { background: #@COLOR_URGENT@; }
+.updates.reboot { background: #@COLOR_ACCENT@; color: #@COLOR_BG@; border-bottom: none; }
+.theme { color: #@COLOR_ACCENT@; border-bottom: none; padding: 3px 10px; }
+.power { background: #@COLOR_ACCENT@; color: #@COLOR_BG@; border-bottom: none; padding: 3px 10px; margin-left: 4px; }
+.theme:hover, .power:hover { filter: brightness(1.15); }
+.clock, .weather { cursor: default; }
+
+/* The hover popups under the clock and the weather (calendar.html,
+   forecast.html): the bar's own strip, grown down, with the same accent
+   rule under it. */
+.popup-body { padding: 4px 0 0 0; }
+.popup {
+  position: absolute; inset: 4px 0 6px 0;
+  background: #@COLOR_BG@;
+  border-radius: 12px;
+  border-bottom: 3px solid #@COLOR_ACCENT@;
+  padding: 12px 14px;
+  overflow: hidden;
+}
+.popup .dim { color: #@COLOR_FG_DIM@; }
+.popup-head { display: flex; justify-content: center; margin-bottom: 10px; color: #@COLOR_ACCENT@; font-weight: bold; }
+.popup-foot { margin-top: 10px; text-align: center; color: #@COLOR_FG_DIM@; }
+.cal-title { font-weight: bold; color: #@COLOR_ACCENT@; }
+.cal-grid { display: grid; grid-template-columns: 26px repeat(7, 1fr); gap: 3px; text-align: center; }
+.cal-dow { color: #@COLOR_FG_DIM@; font-size: 11px; padding-bottom: 2px; }
+.cal-wk { color: #@COLOR_MUTED@; font-size: 11px; line-height: 26px; }
+.cal-day { line-height: 26px; border-radius: 8px; }
+.cal-day.weekend, .cal-dow.weekend { color: #@COLOR_INFO@; }
+.cal-day.other { color: #@COLOR_MUTED@; }
+.cal-day.today { background: #@COLOR_ACCENT@; color: #@COLOR_BG@; font-weight: bold; }
+.fc-place { color: #@COLOR_ACCENT@; }
+.fc-now { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 10px; }
+.fc-now-glyph { font-size: 34px; color: #@COLOR_INFO@; }
+.fc-now-temp { font-size: 30px; font-weight: bold; }
+.fc-now-text { line-height: 1.4; }
+.fc-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 10px; padding: 8px 4px; margin-bottom: 8px;
+  background: rgba(@COLOR_SURFACE:rgb@, 0.7); border-radius: 10px; color: #@COLOR_FG_DIM@; font-size: 12px; text-align: center; }
+.fc-facts b { color: #@COLOR_FG@; font-weight: normal; }
+.fc-label { color: #@COLOR_FG_DIM@; font-size: 11px; margin: 6px 0 4px 2px; }
+.fc-hours { display: grid; grid-template-columns: repeat(12, 1fr); text-align: center; font-size: 12px; }
+.fc-hour { display: flex; flex-direction: column; gap: 2px; }
+.fc-glyph { color: #@COLOR_INFO@; }
+.fc-pp { color: #@COLOR_MUTED@; font-size: 10px; min-height: 12px; }
+.fc-pp.wet { color: #@COLOR_INFO@; }
+.fc-days { display: grid; grid-template-columns: 44px 22px 1fr 36px 70px; gap: 3px 6px; align-items: center; font-size: 12px; }
+.fc-days .fc-pp { font-size: 11px; text-align: right; }
+.fc-text { color: #@COLOR_FG_DIM@; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc-range { text-align: right; }
+
+/* The gauges' hover popups (cpu, memory, disk, gpu .html, all gauge.js):
+   one big reading, its bar in the gauge's colours, the last two minutes as
+   a line, then the detail as two columns. */
+.g-big { font-size: 24px; font-weight: bold; text-align: center; margin-bottom: 6px; }
+.g-big .dim { font-size: 14px; font-weight: normal; }
+.g-bar { height: 8px; border-radius: 4px; background: rgba(@COLOR_SURFACE:rgb@, 0.9); overflow: hidden; margin: 4px 0 8px 0; }
+.g-bar span { display: block; height: 100%; background: #@COLOR_INFO@; border-radius: 4px; }
+.g-bar.warning span { background: #@COLOR_ACCENT@; }
+.g-bar.critical span { background: #@COLOR_URGENT@; }
+.g-bar.thin { height: 4px; }
+.g-spark { width: 100%; height: 40px; display: block; margin-bottom: 8px; }
+.g-spark .line { fill: none; stroke: #@COLOR_INFO@; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.g-spark .area { fill: rgba(@COLOR_INFO:rgb@, 0.15); stroke: none; }
+.g-rows, .g-top { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; font-size: 12px; }
+.g-top span:nth-child(odd) { color: #@COLOR_FG@; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-top span:nth-child(even) { color: #@COLOR_FG_DIM@; text-align: right; }
+.g-wait { font-size: 12px; text-align: center; }
+.g-disks { display: flex; flex-direction: column; gap: 6px; }
+.g-disk-head { display: flex; justify-content: space-between; font-size: 12px; }
+.g-disk .g-bar { margin: 3px 0 0 0; }
+
+/* "Loading..." while a popup waits for its numbers: the same turning ring
+   as vivac's own surfaces (lib/VivacLoading.cs). */
+.spinner {
+  display: inline-block; width: 12px; height: 12px; margin-right: 8px; vertical-align: -1px;
+  border: 2px solid rgba(@COLOR_ACCENT:rgb@, 0.25); border-top-color: #@COLOR_ACCENT@;
+  border-radius: 50%; animation: vivac-spin 0.9s linear infinite;
+}
+@keyframes vivac-spin { to { transform: rotate(360deg); } }

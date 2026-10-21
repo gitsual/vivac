@@ -1,0 +1,23 @@
+{
+  "name": "vivac",
+  "background": "#@TERMINAL_BG@",
+  "foreground": "#@TERMINAL_FG@",
+  "cursorColor": "#@COLOR_ACCENT@",
+  "selectionBackground": "#@COLOR_SURFACE_ALT@",
+  "black": "#@TERMINAL_BG:dark@",
+  "red": "#@COLOR_URGENT@",
+  "green": "#@COLOR_OK@",
+  "yellow": "#@COLOR_MUTED@",
+  "blue": "#@COLOR_INFO@",
+  "purple": "#@COLOR_ACCENT@",
+  "cyan": "#@COLOR_INFO:dim@",
+  "white": "#@COLOR_FG_DIM@",
+  "brightBlack": "#@COLOR_BORDER_INACTIVE@",
+  "brightRed": "#@COLOR_URGENT@",
+  "brightGreen": "#@COLOR_OK@",
+  "brightYellow": "#@COLOR_ACCENT@",
+  "brightBlue": "#@COLOR_INFO@",
+  "brightPurple": "#@COLOR_ACCENT@",
+  "brightCyan": "#@COLOR_INFO@",
+  "brightWhite": "#@TERMINAL_FG@"
+}

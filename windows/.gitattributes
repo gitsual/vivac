@@ -1,0 +1,5 @@
+# Every text file is LF in the repository and in the checkout: the renders are
+# compared byte for byte against their templates, and a checkout that turned
+# them into CRLF would report drift that is not there.
+* text=auto eol=lf
+*.png binary

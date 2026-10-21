@@ -1,0 +1,6 @@
+{
+  "chassis_types": [1], "model": "VMware20,1", "manufacturer": "VMware, Inc.",
+  "video_pnp_ids": ["PCI\\VEN_15AD&DEV_0405&SUBSYS_040515AD&REV_00\\3&0&0&78"],
+  "battery_count": 0, "adapter_media": ["802.3"], "bluetooth_radios": 0,
+  "brightness_monitors": 0, "screen_count": 1, "dpi": 96
+}

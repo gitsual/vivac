@@ -1,0 +1,6 @@
+{
+  "chassis_types": [3], "model": "Virtual Machine", "manufacturer": "Microsoft Corporation",
+  "video_pnp_ids": ["VMBUS\\{DA0A7802-E377-4AAC-8E77-0558EB1073F8}\\{5620E0C7-8062-4DCE-AEB7-520C7EF76171}", "ROOT\\BASICDISPLAY\\0000"],
+  "battery_count": 0, "adapter_media": ["802.3"], "bluetooth_radios": 0,
+  "brightness_monitors": 0, "screen_count": 1, "dpi": 96
+}

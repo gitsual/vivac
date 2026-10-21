@@ -1,0 +1,84 @@
+# bind_id	pane	action_type	action_value	label_key
+# The help registry: one row per key the help pane describes. bind_id spells
+# the window-manager modifier as MOD (Alt or Win, chosen in the settings file)
+# and the rest as GlazeWM names the key. pane is one of wm browser shell
+# editor system. action_type says what action_value is:
+#   glazewm  a GlazeWM command, run through `glazewm command`
+#   vivac    a verb of vivac's resident host, for a key it watches itself
+#            (MOD+r, MOD+v, MOD+l with Win as the modifier)
+#   doc      a section of docs/keys.md, for keys that belong to another program
+# label_key is the i18n key of the description. Every glazewm row must match an
+# annotated binding in render/glazewm/config.yaml.in and every annotated
+# binding a row here: tests/cases/HelpRegistry.Tests.ps1.
+MOD+enter	wm	glazewm	shell-exec wt	help.wm.terminal
+MOD+r	wm	vivac	menu	help.wm.menu
+MOD+e	wm	glazewm	shell-exec wt nvim	help.wm.editor
+MOD+q	wm	glazewm	close	help.wm.close
+MOD+m	wm	glazewm	wm-exit	help.wm.exit
+MOD+space	wm	glazewm	toggle-floating --centered	help.wm.floating
+MOD+f	wm	glazewm	toggle-fullscreen	help.wm.fullscreen
+MOD+j	wm	glazewm	toggle-tiling-direction	help.wm.split
+MOD+l	wm	vivac	lock	help.wm.lock
+MOD+shift+s	wm	glazewm	shell-exec explorer.exe ms-screenclip:	help.wm.screenshot
+MOD+f1	wm	glazewm	shell-exec vivac help	help.wm.help
+MOD+shift+e	wm	glazewm	shell-exec vivac power	help.wm.power
+MOD+shift+t	wm	glazewm	shell-exec vivac theme	help.wm.theme
+MOD+v	wm	vivac	clipboard	help.wm.clipboard
+MOD+shift+r	wm	glazewm	wm-reload-config	help.wm.reload
+MOD+left	wm	glazewm	focus --direction left	help.wm.focus_left
+MOD+right	wm	glazewm	focus --direction right	help.wm.focus_right
+MOD+up	wm	glazewm	focus --direction up	help.wm.focus_up
+MOD+down	wm	glazewm	focus --direction down	help.wm.focus_down
+MOD+shift+left	wm	glazewm	move --direction left	help.wm.move_left
+MOD+shift+right	wm	glazewm	move --direction right	help.wm.move_right
+MOD+shift+up	wm	glazewm	move --direction up	help.wm.move_up
+MOD+shift+down	wm	glazewm	move --direction down	help.wm.move_down
+MOD+control+left	wm	glazewm	resize --width -2%	help.wm.shrink_w
+MOD+control+right	wm	glazewm	resize --width +2%	help.wm.grow_w
+MOD+control+up	wm	glazewm	resize --height -2%	help.wm.shrink_h
+MOD+control+down	wm	glazewm	resize --height +2%	help.wm.grow_h
+MOD+1	wm	glazewm	focus --workspace 1	help.wm.ws_1
+MOD+2	wm	glazewm	focus --workspace 2	help.wm.ws_2
+MOD+3	wm	glazewm	focus --workspace 3	help.wm.ws_3
+MOD+4	wm	glazewm	focus --workspace 4	help.wm.ws_4
+MOD+5	wm	glazewm	focus --workspace 5	help.wm.ws_5
+MOD+6	wm	glazewm	focus --workspace 6	help.wm.ws_6
+MOD+7	wm	glazewm	focus --workspace 7	help.wm.ws_7
+MOD+8	wm	glazewm	focus --workspace 8	help.wm.ws_8
+MOD+9	wm	glazewm	focus --workspace 9	help.wm.ws_9
+MOD+0	wm	glazewm	focus --workspace 10	help.wm.ws_10
+MOD+shift+1	wm	glazewm	move --workspace 1	help.wm.ws_move_1
+MOD+shift+2	wm	glazewm	move --workspace 2	help.wm.ws_move_2
+MOD+shift+3	wm	glazewm	move --workspace 3	help.wm.ws_move_3
+MOD+shift+4	wm	glazewm	move --workspace 4	help.wm.ws_move_4
+MOD+shift+5	wm	glazewm	move --workspace 5	help.wm.ws_move_5
+MOD+shift+6	wm	glazewm	move --workspace 6	help.wm.ws_move_6
+MOD+shift+7	wm	glazewm	move --workspace 7	help.wm.ws_move_7
+MOD+shift+8	wm	glazewm	move --workspace 8	help.wm.ws_move_8
+MOD+shift+9	wm	glazewm	move --workspace 9	help.wm.ws_move_9
+MOD+shift+0	wm	glazewm	move --workspace 10	help.wm.ws_move_10
+MOD+oem_period	wm	glazewm	focus --next-active-workspace	help.wm.ws_next
+MOD+oem_comma	wm	glazewm	focus --prev-active-workspace	help.wm.ws_prev
+Ctrl+T	browser	doc	docs/keys.md#browser	help.browser.new_tab
+Ctrl+W	browser	doc	docs/keys.md#browser	help.browser.close_tab
+Ctrl+L	browser	doc	docs/keys.md#browser	help.browser.address
+Ctrl+Shift+T	browser	doc	docs/keys.md#browser	help.browser.reopen_tab
+Ctrl+F	browser	doc	docs/keys.md#browser	help.browser.find
+Ctrl+R	shell	doc	docs/keys.md#shell	help.shell.history
+Home	shell	doc	docs/keys.md#shell	help.shell.line_start
+End	shell	doc	docs/keys.md#shell	help.shell.line_end
+Esc	shell	doc	docs/keys.md#shell	help.shell.kill_line
+Ctrl+C	shell	doc	docs/keys.md#shell	help.shell.interrupt
+Tab	shell	doc	docs/keys.md#shell	help.shell.complete
+Space	editor	doc	docs/keys.md#editor	help.editor.leader
+Space+F	editor	doc	docs/keys.md#editor	help.editor.find_files
+Space+/	editor	doc	docs/keys.md#editor	help.editor.grep
+Space+E	editor	doc	docs/keys.md#editor	help.editor.explorer
+G+D	editor	doc	docs/keys.md#editor	help.editor.definition
+Win+L	system	doc	docs/keys.md#system	help.system.lock
+Win+V	system	doc	docs/keys.md#system	help.system.clipboard
+Win+Shift+S	system	doc	docs/keys.md#system	help.system.snip
+Win+Tab	system	doc	docs/keys.md#system	help.system.task_view
+Ctrl+Shift+Esc	system	doc	docs/keys.md#system	help.system.task_manager
+Win+I	system	doc	docs/keys.md#system	help.system.settings
+Win+.	system	doc	docs/keys.md#system	help.system.emoji

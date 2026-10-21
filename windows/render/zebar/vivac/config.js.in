@@ -1,0 +1,27 @@
+// Rendered by scripts/deploy.ps1 from render/zebar/vivac/config.js.in for
+// this machine. A gauge is listed only when the hardware facts say the machine
+// can answer for it; correct a fact in %APPDATA%\vivac\hardware-facts.override
+// and deploy again rather than editing this file.
+export const config = {
+  repo: '@PATH_REPO:json@',
+  pipe: '@PIPE_NAME@',
+  locale: '@SET_LANGUAGE@',
+  weather: @WEATHER_JSON@,
+  labels: @BAR_LABELS_JSON@,
+  modules: [
+@?has_wifi=yes@    'wireless',
+    'wired',
+@?has_bluetooth=yes@    'bluetooth',
+    'cpu',
+    'memory',
+    'disk',
+@?gpu_vendors~nvidia@    'gpu',
+@?has_battery=yes@    'battery',
+    'usb',
+    'audio',
+    'security',
+    'theme',
+    'power',
+    'updates',
+  ],
+};

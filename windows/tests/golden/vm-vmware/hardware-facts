@@ -1,0 +1,12 @@
+# Hardware facts, detected by scripts/hardware-facts.ps1. Do not edit:
+# put a corrected key in hardware-facts.override beside this file instead.
+FACTS_SCHEMA=1
+chassis=vm
+virt=vmware
+gpu_vendors=virtual
+has_battery=no
+has_wifi=no
+has_bluetooth=no
+has_backlight=no
+monitor_count=1
+max_scale=1
