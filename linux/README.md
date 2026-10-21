@@ -177,6 +177,7 @@ the build — it is not quietly downgraded, because the claim is what is wrong.
 - **🧭 A first run that teaches.** Three questions and a ten-step tour that waits for you to actually press the key.
 - **🖥️ No GPU assumed.** Hardware facts are detected, rendered into `$XDG_CONFIG_HOME`, and never written into the checkout.
 - **🔗 The Windows half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Windows** sits in the power menu, and a drop tray hands files across. With a second machine: `vivac-link` sends the clipboard, links, files and notifications to it. `Super+Shift+B` opens it all; `apply-system.sh --bridge` sets up the system side. See [the bridge](../docs/bridge.md).
+- **📱 The phone in the bar.** KDE Connect starts with the session: the phone's notifications arrive as the desktop's own, its battery sits on the bar, and **Phone…** in the bridge menu rings it or sends it a file, the clipboard or a link. `vivac-phone commands` gives the phone a fixed list of vivac actions (lock, suspend, restart in Windows). See [the phone](../docs/bridge.md#5-the-phone-kde-connect).
 - **🔐 Sanitized on purpose.** No credentials, device IDs, UUIDs, hostnames or private paths — enforced by a scanner over the staged objects and the Git history, not by memory.
 - **✅ 47 gates before anything ships.** Shell, Python, JSON, Lua, systemd units, manifests, asset checksums, privacy patterns, a two-pass deployment regression and a real Arch VM.
 

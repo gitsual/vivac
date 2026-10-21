@@ -120,8 +120,11 @@ function Invoke-Verb([string]$Verb) {
     # Whatever happens to the greeter, the cover put up at start comes down:
     # a sign-in must never end behind blank windows.
     if ($Verb -eq 'greet') { try { Invoke-VivacLock -Greeter } finally { Hide-VivacLockCover; Clear-VivacLockMarker; Resume-SharedSync }; return }
-    if (@('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security') -notcontains $Verb) { return }
-    $current = $open[$Verb]
+    if (@('menu', 'phone', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security') -notcontains $Verb) { return }
+    # The phone is the menu, open on its category: one window for both.
+    $key = $Verb
+    if ($Verb -eq 'phone') { $key = 'menu' }
+    $current = $open[$key]
     if ($current -and $current.IsVisible) { $current.Close(); return }
     switch ($Verb) {
         'menu'  {
@@ -140,6 +143,7 @@ function Invoke-Verb([string]$Verb) {
             # one installed meanwhile is there the next time.
             $script:refreshApps = $true
         }
+        'phone' { Show-Menu -Registry $open -Category phone }
         'help'  { Show-Help -Registry $open }
         'power' { Show-Power -Registry $open }
         'theme' { Show-ThemePicker -Registry $open }
@@ -162,7 +166,7 @@ foreach ($warm in (Show-Sound -NoShow), (Show-Menu -NoShow), (Show-Help -NoShow)
 # the next ones at once: asked here, the security surface opens like the rest.
 (Show-Security -NoShow).Close()
 (Show-Bluetooth -NoShow).Close()
-$loadingVerbs = @('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security')
+$loadingVerbs = @('menu', 'phone', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security')
 try { Import-VivacLoading } catch { }
 (Show-Network -NoShow).Close()
 (Show-Updates -NoShow).Close()

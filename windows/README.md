@@ -72,7 +72,7 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Editor
 ```
 
 `bootstrap.ps1` installs the base packages with winget (plus the optional
-sets you ask for: `-Editor`, `-Desktop`, `-Security`; `-ListSelectors` says
+sets you ask for: `-Editor`, `-Desktop`, `-Security`, `-Phone`; `-ListSelectors` says
 which apply here), detects the hardware, deploys every configuration, starts
 GlazeWM and opens the first-run wizard.
 
@@ -122,6 +122,7 @@ ornament it has not earned fails the build.
 - **📋 A clipboard history that stays in memory.** `Win+V`, never written to disk.
 - **🖥️ A bar that only shows what the machine has — and never goes blank.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts. It loads nothing from the network, and a watcher brings it back if it dies or comes up empty; see [The bar](#-the-bar).
 - **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it. See [the bridge](../docs/bridge.md).
+- **📱 The phone in the bar.** With KDE Connect (`bootstrap.ps1 -Phone`), a paired phone shows on the bar while it is in reach, and the menu's **Phone** category rings it or sends it a file or the clipboard. Without KDE Connect none of it shows. See [the phone](../docs/bridge.md#5-the-phone-kde-connect).
 - **🛡️ UAC left whole.** Nothing elevated runs a file you can change without elevation; see [What it asks of Windows](#-what-it-asks-of-windows).
 - **✅ 19 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
 

@@ -74,6 +74,7 @@ both. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
 | **Restart into the other system** — one entry in each power menu; it sets the firmware's *BootNext* for one boot only, never the boot order or GRUB's default | ✅ | |
 | **The drop tray** — leave files in a folder on one side; the other says, at sign-in, that they are waiting | ✅ | |
 | **vivac link** — send the clipboard, a link, a file or a notification to the other machine; paired once with a code, every request signed | | ✅ |
+| **The phone** — KDE Connect on either system: the phone's battery on the bar, its notifications as the desktop's own (Linux), and from the menu ring it, send it a file or the clipboard; on Linux the phone can lock, suspend or restart the machine into Windows from a fixed list | ✅ | ✅ |
 
 **Safe by construction.** vivac link never runs what it receives, never opens a link without a click,
 writes files only into `Downloads/vivac-link/` under a name stripped of any path, and refuses a request
@@ -114,6 +115,9 @@ To join the two once both are installed:
    On Windows the command is `bin\vivac-link.ps1`, then `-Register` to listen at sign-in and
    `apply-system.ps1 -Link` (elevated) to let the other machine in. `Super+Shift+B` on Linux and the
    menu on Windows hold the rest.
+4. **The phone** — install the KDE Connect app on the phone and pair it with each system (KDE Connect
+   comes with the Linux packages; on Windows, `bootstrap.ps1 -Phone`). On Linux, `vivac-phone commands`
+   then lists vivac's actions on the phone. See [the phone](docs/bridge.md#5-the-phone-kde-connect).
 
 ---
 

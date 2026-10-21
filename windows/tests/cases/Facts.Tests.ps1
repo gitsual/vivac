@@ -8,11 +8,11 @@ Import-Module (Join-Path (Get-RepoRoot) 'lib\Deploy.psm1') -Force
 $root = Get-RepoRoot
 $detector = Join-Path $root 'scripts\hardware-facts.ps1'
 $expectedModules = @{
-    'desktop-nvidia'    = 'wireless wired bluetooth cpu memory disk gpu usb audio security theme power updates'
-    'laptop-intel'      = 'wireless wired bluetooth cpu memory disk battery usb audio security theme power updates'
-    'laptop-amd-hybrid' = 'wireless wired bluetooth cpu memory disk gpu battery usb audio security theme power updates'
-    'vm-hyperv'         = 'wired cpu memory disk usb audio security theme power updates'
-    'vm-vmware'         = 'wired cpu memory disk usb audio security theme power updates'
+    'desktop-nvidia'    = 'wireless wired bluetooth phone cpu memory disk gpu usb audio security theme power updates'
+    'laptop-intel'      = 'wireless wired bluetooth phone cpu memory disk battery usb audio security theme power updates'
+    'laptop-amd-hybrid' = 'wireless wired bluetooth phone cpu memory disk gpu battery usb audio security theme power updates'
+    'vm-hyperv'         = 'wired phone cpu memory disk usb audio security theme power updates'
+    'vm-vmware'         = 'wired phone cpu memory disk usb audio security theme power updates'
 }
 
 foreach ($dir in Get-ChildItem -LiteralPath (Join-Path $root 'tests\fixtures') -Directory) {

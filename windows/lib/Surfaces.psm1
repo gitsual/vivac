@@ -9,6 +9,7 @@
 Set-StrictMode -Version 2.0
 Import-Module (Join-Path $PSScriptRoot 'Vivac.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Bridge.psm1')
+Import-Module (Join-Path $PSScriptRoot 'Phone.psm1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $script:VivacEntry = Join-Path $root 'bin\vivac.ps1'
@@ -902,7 +903,24 @@ function Get-VivacMenuEntries {
         $e.Add((New-MenuEntry 'session' (T 'bridge.drop_out') 'bridge' 'drop-out' $false 0xE898))
     }
     if (Test-Path -LiteralPath (Get-VivacLinkConfPath)) { $e.Add((New-MenuEntry 'session' (T 'bridge.link_clip') 'bridge' 'link-clip' $false 0xE8C8)) }
+    # The phone, a category of its own while KDE Connect is installed
+    # (lib/Phone.psm1); read from what the bar last saw, never asked here.
+    foreach ($p in @(Get-VivacPhoneMenuEntries ${function:New-MenuEntry})) { $e.Add($p) }
     $e
+}
+
+# The phone's actions, each in a process of its own: the menu closes at once
+# and the result comes as a notification (bin/vivac-phone.ps1).
+function Invoke-PhoneAction([string]$Target) {
+    $action, $id, $name = $Target -split '\|', 3
+    $switch = @{ ring = '-Ring'; 'send-file' = '-SendFile'; 'send-clip' = '-SendClipboard'; manage = '-Manage' }[$action]
+    if (-not $switch) { return }
+    $phoneArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$(Join-Path (Get-VivacPaths).Repo 'bin\vivac-phone.ps1')`"", $switch)
+    if ($action -ne 'manage') {
+        if (-not (Test-VivacPhoneId $id)) { return }
+        $phoneArgs += @('-Device', $id, '-Name', (ConvertTo-VivacArgument $name))
+    }
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList $phoneArgs
 }
 
 # Whether "restart in Linux" is set up: its task is registered. Asked once per
@@ -1005,6 +1023,7 @@ function Invoke-MenuEntry($Entry, [string]$Query, [switch]$Admin) {
         'run-admin' { Start-Process $Entry.Target -Verb RunAs }
         'power'     { Invoke-PowerAction $Entry.Target }
         'bridge'    { Invoke-BridgeAction $Entry.Target }
+        'phone'     { Invoke-PhoneAction $Entry.Target }
         'copy'      { Set-Clipboard -Value $Entry.Target }
         'find-files' {
             $q = [Uri]::EscapeDataString($Query)
@@ -1121,7 +1140,7 @@ $(Get-KitResourcesXaml $p)
 "@
 }
 
-function Show-Menu([switch]$NoShow, [hashtable]$Registry) {
+function Show-Menu([switch]$NoShow, [hashtable]$Registry, [string]$Category = '') {
     Update-SurfaceContext
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'menu' }
     Import-VivacMenu
@@ -1131,7 +1150,9 @@ function Show-Menu([switch]$NoShow, [hashtable]$Registry) {
     $entries = @(Get-VivacMenuEntries)
     $uses = Read-VivacMenuUsage
     $groupOrder = @('apps', 'recent', 'folders', 'settings', 'tools', 'session')
-    $groupGlyph = @{ all = 0xE80F; apps = 0xE71D; recent = 0xE823; folders = 0xE8B7; settings = 0xE713; tools = 0xE90F; session = 0xE7E8 }
+    # The phone's category exists only while KDE Connect is installed.
+    if (@($entries | Where-Object { $_.Group -eq 'phone' }).Count) { $groupOrder += 'phone' }
+    $groupGlyph = @{ all = 0xE80F; apps = 0xE71D; recent = 0xE823; folders = 0xE8B7; settings = 0xE713; tools = 0xE90F; session = 0xE7E8; phone = 0xE8EA }
     $sectionLabel = @{}
     foreach ($g in @('all') + $groupOrder) { $sectionLabel[$g] = T "menu.section.$g" }
 
@@ -1184,6 +1205,8 @@ function Show-Menu([switch]$NoShow, [hashtable]$Registry) {
     }
     $cats.ItemsSource = $catRows
     $cats.SelectedIndex = 0
+    # Opened on one category (the bar's phone opens the Phone one).
+    for ($i = 0; $i -lt $catRows.Count; $i++) { if ($catRows[$i].Group -eq $Category) { $cats.SelectedIndex = $i } }
 
     $newAction = {
         param([string]$Kind, [string]$Label, [int]$Code, [string]$Target = '')
@@ -1326,7 +1349,7 @@ function Show-Menu([switch]$NoShow, [hashtable]$Registry) {
                 $cats.SelectedIndex = ($cats.SelectedIndex + $step + $n) % $n
                 $e.Handled = $true; return
             }
-            if ($ctrl -and $k -match '^D([1-7])$') { $cats.SelectedIndex = [int]$Matches[1] - 1; $e.Handled = $true; return }
+            if ($ctrl -and $k -match '^D([1-8])$' -and [int]$Matches[1] -le $catRows.Count) { $cats.SelectedIndex = [int]$Matches[1] - 1; $e.Handled = $true; return }
             if ($k -eq 'Return') { & $act $ctrl; $e.Handled = $true; return }
         })
     # One click opens, as in a launcher; the scroll bar is not a row.

@@ -250,6 +250,10 @@ table.insert(vivac.autostart, { id = "wallpaper", cmd = "bash " .. vivac.scripts
 table.insert(vivac.autostart, { id = "polkit", cmd = "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1" })
 table.insert(vivac.autostart, { id = "keyring", cmd = "/usr/bin/gnome-keyring-daemon --start --components=secrets,ssh,pkcs11" })
 table.insert(vivac.autostart, { id = "dbus-env", cmd = "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP" })
+-- KDE Connect: the phone's notifications, battery and the actions of
+-- vivac-phone. Started here because Hyprland does not read the XDG autostart
+-- entry the package ships; a machine without it only logs a missing program.
+table.insert(vivac.autostart, { id = "kdeconnect", cmd = "/usr/bin/kdeconnectd" })
 -- The first session, and only the first: the wizard writes a marker and
 -- --first-run is a no-op afterwards. It is started last so the bar, the
 -- wallpaper and the notification daemon are already up to be previewed.

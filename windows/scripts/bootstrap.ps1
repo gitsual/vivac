@@ -19,6 +19,8 @@
   Also install the everyday applications (packages/desktop.txt).
 .PARAMETER Security
   Also install Malwarebytes and KeePassXC (packages/security.txt).
+.PARAMETER Phone
+  Also install KDE Connect, for the phone (packages/phone.txt).
 .PARAMETER NoInstall
   Skip winget entirely; deploy only.
 .PARAMETER ListSelectors
@@ -32,6 +34,7 @@ param(
     [switch]$Editor,
     [switch]$Desktop,
     [switch]$Security,
+    [switch]$Phone,
     [switch]$NoInstall,
     [switch]$ListSelectors,
     [switch]$NoStart
@@ -73,7 +76,7 @@ if ($ListSelectors) {
 }
 
 $manifests = @('packages/base.txt')
-$asked = @{ editor = $Editor; desktop = $Desktop; security = $Security }
+$asked = @{ editor = $Editor; desktop = $Desktop; security = $Security; phone = $Phone }
 foreach ($s in Get-Selectors) {
     if (-not $asked[$s.Id]) { continue }
     if (-not (Test-VivacPredicate $s.Predicate $facts)) {

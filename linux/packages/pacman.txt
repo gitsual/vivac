@@ -20,6 +20,7 @@ hyprland
 hyprlock
 hyprpaper
 jq
+kdeconnect
 keepassxc
 kitty
 libnotify
@@ -49,6 +50,7 @@ shfmt
 slurp
 socat
 sof-firmware
+sshfs
 stow
 swaybg
 ttf-fira-code

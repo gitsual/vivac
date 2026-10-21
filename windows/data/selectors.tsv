@@ -7,3 +7,4 @@
 editor	packages/editor.txt		-Editor	selector.editor
 desktop	packages/desktop.txt		-Desktop	selector.desktop
 security	packages/security.txt		-Security	selector.security
+phone	packages/phone.txt		-Phone	selector.phone

@@ -1,6 +1,6 @@
 * { border: none; border-radius: 0; font-family: "JetBrains Mono Nerd Font", "Font Awesome 6 Free"; font-size: 13px; min-height: 0; }
 window#waybar { background: rgba(@COLOR_BG:rgb@, 0.95); border-radius: 12px; border-bottom: 3px solid #@COLOR_ACCENT@; color: #@COLOR_FG@; }
-#workspaces, #clock, #cpu, #memory, #disk, #network, #pulseaudio, #custom-updates, #custom-gpu, #bluetooth, #backlight, #battery, #temperature, #custom-weather, #window, #submap { background: rgba(@COLOR_SURFACE:rgb@, 0.7); padding: 0 12px; margin: 5px 2px; border-radius: 10px; border-bottom: 2px solid #@COLOR_MUTED@; }
+#workspaces, #clock, #cpu, #memory, #disk, #network, #pulseaudio, #custom-updates, #custom-gpu, #bluetooth, #backlight, #battery, #temperature, #custom-weather, #custom-phone, #window, #submap { background: rgba(@COLOR_SURFACE:rgb@, 0.7); padding: 0 12px; margin: 5px 2px; border-radius: 10px; border-bottom: 2px solid #@COLOR_MUTED@; }
 #workspaces { padding: 0 4px; }
 #workspaces label { color: #@COLOR_FG@; padding: 0 6px; border-radius: 8px; }
 #workspaces label:hover { background: rgba(@COLOR_FG:rgb@, 0.15); }
@@ -19,6 +19,10 @@ window#waybar { background: rgba(@COLOR_BG:rgb@, 0.95); border-radius: 12px; bor
 #window.empty { color: #@COLOR_MUTED@; }
 #submap { color: #@COLOR_BG@; background: #@COLOR_ACCENT@; }
 #bluetooth.connected { color: #@COLOR_OK@; }
+/* The phone (custom/phone, KDE Connect): charging reads as fine, a low
+   battery as the thing worth a look. */
+#custom-phone.charging { color: #@COLOR_OK@; }
+#custom-phone.low { color: #@COLOR_URGENT@; border-bottom: 2px solid #@COLOR_URGENT@; }
 #custom-theme { background: rgba(@COLOR_SURFACE:rgb@, 0.7); color: #@COLOR_ACCENT@; border-radius: 10px; margin: 5px 2px; padding: 0 10px; }
 #custom-power { background: #@COLOR_ACCENT@; color: #@COLOR_BG@; border-radius: 10px; margin: 5px; padding: 0 10px; }
 tooltip { background: rgba(@COLOR_BG:rgb@, 0.98); border: 2px solid #@COLOR_ACCENT@; border-radius: 8px; }

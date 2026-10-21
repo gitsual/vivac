@@ -5,7 +5,7 @@ stands on its own. Together they also share state across a dual boot and talk
 live across a local network. This file is the contract both halves implement;
 a change here is a change to both.
 
-Four features, each usable alone:
+Five features, each usable alone:
 
 | Feature | When it helps | Needs |
 |---|---|---|
@@ -13,6 +13,7 @@ Four features, each usable alone:
 | [Reboot into the other system](#2-reboot-into-the-other-system) | dual boot | UEFI |
 | [The drop tray](#3-the-drop-tray) | dual boot | a disk both systems mount |
 | [vivac link](#4-vivac-link) | two machines on one network | a pairing code |
+| [The phone](#5-the-phone-kde-connect) | a phone on the same network | KDE Connect on both |
 
 ## The shared root
 
@@ -147,6 +148,61 @@ receives, never opens a URL without a click, and writes files only into its
   for TCP and UDP 47321, private networks and the local subnet only. Linux:
   `apply-system.sh --bridge` opens the same in UFW, the firewall vivac configures, for the
   local subnet only.
+
+## 5. The phone: KDE Connect
+
+A phone running the KDE Connect app (Android, GrapheneOS included, from
+F-Droid or the Play Store) pairs with either system and becomes part of
+vivac. vivac does not speak KDE Connect's protocol itself: it asks the
+KDE Connect daemon on the same machine, through its command line
+(`kdeconnect-cli`) and, on Linux, its D-Bus interface. Pairing is KDE
+Connect's own, done once on each system from the phone or KDE Connect's
+window. Everything here hides itself when KDE Connect is not installed or
+no paired phone is in reach: no bar module, no menu entry, no error.
+
+| | Linux | Windows |
+|---|---|---|
+| Install | `kdeconnect` in the base packages; `kdeconnectd` starts with the session | optional: `bootstrap.ps1 -Phone` (winget `KDE.KDEConnect`) |
+| The phone's notifications | through the notification daemon, as any program's; dunst marks them with a phone glyph (rule `vivac-phone`) | KDE Connect's own Windows notifications |
+| The bar | `custom/phone`: the first reachable phone's battery, `charging` and `low` (20 % or less) classes, every phone in the tooltip | a phone glyph while a phone is reachable, a count when there are several, the names on hover; no battery (the Windows build has no D-Bus client to read it with) |
+| The menu | **Phone…** in the bridge menu (`vivac-phone menu`): ring, send a file, send the clipboard, open the link on the clipboard on the phone (http and https only), browse the phone's files (sshfs), pair | a **Phone** category in the menu, also opened by a click on the bar: ring, send a file, send the clipboard, pair |
+
+### What the phone may run on Linux
+
+KDE Connect's *Run command* plugin lets the phone run commands the computer
+lists. `vivac-phone commands` writes vivac's list for each paired device
+(the groups of `~/.config/kdeconnect/trusted_devices`), into
+`~/.config/kdeconnect/<device id>/kdeconnect_runcommand/config`, the file KDE
+Connect's settings page writes: QSettings INI, key `commands` in `[General]`,
+the value a quoted `@ByteArray(...)` of JSON
+
+```json
+{"vivac-lock": {"name": "Lock the screen", "command": "\"$HOME/.local/bin/vivac-phone\" run lock"}}
+```
+
+The list is fixed: `lock` (`loginctl lock-session`), `suspend`, `clip-other`
+(this clipboard to the machine paired through vivac link, when there is one)
+and `reboot-windows` (when the firmware has a Windows entry; it runs
+`vivac-reboot-other --yes`: the tap on the phone is the confirmation, since
+nobody may be at the screen to answer). Each entry only names one of these,
+and `vivac-phone run` refuses any other name, so what the phone can do is
+decided by vivac, not by the file. Entries whose key starts `vivac-` are
+replaced on every run; any other is the user's own and is kept. A second run
+changes nothing, `--dry-run` prints what it would write, `--device ID` limits
+it to one phone. After writing, the daemon is told (D-Bus signal
+`org.kde.kdeconnect.config.configChanged` on
+`/kdeconnect/<device id>/kdeconnect_runcommand`) and sends the new list to
+the phone. On Windows the phone runs nothing of vivac's.
+
+### Not verified with a real phone
+
+The gates exercise all of it against fake `kdeconnect-cli`, `busctl` and
+`rofi` (Linux) and a fake `kdeconnect-cli` (Windows). The runcommand file is
+read back by Qt's own QSettings and rewritten byte for byte. What still needs
+a phone: the battery property names (`charge`, `isCharging` on
+`org.kde.kdeconnect.device.battery`, taken from the 26.x sources), the
+notification's app name (`KDE Connect`, from its notifyrc) that the dunst rule
+matches, and KDE Connect for Windows' install path.
 
 ## Versions
 
