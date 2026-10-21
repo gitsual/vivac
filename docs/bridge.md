@@ -80,7 +80,11 @@ local network, paired once. Then from either one:
 | `url` | shows a notification "<name> sent a link"; a click opens it (http/https only, never opened unasked) |
 | `file` | saves it under `Downloads/vivac-link/` with a safe name, never overwriting, and says so |
 | `notify` | shows the title and body as a notification |
-| `ping` | answers with its name, system and version |
+| `ping` | answers with its name, system, version and hardware address |
+
+And one that is not a request: `wake` sends a Wake-on-LAN packet to the
+other machine's hardware address, the one its last `ping` gave, so a machine
+that is asleep (or off, where its firmware allows) comes up.
 
 ### Pairing
 
@@ -104,7 +108,7 @@ port=47321
 Every 30 s each side sends a UDP broadcast to port `47321`:
 
 ```json
-{"v":1,"name":"<name>","os":"linux|windows","port":47321,"id":"<16 hex>"}
+{"v":2,"name":"<name>","os":"linux|windows","port":47321,"id":"<16 hex>"}
 ```
 
 `id` is the first 16 hex digits of `HMAC-SHA256(secret, "vivac-link-id")`.
@@ -113,34 +117,81 @@ address as its peer. The id proves nothing (anyone can replay a beacon); it
 only lets two paired machines find each other without saying the secret.
 Every request is still signed.
 
+### Keys
+
+Two keys come from the secret, one per use, so the same key never both
+encrypts and signs:
+
+```text
+seal key = HMAC-SHA256(secret, "vivac-link v2 encrypt")
+sign key = HMAC-SHA256(secret, "vivac-link v2 sign")
+```
+
+Every body that carries something is **sealed**: AES-256-CBC under the seal
+key, a fresh random 16-byte IV, PKCS#7 padding; on the wire, the IV and then
+the ciphertext. What is sealed is then signed (encrypt-then-MAC), and a
+receiver checks the signature before it opens anything. Someone else on the
+network sees that two machines talk, when, and roughly how much, never what.
+
 ### Requests
 
 HTTP/1.1 over TCP to the peer's `port`, one request per connection:
 
 ```text
-POST /v1/<verb> HTTP/1.1
+POST /v2/<verb> HTTP/1.1
 Content-Length: <n>
 X-Vivac-Time: <unix seconds>
 X-Vivac-Nonce: <32 hex digits, random>
-X-Vivac-Name: <file name, file verb only, UTF-8 percent-encoded>
-X-Vivac-Sign: <hex HMAC-SHA256(secret, verb + "\n" + time + "\n" + nonce + "\n" + hex SHA-256(body))>
+X-Vivac-Sign: <hex HMAC-SHA256(sign key, "v2\n" + verb + "\n" + time + "\n" + nonce + "\n" + hex SHA-256(sealed body))>
 ```
 
-Bodies: `clip` and `url` are UTF-8 text; `notify` is JSON
-`{"title":"...","body":"..."}`; `file` is the raw bytes; `ping` is empty.
+What is sealed: `clip` and `url`, UTF-8 text; `notify`, JSON
+`{"title":"...","body":"..."}`; `file`, the file's name in UTF-8 (up to 1024
+bytes), a NUL byte, then the file's bytes, so not even the name travels in
+the clear; `ping`, nothing (an empty plain body still seals to 32 bytes).
 
-The receiver rejects with `401` when the signature does not match, the time
+The receiver refuses with `401` when the signature does not match, the time
 is more than 60 s away from its own clock, or the nonce was already seen in
-the last 120 s; with `413` when the body is over 64 MiB (`clip`, `url`,
-`notify`: over 64 KiB); with `404` for an unknown verb. It answers `200` with
-a JSON body (`{"ok":true}`, or the `ping` answer). It never runs anything it
-receives, never opens a URL without a click, and writes files only into its
-`Downloads/vivac-link/` folder, under a name stripped of any path.
+the last 120 s; with `413` when the sealed body is over the verb's limit plus
+1057 bytes (what sealing and a name add); with `400` when the body does not
+open, or opens to more than 64 MiB (`file`) or 64 KiB (`clip`, `url`,
+`notify`); with `404` for an unknown verb or protocol. Refusals are plain
+JSON (`{"ok":false}`) and say nothing more.
+
+### Answers
+
+A `200` carries a sealed JSON body (`{"ok":true}`, or the `ping` answer) and
+its own signature, made over the request's nonce:
+
+```text
+X-Vivac-Sign: <hex HMAC-SHA256(sign key, "v2 answer\n" + nonce + "\n" + hex SHA-256(sealed body))>
+```
+
+The sender trusts an answer only when that signature matches; anything else
+on the port, answering in the peer's place, is refused as "not trusted".
+
+The `ping` answer is `{"ok":true,"name":"...","os":"linux|windows",
+"version":"...","protocol":2,"mac":"aa:bb:cc:dd:ee:ff"}`; `mac` is the
+hardware address of the interface the request came in on (empty on a
+loopback or a tunnel), which the sender keeps for `wake`.
+
+A receiver never runs anything it receives, never opens a URL without a
+click, and writes files only into its `Downloads/vivac-link/` folder, under a
+name stripped of any path.
+
+### Waking the other machine
+
+`vivac-link wake` sends the standard magic packet (six `0xFF`, then the
+6-byte hardware address sixteen times) by UDP broadcast to ports 9 and 7.
+The address is the one the last `ping` answered with, kept beside the
+pairing (`link-peer-mac`). The other machine wakes only if its firmware and
+network card allow Wake-on-LAN, which is a firmware setting vivac does not
+change.
 
 ### Listening
 
 - Linux: a systemd user service, `vivac-link.service` (Python standard
-  library only).
+  library, and python-cryptography for AES).
 - Windows: a sign-in task, `\vivac\link`, at the normal level.
 - Both listen on all interfaces, so each system's firewall decides who may
   reach the port. Windows: `apply-system.ps1 -Link` adds one inbound rule
@@ -153,5 +204,7 @@ receives, never opens a URL without a click, and writes files only into its
 The product has one version (`VERSION` at the root); each half has its own
 (`linux/VERSION`, `windows/VERSION`). A release is tagged `vX.Y.Z` for the
 product, `linux-vX.Y.Z` and `windows-vX.Y.Z` for a half. The bridge protocol
-carries its own number (`v1` in the path and the beacon); a half refuses a
-peer whose protocol it does not speak, by answering `404`.
+carries its own number (`v2` in the path, the beacon and the key labels); a
+half refuses a peer whose protocol it does not speak, by answering `404`.
+`v1` signed but did not encrypt; it was never released, and no half speaks
+it.

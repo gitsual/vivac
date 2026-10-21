@@ -39,6 +39,7 @@ pipewire-jack
 pipewire-pulse
 polkit-gnome
 python
+python-cryptography
 ripgrep
 rkhunter
 rofi

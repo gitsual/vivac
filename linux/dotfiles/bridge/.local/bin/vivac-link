@@ -9,13 +9,14 @@
     vivac-link send-file PATH       a file into the peer's Downloads/vivac-link
     vivac-link notify TITLE BODY    a notification on the peer
     vivac-link ping                 the peer's name, system and version
+    vivac-link wake                 wake the peer from sleep or off (Wake-on-LAN)
 
 The protocol is docs/bridge.md at the root of the product, section 4, and the
 Windows half speaks the same one. `serve` is what vivac-link.service runs: it
-answers signed requests over TCP and finds the peer by UDP beacon, both on the
-link port. It never runs what it receives, never opens a link without a click,
-and writes files only into Downloads/vivac-link, under a name stripped of any
-path. Python standard library only.
+answers signed, encrypted requests over TCP and finds the peer by UDP beacon,
+both on the link port. It never runs what it receives, never opens a link
+without a click, and writes files only into Downloads/vivac-link, under a name
+stripped of any path. Python standard library, and python-cryptography for AES.
 
 The pairing lives in ${XDG_STATE_HOME:-~/.local/state}/vivac/link.conf, mode
 600, and never anywhere else; the address discovery last saw, in link-peer
@@ -45,11 +46,23 @@ from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-PROTOCOL = 1
+try:
+    from cryptography.hazmat.primitives import padding
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+except ImportError:  # nothing works without it; the message says what to install
+    print("vivac-link: python-cryptography is needed (pacman -S python-cryptography)", file=sys.stderr)
+    raise SystemExit(1) from None
+
+PROTOCOL = 2
 DEFAULT_PORT = 47321
 VERBS = ("clip", "url", "file", "notify", "ping")
 TEXT_LIMIT = 64 * 1024
 FILE_LIMIT = 64 * 1024 * 1024
+NAME_LIMIT = 1024
+# What sealing adds to a body: the IV, a block of padding at most, and for a file
+# its name and the NUL after it.
+SEAL_ROOM = 16 + 16 + NAME_LIMIT + 1
+MAC = re.compile(r"([0-9a-f]{2}:){5}[0-9a-f]{2}")
 CLOCK_WINDOW = 60
 NONCE_MEMORY = 120
 BEACON_EVERY = 30
@@ -191,9 +204,40 @@ def format_code(raw: bytes) -> str:
     return "-".join(text[index : index + 5] for index in range(0, len(text), 5))
 
 
-def signature(secret: bytes, verb: str, stamp: str, nonce: str, body: bytes) -> str:
-    message = f"{verb}\n{stamp}\n{nonce}\n{hashlib.sha256(body).hexdigest()}"
-    return hmac.new(secret, message.encode("utf-8"), hashlib.sha256).hexdigest()
+def derive(secret: bytes, purpose: str) -> bytes:
+    """One key per use from the shared secret: never the same key to encrypt and to sign."""
+    return hmac.new(secret, f"vivac-link v{PROTOCOL} {purpose}".encode("ascii"), hashlib.sha256).digest()
+
+
+def seal(key: bytes, plain: bytes) -> bytes:
+    """AES-256-CBC under a fresh IV, PKCS#7 padded: the IV, then the ciphertext. What is
+    sealed is signed after (encrypt-then-MAC), and checked before it is opened."""
+    iv = secrets.token_bytes(16)
+    padder = padding.PKCS7(128).padder()
+    padded = padder.update(plain) + padder.finalize()
+    encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
+    return iv + encryptor.update(padded) + encryptor.finalize()
+
+
+def unseal(key: bytes, sealed: bytes) -> bytes:
+    """The plain bytes back; ValueError when SEALED is not a sealed body."""
+    if len(sealed) < 32 or len(sealed) % 16:
+        raise ValueError("not a sealed body")
+    decryptor = Cipher(algorithms.AES(key), modes.CBC(sealed[:16])).decryptor()
+    padded = decryptor.update(sealed[16:]) + decryptor.finalize()
+    unpadder = padding.PKCS7(128).unpadder()
+    return unpadder.update(padded) + unpadder.finalize()
+
+
+def signature(key: bytes, verb: str, stamp: str, nonce: str, body: bytes) -> str:
+    message = f"v{PROTOCOL}\n{verb}\n{stamp}\n{nonce}\n{hashlib.sha256(body).hexdigest()}"
+    return hmac.new(key, message.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def answer_signature(key: bytes, nonce: str, body: bytes) -> str:
+    """An answer is signed over its request's nonce: it cannot be passed off for another."""
+    message = f"v{PROTOCOL} answer\n{nonce}\n{hashlib.sha256(body).hexdigest()}"
+    return hmac.new(key, message.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def link_id(secret: bytes) -> str:
@@ -208,6 +252,14 @@ class Pairing:
     port: int
     peer: str
 
+    @property
+    def seal_key(self) -> bytes:
+        return derive(self.secret, "encrypt")
+
+    @property
+    def sign_key(self) -> bytes:
+        return derive(self.secret, "sign")
+
 
 def conf_path() -> Path:
     return state_dir() / "link.conf"
@@ -215,6 +267,10 @@ def conf_path() -> Path:
 
 def peer_path() -> Path:
     return state_dir() / "link-peer"
+
+
+def peer_mac_path() -> Path:
+    return state_dir() / "link-peer-mac"
 
 
 def load_pairing() -> Pairing | None:
@@ -417,7 +473,7 @@ class Receiver:
             return "time too far from ours"
         if not NONCE.fullmatch(nonce):
             return "no nonce"
-        expected = signature(self.pairing.secret, verb, stamp, nonce, body)
+        expected = signature(self.pairing.sign_key, verb, stamp, nonce, body)
         with self.lock:
             for old in [key for key, when in self.seen.items() if now - when > NONCE_MEMORY]:
                 del self.seen[old]
@@ -431,12 +487,15 @@ class Receiver:
     def sender(self) -> str:
         return self.peer_name or TEXT.get("link.someone")
 
-    def act(self, verb: str, body: bytes, name_header: str) -> dict[str, object]:
+    def act(self, verb: str, body: bytes, local: str) -> dict[str, object]:
         if verb == "ping":
-            return {"ok": True, "name": self.pairing.name, "os": "linux", "version": version(), "protocol": PROTOCOL}
+            return {"ok": True, "name": self.pairing.name, "os": "linux", "version": version(), "protocol": PROTOCOL, "mac": mac_of(local)}
         if verb == "file":
-            name = safe_name(urllib.parse.unquote(name_header, encoding="utf-8", errors="replace"))
-            path = store(inbox(), name, body)
+            raw_name, nul, data = body.partition(b"\0")
+            if not nul or len(raw_name) > NAME_LIMIT or len(data) > FILE_LIMIT:
+                raise Refused("a file is its name, a NUL, then its bytes")
+            name = safe_name(raw_name.decode("utf-8", errors="replace"))
+            path = store(inbox(), name, data)
             notify(TEXT.get("link.file_received", self.sender(), path.name), str(path.parent), TEXT.get("link.open_folder"), str(path.parent))
             return {"ok": True}
         try:
@@ -474,12 +533,19 @@ def make_handler(receiver: Receiver) -> type[BaseHTTPRequestHandler]:
         def log_message(self, format: str, *args: object) -> None:  # noqa: A002 (the base class names it)
             log(f"{self.client_address[0]} {format % args}")
 
-        def answer(self, status: int, payload: dict[str, object]) -> None:
+        def answer(self, status: int, payload: dict[str, object], nonce: str = "") -> None:
+            """A 200 is sealed and signed over the request's nonce; a refusal is plain
+            JSON and says nothing the asker did not know."""
             data = json.dumps(payload).encode("utf-8")
+            sealed = status == 200 and bool(nonce)
+            if sealed:
+                data = seal(receiver.pairing.seal_key, data)
             self.close_connection = True
             self.send_response(status)
-            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Type", "application/octet-stream" if sealed else "application/json")
             self.send_header("Content-Length", str(len(data)))
+            if sealed:
+                self.send_header("X-Vivac-Sign", answer_signature(receiver.pairing.sign_key, nonce, data))
             self.send_header("Connection", "close")
             self.end_headers()
             self.wfile.write(data)
@@ -495,24 +561,31 @@ def make_handler(receiver: Receiver) -> type[BaseHTTPRequestHandler]:
                 self.answer(411, {"ok": False, "error": "length required"})
                 return
             length = int(length_header)
-            if length > (FILE_LIMIT if verb == "file" else TEXT_LIMIT):
+            if length > (FILE_LIMIT if verb == "file" else TEXT_LIMIT) + SEAL_ROOM:
                 self.answer(413, {"ok": False, "error": "too large"})
                 return
             body = self.rfile.read(length) if length else b""
             if len(body) != length:
                 self.answer(400, {"ok": False, "error": "short body"})
                 return
-            why = receiver.refusal(verb, self.headers.get("X-Vivac-Time", ""), self.headers.get("X-Vivac-Nonce", ""), self.headers.get("X-Vivac-Sign", ""), body)
+            nonce = self.headers.get("X-Vivac-Nonce", "")
+            why = receiver.refusal(verb, self.headers.get("X-Vivac-Time", ""), nonce, self.headers.get("X-Vivac-Sign", ""), body)
             if why:
                 log(f"{self.client_address[0]} refused {verb}: {why}")
                 self.answer(401, {"ok": False, "error": "unauthorized"})
                 return
             try:
-                payload = receiver.act(verb, body, self.headers.get("X-Vivac-Name", ""))
+                plain = unseal(receiver.pairing.seal_key, body)
+                if verb != "file" and len(plain) > TEXT_LIMIT:
+                    raise Refused("too large")
+                payload = receiver.act(verb, plain, self.connection.getsockname()[0])
+            except ValueError:
+                self.answer(400, {"ok": False, "error": "not a sealed body"})
+                return
             except Refused as reason:
                 self.answer(400, {"ok": False, "error": str(reason)})
                 return
-            self.answer(200, payload)
+            self.answer(200, payload, nonce)
 
         def refuse_method(self) -> None:
             self.answer(404, {"ok": False, "error": "unknown verb"})
@@ -542,6 +615,24 @@ def local_addresses() -> set[str]:
     except OSError:
         pass
     return found
+
+
+def mac_of(address: str) -> str:
+    """The hardware address of the interface that holds ADDRESS, for the peer to wake
+    this machine with; empty when there is none (loopback, a tunnel)."""
+    try:
+        listing = subprocess.run(["ip", "-o", "-4", "addr", "show"], capture_output=True, text=True, timeout=5).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    for line in listing.splitlines():
+        match = re.match(r"\d+:\s+(\S+)\s+inet (\d+\.\d+\.\d+\.\d+)/", line)
+        if match and match.group(2) == address:
+            try:
+                mac = (Path("/sys/class/net") / match.group(1) / "address").read_text(encoding="ascii").strip()
+            except OSError:
+                return ""
+            return mac if MAC.fullmatch(mac) and mac.strip("0:") else ""
+    return ""
 
 
 def beacon_sender(pairing: Pairing) -> None:
@@ -647,28 +738,37 @@ def send(verb: str, body: bytes = b"", name: str | None = None, timeout: float =
     except ValueError:
         complain("link.no_peer", conf_path())
         raise SystemExit(1) from None
+    if name is not None:
+        body = name.encode("utf-8")[:NAME_LIMIT] + b"\0" + body
+    body = seal(pairing.seal_key, body)
     stamp, nonce = str(int(time.time())), secrets.token_hex(16)
     headers = {
         "Content-Length": str(len(body)),
         "X-Vivac-Time": stamp,
         "X-Vivac-Nonce": nonce,
-        "X-Vivac-Sign": signature(pairing.secret, verb, stamp, nonce, body),
+        "X-Vivac-Sign": signature(pairing.sign_key, verb, stamp, nonce, body),
     }
-    if name is not None:
-        headers["X-Vivac-Name"] = urllib.parse.quote(name, safe="")
     try:
         connection = http.client.HTTPConnection(host, port, timeout=timeout)
         connection.request("POST", f"/v{PROTOCOL}/{verb}", body=body, headers=headers)
         response = connection.getresponse()
         raw = response.read()
+        sign = response.getheader("X-Vivac-Sign", "")
         connection.close()
     except (OSError, http.client.HTTPException) as error:
         complain("link.unreachable", peer, error)
         raise SystemExit(1) from None
+    if response.status != 200:
+        return response.status, {}
+    # Only the peer holds the keys: an answer it did not sign is not its answer.
+    if not hmac.compare_digest(answer_signature(pairing.sign_key, nonce, raw).encode("ascii"), sign.lower().encode("utf-8", errors="replace")):
+        complain("link.bad_answer", peer)
+        raise SystemExit(1)
     try:
-        answer = json.loads(raw.decode("utf-8")) if raw else {}
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        answer = {}
+        answer = json.loads(unseal(pairing.seal_key, raw).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        complain("link.bad_answer", peer)
+        raise SystemExit(1) from None
     return response.status, answer if isinstance(answer, dict) else {}
 
 
@@ -691,6 +791,35 @@ def ping() -> int:
     if status != 200:
         return report(status)
     say("link.pong", answer.get("name", "?"), answer.get("os", "?"), answer.get("version", "?"))
+    mac = answer.get("mac", "")
+    if isinstance(mac, str) and MAC.fullmatch(mac):
+        write_private(peer_mac_path(), mac + "\n")
+    return 0
+
+
+def magic_packet(mac: str) -> bytes:
+    """Wake-on-LAN: six 0xFF, then the hardware address sixteen times."""
+    return b"\xff" * 6 + bytes.fromhex(mac.replace(":", "")) * 16
+
+
+def wake() -> int:
+    """The peer's hardware address is the one its last ping gave; the packet goes to the
+    broadcast address, as a machine asleep answers at no other."""
+    try:
+        mac = peer_mac_path().read_text(encoding="ascii").strip()
+    except OSError:
+        mac = ""
+    if not MAC.fullmatch(mac):
+        complain("link.no_mac")
+        return 1
+    # The gates aim it at the loopback (VIVAC_WAKE_TARGET=host:port) instead.
+    aimed = os.environ.get("VIVAC_WAKE_TARGET", "")
+    targets = [split_peer(aimed, 9)] if aimed else [("255.255.255.255", 9), ("255.255.255.255", 7)]
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
+        sender.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        for target in targets:
+            sender.sendto(magic_packet(mac), target)
+    say("link.woken", mac)
     return 0
 
 
@@ -752,6 +881,8 @@ def main(arguments: list[str]) -> int:
         return status()
     if command == "ping" and not rest:
         return ping()
+    if command == "wake" and not rest:
+        return wake()
     if command == "send-clip" and len(rest) <= 1:
         text = rest[0] if rest else clipboard_get()
         if not text:

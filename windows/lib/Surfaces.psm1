@@ -902,6 +902,8 @@ function Get-VivacMenuEntries {
         $e.Add((New-MenuEntry 'session' (T 'bridge.drop_out') 'bridge' 'drop-out' $false 0xE898))
     }
     if (Test-Path -LiteralPath (Get-VivacLinkConfPath)) { $e.Add((New-MenuEntry 'session' (T 'bridge.link_clip') 'bridge' 'link-clip' $false 0xE8C8)) }
+    # Waking needs the other machine's hardware address, which a ping learns.
+    if (Test-Path -LiteralPath (Get-VivacLinkPeerMacPath)) { $e.Add((New-MenuEntry 'session' (T 'bridge.link_wake') 'bridge' 'link-wake' $false 0xE7E8)) }
     $e
 }
 
@@ -927,6 +929,7 @@ function Invoke-BridgeAction([string]$Id) {
             Start-Process explorer.exe -ArgumentList "`"$folder`""
         }
         'link-clip' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-link.ps1`"", 'send-clip', '-Notify') }
+        'link-wake' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-link.ps1`"", 'wake', '-Notify') }
     }
 }
 

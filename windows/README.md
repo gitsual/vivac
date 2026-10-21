@@ -121,7 +121,7 @@ ornament it has not earned fails the build.
 - **🔒 A lock that wears the theme.** `Win+L`; an empty Enter asks Windows Hello, Ctrl+Alt+Del hands over to Windows' own lock. AltGr works in the password field, so `@ # | \ [ ] { } €` type on any layout.
 - **📋 A clipboard history that stays in memory.** `Win+V`, never written to disk.
 - **🖥️ A bar that only shows what the machine has — and never goes blank.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts. It loads nothing from the network, and a watcher brings it back if it dies or comes up empty; see [The bar](#-the-bar).
-- **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it. See [the bridge](../docs/bridge.md).
+- **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it, encrypted, and `wake` wakes it up. See [the bridge](../docs/bridge.md).
 - **🛡️ UAC left whole.** Nothing elevated runs a file you can change without elevation; see [What it asks of Windows](#-what-it-asks-of-windows).
 - **✅ 19 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
 

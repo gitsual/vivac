@@ -73,9 +73,9 @@ both. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
 | **Shared choices** — the theme, the weather location and the language follow you to the other system, through a file on a disk both mount | ✅ | |
 | **Restart into the other system** — one entry in each power menu; it sets the firmware's *BootNext* for one boot only, never the boot order or GRUB's default | ✅ | |
 | **The drop tray** — leave files in a folder on one side; the other says, at sign-in, that they are waiting | ✅ | |
-| **vivac link** — send the clipboard, a link, a file or a notification to the other machine; paired once with a code, every request signed | | ✅ |
+| **vivac link** — send the clipboard, a link, a file or a notification to the other machine, or wake it up; paired once with a code, everything encrypted (AES-256) and signed | | ✅ |
 
-**Safe by construction.** vivac link never runs what it receives, never opens a link without a click,
+**Safe by construction.** vivac link encrypts everything it sends and signs it both ways, never runs what it receives, never opens a link without a click,
 writes files only into `Downloads/vivac-link/` under a name stripped of any path, and refuses a request
 whose signature, clock or nonce is wrong. Each system's firewall lets in the local subnet only, and only
 once you ask (`apply-system.ps1 -Link` on Windows, `apply-system.sh --bridge` on Linux). The restart needs administrator
@@ -139,7 +139,7 @@ shared/sync.sh --check    # what the gates run
 | The product | [`VERSION`](VERSION) · 2.0.0 | `vX.Y.Z` |
 | The Linux half | [`linux/VERSION`](linux/VERSION) · 1.1.0 | `linux-vX.Y.Z` |
 | The Windows half | [`windows/VERSION`](windows/VERSION) · 1.0.0 | `windows-vX.Y.Z` |
-| The bridge protocol | `v1`, in every request path and beacon | — |
+| The bridge protocol | `v2`, in every request path and beacon | — |
 
 The product's 2.0.0 is the layout: until 1.0.0 this repository was the Linux half alone, at its root. The
 Windows half came from [gitsual/vivac-windows](https://github.com/gitsual/vivac-windows), merged with its

@@ -23,8 +23,8 @@ i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
 # Each command is a program beside this one and its arguments, split on spaces
 # here and run with the directory prefixed, so a $HOME with a space survives.
 bin="$(dirname -- "$self")"
-keys=(drop.title drop.send link.send_clip)
-commands=('vivac-drop --open-in' 'vivac-drop --open-out' 'vivac-link send-clip')
+keys=(drop.title drop.send link.send_clip link.wake)
+commands=('vivac-drop --open-in' 'vivac-drop --open-out' 'vivac-link send-clip' 'vivac-link wake')
 if "$bin/vivac-reboot-other" --available 2>/dev/null; then
 	keys+=(power.reboot_windows)
 	commands+=(vivac-reboot-other)
@@ -45,7 +45,7 @@ chosen="$(menu | rofi -dmenu -i -format i -p "$(i18n_get bridge.title)")" || exi
 ((chosen < ${#commands[@]})) || exit 0
 read -r -a words <<<"${commands[$chosen]}"
 if [[ "${words[0]}" == vivac-link ]]; then
-	# What send-clip says goes on screen: a menu has no terminal to print it in.
+	# What send-clip and wake say goes on screen: a menu has no terminal to print it in.
 	output="$("$bin/${words[0]}" "${words[@]:1}" 2>&1)" || true
 	command -v notify-send >/dev/null && notify-send --app-name=vivac -- "$(i18n_get link.title)" "$output"
 	exit 0
