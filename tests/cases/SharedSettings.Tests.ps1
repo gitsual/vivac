@@ -542,7 +542,7 @@ try {
     Case 'a share without ReplaceFileW (WSL 9P) gets the new content by an atomic rename' {
         $f = Join-Path $dir 'replace-9p\settings'
         Write-Bytes $f "theme=cosmos`nx=1`n"
-        # What \\wsl.localhost answers, measured on the real C:\m2: ERROR_NOT_SUPPORTED, destination untouched.
+        # What \\wsl.localhost answers, measured on a real WSL-backed share: ERROR_NOT_SUPPORTED, destination untouched.
         Set-ReplaceSeam { param($s, $d, $b) throw (New-Object IO.IOException 'The request is not supported.', ([int]0x80070032)) }
         try { Write-VivacSharedKey $f 'theme' 'gatsby' } finally { Reset-ReplaceSeam }
         Assert-Equal "theme=gatsby`nx=1`n" (Read-Bytes $f)

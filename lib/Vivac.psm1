@@ -265,7 +265,7 @@ $script:SharedKeys = @('theme', 'weather_location', 'language')
 $script:Latin1 = [Text.Encoding]::GetEncoding(28591)
 # The one call that swaps the new content in; a seam so a test can make it fail.
 $script:ReplaceFile = { param($Scratch, $Destination, $Backup) [IO.File]::Replace($Scratch, $Destination, $Backup) }
-# A share that has no ReplaceFileW (\\wsl.localhost, where C:\m2 points) still
+# A share that has no ReplaceFileW (a \\wsl.localhost path, such as a WSL disk shared with Linux) still
 # renames over a file atomically, which is what the Linux side does with mv.
 if (-not ('VivacRename' -as [type])) {
     Add-Type -TypeDefinition @'

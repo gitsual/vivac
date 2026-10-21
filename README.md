@@ -12,12 +12,13 @@ This is the <a href="https://github.com/gitsual/vivac">vivac</a> workstation, pi
   <img alt="Windows 11" src="https://img.shields.io/badge/os-Windows%2011-0E1513?style=for-the-badge&labelColor=0E1513&color=6CA4B1">
   <img alt="GlazeWM" src="https://img.shields.io/badge/wm-GlazeWM-0E1513?style=for-the-badge&labelColor=0E1513&color=55A185">
   <img alt="8 palettes" src="https://img.shields.io/badge/8%20palettes-one%20source-0E1513?style=for-the-badge&labelColor=0E1513&color=E1777D">
-  <img alt="14 gate files" src="https://img.shields.io/badge/14%20gate%20files-author--run-0E1513?style=for-the-badge&labelColor=0E1513&color=AAA875">
+  <img alt="17 gate files" src="https://img.shields.io/badge/17%20gate%20files-author--run-0E1513?style=for-the-badge&labelColor=0E1513&color=AAA875">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-0E1513?style=for-the-badge&labelColor=0E1513&color=6CA4B1">
 </p>
 
 <a href="#-get-it"><strong>Get it</strong></a> ·
 <a href="#-the-surfaces-it-draws-itself"><strong>The surfaces</strong></a> ·
+<a href="#-the-bar"><strong>The bar</strong></a> ·
 <a href="#-the-eight"><strong>The eight</strong></a> ·
 <a href="#-how-colour-works"><strong>How colour works</strong></a> ·
 <a href="#-what-it-asks-of-windows"><strong>What it asks of Windows</strong></a> ·
@@ -117,11 +118,11 @@ ornament it has not earned fails the build.
 - **🧭 A menu instead of the Start menu.** `Win+R`: every application, recent file, folder, settings page and Win+X tool, with real icons, categories, what you use most first, a calculator and a run box. Explorer's own Win+R is switched off (`apply-system.ps1 -WinKeys`) so nothing opens behind it.
 - **🔔 Notifications in the palette.** Other programs' notifications arrive as vivac's cards at the top right, under the bar; Windows' banners at the bottom right are switched off program by program (`-Toasts`), and every switch is put back by uninstall. Windows Security keeps its own, on purpose.
 - **🎛️ The quick settings, redrawn.** Sound with a mixer, Bluetooth with pairing, Wi-Fi and Ethernet with the key asked in the panel, Defender and Malwarebytes in one security view, Windows Update and winget in one updates view — each a click on the bar.
-- **🔒 A lock that wears the theme.** `Win+L`; an empty Enter asks Windows Hello, Ctrl+Alt+Del hands over to Windows' own lock.
+- **🔒 A lock that wears the theme.** `Win+L`; an empty Enter asks Windows Hello, Ctrl+Alt+Del hands over to Windows' own lock. AltGr works in the password field, so `@ # | \ [ ] { } €` type on any layout.
 - **📋 A clipboard history that stays in memory.** `Win+V`, never written to disk.
-- **🖥️ A bar that only shows what the machine has.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts.
+- **🖥️ A bar that only shows what the machine has — and never goes blank.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts. It loads nothing from the network, and a watcher brings it back if it dies or comes up empty; see [The bar](#-the-bar).
 - **🛡️ UAC left whole.** Nothing elevated runs a file you can change without elevation; see [What it asks of Windows](#-what-it-asks-of-windows).
-- **✅ 14 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme and a two-pass deploy regression.
+- **✅ 17 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
 
 ### ⚡ 60-second tour
 
@@ -191,6 +192,38 @@ actions never do. A translation can change what a button says and cannot change 
 
 ---
 
+## 📊 The bar
+
+A [Zebar](https://github.com/glzr-io/zebar) widget in plain ES modules, no build step
+(`static/zebar/vivac/`). With the Windows taskbar gone (`apply-system.ps1 -Taskbar`) it is the way back to
+every window, so it is built to stay.
+
+| Where | What |
+|---|---|
+| **Left** | The ten workspaces, each followed by a glyph per window (by process, then title). Every glyph is a button: a minimized window comes back to the state it left. The wheel walks the workspaces. Then the focused window's title. |
+| **Centre** | The clock — hover for the month, with ISO weeks — and the weather — hover for the forecast ([Open-Meteo](https://open-meteo.com), no key). |
+| **Right** | Wi-Fi or Ethernet, Bluetooth, a removable drive (a click ejects it safely), CPU, memory, disk and GPU — hover any of them for its top five processes and the last two minutes — volume, battery, the security shield, updates, theme and power. A pill is only there when the machine has the thing. |
+
+**It is never covered.** A maximized or full-screen program fills the work area under it, and the key
+guard (below) puts it back on top within a second if anything slides over it.
+
+**It never stays blank.** Four guards, in [lib/Bar.psm1](lib/Bar.psm1) and
+[bin/vivac-bar-watch.ps1](bin/vivac-bar-watch.ps1):
+
+1. **Nothing from the network.** The Zebar client is vendored (`zebar-client.js`), so the bar draws at
+   sign-in before the network is up.
+2. **Checked before it is written.** `deploy.ps1` assembles the pack as it would land and refuses it if a
+   module would not load: a syntax error (checked as an ES module), a network import, a missing file, or a
+   name imported that its sibling does not export.
+3. **Proof of life.** While it is really drawn — stylesheet applied, workspaces in place — the bar stamps
+   `%LOCALAPPDATA%\vivac\bar.alive` every 30 s.
+4. **Self-healing.** The task `\vivac\bar-watch` (normal level, at sign-in) restarts Zebar when it dies or
+   the stamp goes stale. It keeps a copy of the last pack it saw drawn and puts it back after two restarts
+   that did not help; a deploy whose new bar does not draw within 40 s is rolled back the same way.
+   What it did is in `%LOCALAPPDATA%\vivac\bar-watch.log`.
+
+---
+
 ## 🖼️ The eight
 
 The catalogue is the source's, palette for palette. Every wallpaper below is rendered from its theme file
@@ -249,7 +282,7 @@ put back by uninstall:
 
 | Profile | What it does |
 |---|---|
-| `-Session` | GlazeWM, and with it the bar, at sign-in |
+| `-Session` | GlazeWM, and with it the bar, at sign-in; the bar's watcher (`\vivac\bar-watch`) |
 | `-Idle` | lock after 5 minutes, screen off after 10, sleep after 30 |
 | `-Taskbar` | no Windows taskbar; the bar takes its place, with pills for what the tray held |
 | `-DesktopIcons` | no icons on the desktop, and installers' shortcuts moved into the Start menu |
@@ -288,12 +321,13 @@ the help pane.
 | `scripts\make-readme-assets.ps1` | Every image on this page, again, from this tree |
 | `bin\vivac.ps1 welcome` | The first-run wizard again |
 | `scripts\sync-shared-settings.ps1 -Pull` | Take in the shared choices now (see below) |
+| `bin\vivac-bar-watch.ps1 [-DryRun]` | Check the bar once and restart it if it needs it |
 
 ### Sharing choices with the Linux side
 
-Optional, off by default. Set `shared_settings=C:\m2\vivac-shared\settings` (or `~\...`) in
+Optional, off by default. Set `shared_settings=D:\vivac-shared\settings` (or `~\...`) in
 `%APPDATA%\vivac\settings` and the theme, weather location and language follow the same flat file the Linux
-vivac reads (`~/m2/vivac-shared/settings`). `mod` and everything else stay local; other keys in the file are
+vivac reads, on a disk both systems mount. `mod` and everything else stay local; other keys in the file are
 the other OS's and are kept as they are. A local change is written through at once, under a lock; if the
 folder is not there yet it is queued and sent at the next sign-in, when the resident host runs
 `scripts\sync-shared-settings.ps1 -Pull` in the background (it waits up to 90 s for the share) and takes in
@@ -312,7 +346,7 @@ it can fail without consequence: the lock and the cover run the same, the failur
 The host's own marker is checked without WMI; for another process WMI is asked with a 2 s limit, and no answer counts as
 live, never stale. The pid file is guarded the same way.
 
-Known gaps, left as they are: if `File.Replace` keeps failing on the share (a 9P-backed `C:\m2`) the key stays
+Known gaps, left as they are: if `File.Replace` keeps failing on the share (a 9P-backed `\\wsl.localhost` path) the key stays
 pending and is warned about, there is no non-atomic fallback; there are no toasts, the log is not rotated; a host
 restarted while a manual lock (not the start-up cover) is up comes back without that lock; values one side accepts
 and the other does not (place names, `language=auto`) are still just reported and skipped.
@@ -331,8 +365,10 @@ eight palettes obey the doctrine, the help registry and the GlazeWM bindings des
 key bound twice, every language carries every string, hardware detection matches golden facts for five
 machines this one is not, the WPF surfaces build in every theme, the notification and winget parsers read
 what Windows and winget actually print, the committed renders have not drifted, nothing private is in the
-tree, and the deploy regression runs end to end in a scratch profile: a dry run writes nothing, the second
-pass changes nothing, a file that is not vivac's is backed up first, and uninstall restores it.
+tree, every bar module loads as an ES module with nothing fetched from the network and the bar's guard
+catches each way a pack can load blank, and the deploy regression runs end to end in a scratch profile: a
+dry run writes nothing, the second pass changes nothing, a file that is not vivac's is backed up first, and
+uninstall restores it.
 
 > **Author-run, not CI.** Like the source, every claim here rests on checks run by hand on the author's
 > machine before publication. There is no hosted pipeline re-running them on each commit, and nothing here
@@ -346,12 +382,13 @@ pass changes nothing, a file that is not vivac's is backed up first, and uninsta
 data/        Palettes (the source's), corpus, help registry, selectors
 templates/   Themed templates -> dotfiles/ (committed render) and the deploy
 render/      Per-machine templates (palette + settings + hardware facts)
-static/      Files deployed as they are: the bar's code, the Neovim config
+static/      Files deployed as they are: the bar's code (and its vendored Zebar client), the Neovim config
 dotfiles/    The default theme's render, committed and checked for drift
-lib/         Vivac (render, settings, i18n), Deploy, Desktop, Apps, Surfaces (the kit, menu, lock),
+lib/         Vivac (render, settings, i18n), Deploy, Desktop, Apps, Bar (its guard), Surfaces (the kit, menu, lock),
              Sound/Bluetooth/Network/Security/Updates panels, Toasts, Protected, Boot, and the C#
              they lean on (VivacMenu, VivacAudio, VivacBluetooth, VivacNetwork, VivacToasts, ...)
-bin/         vivac.ps1 (one verb per surface), the resident host, the key guard, winget, the wizard
+bin/         vivac.ps1 (one verb per surface), the resident host, the key guard, the bar watcher, winget,
+             the desktop tidier, the wizard
 scripts/     bootstrap, deploy, apply-theme, apply-system, protect-tasks, audit, uninstall, assets...
 packages/    winget manifests: base and optional sets
 i18n/        English and Spanish
@@ -369,7 +406,9 @@ tests/       The gates, fixtures, golden files and the off-screen surface render
 
 ## 📄 License
 
-[MIT](LICENSE), as the source.
+[MIT](LICENSE), as the source — except `static/zebar/vivac/zebar-client.js`, the vendored
+[Zebar](https://github.com/glzr-io/zebar) client, which keeps its own licence (GPL-3.0-only; it bundles
+@tauri-apps/api, glazewm, luxon and zod, all MIT or Apache-2.0). Its header says where it came from.
 
 ---
 
