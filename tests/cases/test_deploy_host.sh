@@ -54,6 +54,16 @@ printf 'call %s | local=%s\n' "$*" "$(head -n 1 "$dir/local.lua" 2>/dev/null)" >
 STUB
 chmod +x "$sandbox/hyprland"
 export STUB_LOG="$sandbox/log"
+# A stub pacman: -T prints the packages named in STUB_MISSING and exits 127 if any, like the real one.
+cat >"$sandbox/pacman" <<'STUB'
+#!/usr/bin/env bash
+[[ "$1" == -T ]] || exit 2
+[[ -z "${STUB_MISSING:-}" ]] && exit 0
+printf '%s\n' $STUB_MISSING
+exit 127
+STUB
+chmod +x "$sandbox/pacman"
+export PACMAN_BIN="$sandbox/pacman"
 # run HOME [args] — the deploy against one host.
 run() {
 	local h="$1"
@@ -74,6 +84,9 @@ host="$sandbox/refuse"
 make_host "$host"
 : >"$STUB_LOG"
 HYPRLAND_BIN="$sandbox/missing-hyprland" refuses "$host" 'not installed'
+# A runtime dependency that is not installed (socat feeds the workspace strip, swaybg
+# draws the wallpaper) leaves a desktop that looks deployed and silently is not.
+HYPRLAND_BIN="$sandbox/hyprland" STUB_MISSING='socat swaybg' refuses "$host" 'pacman -S --needed socat swaybg'
 HYPRLAND_BIN="$sandbox/hyprland" STUB_EXIT=1 refuses "$host" 'stub: refusing this config'
 grep -q 'call --verify-config -c .*/hypr/hyprland.lua | local=hl.bind("SUPER + A"' "$STUB_LOG" || fail "the verifier did not see the host's local.lua: $(<"$STUB_LOG")"
 grep -q "$host" <(grep '^call' "$STUB_LOG") && fail 'the verifier was pointed at the live config, not a staged one'

@@ -153,6 +153,11 @@ fi
 command -v stow >/dev/null || die 'GNU Stow is required'
 [[ "$repo_root" != *[[:space:]]* ]] || die "the checkout path has whitespace; the session autostart cannot use it: $repo_root"
 command -v "$hyprland" >/dev/null || die "$hyprland is not installed, so the staged config cannot be verified; refusing to replace the live compositor config"
+# bootstrap.sh installs packages/pacman.txt; a host adopting the desktop never ran it.
+# Without socat the workspace strip freezes after its first snapshot, without swaybg
+# the wallpaper never follows the theme -- and neither says so on screen.
+mapfile -t missing < <(grep -Ev '^[[:space:]]*(#|$)' "$repo_root/packages/pacman.txt" | xargs "${PACMAN_BIN:-pacman}" -T 2>/dev/null || true)
+((${#missing[@]} == 0)) || die "packages the desktop runs on are not installed; run: sudo pacman -S --needed ${missing[*]}"
 facts="$state/vivac/hardware-facts" override="$config/vivac/hardware-facts.override" settings="$config/vivac/settings"
 [[ -r "$facts" || -r "$override" ]] || die 'no hardware facts; run scripts/hardware-facts.sh --emit first'
 live="$config/hypr/hyprland.lua"
