@@ -1,0 +1,649 @@
+#!/usr/bin/env python3
+"""vivac-bt-sync: Bluetooth pairings taken from Windows, onto Linux.
+
+    vivac-bt-sync                 show what would change, change nothing
+    vivac-bt-sync --apply         change it: back up each info file, then write
+    vivac-bt-sync --ask           show it, ask, apply on yes (what the bridge
+                                  menu runs, in a terminal window of its own)
+    vivac-bt-sync --available     exit 0 when a Windows system is mounted
+      --windows DIR               the mounted Windows partition (else found
+                                  among the mounted NTFS file systems)
+      --hive PATH                 the SYSTEM hive itself, or a copy of it
+      --reg FILE                  a .reg export of BTHPORT\\Parameters\\Keys
+                                  instead of the hive (regedit run as SYSTEM)
+      --no-restart                leave bluetooth.service alone
+
+docs/bridge.md at the root of the product, section 5. A device paired on both
+systems has one key per system and only the last pairing's works; this copies
+Windows' keys into BlueZ's /var/lib/bluetooth/<adapter>/<device>/info, so
+pairing on Linux first and on Windows second is the last pairing either needs.
+The Windows hive is only ever read (python-hivex), never written. Key values
+are never printed. Needs root for /var/lib/bluetooth: it asks sudo for itself.
+Python standard library, plus the hivex bindings for a hive.
+"""
+
+from __future__ import annotations
+
+import datetime
+import os
+import re
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+SELF = Path(__file__).resolve()
+MAC_KEY = re.compile(r"[0-9a-fA-F]{12}")
+LE_SECTIONS = ("LongTermKey", "PeripheralLongTermKey", "SlaveLongTermKey")
+REG_BINARY, REG_DWORD, REG_QWORD = 3, 4, 11
+
+
+# --- where things are ------------------------------------------------------------------------
+
+
+def repo_root() -> Path:
+    """The checkout this file is stowed from: dotfiles/bridge/.local/bin/ is four up."""
+    return Path(os.environ.get("VIVAC_REPO") or SELF.parents[4])
+
+
+def bluez_dir() -> Path:
+    return Path(os.environ.get("VIVAC_BT_DIR") or "/var/lib/bluetooth")
+
+
+def read_kv(path: Path) -> dict[str, str]:
+    """A flat KEY=value file, read as data, as lib/kv.sh writes it. Never raises."""
+    values: dict[str, str] = {}
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return values
+    for line in text.lstrip("﻿").splitlines():
+        line = line.rstrip("\r")
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", key):
+            values[key] = re.sub(r"%([0-9A-Fa-f]{2})", lambda m: chr(int(m.group(1), 16)), value)
+    return values
+
+
+# --- the session's language (lib/i18n.sh, same tables, same rules) -----------------------------
+
+
+def session_language() -> str:
+    """--lang (the sudo hop carries it), VIVAC_LANG, the language setting, LANG, English."""
+    short = re.compile(r"[a-z]{2,3}")
+    config = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    settings = Path(os.environ.get("SETTINGS_FILE") or config / "vivac" / "settings")
+    for candidate in (os.environ.get("VIVAC_LANG", ""), read_kv(settings).get("language", ""), os.environ.get("LANG", "")):
+        candidate = re.split(r"[._@]", candidate)[0]
+        if candidate != "auto" and short.fullmatch(candidate):
+            return candidate
+    return "en"
+
+
+class Text:
+    """i18n/<lang>.conf over i18n/en.conf; {1}, {2}, ... replaced as plain text."""
+
+    def __init__(self, language: str) -> None:
+        directory = Path(os.environ.get("I18N_DIR") or repo_root() / "i18n")
+        self.reference = read_kv(directory / "en.conf")
+        self.table = read_kv(directory / f"{language}.conf") if language != "en" else {}
+
+    def get(self, key: str, *args: object) -> str:
+        if key in self.table:
+            text = self.table[key]
+        elif key in self.reference:
+            text = self.reference[key] if not self.table else "[en] " + self.reference[key]
+        else:
+            return f"[{key}]"
+        for index, arg in enumerate(args, 1):
+            text = text.replace("{%d}" % index, str(arg))
+        return text
+
+
+TEXT = Text("en")
+
+
+def say(key: str, *args: object) -> None:
+    print(TEXT.get(key, *args), flush=True)
+
+
+def complain(key: str, *args: object) -> None:
+    print("vivac-bt-sync: " + TEXT.get(key, *args), file=sys.stderr, flush=True)
+
+
+# --- byte order: Windows' values as BlueZ writes them ------------------------------------------
+#
+# Each conversion is the one the ArchWiki (Bluetooth, "Dual boot pairing") and
+# the tools it cites (bt-dualboot, export-ble-infos.py) agree on: keys keep the
+# order Windows shows them in; numbers are read as the little-endian integers
+# the registry stores and written in decimal.
+
+
+def key_hex(data: bytes) -> str:
+    """LinkKey, LTK, IRK, CSRK: the 16 bytes in stored order, upper-case hex."""
+    return data.hex().upper()
+
+
+def number(data: bytes) -> str:
+    """ERand (REG_QWORD), EDIV and KeyLength (REG_DWORD): a little-endian integer, in decimal."""
+    return str(int.from_bytes(data, "little"))
+
+
+def mac_of(reg_name: str) -> str:
+    """A registry key or value name, twelve hex digits, as BlueZ writes an address:
+    upper case, a colon between each two digits."""
+    return ":".join(reg_name[i : i + 2] for i in range(0, 12, 2)).upper()
+
+
+# --- reading Windows ---------------------------------------------------------------------------
+
+
+@dataclass
+class Adapter:
+    mac: str
+    classic: dict[str, bytes] = field(default_factory=dict)  # device MAC -> link key
+    le: dict[str, dict[str, bytes]] = field(default_factory=dict)  # device MAC -> value -> data
+
+
+@dataclass
+class Windows:
+    source: str
+    adapters: dict[str, Adapter] = field(default_factory=dict)
+    names: dict[str, str] = field(default_factory=dict)  # device MAC -> name Windows knows
+
+
+def add_keys(found: Windows, adapter_name: str, values: dict[str, tuple[int, bytes]], subkeys: dict[str, dict[str, tuple[int, bytes]]]) -> None:
+    """One Keys\\<adapter> key: a 16-byte value per Classic device, a subkey per LE one."""
+    if not MAC_KEY.fullmatch(adapter_name):
+        return
+    adapter = found.adapters.setdefault(mac_of(adapter_name), Adapter(mac_of(adapter_name)))
+    for name, (kind, data) in values.items():
+        # MasterIRK, CentralIRK and the like are the adapter's own: not a device.
+        if MAC_KEY.fullmatch(name) and kind == REG_BINARY and len(data) == 16:
+            adapter.classic[mac_of(name)] = data
+    for name, device_values in subkeys.items():
+        if MAC_KEY.fullmatch(name):
+            adapter.le[mac_of(name)] = {value: data for value, (_, data) in device_values.items()}
+
+
+def printable(name: str) -> str:
+    """A device names itself: no control character of its own reaches the terminal."""
+    return "".join(c for c in name if c.isprintable()).strip()
+
+
+def device_name(data: bytes) -> str:
+    """Devices\\<mac>\\Name: UTF-8, ended by a NUL."""
+    return printable(data.split(b"\0", 1)[0].decode("utf-8", errors="replace"))
+
+
+def read_hive(path: Path) -> Windows:
+    import hivex  # pacman hivex: python bindings of libhivex, read-only use here
+
+    hive = hivex.Hivex(str(path))
+    root = hive.root()
+
+    def child(node, *names):
+        for name in names:
+            node = hive.node_get_child(node, name) if node else None
+        return node
+
+    def values(node) -> dict[str, tuple[int, bytes]]:
+        out = {}
+        for value in hive.node_values(node):
+            kind, data = hive.value_value(value)
+            out[hive.value_key(value)] = (kind, data)
+        return out
+
+    # An offline hive has no CurrentControlSet: Select\Current names it.
+    current = 1
+    select = child(root, "Select")
+    if select:
+        current_value = values(select).get("Current")
+        if current_value:
+            current = int.from_bytes(current_value[1][:4], "little") or 1
+    control_set = f"ControlSet{current:03d}"
+    found = Windows(f"{path} ({control_set})")
+    parameters = child(root, control_set, "Services", "BTHPORT", "Parameters")
+    if not parameters:
+        return found
+    keys = child(parameters, "Keys")
+    for adapter in hive.node_children(keys) if keys else []:
+        subkeys = {hive.node_name(n): values(n) for n in hive.node_children(adapter)}
+        add_keys(found, hive.node_name(adapter), values(adapter), subkeys)
+    devices = child(parameters, "Devices")
+    for device in hive.node_children(devices) if devices else []:
+        name = values(device).get("Name")
+        if MAC_KEY.fullmatch(hive.node_name(device)) and name:
+            found.names[mac_of(hive.node_name(device))] = device_name(name[1])
+    return found
+
+
+REG_VALUE = re.compile(r'^"((?:[^"\\]|\\.)*)"=(.*)$')
+
+
+def reg_data(text: str) -> tuple[int, bytes] | None:
+    """dword:0000928f, hex:01,02, hex(b):..., as (type, bytes); strings are not needed."""
+    text = text.strip()
+    if text.startswith("dword:"):
+        return REG_DWORD, int(text[6:], 16).to_bytes(4, "little")
+    match = re.match(r"hex(?:\(([0-9a-fA-F]+)\))?:(.*)$", text)
+    if not match:
+        return None
+    kind = int(match.group(1), 16) if match.group(1) else REG_BINARY
+    octets = [part.strip() for part in match.group(2).split(",") if part.strip()]
+    return kind, bytes(int(octet, 16) for octet in octets)
+
+
+def read_reg(path: Path) -> Windows:
+    """A .reg export (regedit's UTF-16 or reged's text) of BTHPORT\\Parameters or below."""
+    raw = path.read_bytes()
+    if raw.startswith(b"\xff\xfe"):
+        text = raw[2:].decode("utf-16-le", errors="replace")
+    else:
+        text = raw.decode("utf-8-sig", errors="replace")
+    lines: list[str] = []
+    for line in text.splitlines():
+        line = line.rstrip("\r")
+        if lines and lines[-1].endswith("\\"):
+            lines[-1] = lines[-1][:-1] + line.strip()
+        else:
+            lines.append(line)
+    # section path (lower case, after Parameters) -> values
+    sections: dict[tuple[str, ...], dict[str, tuple[int, bytes]]] = {}
+    current: dict[str, tuple[int, bytes]] | None = None
+    for line in lines:
+        if line.startswith("["):
+            current = None
+            parts = line.strip().strip("[]").split("\\")
+            lowered = [part.lower() for part in parts]
+            if not line.startswith("[-") and "bthport" in lowered:
+                at = lowered.index("bthport")
+                if lowered[at + 1 : at + 2] == ["parameters"]:
+                    current = sections.setdefault(tuple(parts[at + 2 :]), {})
+            continue
+        match = REG_VALUE.match(line)
+        if current is not None and match:
+            data = reg_data(match.group(2))
+            if data:
+                current[match.group(1).replace('\\"', '"')] = data
+    found = Windows(str(path))
+    for path_parts, values in sections.items():
+        if len(path_parts) == 2 and path_parts[0].lower() == "keys":
+            subkeys = {p[2]: v for p, v in sections.items() if len(p) == 3 and p[:2] == path_parts}
+            add_keys(found, path_parts[1], values, subkeys)
+        elif len(path_parts) == 2 and path_parts[0].lower() == "devices" and "Name" in values:
+            if MAC_KEY.fullmatch(path_parts[1]):
+                found.names[mac_of(path_parts[1])] = device_name(values["Name"][1])
+    return found
+
+
+# --- is the hive safe to read? -----------------------------------------------------------------
+
+
+def hive_dirty(path: Path) -> bool:
+    """regf header: two sequence numbers that differ mean Windows did not finish
+    writing the hive (its log holds the rest), so what is on disk may be old."""
+    with path.open("rb") as handle:
+        header = handle.read(12)
+    if header[:4] != b"regf":
+        raise ValueError("not a registry hive")
+    return header[4:8] != header[8:12]
+
+
+def hibernated(windows_root: Path) -> bool:
+    """hiberfil.sys starting with HIBR/hibr is a hibernated system, which is also
+    what Fast Startup leaves: the registry Windows resumes is in that image."""
+    for entry in windows_root.iterdir() if windows_root.is_dir() else []:
+        if entry.name.lower() == "hiberfil.sys":
+            try:
+                with entry.open("rb") as handle:
+                    return handle.read(4).lower() == b"hibr"
+            except OSError:
+                return False
+    return False
+
+
+def find_nocase(base: Path, *parts: str) -> Path | None:
+    """base/parts..., matching each name without regard to case, as NTFS does."""
+    path = base
+    for part in parts:
+        try:
+            match = next((e for e in path.iterdir() if e.name.lower() == part.lower()), None)
+        except OSError:
+            return None
+        if match is None:
+            return None
+        path = match
+    return path
+
+
+def windows_mounts() -> list[Path]:
+    """Mounted NTFS file systems holding Windows\\System32\\config\\SYSTEM."""
+    found = []
+    mounts = Path(os.environ.get("VIVAC_MOUNTS") or "/proc/self/mounts")
+    try:
+        lines = mounts.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return found
+    for line in lines:
+        fields = line.split()
+        if len(fields) < 3 or fields[2] not in ("ntfs", "ntfs3", "fuseblk", "ntfs-3g"):
+            continue
+        point = Path(re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), fields[1]))
+        if find_nocase(point, "Windows", "System32", "config", "SYSTEM"):
+            found.append(point)
+    return found
+
+
+# --- BlueZ's info files ------------------------------------------------------------------------
+
+
+def sections_of(text: str) -> dict[str, dict[str, str]]:
+    out: dict[str, dict[str, str]] = {}
+    current = None
+    for line in text.splitlines():
+        if line.startswith("[") and line.rstrip().endswith("]"):
+            current = out.setdefault(line.strip()[1:-1], {})
+        elif current is not None and "=" in line:
+            key, _, value = line.partition("=")
+            current[key] = value
+    return out
+
+
+def edit_info(text: str, changes: list[tuple[str, str, str]]) -> str:
+    """Set (section, key, value) in place, each line kept as it was otherwise;
+    a key the section lacks goes under its header."""
+    lines = text.split("\n")
+    for section, key, value in changes:
+        start = next((i for i, l in enumerate(lines) if l.strip() == f"[{section}]"), None)
+        if start is None:
+            continue
+        end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("[")), len(lines))
+        at = next((i for i in range(start + 1, end) if lines[i].split("=", 1)[0] == key), None)
+        if at is None:
+            lines.insert(start + 1, f"{key}={value}")
+        else:
+            lines[at] = f"{key}={value}"
+    return "\n".join(lines)
+
+
+# --- the plan ----------------------------------------------------------------------------------
+
+
+@dataclass
+class Step:
+    adapter: str
+    mac: str
+    name: str
+    state: str  # update, same, windows_only, transport
+    info: Path | None = None
+    move_from: Path | None = None
+    changes: list[tuple[str, str, str]] = field(default_factory=list)
+
+
+def same_key(a: str, b: str) -> bool:
+    return a.strip().upper() == b.strip().upper()
+
+
+def le_changes(info: dict[str, dict[str, str]], values: dict[str, bytes]) -> list[tuple[str, str, str]] | None:
+    """What an LE device's info needs from Windows' LTK, ERand, EDIV, KeyLength,
+    IRK and CSRKs; None when Linux keeps no LTK for it (paired another way)."""
+    if "LTK" not in values:
+        return None
+    # [LongTermKey] is the key the device handed out, which is the one Windows
+    # keeps; BlueZ keeps it in the peripheral sections only when it has no
+    # [LongTermKey] (Secure Connections, as on the devices the ArchWiki lists).
+    targets = ["LongTermKey"] if "LongTermKey" in info else [s for s in LE_SECTIONS if s in info]
+    if not targets:
+        return None
+    wanted = []
+    for section in targets:
+        wanted.append((section, "Key", key_hex(values["LTK"])))
+        for key, value in (("EncSize", "KeyLength"), ("EDiv", "EDIV"), ("Rand", "ERand")):
+            if value in values and key in info[section]:
+                wanted.append((section, key, number(values[value])))
+    # The IRK is the device's own, the same on both systems; some devices show
+    # it to Windows byte-reversed. Either way round it is the same key, left alone.
+    irk = info.get("IdentityResolvingKey", {}).get("Key")
+    if irk is not None and "IRK" in values:
+        windows = key_hex(values["IRK"])
+        if not same_key(irk, windows) and not same_key(irk, key_hex(values["IRK"][::-1])):
+            wanted.append(("IdentityResolvingKey", "Key", windows))
+    for value, section in (("CSRK", "LocalSignatureKey"), ("CSRKInbound", "RemoteSignatureKey")):
+        if value in values and "Key" in info.get(section, {}):
+            wanted.append((section, "Key", key_hex(values[value])))
+    return [(s, k, v) for s, k, v in wanted if not same_key(info[s].get(k, ""), v)]
+
+
+def read_info(path: Path) -> dict[str, dict[str, str]]:
+    try:
+        return sections_of(path.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        return {}
+
+
+def same_identity(info: dict[str, dict[str, str]], irk: bytes | None) -> bool:
+    known = info.get("IdentityResolvingKey", {}).get("Key")
+    return bool(known and irk) and (same_key(known, key_hex(irk)) or same_key(known, key_hex(irk[::-1])))
+
+
+def plan(windows: Windows) -> list[Step]:
+    steps: list[Step] = []
+    for adapter in sorted(windows.adapters.values(), key=lambda a: a.mac):
+        here = bluez_dir() / adapter.mac
+        if not here.is_dir():
+            continue
+        known = {p.name.upper(): p for p in here.iterdir() if (p / "info").is_file() and re.fullmatch(r"[0-9A-Fa-f:]{17}", p.name)}
+        for mac in sorted(set(adapter.classic) | set(adapter.le)):
+            le = adapter.le.get(mac)
+            directory, moved = known.get(mac), None
+            if directory is None and le:
+                # Some devices take a new address with every pairing: the same
+                # identity key under another address that Windows no longer has
+                # is the same device.
+                for other_mac, other in sorted(known.items()):
+                    if other_mac not in adapter.classic and other_mac not in adapter.le and same_identity(read_info(other / "info"), le.get("IRK")):
+                        directory, moved = other, other
+                        break
+            name = windows.names.get(mac, "")
+            if directory is None:
+                steps.append(Step(adapter.mac, mac, name, "windows_only"))
+                continue
+            info = read_info(directory / "info")
+            name = printable(info.get("General", {}).get("Name", "")) or name
+            changes: list[tuple[str, str, str]] = []
+            usable = False
+            if mac in adapter.classic and "LinkKey" in info:
+                usable = True
+                wanted = key_hex(adapter.classic[mac])
+                if not same_key(info["LinkKey"].get("Key", ""), wanted):
+                    changes.append(("LinkKey", "Key", wanted))
+            if le:
+                more = le_changes(info, le)
+                if more is not None:
+                    usable = True
+                    changes += more
+            if not usable:
+                steps.append(Step(adapter.mac, mac, name, "transport", directory / "info"))
+            elif changes or moved:
+                steps.append(Step(adapter.mac, mac, name, "update", directory / "info", moved, changes))
+            else:
+                steps.append(Step(adapter.mac, mac, name, "same", directory / "info"))
+    return steps
+
+
+def show(windows: Windows, steps: list[Step]) -> None:
+    say("btsync.source", windows.source)
+    if not windows.adapters:
+        say("btsync.no_keys")
+        return
+    adapters = sorted(windows.adapters)
+    matched = sorted({step.adapter for step in steps})
+    for adapter in adapters:
+        if not (bluez_dir() / adapter).is_dir():
+            say("btsync.adapter_missing", adapter)
+    for adapter in matched:
+        say("btsync.adapter", adapter)
+        for step in (s for s in steps if s.adapter == adapter):
+            label = f"  {step.mac}  {step.name or '?'}"
+            if step.state == "update":
+                fields = ", ".join(f"{s}.{k}" for s, k, _ in step.changes) or "-"
+                if step.move_from:
+                    print(f"{label}: {TEXT.get('btsync.move', step.move_from.name, fields)}")
+                else:
+                    print(f"{label}: {TEXT.get('btsync.update', fields)}")
+            else:
+                print(f"{label}: {TEXT.get('btsync.' + step.state)}")
+
+
+# --- writing -----------------------------------------------------------------------------------
+
+
+def systemctl(*args: str) -> None:
+    subprocess.run(["systemctl", *args], check=False)
+
+
+def apply(steps: list[Step], restart: bool) -> int:
+    todo = [step for step in steps if step.state == "update"]
+    if not todo:
+        return 0
+    stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    # bluetoothd writes these files back on its way out: stopped first, it
+    # cannot overwrite what is written here.
+    if restart:
+        systemctl("stop", "bluetooth.service")
+    try:
+        for step in todo:
+            info = step.info
+            if step.move_from is not None:
+                target = step.move_from.parent / step.mac
+                step.move_from.rename(target)
+                info = target / "info"
+            # Bytes in, bytes out: every line not changed stays exactly as it was.
+            raw = info.read_bytes()
+            backup = info.with_name(f"info.vivac-bak-{stamp}")
+            backup.write_bytes(raw)
+            os.chmod(backup, 0o600)
+            temporary = info.with_name("info.vivac-new")
+            temporary.write_bytes(edit_info(raw.decode("utf-8", errors="surrogateescape"), step.changes).encode("utf-8", errors="surrogateescape"))
+            os.chmod(temporary, info.stat().st_mode & 0o777)
+            os.replace(temporary, info)
+            say("btsync.written", step.mac, backup.name)
+    finally:
+        if restart:
+            systemctl("start", "bluetooth.service")
+    return len(todo)
+
+
+# --- main --------------------------------------------------------------------------------------
+
+
+def main(argv: list[str]) -> int:
+    global TEXT
+    options = {"apply": False, "ask": False, "available": False, "restart": True}
+    windows_dir = hive = reg = None
+    lang = None
+    args = list(argv)
+    while args:
+        arg = args.pop(0)
+        if arg in ("--apply", "--ask", "--available"):
+            options[arg[2:]] = True
+        elif arg == "--no-restart":
+            options["restart"] = False
+        elif arg in ("--windows", "--hive", "--reg", "--lang") and args:
+            value = args.pop(0)
+            if arg == "--windows":
+                windows_dir = Path(value)
+            elif arg == "--hive":
+                hive = Path(value)
+            elif arg == "--reg":
+                reg = Path(value)
+            else:
+                lang = value
+        elif arg in ("-h", "--help"):
+            print(__doc__.strip())
+            return 0
+        else:
+            print(f"Unknown option: {arg}", file=sys.stderr)
+            return 2
+    language = lang if lang and re.fullmatch(r"[a-z]{2,3}", lang) else session_language()
+    TEXT = Text(language)
+
+    if options["available"]:
+        return 0 if (hive or reg or windows_dir or windows_mounts()) else 1
+
+    # From a menu there is no terminal: open one, ask in it, and keep it open
+    # until it has been read.
+    if options["ask"] and not sys.stdin.isatty():
+        try:
+            return subprocess.call(["kitty", "--hold", "--title", TEXT.get("btsync.title"), "--", sys.executable, str(SELF), *argv])
+        except OSError:
+            complain("btsync.no_terminal")
+            return 1
+
+    # /var/lib/bluetooth is root's alone. VIVAC_BT_DIR (the tests) is not.
+    if os.geteuid() != 0 and not os.environ.get("VIVAC_BT_DIR"):
+        os.execvp("sudo", ["sudo", "--", sys.executable, str(SELF), *argv, "--lang", language])
+
+    # Where Windows' keys come from, and whether that copy can be trusted.
+    warnings: list[str] = []
+    try:
+        if reg:
+            windows = read_reg(reg)
+        else:
+            if hive is None:
+                if windows_dir is None:
+                    mounts = windows_mounts()
+                    if len(mounts) != 1:
+                        complain("btsync.no_windows" if not mounts else "btsync.many_windows", " ".join(map(str, mounts)))
+                        return 1
+                    windows_dir = mounts[0]
+                hive = find_nocase(windows_dir, "Windows", "System32", "config", "SYSTEM")
+                if hive is None:
+                    complain("btsync.no_hive", windows_dir)
+                    return 1
+                if hibernated(windows_dir):
+                    warnings.append(TEXT.get("btsync.hibernated"))
+            if hive_dirty(hive):
+                warnings.append(TEXT.get("btsync.dirty"))
+            try:
+                windows = read_hive(hive)
+            except ImportError:
+                complain("btsync.no_hivex")
+                return 1
+    except (OSError, ValueError, RuntimeError) as error:  # hivex raises RuntimeError
+        complain("btsync.unreadable", reg or hive, error)
+        return 1
+
+    steps = plan(windows)
+    show(windows, steps)
+    for warning in warnings:
+        print("! " + warning, flush=True)
+    count = sum(step.state == "update" for step in steps)
+    if not count:
+        say("btsync.nothing")
+        return 0
+    if not options["apply"] and not options["ask"]:
+        say("btsync.dry_run", count)
+        return 0
+    if warnings:
+        # Keys read from a half-written hive could be the old ones: refuse.
+        complain("btsync.refused")
+        return 3
+    if options["ask"]:
+        answer = input(TEXT.get("btsync.confirm", count) + f" [{TEXT.get('bridge.yes')}/{TEXT.get('bridge.no')}] ")
+        if not answer or answer.strip()[:1].lower() != TEXT.get("bridge.yes")[:1].lower():
+            say("btsync.cancelled")
+            return 1
+    apply(steps, options["restart"])
+    say("btsync.done", count)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except (KeyboardInterrupt, EOFError):
+        sys.exit(130)

@@ -15,6 +15,7 @@ git
 gitleaks
 gnome-keyring
 grim
+hivex
 hypridle
 hyprland
 hyprlock
