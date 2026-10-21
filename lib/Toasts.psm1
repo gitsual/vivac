@@ -108,9 +108,9 @@ $script:Seconds = 7
 
 function Update-ToastStack {
     $area = [Windows.SystemParameters]::WorkArea
-    $top = $area.Top + 8
+    $top = $area.Top + 15
     foreach ($w in $script:Stack.ToArray()) {
-        $w.Left = $area.Right - $w.Width - 12
+        $w.Left = $area.Right - $w.Width - 15
         $w.Top = $top
         $top += $w.ActualHeight + 8
     }

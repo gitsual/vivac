@@ -121,7 +121,7 @@
         {
           "name": "default",
           "anchor": "top_right",
-          "offsetX": "-313px",
+          "offsetX": "-320px",
           "offsetY": "46px",
           "width": "340px",
           "height": "380px",
@@ -149,7 +149,7 @@
         {
           "name": "default",
           "anchor": "top_right",
-          "offsetX": "-251px",
+          "offsetX": "-258px",
           "offsetY": "46px",
           "width": "340px",
           "height": "360px",
@@ -177,7 +177,7 @@
         {
           "name": "default",
           "anchor": "top_right",
-          "offsetX": "-191px",
+          "offsetX": "-198px",
           "offsetY": "46px",
           "width": "340px",
           "height": "330px",
@@ -205,7 +205,7 @@
         {
           "name": "default",
           "anchor": "top_right",
-          "offsetX": "-128px",
+          "offsetX": "-135px",
           "offsetY": "46px",
           "width": "340px",
           "height": "250px",

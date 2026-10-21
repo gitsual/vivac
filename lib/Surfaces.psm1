@@ -269,9 +269,9 @@ function Set-KitDropDown($Window) {
     $area = [Windows.SystemParameters]::WorkArea
     $Window.WindowStartupLocation = 'Manual'
     $Window.SizeToContent = 'Height'
-    $Window.MaxHeight = $area.Height - 16
-    $Window.Left = $area.Right - $Window.Width - 12
-    $Window.Top = $area.Top + 8
+    $Window.MaxHeight = $area.Height - 30
+    $Window.Left = $area.Right - $Window.Width - 15
+    $Window.Top = $area.Top + 15
 }
 
 # A row built in code, in the look of the menu's: icon tile, name, a muted
@@ -342,12 +342,12 @@ function New-VivacNotification([string]$Title, [string]$Body, [string]$App = 'vi
   <Border x:Name="Card" Background="#F2$($p['COLOR_BG'])" BorderBrush="#$($p['COLOR_SURFACE_ALT'])" BorderThickness="1" CornerRadius="12" Cursor="Hand">
     <Grid>
       <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="3"/></Grid.RowDefinitions>
-      <Grid Margin="14,12,12,12">
-        <Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Border Width="36" Height="36" CornerRadius="9" Background="#$($p['COLOR_SURFACE'])" VerticalAlignment="Top" HorizontalAlignment="Left">
+      <Grid Margin="12">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Border Width="48" Height="48" CornerRadius="10" Background="#$($p['COLOR_SURFACE'])" VerticalAlignment="Center" HorizontalAlignment="Left">
           <Grid>
-            <TextBlock x:Name="Glyph" Text="$(Get-KitGlyph $Glyph)" FontFamily="$script:KitIconFont" FontSize="16" Foreground="#$($p['COLOR_ACCENT'])" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            <Image x:Name="Icon" Width="24" Height="24" RenderOptions.BitmapScalingMode="HighQuality"/>
+            <TextBlock x:Name="Glyph" Text="$(Get-KitGlyph $Glyph)" FontFamily="$script:KitIconFont" FontSize="20" Foreground="#$($p['COLOR_ACCENT'])" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <Image x:Name="Icon" Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
           </Grid>
         </Border>
         <Grid Grid.Column="1">
@@ -374,7 +374,7 @@ function New-VivacNotification([string]$Title, [string]$Body, [string]$App = 'vi
             $bmp = New-Object Windows.Media.Imaging.BitmapImage
             $bmp.BeginInit()
             $bmp.UriSource = New-Object Uri $Image
-            $bmp.DecodePixelWidth = 48
+            $bmp.DecodePixelWidth = 64
             $bmp.CacheOption = 'OnLoad'
             $bmp.EndInit()
             $icon.Source = $bmp
@@ -406,8 +406,8 @@ function New-VivacNotification([string]$Title, [string]$Body, [string]$App = 'vi
     $w.Tag = @{ Close = $w.FindName('Close'); Progress = $w.FindName('Progress'); Card = $w.FindName('Card') }
     $area = [Windows.SystemParameters]::WorkArea
     $w.WindowStartupLocation = 'Manual'
-    $w.Left = $area.Right - $w.Width - 12
-    $w.Top = $area.Top + 8
+    $w.Left = $area.Right - $w.Width - 15
+    $w.Top = $area.Top + 15
     $w
 }
 

@@ -15,7 +15,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
    screen whatever is either side of it. Left clips its title rather than
    push into the clock; the gauges hug the right edge. */
 .bar {
-  position: absolute; inset: 6px 8px 6px 8px;
+  position: absolute; inset: 6px 15px 6px 15px;
   display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center; gap: 8px;
   background: rgba(@COLOR_BG:rgb@, 0.95);
