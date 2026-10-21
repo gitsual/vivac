@@ -28,10 +28,15 @@ grep -Fq '#custom-theme' "$repo_root/templates/waybar/.config/waybar/style.css.i
 
 # The catalogue is read, never copied: the picker offers exactly what the
 # wizard offers, which is exactly what ships.
-mapfile -t offered < <(VIVAC_REPO="$repo_root" "$picker" --print)
+# The last row makes a new palette from a picture; a scratch config home keeps
+# any palette already made on this machine out of the count.
+scratch="$(mktemp -d)"
+trap 'rm -rf -- "$scratch"' EXIT
+mapfile -t offered < <(VIVAC_REPO="$repo_root" VIVAC_LANG=en XDG_CONFIG_HOME="$scratch" SETTINGS_FILE="$scratch/settings" "$picker" --print)
 count=$(($(find "$repo_root/data/themes" -name '*.conf' -type f | wc -l) + 1))
-((${#offered[@]} == count)) ||
-	fail "the picker offers ${#offered[@]} themes and the catalogue holds $count"
+((${#offered[@]} == count + 1)) ||
+	fail "the picker offers ${#offered[@]} rows and the catalogue holds $count themes, plus one to make a palette"
+[[ "${offered[-1]}" == 'From a picture'* ]] || fail 'the last row does not make a palette from a picture'
 for row in "${offered[@]}"; do
 	[[ "$row" == *' — '* ]] || fail "a row says nothing about the theme it offers: $row"
 done

@@ -17,6 +17,8 @@ repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 source "$repo_root/lib/kv.sh"
 # shellcheck source=lib/settings.sh
 source "$repo_root/lib/settings.sh"
+# shellcheck source=lib/themes.sh
+source "$repo_root/lib/themes.sh"
 hyprland="${HYPRLAND_BIN:-Hyprland}"
 config="$HOME/.config"
 state="${XDG_STATE_HOME:-$HOME/.local/state}"
@@ -174,11 +176,14 @@ staged="$stage/home"
 if [[ -r "$settings" ]]; then LC_ALL=C tr -d '\r' <"$settings" >"$stage/settings"; fi
 settings_load "$stage/settings" || die 'the settings file is not valid (see above); nothing was changed'
 theme="$(settings_get theme)"
-[[ "$theme" == bad-romance || -f "$repo_root/data/themes/$theme.conf" ]] || die "the theme '$theme' is not in the catalogue; nothing was changed"
+# Resolved here, against the real settings and config: the render below runs in
+# a staged home that has no palettes made from pictures in it.
+theme_file="$(SETTINGS_FILE="$settings" theme_file_for "$repo_root" "$theme")" ||
+	die "the theme '$theme' is not in the catalogue; nothing was changed"
 mkdir -p -- "$staged/.config/hypr" "$staged/.config/vivac" "$stage/run"
 chmod 700 "$stage/run"
 HOME="$staged" XDG_CONFIG_HOME="$staged/.config" XDG_STATE_HOME="$staged/.state" \
-	FACTS_FILE="$facts" FACTS_OVERRIDE="$override" SETTINGS_FILE="$stage/settings" \
+	FACTS_FILE="$facts" FACTS_OVERRIDE="$override" SETTINGS_FILE="$stage/settings" THEME_FILE="$theme_file" \
 	"$repo_root/scripts/render-config.sh" --deploy >/dev/null || die 'the render failed; nothing was changed'
 cp -- "$repo_root/dotfiles/hypr/.config/hypr/hyprland.lua" "$staged/.config/hypr/hyprland.lua"
 printf '%s\n' "$repo_root" >"$staged/.config/vivac/repo"

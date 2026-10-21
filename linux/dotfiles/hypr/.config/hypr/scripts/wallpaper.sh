@@ -40,8 +40,24 @@ image="$wallpapers/$theme.png"
 # committed render is check-theme-drift.sh's business, not this script's.
 theme_file="$repo/data/themes/$theme.conf"
 [[ "$theme" == bad-romance ]] && theme_file="$repo/data/theme.conf"
+# A palette made from a picture (vivac-theme from-image) wears the picture
+# itself, which sits beside it; there is nothing to draw.
+picture=''
+if [[ ! -f "$theme_file" && -f "$repo/lib/themes.sh" ]]; then
+	# shellcheck source=/dev/null
+	source "$repo/lib/kv.sh"
+	# shellcheck source=/dev/null
+	source "$repo/lib/settings.sh"
+	# shellcheck source=/dev/null
+	source "$repo/lib/themes.sh"
+	if theme_file="$(SETTINGS_FILE="$settings" theme_file_for "$repo" "$theme")"; then
+		picture="$(theme_wallpaper_for "$theme_file")" || picture=''
+	fi
+fi
 stale=false
-if [[ ! -f "$image" ]]; then
+if [[ -n "$picture" ]]; then
+	image="$picture"
+elif [[ ! -f "$image" ]]; then
 	stale=true
 elif [[ ! -L "$image" ]] &&
 	[[ -n "$(find "$repo/scripts/make-wallpaper.sh" "$theme_file" \

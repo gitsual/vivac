@@ -6,6 +6,9 @@ Import-Module (Join-Path (Get-RepoRoot) 'lib\Vivac.psm1') -Force
 Import-Module (Join-Path (Get-RepoRoot) 'lib\Desktop.psm1') -Force
 
 $root = Get-RepoRoot
+# A scratch profile: palettes made from pictures in the real one would join
+# the catalogue counted below.
+$scratch = New-TempProfile
 $corpus = @{}
 foreach ($line in [IO.File]::ReadAllLines((Join-Path $root 'data\palette-corpus.tsv'))) {
     if ($line -match '^([0-9A-F]{6})\t') { $corpus[$Matches[1]] = $true }
@@ -66,4 +69,5 @@ Case 'a malformed palette is refused when read' {
     [IO.File]::WriteAllText($bad, "COLOR_BG=2d1f2d`n")
     try { Assert-Throws { Read-VivacTheme 'zz-test-broken' } 'not bare upper-case' } finally { Remove-Item -LiteralPath $bad -Force }
 }
+Remove-TempProfile $scratch
 Complete-Cases

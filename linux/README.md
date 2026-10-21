@@ -172,6 +172,7 @@ the build — it is not quietly downgraded, because the claim is what is wrong.
 ### ✨ What you get
 
 - **🎨 Eight palettes, one switch.** `Super+Shift+T`, the `◐` in the bar, or `apply-theme.sh --theme NAME` — wallpaper, bar, borders, notifications, launcher and **every terminal already open**.
+- **🏞️ A palette from a picture.** The theme menu's last row, or `vivac-theme from-image IMAGE`, makes a ninth palette from a wallpaper of yours: every colour still comes from the corpus and clears the same contrast floors, the picture becomes its wallpaper, and with a shared folder Windows lists it too. `--dry-run` shows it as swatches. See [the bridge](../docs/bridge.md#5-palettes-from-a-picture).
 - **🖼️ Artwork that is generated, not drawn.** Eight 4K wallpapers and the banner above come out of the theme files by running a script.
 - **🌍 Three language axes, one writer each.** Locale, console keymap and compositor layout are separate choices; a test pins that exactly one place writes each.
 - **🧭 A first run that teaches.** Three questions and a ten-step tour that waits for you to actually press the key.

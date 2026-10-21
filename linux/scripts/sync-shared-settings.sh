@@ -19,6 +19,8 @@ repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 source "$repo_root/lib/kv.sh"
 # shellcheck source=lib/settings.sh
 source "$repo_root/lib/settings.sh"
+# shellcheck source=lib/themes.sh
+source "$repo_root/lib/themes.sh"
 
 [[ "${1:-}" == --pull && $# -eq 1 ]] || {
 	printf 'Usage: scripts/sync-shared-settings.sh --pull\n' >&2
@@ -53,7 +55,9 @@ fi
 acceptable() {
 	settings_valid "$1" "$2" || return 1
 	case "$1" in
-	theme) [[ "$2" == bad-romance || -f "$repo_root/data/themes/$2.conf" ]] ;;
+	# A palette made from a picture counts when its file is in the shared root's
+	# themes/ (or this system's own) and keeps the corpus rule.
+	theme) SETTINGS_FILE="$settings_file" theme_file_for "$repo_root" "$2" >/dev/null ;;
 	language) [[ "$2" == auto || -f "$repo_root/i18n/$2.conf" ]] ;;
 	esac
 }

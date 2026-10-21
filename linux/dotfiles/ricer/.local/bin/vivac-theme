@@ -2,10 +2,16 @@
 # Pick a theme from a menu and wear it.
 #
 #   --print   list what the menu would show, one theme per line, and exit
+#   from-image IMAGE [--name NAME] [--dry-run] [--apply]
+#             make a new palette from a picture (scripts/theme-from-image.py):
+#             corpus colours only, the picture as its wallpaper. --dry-run
+#             prints it as colour swatches and writes nothing; --apply wears it
 #
 # The catalogue is read from data/, never copied here: a second list is a
 # second thing to forget to update. Each row is the theme's own title and
 # essence, which are the lines the catalogue already writes for the wizard.
+# Palettes made from pictures follow the shipped ones (lib/themes.sh), and
+# the last row makes a new one: "From a picture...", then a picture to pick.
 set -Eeuo pipefail
 
 self="$(readlink -f -- "${BASH_SOURCE[0]}")"
@@ -14,38 +20,87 @@ repo="${VIVAC_REPO:-$(cd -- "$(dirname -- "$self")/../../../.." && pwd -P)}"
 source "$repo/lib/kv.sh"
 # shellcheck source=lib/i18n.sh
 source "$repo/lib/i18n.sh"
+# shellcheck source=lib/settings.sh
+source "$repo/lib/settings.sh"
+# shellcheck source=lib/themes.sh
+source "$repo/lib/themes.sh"
 
 language="${VIVAC_LANG:-${LANG:-en}}"
 language="${language%%[._@]*}"
 i18n_load "$language" "${I18N_DIR:-$repo/i18n}" 2>/dev/null ||
 	i18n_load en "${I18N_DIR:-$repo/i18n}"
 
-names=(bad-romance)
-while IFS= read -r file; do names+=("$(basename -- "$file" .conf)"); done \
-	< <(find "$repo/data/themes" -name '*.conf' -type f | LC_ALL=C sort)
-
-file_for() {
-	if [[ "$1" == bad-romance ]]; then
-		printf '%s' "$repo/data/theme.conf"
+# from_image IMAGE [--name NAME] [--dry-run] [--apply] — the palette goes
+# where lib/themes.sh will look for it, and its name comes back on stdout.
+from_image() {
+	local image="${1:-}" apply=false args=()
+	[[ -n "$image" ]] || {
+		printf 'Usage: vivac-theme from-image IMAGE [--name NAME] [--dry-run] [--apply]\n' >&2
+		exit 2
+	}
+	shift
+	while (($#)); do
+		case "$1" in
+		--name)
+			args+=(--name "${2:-}")
+			shift
+			;;
+		--dry-run) args+=(--dry-run) ;;
+		--apply) apply=true ;;
+		*)
+			printf 'Unknown option: %s\n' "$1" >&2
+			exit 2
+			;;
+		esac
+		shift
+	done
+	local name
+	name="$(python3 -I "$repo/scripts/theme-from-image.py" "$image" --dir "$(themes_home)" \
+		--data "$repo/data" "${args[@]}")" || exit 1
+	if [[ " ${args[*]} " == *' --dry-run '* ]]; then
+		printf '%s\n' "$name"
+	elif $apply; then
+		exec "$repo/scripts/apply-theme.sh" --theme "$name"
 	else
-		printf '%s' "$repo/data/themes/$1.conf"
+		printf '%s\n' "$name"
 	fi
 }
+
+if [[ "${1:-}" == from-image ]]; then
+	shift
+	from_image "$@"
+	exit 0
+fi
+
+mapfile -t names < <(theme_catalogue "$repo")
 
 menu() {
 	local name file title essence
 	for name in "${names[@]}"; do
-		file="$(file_for "$name")"
+		file="$(theme_file_for "$repo" "$name")" || continue
 		title="$(sed -nE 's/^# @title: (.*)$/\1/p' "$file")"
 		essence="$(sed -nE 's/^# @essence: (.*)$/\1/p' "$file")"
 		printf '%s — %s\n' "${title:-$name}" "${essence:-$name}"
 	done
+	printf '%s\n' "$(i18n_get picture.menu)"
 }
 
 if [[ "${1:-}" == --print ]]; then
 	menu
 	exit 0
 fi
+
+# The pictures offered: PNG and JPEG under the pictures folder and Downloads,
+# newest first. A file manager would be one more program to depend on.
+pick_picture() {
+	local pictures
+	pictures="$(xdg-user-dir PICTURES 2>/dev/null || true)"
+	[[ -n "$pictures" && "$pictures" != "$HOME" ]] || pictures="$HOME/Pictures"
+	find "$pictures" "$HOME/Downloads" -maxdepth 3 -type f \
+		\( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -printf '%T@\t%p\n' 2>/dev/null |
+		LC_ALL=C sort -rn | cut -f2- |
+		rofi -dmenu -i -p "$(i18n_get picture.prompt)"
+}
 
 current="$(sed -nE 's/^theme=(.*)$/\1/p' \
 	"${XDG_CONFIG_HOME:-$HOME/.config}/vivac/settings" 2>/dev/null | tail -1)"
@@ -58,5 +113,14 @@ done
 # em dash in it, or a translated one, can never be mistaken for a theme name.
 chosen="$(menu | rofi -dmenu -i -format i -selected-row "$selected" -p "$(i18n_get help.hypr.theme)")" || exit 0
 [[ "$chosen" =~ ^[0-9]+$ ]] || exit 0
+if ((chosen == ${#names[@]})); then
+	picture="$(pick_picture)" || exit 0
+	[[ -f "$picture" ]] || exit 0
+	# What went wrong goes on screen: a menu has no terminal to print it in.
+	if ! output="$(from_image "$picture" --apply 2>&1)"; then
+		command -v notify-send >/dev/null && notify-send --app-name=vivac -- "$(i18n_get picture.failed_title)" "$output"
+	fi
+	exit 0
+fi
 ((chosen < ${#names[@]})) || exit 0
 exec "$repo/scripts/apply-theme.sh" --theme "${names[$chosen]}"
