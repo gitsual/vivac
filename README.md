@@ -74,6 +74,7 @@ both. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
 | **Restart into the other system** — one entry in each power menu; it sets the firmware's *BootNext* for one boot only, never the boot order or GRUB's default | ✅ | |
 | **The drop tray** — leave files in a folder on one side; the other says, at sign-in, that they are waiting | ✅ | |
 | **vivac link** — send the clipboard, a link, a file or a notification to the other machine; paired once with a code, every request signed | | ✅ |
+| **Palettes from a picture** — a new palette from a wallpaper of yours, every colour taken from the corpus; kept in the shared folder, so both systems list it and wear the same picture | ✅ | |
 
 **Safe by construction.** vivac link never runs what it receives, never opens a link without a click,
 writes files only into `Downloads/vivac-link/` under a name stripped of any path, and refuses a request

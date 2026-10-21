@@ -5,7 +5,7 @@ stands on its own. Together they also share state across a dual boot and talk
 live across a local network. This file is the contract both halves implement;
 a change here is a change to both.
 
-Four features, each usable alone:
+Five features, each usable alone:
 
 | Feature | When it helps | Needs |
 |---|---|---|
@@ -13,6 +13,7 @@ Four features, each usable alone:
 | [Reboot into the other system](#2-reboot-into-the-other-system) | dual boot | UEFI |
 | [The drop tray](#3-the-drop-tray) | dual boot | a disk both systems mount |
 | [vivac link](#4-vivac-link) | two machines on one network | a pairing code |
+| [Palettes from a picture](#5-palettes-from-a-picture) | dual boot (or one system alone) | a disk both systems mount, to share them |
 
 ## The shared root
 
@@ -28,12 +29,16 @@ and does nothing else.
   settings            shared choices (key=value, lowercase values)
   drop/to-linux/      the drop tray, towards Linux
   drop/to-windows/    the drop tray, towards Windows
+  themes/             palettes made from a picture, each with its picture
 ```
 
 ## 1. Shared choices
 
 Already in both halves (`sync-shared-settings`): `theme`, `weather_location`
 and `language` follow the shared file; `mod` and everything else stay local.
+A `theme` that names a palette made from a picture is accepted when that
+palette is in `<shared root>/themes/` (section 5); otherwise the other side
+ignores it and says so, as it does for any name it does not know.
 
 ## 2. Reboot into the other system
 
@@ -147,6 +152,58 @@ receives, never opens a URL without a click, and writes files only into its
   for TCP and UDP 47321, private networks and the local subnet only. Linux:
   `apply-system.sh --bridge` opens the same in UFW, the firewall vivac configures, for the
   local subnet only.
+
+## 5. Palettes from a picture
+
+`vivac theme from-image IMAGE [--name NAME]` makes a new palette, a ninth,
+a tenth, from a PNG or JPEG: on Linux `vivac-theme from-image`, on Windows
+`vivac.ps1 theme from-image` (`-Name`, `-DryRun`, `-Apply`). Each theme
+menu ends with **From a picture…**, which asks for the picture (rofi over
+the pictures folder and Downloads; the Windows file dialog), makes the
+palette and wears it. `--dry-run` / `-DryRun` prints it as truecolour
+swatches and writes nothing.
+
+No colour is invented. Every one of the thirteen tokens is a row of
+`palette-corpus.tsv`; the picture only votes for which. Both halves run the
+same steps with the same constants (`linux/scripts/theme-from-image.py`,
+`windows/lib/Picture.psm1`):
+
+1. A grid of at most 64 × 64 samples, the centre of each cell, read from the
+   decoded pixels without resampling; samples under half opacity are skipped.
+2. Distance is redmean, the measure the catalogue gate uses, as the integer
+   512 × redmean², so both halves compare exactly.
+3. The ground is the dark corpus colour (role `deep` or `base`) most samples
+   are nearest to; if no full palette can be built on it, the next one.
+4. Text, dim text, surfaces and the terminal pair come from their corpus
+   roles, each the first in its order that clears the catalogue's floors
+   (7:1 text, 4.5:1 dim text, 3:1 accent and signals).
+5. The accent is the most salient colour: samples vote weighted by chroma.
+   Its root and the ground's root come from `corpus-roots.tsv`; an accent of
+   the ground's own root, or a rupture (distance ≥ 5), is passed over.
+6. Urgent, info, ok and muted keep their meaning: the corpus colour nearest
+   the shipped signal colour that clears the floor and stays 60 apart from
+   the accent (info) or the dim text (muted).
+
+The result is a file in the format of `data/themes/*.conf`, declaring its
+roots, distance and verdict, plus `# @wallpaper: NAME.png` (or `.jpg`): the
+picture, copied beside it, is the palette's wallpaper. A name is lower-case
+letters, digits and dashes; a shipped name is refused.
+
+Where it lives: never in the checkout. With `shared_settings` set and the
+shared root there, in `<shared root>/themes/`, so the other system lists the
+same palette and the shared `theme` choice works on both; otherwise in
+`~/.config/vivac/themes/` (Linux) or `%APPDATA%\vivac\themes\` (Windows).
+Each side lists both folders after the eight, the shared one first. A file
+there is checked as it is read: the thirteen tokens, every value in the
+corpus, a wallpaper that is a plain name beside it; one that fails, or takes
+a shipped name, is left out of the catalogue.
+
+The same picture gives the same file on both sides:
+`shared/fixtures/theme-from-image/` holds two small generated pictures and
+the palettes both halves must make from them, and each half's tests compare
+byte for byte. A JPEG can decode a shade differently on each side (libjpeg
+against Windows' own decoder); the snapping to the corpus almost always
+absorbs it, but only a PNG is guaranteed identical.
 
 ## Versions
 

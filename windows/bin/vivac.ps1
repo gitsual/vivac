@@ -7,6 +7,8 @@
     help [pane] the key help pane (F1-F5 switch panes, Esc closes)
     power       the power menu: lock, sign out, sleep, restart, shut down
     theme       the theme picker
+    theme from-image IMAGE [-Name N] [-DryRun] [-Apply]
+                a new palette from a picture (scripts\theme-from-image.ps1)
     sound       the sound panel: devices, volumes and the mixer
     bluetooth   the Bluetooth panel: the radio, paired devices, pairing new ones
     network     the network panel: Wi-Fi networks and the wired adapters
@@ -30,13 +32,20 @@ $root = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
 # Without the resident host a surface takes a couple of seconds more to
 # build: "Loading..." meanwhile, so the key does not look dead.
-if (@('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'security') -contains $Verb) { Start-VivacLoading }
+$fromImage = $Verb -eq 'theme' -and $Rest -and $Rest[0] -eq 'from-image'
+if (@('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'security') -contains $Verb -and -not $fromImage) { Start-VivacLoading }
 
 switch ($Verb) {
     'help'      { $pane = 'wm'; if ($Rest) { $pane = $Rest[0] }; Show-Help $pane }
     'menu'      { Show-Menu }
     'power'     { Show-Power }
-    'theme'     { Show-ThemePicker }
+    'theme'     {
+        if ($fromImage) {
+            $pictureArgs = @(@($Rest) | Select-Object -Skip 1)
+            & (Join-Path $root 'scripts\theme-from-image.ps1') @pictureArgs
+        }
+        else { Show-ThemePicker }
+    }
     'sound'     { Show-Sound }
     'bluetooth' { Import-Module (Join-Path $root 'lib\Bluetooth.psm1') -Force; Show-Bluetooth }
     'network'   { Import-Module (Join-Path $root 'lib\Network.psm1') -Force; Show-Network }

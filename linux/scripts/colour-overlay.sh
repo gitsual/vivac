@@ -43,8 +43,17 @@ done
 
 if [[ "$theme" == bad-romance ]]; then
 	theme_file="$data/theme.conf"
-else
+elif [[ -f "$data/themes/$theme.conf" ]]; then
 	theme_file="$data/themes/$theme.conf"
+else
+	# A palette made from a picture lives outside the checkout (lib/themes.sh).
+	# shellcheck source=lib/kv.sh
+	source "$repo_root/lib/kv.sh"
+	# shellcheck source=lib/settings.sh
+	source "$repo_root/lib/settings.sh"
+	# shellcheck source=lib/themes.sh
+	source "$repo_root/lib/themes.sh"
+	theme_file="$(theme_file_for "$repo_root" "$theme")" || theme_file=''
 fi
 [[ -f "$theme_file" ]] || {
 	printf 'colour-overlay: %s names no palette\n' "$theme" >&2

@@ -778,11 +778,30 @@ function Show-ThemePicker([switch]$NoShow, [hashtable]$Registry) {
         [void]$panel.Children.Add($label)
         [void]$rows.Items.Add($panel)
     }
+    # The last row makes a new palette from a picture (lib/Picture.psm1).
+    $fromPicture = New-Object Windows.Controls.TextBlock
+    $fromPicture.Margin = '4,10'
+    $fromPicture.Tag = ':picture'
+    $fromPicture.Foreground = "#$($p['COLOR_ACCENT'])"
+    $fromPicture.Text = T 'picture.menu'
+    [void]$rows.Items.Add($fromPicture)
     $rows.SelectedIndex = [Math]::Max(0, [array]::IndexOf($names, $current))
 
     $apply = {
         $sel = $rows.SelectedItem
         if (-not $sel) { return }
+        if ([string]$sel.Tag -eq ':picture') {
+            $dialog = New-Object Microsoft.Win32.OpenFileDialog
+            $dialog.Title = T 'picture.dialog_title'
+            $dialog.Filter = (T 'picture.filter') + '|*.png;*.jpg;*.jpeg'
+            $dialog.InitialDirectory = [Environment]::GetFolderPath('MyPictures')
+            if (-not $dialog.ShowDialog($window)) { return }
+            $window.Close()
+            # Made and worn in the background, like any switch. Start-Process
+            # quotes nothing, so the path is quoted here.
+            Invoke-Detached (Join-Path $root 'scripts\theme-from-image.ps1') @("`"$($dialog.FileName)`"", '-Apply')
+            return
+        }
         $window.Close()
         # Applied in the background: a theme switch restarts the bar and may
         # render a wallpaper, and the picker should not sit on screen for it.

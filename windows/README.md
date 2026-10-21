@@ -12,7 +12,7 @@ This is the Windows half of <a href="../README.md">vivac</a>: the <a href="../li
   <img alt="Windows 11" src="https://img.shields.io/badge/os-Windows%2011-0E1513?style=for-the-badge&labelColor=0E1513&color=6CA4B1">
   <img alt="GlazeWM" src="https://img.shields.io/badge/wm-GlazeWM-0E1513?style=for-the-badge&labelColor=0E1513&color=55A185">
   <img alt="8 palettes" src="https://img.shields.io/badge/8%20palettes-one%20source-0E1513?style=for-the-badge&labelColor=0E1513&color=E1777D">
-  <img alt="19 gate files" src="https://img.shields.io/badge/19%20gate%20files-author--run-0E1513?style=for-the-badge&labelColor=0E1513&color=AAA875">
+  <img alt="20 gate files" src="https://img.shields.io/badge/20%20gate%20files-author--run-0E1513?style=for-the-badge&labelColor=0E1513&color=AAA875">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-0E1513?style=for-the-badge&labelColor=0E1513&color=6CA4B1">
 </p>
 
@@ -116,6 +116,7 @@ ornament it has not earned fails the build.
 
 - **🎨 Eight palettes, one switch.** `Win+Shift+T` or `scripts\apply-theme.ps1 -Theme NAME` — wallpaper, accent colour, window borders, bar, lock screen, every vivac window and every terminal already open.
 - **🧭 A menu instead of the Start menu.** `Win+R`: every application, recent file, folder, settings page and Win+X tool, with real icons, categories, what you use most first, a calculator and a run box. Explorer's own Win+R is switched off (`apply-system.ps1 -WinKeys`) so nothing opens behind it.
+- **🏞️ A palette from a picture.** The theme picker's last row, or `bin\vivac.ps1 theme from-image IMAGE`, makes a ninth palette from a wallpaper of yours: every colour still comes from the corpus and clears the same contrast floors, the picture becomes its wallpaper, and with a shared folder Linux lists it too. `-DryRun` shows it as swatches. See [the bridge](../docs/bridge.md#5-palettes-from-a-picture).
 - **🔔 Notifications in the palette.** Other programs' notifications arrive as vivac's cards at the top right, under the bar; Windows' banners at the bottom right are switched off program by program (`-Toasts`), and every switch is put back by uninstall. Windows Security keeps its own, on purpose.
 - **🎛️ The quick settings, redrawn.** Sound with a mixer, Bluetooth with pairing, Wi-Fi and Ethernet with the key asked in the panel, Defender and Malwarebytes in one security view, Windows Update and winget in one updates view — each a click on the bar.
 - **🔒 A lock that wears the theme.** `Win+L`; an empty Enter asks Windows Hello, Ctrl+Alt+Del hands over to Windows' own lock. AltGr works in the password field, so `@ # | \ [ ] { } €` type on any layout.
@@ -123,7 +124,7 @@ ornament it has not earned fails the build.
 - **🖥️ A bar that only shows what the machine has — and never goes blank.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts. It loads nothing from the network, and a watcher brings it back if it dies or comes up empty; see [The bar](#-the-bar).
 - **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it. See [the bridge](../docs/bridge.md).
 - **🛡️ UAC left whole.** Nothing elevated runs a file you can change without elevation; see [What it asks of Windows](#-what-it-asks-of-windows).
-- **✅ 19 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
+- **✅ 20 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
 
 ### ⚡ 60-second tour
 
@@ -404,7 +405,7 @@ tests/       The gates, fixtures, golden files and the off-screen surface render
 | [Mapping](docs/mapping.md) | Every part of the source and what it became here — or why it did not carry over |
 | [Keys](docs/keys.md) | The help registry, for readers without a session |
 | [The Linux half](../linux/README.md) | The Arch Linux workstation this is pitched from |
-| [The bridge](../docs/bridge.md) | What the two halves do together: shared choices, restart into the other system, the drop tray, vivac link |
+| [The bridge](../docs/bridge.md) | What the two halves do together: shared choices, restart into the other system, the drop tray, vivac link, palettes from a picture |
 
 ## 📄 License
 

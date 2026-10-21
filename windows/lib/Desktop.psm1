@@ -97,6 +97,18 @@ function ConvertTo-VivacPng([string]$SvgPath, [string]$PngPath, [int]$Width = 38
 # hash of the SVG, so a changed palette or template renders anew and an
 # unchanged one is reused.
 function Get-VivacWallpaper($Theme, [switch]$DryRun) {
+    # A palette made from a picture wears that picture. It is copied here
+    # first, under a name that carries its hash: the original may sit on a
+    # shared disk the desktop cannot read at sign-in.
+    if ($Theme.PSObject.Properties['Picture'] -and $Theme.Picture) {
+        $hash = (Get-VivacHash $Theme.Picture).Substring(0, 12)
+        $copy = Join-Path (Get-VivacPaths).Wallpapers ("$($Theme.Name)-$hash" + [IO.Path]::GetExtension($Theme.Picture))
+        if (-not $DryRun -and -not (Test-Path -LiteralPath $copy)) {
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $copy) | Out-Null
+            Copy-Item -LiteralPath $Theme.Picture -Destination $copy -Force
+        }
+        return $copy
+    }
     $svg = Get-VivacWallpaperSvg $Theme
     $sha = [Security.Cryptography.SHA256]::Create()
     $hash = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($svg))) -replace '-', '').Substring(0, 12).ToLowerInvariant()

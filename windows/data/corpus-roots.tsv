@@ -1,0 +1,87 @@
+# Which of the eight formal roots a corpus colour speaks for, for the colours
+# that can carry a theme's identity: a ground (role deep or base) names the
+# dominant root, an accent (role accent) names the accent root. A palette
+# made from a picture (vivac theme from-image) reads its two roots here and
+# then the distance between them in root-distance.tsv, exactly as a
+# hand-made theme declares them.
+#
+# The eight shipped themes are the anchors: each one's ground and accent are
+# filed under the roots that theme already declares (test_theme_from_image.sh
+# and ThemeFromImage.Tests.ps1 hold that line). The rest follow the family
+# their pack belongs to: night blues and violets are Luna, burgundy and wine
+# Fuego, rose and coral Flor, golds and ambers Sol, greens and teals Tierra,
+# greys, khaki and dark olive Piedra. Montana and Champinon have no colour of
+# their own in the corpus yet, so nothing is filed under them.
+#
+# hex	root
+0E1513	Luna
+0B100F	Luna
+131313	Piedra
+0A0A0F	Luna
+14201D	Tierra
+253850	Luna
+302541	Luna
+283536	Luna
+2D1F2D	Luna
+241B0E	Piedra
+2A1520	Fuego
+302B21	Piedra
+18131B	Luna
+3D0115	Fuego
+1E1E1E	Piedra
+3C1331	Fuego
+4D011A	Fuego
+B56067	Flor
+C4686E	Flor
+D26F76	Flor
+E1777D	Flor
+C4A982	Sol
+D2B68F	Sol
+DFC39D	Sol
+F2D2BC	Sol
+519BC5	Luna
+6DC4F8	Luna
+AFC59E	Tierra
+BAD0AA	Tierra
+C4DBB5	Tierra
+CFE6C1	Tierra
+D5BC70	Sol
+E3D6A3	Sol
+EBCCA9	Sol
+80CFBB	Tierra
+92DA7D	Tierra
+B3E56B	Tierra
+C1E696	Tierra
+5AA9D6	Luna
+64B6E7	Luna
+6CA4B1	Luna
+77B0BD	Luna
+AAA875	Piedra
+DECD77	Sol
+E8C66A	Sol
+937E2F	Sol
+A8904A	Sol
+55A185	Tierra
+5FB3A1	Tierra
+5B1339	Fuego
+681038	Fuego
+731F51	Fuego
+63092F	Fuego
+7F2F6A	Fuego
+5DAC04	Tierra
+75BF18	Tierra
+8DD22C	Tierra
+A5E540	Tierra
+B79C74	Piedra
+B4B27C	Piedra
+E1997C	Flor
+E7AC91	Flor
+ECBFA7	Flor
+CEDC8C	Sol
+D1D77E	Sol
+D3D171	Sol
+D6CC63	Sol
+6E93C8	Luna
+9A7BC8	Luna
+B06A8F	Flor
+D79A57	Sol
