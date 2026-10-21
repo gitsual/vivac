@@ -75,12 +75,26 @@ function New-VivacWindow([string]$Xaml) {
     $window.Focusable = $true
     $window.Add_ContentRendered({
         param($s)
+        $s.Resources['vivac.shownAt'] = [Environment]::TickCount
         Set-VivacForeground $s
         if (-not [Windows.Input.Keyboard]::FocusedElement) { [void][Windows.Input.Keyboard]::Focus($s) }
     })
     # Close on losing focus, as a launcher does: a surface left behind another
-    # window is one the next keypress cannot find.
-    $window.Add_Deactivated({ param($s) try { $s.Close() } catch { } })
+    # window is one the next keypress cannot find. Not in its first moments,
+    # though: the focus can be taken from it while it opens (the window the
+    # key was pressed in, the shell settling the foreground, a window manager
+    # catching up), and that closed the menu as soon as it appeared. Then the
+    # focus is taken back instead.
+    $window.Add_Deactivated({
+            param($s)
+            $at = $s.Resources['vivac.shownAt']
+            if ($null -eq $at -or [Environment]::TickCount - [int]$at -lt 1500) {
+                [void]$s.Dispatcher.BeginInvoke([Windows.Threading.DispatcherPriority]::Background,
+                    [Action[object]] { param($w) try { if ($w.IsVisible) { Set-VivacForeground $w } } catch { } }, $s)
+                return
+            }
+            try { $s.Close() } catch { }
+        })
     $window
 }
 

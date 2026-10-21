@@ -124,7 +124,17 @@ function Invoke-Verb([string]$Verb) {
     if ($current -and $current.IsVisible) { $current.Close(); return }
     switch ($Verb) {
         'menu'  {
-            Show-Menu -Registry $open
+            # A menu this host cannot build is still a menu: it opens in a
+            # process of its own, as when the host is not running, instead of
+            # the key doing nothing until the next sign-in.
+            try { Show-Menu -Registry $open }
+            catch {
+                Write-DaemonLog "the menu failed here, opening it on its own: $_"
+                try {
+                    Start-Process -WindowStyle Hidden -FilePath powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                        "`"$(Join-Path $PSScriptRoot 'vivac.ps1')`"", 'menu')
+                } catch { Write-DaemonLog "the menu could not be started on its own either: $_" }
+            }
             # The applications are listed again once the menu is gone, so
             # one installed meanwhile is there the next time.
             $script:refreshApps = $true
@@ -156,6 +166,33 @@ try { Import-VivacLoading } catch { }
 (Show-Network -NoShow).Close()
 (Show-Updates -NoShow).Close()
 $script:refreshApps = $false
+# A program installed (or removed) while the host runs: its shortcut lands in
+# one of the Start menu's two folders, and the list is read again then, not
+# only after the menu has been opened once with it missing. Looked at every
+# few seconds: a few hundred names, some forty milliseconds.
+function Get-StartMenuStamp {
+    $n = 0; $last = 0L
+    foreach ($dir in [Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('CommonPrograms')) {
+        try {
+            foreach ($f in [IO.Directory]::EnumerateFileSystemEntries($dir, '*', [IO.SearchOption]::AllDirectories)) {
+                $n++
+                $t = [IO.File]::GetLastWriteTimeUtc($f).Ticks
+                if ($t -gt $last) { $last = $t }
+            }
+        } catch { }
+    }
+    "$n/$last"
+}
+$script:startStamp = Get-StartMenuStamp
+$startTimer = New-Object Windows.Threading.DispatcherTimer
+$startTimer.Interval = [TimeSpan]::FromSeconds(5)
+$startTimer.Add_Tick({
+        try {
+            $now = Get-StartMenuStamp
+            if ($now -ne $script:startStamp) { $script:startStamp = $now; $script:refreshApps = $true }
+        } catch { }
+    })
+$startTimer.Start()
 
 # The taskbar, when apply-system.ps1 -Taskbar asked for it gone. Auto-hide
 # alone still slides it in at the bottom edge, and Explorer shows it again
