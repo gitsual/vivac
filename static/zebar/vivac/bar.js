@@ -5,7 +5,7 @@
 // by scripts/deploy.ps1 from render/zebar/vivac/config.js.in, so a gauge only
 // exists when the hardware answers for it (a battery, a Wi-Fi adapter, an
 // NVIDIA card). This file only knows how to draw each one.
-import * as zebar from 'https://esm.sh/zebar@3.0';
+import * as zebar from './zebar-client.js';
 import { config } from './config.js';
 
 const icons = await fetch('./workspace-icons.json').then((r) => r.json());
@@ -557,3 +557,17 @@ document.getElementById('ws').addEventListener('wheel', (e) => {
 
 providers.onOutput(draw);
 draw();
+
+// Proof of life for bin/vivac-bar-watch.ps1, which restarts Zebar when this
+// goes stale. Stamped only while the bar is really drawn: its stylesheet
+// applied and the workspaces in place. A page that loaded blank, half a
+// module graph or no styles, never stamps, and is restarted.
+function drawn() {
+  const bar = document.getElementById('bar');
+  return getComputedStyle(bar).position === 'absolute' && document.getElementById('ws').childElementCount > 0;
+}
+function stampAlive() {
+  if (drawn()) zebar.shellExec('cmd.exe', '/d /c cd /d %LOCALAPPDATA%\\vivac && type nul>bar.alive').catch(() => {});
+}
+setTimeout(stampAlive, 3000);
+setInterval(stampAlive, 30000);

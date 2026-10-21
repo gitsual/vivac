@@ -38,6 +38,31 @@ Case 'the bar pack has every field the Zebar schema requires' {
     $settings = Get-ZebarSettingsMerge '' | ConvertFrom-Json
     Assert-Equal "$($pack.name)/bar/default" ("{0}/{1}/{2}" -f $settings.startupConfigs[0].pack, $settings.startupConfigs[0].widget, $settings.startupConfigs[0].preset)
 }
+# A bar module that fails to load leaves the bar blank: its stylesheet draws,
+# nothing else does. Zebar loads them as ES modules, which reject what a
+# script tolerates (a name declared twice), so they are checked as .mjs.
+Case 'every bar module parses as an ES module' {
+    $node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $node) { Write-Host '  (node not installed: skipped)'; return }
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) ('vivac-mjs-' + [guid]::NewGuid())
+    [void](New-Item -ItemType Directory -Path $tmp)
+    try {
+        foreach ($f in Get-ChildItem -LiteralPath (Join-Path $root 'static\zebar\vivac') -Filter '*.js') {
+            $copy = Join-Path $tmp ($f.BaseName + '.mjs')
+            Copy-Item -LiteralPath $f.FullName -Destination $copy
+            $out = & $node.Source --check $copy 2>&1
+            Assert-Equal 0 $LASTEXITCODE "$($f.Name): $($out -join ' ')"
+        }
+    } finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
+}
+# The bar draws at sign-in, before the network may be up: nothing it needs
+# to start is fetched from the internet (static/zebar/vivac/zebar-client.js).
+Case 'the bar imports nothing from the network' {
+    foreach ($f in Get-ChildItem -LiteralPath (Join-Path $root 'static\zebar\vivac') -Include '*.js', '*.html' -Recurse) {
+        $hits = @(Select-String -LiteralPath $f.FullName -Pattern "(from\s+|import\s*\(\s*|src=)['""]https?:" | ForEach-Object { $_.LineNumber })
+        Assert-Equal 0 $hits.Count "$($f.Name) imports from the network at line $($hits -join ', ')"
+    }
+}
 Case 'the bar start-up list is merged: Zebar own rewrite of it is not a change' {
     $zebarRewrite = "{`n  `"`$schema`": `"https://example/v9.9.9/settings-schema.json`",`n  `"startupConfigs`": [`n    {`n      `"pack`": `"vivac`",`n      `"widget`": `"bar`",`n      `"preset`": `"default`"`n    }`n  ]`n}`n"
     Assert-True ((Get-ZebarSettingsMerge $zebarRewrite) -ceq $zebarRewrite) 'returned unchanged'
@@ -46,7 +71,7 @@ Case 'the bar start-up list is merged: Zebar own rewrite of it is not a change' 
 }
 Case 'the bar may only run the verbs it is granted' {
     $pack = Get-Content -Raw -LiteralPath (Join-Path $root 'static\zebar\vivac\zpack.json') | ConvertFrom-Json
-    $grant = ($pack.widgets[0].privileges.shellCommands | Where-Object { $_.program -eq 'cmd.exe' }).argsRegex
+    $grant = ($pack.widgets[0].privileges.shellCommands | Where-Object { $_.program -eq 'cmd.exe' -and $_.argsRegex -match 'pipe' }).argsRegex
     Assert-True ($grant -notmatch '\\[1-9]') 'Zebar matches with Rust regex, which has no backreferences'
     # The exact argument line bar.js builds, for each verb.
     $line = '/c echo VERB>\\.\pipe\vivac-someone 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\x\vivac\bin\vivac.ps1 VERB'
@@ -57,6 +82,12 @@ Case 'the bar may only run the verbs it is granted' {
     Assert-True (($line.Replace('VERB', 'help') + ' & calc') -notmatch $grant) 'nothing can be appended'
     $js = [IO.File]::ReadAllText((Join-Path $root 'static\zebar\vivac\bar.js'))
     Assert-True ($js -match [regex]::Escape('`/c echo ${verb}>\\\\.\\pipe\\${config.pipe} 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${config.repo}\\bin\\vivac.ps1 ${verb}`')) 'bar.js builds the line the grant expects'
+    # The proof of life bin/vivac-bar-watch.ps1 reads: one fixed line, nothing appended.
+    $alive = ($pack.widgets[0].privileges.shellCommands | Where-Object { $_.program -eq 'cmd.exe' -and $_.argsRegex -match 'bar\.alive' }).argsRegex
+    $aliveLine = '/d /c cd /d %LOCALAPPDATA%\vivac && type nul>bar.alive'
+    Assert-True ($aliveLine -match $alive) 'the bar may stamp bar.alive'
+    Assert-True (($aliveLine + ' & calc') -notmatch $alive) 'nothing can be appended to the stamp'
+    Assert-True ($js.Contains("'" + $aliveLine.Replace('\', '\\') + "'")) 'bar.js stamps the line the grant expects'
 }
 Case 'every XML and SVG file and every rendered XAML is well-formed' {
     foreach ($f in Get-RepoFiles @('*.xml', '*.svg', '*.xaml')) { [void][xml][IO.File]::ReadAllText($f.FullName) }

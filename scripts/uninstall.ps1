@@ -63,8 +63,9 @@ if (Test-Path -LiteralPath $sys) {
         [void](Restore-VivacToastBanners -DryRun:$DryRun)
     }
     if (& $has 'run_glazewm') {
-        Write-Host '  [restore]   HKCU Run\GlazeWM'
+        Write-Host '  [restore]   HKCU Run\GlazeWM, task \vivac\bar-watch'
         if (-not $DryRun) {
+            [void](& (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-bar-watch.ps1') -Unregister)
             $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
             if ($o.run_glazewm) { Set-ItemProperty -LiteralPath $run -Name GlazeWM -Value $o.run_glazewm } else { Remove-ItemProperty -LiteralPath $run -Name GlazeWM -ErrorAction SilentlyContinue }
         }

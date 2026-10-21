@@ -57,6 +57,34 @@ function Restart-VivacApp([string]$Name) {
     [void](Start-VivacApp $Name)
 }
 
+# The WebView2 processes behind Zebar's widgets, found by the profile folder
+# on their command line. They outlive zebar.exe by a few seconds; a new Zebar
+# that opens the same profile while they still hold it can come up with a
+# blank bar.
+function Get-ZebarWebViews {
+    @(Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -match '\\zebar\\webview-cache\\' })
+}
+
+# Zebar restarted so that it comes back drawn: the old one and its web views
+# gone first, then the new one, then GlazeWM told to lay the windows out
+# again once the bar has reserved its strip (a new Zebar reserves it anew,
+# and windows tiled meanwhile sit under it). Bounded throughout.
+function Restart-VivacBar {
+    [void](Stop-VivacApp 'zebar')
+    $deadline = (Get-Date).AddSeconds(8)
+    while (@(Get-ZebarWebViews).Count -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 250 }
+    foreach ($p in Get-ZebarWebViews) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
+    if (-not (Start-VivacApp 'zebar')) { return $false }
+    Add-Type -AssemblyName System.Windows.Forms
+    $deadline = (Get-Date).AddSeconds(10)
+    while ([System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea.Y -eq [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Y -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Milliseconds 250
+    }
+    [void](Invoke-GlazeWM 'command', 'wm-redraw')
+    $true
+}
+
 # GlazeWM's CLI talks to the running window manager over its IPC port. Bounded
 # to five seconds: a wedged IPC must not freeze a theme switch.
 function Invoke-GlazeWM([string[]]$Arguments, [int]$TimeoutMs = 5000) {

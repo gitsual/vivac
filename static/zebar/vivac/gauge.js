@@ -3,7 +3,7 @@
 // the numbers at once; the programs using the most, and the NVIDIA card's
 // detail, come from bin/vivac-sysinfo.ps1, which takes a few seconds, so
 // they fill in after.
-import * as zebar from 'https://esm.sh/zebar@3.0';
+import * as zebar from './zebar-client.js';
 import { config } from './config.js';
 import { keepOpenWhileHovered, esc } from './popup.js';
 

@@ -39,6 +39,10 @@
           {
             "program": "nvidia-smi",
             "argsRegex": "^--query-gpu=temperature\\.gpu --format=csv,noheader,nounits$"
+          },
+          {
+            "program": "cmd.exe",
+            "argsRegex": "^/d /c cd /d %LOCALAPPDATA%\\\\vivac && type nul>bar.alive$"
           }
         ]
       },

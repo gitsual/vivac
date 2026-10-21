@@ -112,6 +112,8 @@ if ($Session) {
     Save-Original 'run_glazewm' $prevValue
     Step (T 'system.session_step' @($glaze))
     if (-not $DryRun) { Set-ItemProperty -LiteralPath $run -Name 'GlazeWM' -Value "`"$glaze`"" -Type String }
+    Step (T 'system.bar_watch_step')
+    if (-not $DryRun) { [void](& (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-bar-watch.ps1') -Register) }
 }
 
 if ($Idle) {

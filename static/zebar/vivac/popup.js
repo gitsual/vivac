@@ -1,7 +1,7 @@
 // What the bar's hover popups share: staying open while the pointer is on
 // them or on the pill that opened them, and closing themselves after. The
 // bar's half of the handshake is at the end of bar.js.
-import * as zebar from 'https://esm.sh/zebar@3.0';
+import * as zebar from './zebar-client.js';
 
 const GRACE = 400; // the pointer crossing from the pill down into the popup
 const FIRST = 2500; // a popup the pointer never reaches, if the stamps fail
