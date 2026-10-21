@@ -19,6 +19,8 @@ fail() {
 render() {
 	local archetype="$1" home="$sandbox/$1"
 	mkdir -p -- "$home"
+	# Stow first, as bootstrap does: the bar is only rendered once the scripts it calls exist.
+	HOME="$home" XDG_STATE_HOME="$home/.state" "$repo_root/scripts/deploy.sh" --all >/dev/null || fail "stow failed for $archetype"
 	HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_STATE_HOME="$home/.state" \
 		FACTS_FILE="$repo_root/tests/golden/$archetype/hardware-facts" FACTS_OVERRIDE="$sandbox/none" \
 		bash "$renderer" --deploy >/dev/null || fail "render failed for $archetype"

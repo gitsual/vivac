@@ -152,6 +152,20 @@ while IFS= read -r template; do
 		continue
 	fi
 
+	# A render that calls scripts by path is only as good as those scripts.
+	# deploy-host never stows the waybar package, so on such a host the bar
+	# would call ws-render.sh and friends that are not there and draw a blank
+	# workspace strip over the owner's working one. Keep what is there.
+	missing=()
+	while IFS= read -r called; do
+		[[ -e "$HOME/$called" ]] || missing+=("$called")
+	done < <(grep -o '\$HOME/[A-Za-z0-9._/-]*' "$rendered" | sed 's|^\$HOME/||' | LC_ALL=C sort -u)
+	if ((${#missing[@]})); then
+		printf 'skipped %s: it calls %s, which is not deployed (deploy the package that provides it)\n' \
+			"$target" "${missing[*]}" >&2
+		continue
+	fi
+
 	case "$mode" in
 	check-drift)
 		if [[ ! -f "$target" ]]; then

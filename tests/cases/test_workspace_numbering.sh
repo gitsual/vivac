@@ -33,6 +33,8 @@ grep -Fq '{ id = "ws-refresh", cmd = "$HOME/.config/waybar/scripts/ws-refresh.sh
 for archetype in vm-virtio laptop-amd-hybrid; do
 	home="$sandbox/$archetype"
 	mkdir -p -- "$home"
+	# Stow first, as bootstrap does: the bar is only rendered once the scripts it calls exist.
+	HOME="$home" XDG_STATE_HOME="$sandbox/state-$archetype" "$repo_root/scripts/deploy.sh" --all >/dev/null || fail "$archetype: stow failed"
 	HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_STATE_HOME="$sandbox/state-$archetype" \
 		FACTS_FILE="$repo_root/tests/golden/$archetype/hardware-facts" FACTS_OVERRIDE="$sandbox/none" \
 		bash "$repo_root/scripts/render-config.sh" --deploy >/dev/null || fail "$archetype: render failed"

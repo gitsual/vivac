@@ -28,6 +28,19 @@ hash_checkout() {
 }
 backups() { compgen -G "$state/vivac/backups/*/.config/$1" || true; }
 
+# stow_referenced HOME — link every script the Waybar render calls by path, as
+# a full deploy would. A render is only written once what it calls exists.
+stow_referenced() {
+	local into="$1" path source
+	while IFS= read -r path; do
+		source="$(find "$repo_root/dotfiles" -path "*/dotfiles/*/${path}" -print -quit)"
+		[[ -n "$source" ]] || fail "no package provides $path"
+		mkdir -p -- "$into/$(dirname -- "$path")"
+		ln -sfn -- "$source" "$into/$path"
+	done < <(grep -o '\$HOME/[A-Za-z0-9._/-]*' "$repo_root/render/waybar/config.in" | sed 's|^\$HOME/||' | sort -u)
+}
+stow_referenced "$home"
+
 # A machine deployed before this unit still carries Stow's link to the Waybar
 # config that no longer exists in the repository: a dangling symlink.
 ln -s -- "$repo_root/dotfiles/waybar/.config/waybar/config" "$home/.config/waybar/config"
@@ -39,7 +52,7 @@ run --dry-run >"$sandbox/dry.out" || fail 'dry run failed'
 grep -q "^would back up $home/.config/waybar/config" "$sandbox/dry.out" || fail 'dry run did not announce the backup'
 grep -q "^would write $home/.config/hypr/generated/monitors.lua" "$sandbox/dry.out" || fail 'dry run did not announce the render'
 [[ -L "$home/.config/waybar/config" ]] || fail 'dry run replaced the existing file'
-[[ ! -e "$home/.config/hypr" ]] || fail 'dry run created output'
+[[ ! -e "$home/.config/hypr/generated" ]] || fail 'dry run created output'
 [[ -z "$(backups waybar/config)" ]] || fail 'dry run wrote a backup'
 
 # --- a deploy writes into the config directory and nowhere else ----------------------
@@ -80,5 +93,20 @@ cp -- "$repo_root/render/hypr/generated/hardware.lua.in" "$sandbox/templates/hyp
 if TEMPLATES_DIR="$sandbox/templates" RENDER_ROOT="$sandbox/out" bash "$repo_root/scripts/check-theme-drift.sh" --render >/dev/null 2>&1; then
 	fail 'the committed render path accepted a guarded template'
 fi
+
+# --- an owner's Waybar is never replaced by a bar whose scripts are not there ---------
+# deploy-host never stows the waybar package, so on such a host the rendered
+# bar would call ws-render.sh and friends that do not exist: ten workspaces
+# become a blank strip. The owner's config stays, and the skip is reported.
+owner="$sandbox/owner"
+mkdir -p -- "$owner/.config/waybar"
+printf '{"modules-left": ["hyprland/workspaces"]}\n' >"$owner/.config/waybar/config"
+cp -- "$owner/.config/waybar/config" "$sandbox/owner-config"
+owner_run() { HOME="$owner" XDG_CONFIG_HOME="$owner/.config" XDG_STATE_HOME="$sandbox/owner-state" FACTS_FILE="$facts" FACTS_OVERRIDE="$sandbox/absent" bash "$renderer" "$@"; }
+output="$(owner_run --deploy 2>&1)" || fail "deploy failed on an owner's bar: $output"
+cmp -s "$owner/.config/waybar/config" "$sandbox/owner-config" || fail "the owner's Waybar config was replaced by a bar whose scripts are missing"
+[[ "$output" == *'skipped'*'waybar/config'*'ws-render.sh'* ]] || fail "the skip was not reported with the missing script: $output"
+[[ -f "$owner/.config/hypr/generated/monitors.lua" ]] || fail 'a skipped bar stopped the other renders'
+owner_run --check-drift >/dev/null 2>&1 || fail 'a skipped render counted as drift'
 
 printf 'render-config: checkout untouched, backups honoured, drift detected and repaired\n'
