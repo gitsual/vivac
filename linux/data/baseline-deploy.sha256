@@ -17,7 +17,7 @@ e2db77b8cd97138a9070e4bd4beab977021a01f9c20427da44fca02b7d64a956  dotfiles/bridg
 63568be632e3d793c545bba796ee7d0e9b286924e6e547acfc62d52d1615f2b2  dotfiles/bridge/.local/bin/vivac-reboot-other
 753e22bd5b60e9631aa14f52025ed214e324c9f499175ed774dc498b173800c9  dotfiles/dunst/.config/dunst/dunstrc
 675a3b616ec6bc42bf06674c4b11f3e9e6fc60562d99dc0f6f6d4d255d74be06  dotfiles/hypr/.config/hypr/hypridle.conf
-9d12ccdb99d2db9819b28ea8c08b5efa261692a8b55fd344c28abfe936e39dbb  dotfiles/hypr/.config/hypr/hyprland.lua
+98d37446889d86c34e192948db5f973db34527662e9dd92c0bd316d8728cf31c  dotfiles/hypr/.config/hypr/hyprland.lua
 f6fb631aef275fc624a390f5b9281168497f596a92e9e687c0618c3674bc54e8  dotfiles/hypr/.config/hypr/hyprlock.conf
 86aaa6f67e286bdb49b5a63cab6d65133f6686d814b0ff509142f1302dea3b0a  dotfiles/hypr/.config/hypr/hyprpaper.conf
 366af025965f0db167d6fe763bd002a5b5a8b558f07ad3c6cf4d5890dcaa1518  dotfiles/hypr/.config/hypr/local.lua.example
@@ -52,6 +52,7 @@ f9522fbc197ec8a3fbc9c197bfeeb839f1a5e8307f8b5718f9db53c641a3686d  dotfiles/ricer
 4c02a7e36c8884fd36380eed7dad622c7d5e6bfd7237fb70ff6f08884d1dfe8d  dotfiles/ricer/.config/nwg-bar/icons/reboot.svg
 f83792888aaa59994790ed530bb7dafcda08e3a0f3f97774839c8a3faf4dec86  dotfiles/ricer/.config/nwg-bar/icons/suspend.svg
 a163273069081fc3949fea32ed15907e77e00d82a7e570456752ef280409d10c  dotfiles/ricer/.config/nwg-bar/style.css
+71359fb87ea2a74371a1e856de8c657405e18f39093129bc6f6bd683978edaf6  dotfiles/ricer/.local/bin/vivac-ask
 b3afd5a2c0ab32532ebe629773f3486148c2bd26eac1b076086a91bdf95a9fd8  dotfiles/ricer/.local/bin/vivac-power
 1530ca18fe9f48bb6571140ce9df0cf2e131ba08246c79e964e333a5642f4050  dotfiles/ricer/.local/bin/vivac-theme
 090766eccd45ca35ee79c791aeab3c383a6bbd1056b9d1c8ee15ca5dd7121f56  dotfiles/rofi/.config/rofi/config.rasi

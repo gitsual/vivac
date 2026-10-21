@@ -94,6 +94,8 @@ function New-VivacWindow([string]$Xaml) {
                     [Action[object]] { param($w) try { if ($w.IsVisible) { Set-VivacForeground $w } } catch { } }, $s)
                 return
             }
+            # A panel you work beside (vivac ask) sets vivac.keep and stays.
+            if ($s.Resources['vivac.keep']) { return }
             try { $s.Close() } catch { }
         })
     $window

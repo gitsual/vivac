@@ -148,6 +148,17 @@ receives, never opens a URL without a click, and writes files only into its
   `apply-system.sh --bridge` opens the same in UFW, the firewall vivac configures, for the
   local subnet only.
 
+## 5. vivac ask across machines
+
+`vivac ask` is a feature of each half on its own (`linux/README.md`, `windows/README.md`): a
+side panel for a language model served by Ollama, talking to `ask_url`, `http://localhost:11434`
+by default. It is not part of the bridge protocol and carries nothing of vivac link. One machine
+can still use the other's Ollama, typically the one with the larger GPU: set
+`ask_url=http://ADDRESS:11434` and `ask_allow_lan=true` on the asking side, and make Ollama listen
+on the network on the serving side (`OLLAMA_HOST=0.0.0.0`), with the firewall letting in the local
+subnet only. Ollama has no authentication: whoever reaches the port can use it, so only on a
+network you trust. A public address is refused even with `ask_allow_lan=true`.
+
 ## Versions
 
 The product has one version (`VERSION` at the root); each half has its own

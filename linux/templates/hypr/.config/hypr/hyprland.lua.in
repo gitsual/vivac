@@ -144,6 +144,8 @@ hl.bind("SUPER + SHIFT + Q", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-power"))
 hl.bind("SUPER + SHIFT + T", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-theme"))
 -- @help: hypr help.hypr.bridge
 hl.bind("SUPER + SHIFT + B", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-bridge"))
+-- @help: hypr help.hypr.ask
+hl.bind("SUPER + SHIFT + A", hl.dsp.exec_cmd(vivac.terminal .. " --class vivac-ask -e $HOME/.local/bin/vivac-ask"))
 -- @help: hypr help.hypr.clipboard
 hl.bind("SUPER + V", hl.dsp.exec_cmd("cliphist list | rofi -dmenu -i -p Clipboard | cliphist decode | wl-copy"))
 -- @help: hypr help.hypr.reload
@@ -230,6 +232,9 @@ hl.window_rule({ name = "nm-connection-editor", match = { class = "^(nm-connecti
 -- The wizard is the only thing on screen while it runs: floating, centred and
 -- large enough to read without leaning in.
 hl.window_rule({ name = "vivac-welcome", match = { class = "^(vivac-welcome)$" }, float = true, center = true, size = "1100 700" })
+-- vivac ask is a side panel: floating against the right edge, the height of
+-- the screen less a margin, so what it is asked about stays in view.
+hl.window_rule({ name = "vivac-ask", match = { class = "^(vivac-ask)$" }, float = true, size = "560 (monitor_h*0.9)", move = "(monitor_w-window_w-16) (monitor_h*0.05)" })
 
 -- Started with the session, in this order, once the compositor is up.
 -- The pull of the optional shared settings (it does nothing when none are

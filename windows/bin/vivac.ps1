@@ -17,6 +17,9 @@
     welcome     the first-run wizard, in a terminal of its own
     security    Defender's state, in the palette: quick scan, signatures, history
     audit       the security audit
+    ask [clip|inbox] [--dry-run]
+                a local model (Ollama) in a side panel; clip puts the clipboard's
+                text in as context, inbox summarises Downloads\vivac-link
 
   The windows themselves live in lib/Surfaces.psm1; this file only picks one.
 #>
@@ -51,5 +54,24 @@ switch ($Verb) {
         Start-Process -FilePath 'wt.exe' -ArgumentList $wtArgs
     }
     'audit'     { & (Join-Path $root 'scripts\security-audit.ps1') @Rest }
-    default     { throw "vivac: unknown verb '$Verb' (menu, help, power, theme, sound, bluetooth, network, updates, security, clipboard, notify, welcome, audit)" }
+    'ask'       {
+        $askMode = ''; $dryRun = $false
+        foreach ($a in @($Rest | Where-Object { $_ })) {
+            $w = $a.TrimStart('-').ToLowerInvariant()
+            if ($w -eq 'dry-run' -or $w -eq 'dryrun') { $dryRun = $true }
+            elseif (@('clip', 'inbox') -contains $w) { $askMode = $w }
+            else { throw "vivac ask: unknown option '$a' (clip, inbox, --dry-run)" }
+        }
+        if ($dryRun) {
+            Import-Module (Join-Path $root 'lib\Ask.psm1') -Force
+            Import-Module (Join-Path $root 'lib\Bridge.psm1') -Force
+            $clipText = ''
+            if ($askMode -eq 'clip') { $clipText = [string](Get-Clipboard -Raw) }
+            Get-VivacAskDryRun $askMode $clipText (Get-VivacLinkInbox)
+        } else {
+            Import-Module (Join-Path $root 'lib\AskPanel.psm1') -Force
+            Show-Ask $askMode
+        }
+    }
+    default     { throw "vivac: unknown verb '$Verb' (menu, help, power, theme, sound, bluetooth, network, updates, security, clipboard, notify, welcome, audit, ask)" }
 }
