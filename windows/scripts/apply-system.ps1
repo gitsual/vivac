@@ -37,6 +37,9 @@
                 alerts stay
     -LockScreen the theme's wallpaper on the lock screen and the sign-in
                 screen, without the sign-in screen's blur
+    -Link       vivac link reachable from the local network: TCP and UDP
+                47321 in, private networks and the local subnet only
+                (docs/bridge.md at the product root)
     -Boot       GRUB's menu and the boot logo in the theme, following every
                 theme switch: HackBGRT (pinned, checked) and a GRUB theme on
                 the EFI partition shared with Arch, carried there by a SYSTEM
@@ -56,7 +59,7 @@
 [CmdletBinding()]
 param(
     [switch]$Session, [switch]$Idle, [switch]$Taskbar, [switch]$DesktopIcons, [switch]$WinKeys, [switch]$Toasts,
-    [switch]$Firewall, [switch]$Defender, [switch]$SecurityQuiet, [switch]$LockScreen, [switch]$AutoLogin, [switch]$Boot,
+    [switch]$Firewall, [switch]$Defender, [switch]$SecurityQuiet, [switch]$LockScreen, [switch]$AutoLogin, [switch]$Boot, [switch]$Link,
     [switch]$DryRun
 )
 Set-StrictMode -Version 2.0
@@ -66,12 +69,12 @@ Import-Module (Join-Path $PSScriptRoot '..\lib\Apps.psm1') -Force
 [void](Import-VivacStrings (Read-VivacSettings)['language'])
 
 $restartExplorer = $false
-if (-not ($Session -or $Idle -or $Taskbar -or $DesktopIcons -or $WinKeys -or $Toasts -or $Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot)) {
+if (-not ($Session -or $Idle -or $Taskbar -or $DesktopIcons -or $WinKeys -or $Toasts -or $Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot -or $Link)) {
     Write-Host (T 'system.none_chosen')
     return
 }
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (($Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot) -and -not $admin -and -not $DryRun) {
+if (($Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot -or $Link) -and -not $admin -and -not $DryRun) {
     throw (T 'system.needs_admin')
 }
 
@@ -263,6 +266,20 @@ if ($Firewall) {
     }
     if (-not $DryRun) {
         Set-NetFirewallProfile -Profile Domain, Private, Public -Enabled True -DefaultInboundAction Block -DefaultOutboundAction Allow
+    }
+}
+
+# vivac link (docs/bridge.md) listens on 47321; the firewall decides who may
+# reach it: the local subnet, on private networks, nothing else.
+if ($Link) {
+    Write-Host (T 'system.link')
+    Save-Original 'link' $true
+    Step (T 'system.link_step')
+    if (-not $DryRun) {
+        Remove-NetFirewallRule -DisplayName 'vivac link' -ErrorAction SilentlyContinue
+        foreach ($protocol in 'TCP', 'UDP') {
+            New-NetFirewallRule -DisplayName 'vivac link' -Group 'vivac' -Direction Inbound -Protocol $protocol -LocalPort 47321 -Profile Private -RemoteAddress LocalSubnet -Action Allow | Out-Null
+        }
     }
 }
 

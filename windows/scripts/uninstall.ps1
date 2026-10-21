@@ -168,7 +168,17 @@ if (Test-Path -LiteralPath $sys) {
         } else {
             Write-Warning 'the boot menu and logo are vivac''s: run scripts\uninstall.ps1 from an elevated PowerShell to remove them'
         }
-    }    $machine = @('firewall', 'defender', 'security_quiet', 'lockscreen', 'lockscreen_acrylic') | Where-Object { & $has $_ }
+    }
+    if (& $has 'link') {
+        Write-Host '  [restore]   firewall rule "vivac link", task \vivac\link'
+        if (-not $DryRun) {
+            [void](& (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-link.ps1') -Unregister)
+            $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            if ($admin) { Remove-NetFirewallRule -DisplayName 'vivac link' -ErrorAction SilentlyContinue }
+            else { Write-Warning 'the firewall rule "vivac link" is left: run scripts\uninstall.ps1 from an elevated PowerShell to remove it' }
+        }
+    }
+    $machine = @('firewall', 'defender', 'security_quiet', 'lockscreen', 'lockscreen_acrylic') | Where-Object { & $has $_ }
     if ($machine) { Write-Host (T 'uninstall.machine_profiles' @(($machine -join ', '), $sys)) }
     if (-not $DryRun -and -not $machine) { Remove-Item -LiteralPath $sys -Force }
 }

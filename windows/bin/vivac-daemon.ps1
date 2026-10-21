@@ -34,6 +34,7 @@ Import-Module (Join-Path $root 'lib\Bluetooth.psm1') -Force
 Import-Module (Join-Path $root 'lib\Network.psm1') -Force
 Import-Module (Join-Path $root 'lib\Updates.psm1') -Force
 Import-Module (Join-Path $root 'lib\Toasts.psm1') -Force
+Import-Module (Join-Path $root 'lib\Bridge.psm1') -Force
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
 $created = $false
@@ -364,6 +365,27 @@ $toastTimer = New-Object Windows.Threading.DispatcherTimer
 $toastTimer.Interval = [TimeSpan]::FromSeconds(1)
 $toastTimer.Add_Tick({ try { Update-VivacToastWatch } catch { } })
 $toastTimer.Start()
+
+# What Linux left in the drop tray (docs/bridge.md), said once a sign-in. The
+# shared disk may be mounted a little after sign-in: looked for every 20 s,
+# for three minutes.
+$dropTimer = New-Object Windows.Threading.DispatcherTimer
+$dropTimer.Interval = [TimeSpan]::FromSeconds(20)
+$dropTimer.Tag = @{ Tries = 0 }
+$dropTimer.Add_Tick({
+        param($s)
+        $s.Tag.Tries++
+        try {
+            $sharedRoot = Get-VivacSharedRoot
+            if (-not $sharedRoot) { $s.Stop(); return }
+            if (-not (Test-Path -LiteralPath $sharedRoot)) { if ($s.Tag.Tries -ge 9) { $s.Stop() }; return }
+            $s.Stop()
+            $folder = Get-VivacDropFolder 'in' $sharedRoot
+            $n = @(Get-VivacDropItems $folder).Count
+            if ($n) { Show-VivacToast (T 'bridge.drop_title') (T 'bridge.drop_waiting' @($n)) 'vivac' '' '' { Start-Process explorer.exe -ArgumentList "`"$folder`"" }.GetNewClosure() }
+        } catch { $s.Stop(); Write-DaemonLog "drop tray: $_" }
+    })
+$dropTimer.Start()
 
 $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(30)

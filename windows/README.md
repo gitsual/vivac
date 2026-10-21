@@ -4,7 +4,7 @@
 
 <p>
 <em>A <strong>vivac</strong> is the camp you pitch from what you carry and strike at dawn.<br>
-This is the <a href="https://github.com/gitsual/vivac">vivac</a> workstation, pitched on Windows 11.</em><br>
+This is the Windows half of <a href="../README.md">vivac</a>: the <a href="../linux/README.md">Arch workstation</a>, pitched on Windows 11.</em><br>
 <strong>What you carry is the same one file — twenty-odd lines of colour. The wallpaper, the bar, the borders and every window vivac draws are rendered from it, none of them painted by hand. There are eight such files.</strong>
 </p>
 
@@ -12,7 +12,7 @@ This is the <a href="https://github.com/gitsual/vivac">vivac</a> workstation, pi
   <img alt="Windows 11" src="https://img.shields.io/badge/os-Windows%2011-0E1513?style=for-the-badge&labelColor=0E1513&color=6CA4B1">
   <img alt="GlazeWM" src="https://img.shields.io/badge/wm-GlazeWM-0E1513?style=for-the-badge&labelColor=0E1513&color=55A185">
   <img alt="8 palettes" src="https://img.shields.io/badge/8%20palettes-one%20source-0E1513?style=for-the-badge&labelColor=0E1513&color=E1777D">
-  <img alt="17 gate files" src="https://img.shields.io/badge/17%20gate%20files-author--run-0E1513?style=for-the-badge&labelColor=0E1513&color=AAA875">
+  <img alt="19 gate files" src="https://img.shields.io/badge/19%20gate%20files-author--run-0E1513?style=for-the-badge&labelColor=0E1513&color=AAA875">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-0E1513?style=for-the-badge&labelColor=0E1513&color=6CA4B1">
 </p>
 
@@ -65,8 +65,8 @@ On Windows 11, from an ordinary PowerShell. No elevation: what needs an
 administrator is a separate, opt-in step with a dry run of its own.
 
 ```powershell
-git clone https://github.com/gitsual/vivac-windows.git C:\vivac
-cd C:\vivac
+git clone https://github.com/gitsual/vivac.git C:\vivac
+cd C:\vivac\windows
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -DryRun
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Editor
 ```
@@ -101,7 +101,7 @@ the taskbar, every banner switch and system setting vivac touched.
 
 ## 🎨 Why this exists
 
-The [source](https://github.com/gitsual/vivac) is an Arch Linux workstation whose whole look is one
+The [Linux half](../linux/README.md) is an Arch Linux workstation whose whole look is one
 palette file, rendered into everything else. This is that workstation pitched on Windows 11, with the
 doctrine carried over intact and the floor underneath replaced: Hyprland becomes GlazeWM, Waybar a Zebar
 widget, rofi a menu vivac draws itself, dunst vivac's own notification cards, hyprlock vivac's own lock,
@@ -121,13 +121,14 @@ ornament it has not earned fails the build.
 - **🔒 A lock that wears the theme.** `Win+L`; an empty Enter asks Windows Hello, Ctrl+Alt+Del hands over to Windows' own lock. AltGr works in the password field, so `@ # | \ [ ] { } €` type on any layout.
 - **📋 A clipboard history that stays in memory.** `Win+V`, never written to disk.
 - **🖥️ A bar that only shows what the machine has — and never goes blank.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts. It loads nothing from the network, and a watcher brings it back if it dies or comes up empty; see [The bar](#-the-bar).
+- **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it. See [the bridge](../docs/bridge.md).
 - **🛡️ UAC left whole.** Nothing elevated runs a file you can change without elevation; see [What it asks of Windows](#-what-it-asks-of-windows).
-- **✅ 17 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
+- **✅ 19 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
 
 ### ⚡ 60-second tour
 
 ```powershell
-git clone https://github.com/gitsual/vivac-windows.git C:\vivac; cd C:\vivac
+git clone https://github.com/gitsual/vivac.git C:\vivac; cd C:\vivac\windows
 powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -DryRun   # what it would install and write
 powershell -ExecutionPolicy Bypass -File scripts\check.ps1               # the whole gate suite
 ```
@@ -402,11 +403,12 @@ tests/       The gates, fixtures, golden files and the off-screen surface render
 |---|---|
 | [Mapping](docs/mapping.md) | Every part of the source and what it became here — or why it did not carry over |
 | [Keys](docs/keys.md) | The help registry, for readers without a session |
-| [The source](https://github.com/gitsual/vivac) | The Arch Linux workstation this is pitched from |
+| [The Linux half](../linux/README.md) | The Arch Linux workstation this is pitched from |
+| [The bridge](../docs/bridge.md) | What the two halves do together: shared choices, restart into the other system, the drop tray, vivac link |
 
 ## 📄 License
 
-[MIT](LICENSE), as the source — except `static/zebar/vivac/zebar-client.js`, the vendored
+[MIT](../LICENSE), as the Linux half — except `static/zebar/vivac/zebar-client.js`, the vendored
 [Zebar](https://github.com/glzr-io/zebar) client, which keeps its own licence (GPL-3.0-only; it bundles
 @tauri-apps/api, glazewm, luxon and zod, all MIT or Apache-2.0). Its header says where it came from.
 

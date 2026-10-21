@@ -8,6 +8,7 @@
 
 Set-StrictMode -Version 2.0
 Import-Module (Join-Path $PSScriptRoot 'Vivac.psm1')
+Import-Module (Join-Path $PSScriptRoot 'Bridge.psm1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $script:VivacEntry = Join-Path $root 'bin\vivac.ps1'
@@ -666,6 +667,7 @@ function Show-Power([switch]$NoShow, [hashtable]$Registry) {
         @{ Id = 'restart'; Glyph = [char]0xE777; Confirm = $true },
         @{ Id = 'shutdown'; Glyph = [char]0xE7E8; Confirm = $true }
     )
+    if (Test-VivacRebootOther) { $entries += @{ Id = 'other'; Glyph = [char]0xE895; Confirm = $true } }
     $buttons = ''
     for ($i = 0; $i -lt $entries.Count; $i++) {
         $e = $entries[$i]
@@ -680,7 +682,7 @@ function Show-Power([switch]$NoShow, [hashtable]$Registry) {
 "@
     }
     $body = "<StackPanel><StackPanel Orientation='Horizontal' HorizontalAlignment='Center'>$buttons</StackPanel><TextBlock Margin='0,8,0,0' HorizontalAlignment='Center' Foreground='#$($p['COLOR_MUTED'])' Text='$(ConvertTo-XmlText (T 'power.hint'))'/></StackPanel>"
-    $window = New-VivacWindow (Get-WindowXaml 'vivac - power' 800 260 $body)
+    $window = New-VivacWindow (Get-WindowXaml 'vivac - power' (160 * $entries.Count) 260 $body)
     $state = @{ Index = 0; Armed = -1 }
 
     $paint = {
@@ -706,6 +708,7 @@ function Show-Power([switch]$NoShow, [hashtable]$Registry) {
             'sleep'    { Add-Type -AssemblyName System.Windows.Forms; [void][System.Windows.Forms.Application]::SetSuspendState('Suspend', $false, $false) }
             'restart'  { Start-Process shutdown.exe -ArgumentList '/r', '/t', '0' -WindowStyle Hidden }
             'shutdown' { Start-Process shutdown.exe -ArgumentList '/s', '/t', '0' -WindowStyle Hidden }
+            'other'    { Invoke-BridgeAction 'reboot-other' }
         }
     }
 
@@ -719,7 +722,7 @@ function Show-Power([switch]$NoShow, [hashtable]$Registry) {
         if ($k -eq 'Escape') { $window.Close(); return }
         if ($k -eq 'Left' -and $state.Index -gt 0) { $state.Index--; $state.Armed = -1; & $paint; return }
         if ($k -eq 'Right' -and $state.Index -lt $entries.Count - 1) { $state.Index++; $state.Armed = -1; & $paint; return }
-        if ($k -match '^D([1-5])$' -or $k -match '^NumPad([1-5])$') { & $run ([int]$Matches[1] - 1); return }
+        if (($k -match '^D([1-9])$' -or $k -match '^NumPad([1-9])$') -and [int]$Matches[1] -le $entries.Count) { & $run ([int]$Matches[1] - 1); return }
         if ($k -eq 'Return' -or $k -eq 'Space') { & $run $state.Index; return }
     })
     & $paint
@@ -891,7 +894,40 @@ function Get-VivacMenuEntries {
     $e.Add((New-MenuEntry 'session' (T 'power.sleep') 'power' 'sleep' $false 0xE708))
     $e.Add((New-MenuEntry 'session' (T 'power.restart') 'power' 'restart' $true 0xE72C))
     $e.Add((New-MenuEntry 'session' (T 'power.shutdown') 'power' 'shutdown' $true 0xE7E8))
+    # What the Linux half is reachable through (docs/bridge.md): each only
+    # once it is set up.
+    if (Test-VivacRebootOther) { $e.Add((New-MenuEntry 'session' (T 'power.other') 'bridge' 'reboot-other' $true 0xE895)) }
+    if (Get-VivacSharedRoot) {
+        $e.Add((New-MenuEntry 'session' (T 'bridge.drop_in') 'bridge' 'drop-in' $false 0xE896))
+        $e.Add((New-MenuEntry 'session' (T 'bridge.drop_out') 'bridge' 'drop-out' $false 0xE898))
+    }
+    if (Test-Path -LiteralPath (Get-VivacLinkConfPath)) { $e.Add((New-MenuEntry 'session' (T 'bridge.link_clip') 'bridge' 'link-clip' $false 0xE8C8)) }
     $e
+}
+
+# Whether "restart in Linux" is set up: its task is registered. Asked once per
+# process; the Task Scheduler takes a moment to answer.
+$script:RebootOther = $null
+function Test-VivacRebootOther {
+    if ($null -eq $script:RebootOther) {
+        $script:RebootOther = [bool](Get-ScheduledTask -TaskPath '\vivac\' -TaskName 'reboot-other' -ErrorAction SilentlyContinue)
+    }
+    $script:RebootOther
+}
+
+# The bridge's actions, from the menu and the power menu.
+function Invoke-BridgeAction([string]$Id) {
+    $bin = Join-Path (Get-VivacPaths).Repo 'bin'
+    switch ($Id) {
+        'reboot-other' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-reboot-other.ps1`"") }
+        { $_ -in 'drop-in', 'drop-out' } {
+            $folder = Get-VivacDropFolder ($Id.Substring(5))
+            if (-not $folder) { return }
+            [void](New-Item -ItemType Directory -Force -Path $folder)
+            Start-Process explorer.exe -ArgumentList "`"$folder`""
+        }
+        'link-clip' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-link.ps1`"", 'send-clip', '-Notify') }
+    }
 }
 
 # Matching ignores case and accents, and every word typed must appear:
@@ -968,6 +1004,7 @@ function Invoke-MenuEntry($Entry, [string]$Query, [switch]$Admin) {
         }
         'run-admin' { Start-Process $Entry.Target -Verb RunAs }
         'power'     { Invoke-PowerAction $Entry.Target }
+        'bridge'    { Invoke-BridgeAction $Entry.Target }
         'copy'      { Set-Clipboard -Value $Entry.Target }
         'find-files' {
             $q = [Uri]::EscapeDataString($Query)
