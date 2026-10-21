@@ -240,6 +240,8 @@ table.insert(vivac.autostart, { id = "sync-shared", cmd = "${VIVAC_REPO:-$HOME/v
 -- What came from Windows through the drop tray: a notification when there is
 -- something, silence otherwise, and nothing on screen without a shared folder.
 table.insert(vivac.autostart, { id = "drop-tray", cmd = "$HOME/.local/bin/vivac-drop --notify" })
+-- The shared keyboard and mouse (lan-mouse), back on only if it was left on.
+table.insert(vivac.autostart, { id = "mouse", cmd = "$HOME/.local/bin/vivac-mouse resume" })
 table.insert(vivac.autostart, { id = "waybar", cmd = "waybar" })
 table.insert(vivac.autostart, { id = "hypridle", cmd = "hypridle" })
 -- Clipboard history for the picker above; harmless when cliphist is absent.

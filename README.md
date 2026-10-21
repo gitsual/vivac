@@ -74,6 +74,7 @@ both. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
 | **Restart into the other system** — one entry in each power menu; it sets the firmware's *BootNext* for one boot only, never the boot order or GRUB's default | ✅ | |
 | **The drop tray** — leave files in a folder on one side; the other says, at sign-in, that they are waiting | ✅ | |
 | **vivac link** — send the clipboard, a link, a file or a notification to the other machine, or wake it up; paired once with a code, everything encrypted (AES-256) and signed | | ✅ |
+| **One keyboard and mouse** — push the pointer past a screen edge and keep typing on the other machine (lan-mouse, encrypted; each side trusts only the other's certificate) | | ✅ |
 
 **Safe by construction.** vivac link encrypts everything it sends and signs it both ways, never runs what it receives, never opens a link without a click,
 writes files only into `Downloads/vivac-link/` under a name stripped of any path, and refuses a request
@@ -114,6 +115,10 @@ To join the two once both are installed:
    On Windows the command is `bin\vivac-link.ps1`, then `-Register` to listen at sign-in and
    `apply-system.ps1 -Link` (elevated) to let the other machine in. `Super+Shift+B` on Linux and the
    menu on Windows hold the rest.
+4. **One keyboard and mouse** — `vivac-mouse enable` on each machine (on Windows `bin\vivac-mouse.ps1`,
+   after `bootstrap.ps1 -Mouse` installs lan-mouse and `apply-system.ps1 -Mouse` opens UDP 4242), then
+   `vivac-mouse config --peer HOST --side right` on one and `vivac-mouse pair` on each: it prints the
+   line to run on the other. See [One keyboard and mouse](docs/bridge.md#5-one-keyboard-and-mouse).
 
 ---
 
