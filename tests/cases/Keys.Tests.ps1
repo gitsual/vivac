@@ -66,4 +66,20 @@ Case 'the lock still turns away Alt+Tab and the Win key' {
     Assert-Equal 0 ([VivacKeys]::Sent.Count) 'nothing is sent in place of any key'
 }
 
+Case 'AltGr types into the lock''s field (@ on a Spanish keyboard)' {
+    Start-Keys
+    [VivacKeys]::LockMode = $true
+    $lctrl = 0xA2; $altGr = 0xA5; $key2 = 0x32
+    # AltGr arrives as a left Ctrl and a right Alt.
+    Assert-True (-not (Send-Key $lctrl $down)) 'the Ctrl half of AltGr'
+    Assert-True (-not (Send-Key $altGr $down)) 'AltGr'
+    Assert-True (-not (Send-Key $key2 $down)) 'AltGr+2 (@) must reach the field'
+    Assert-True (-not (Send-Key $key2 $up)) 'the release of 2'
+    Assert-True (Send-Key $tab $down) 'AltGr+Tab is still turned away'
+    Assert-True (Send-Key $tab $up) 'the release of Tab'
+    Assert-True (-not (Send-Key $altGr $up)) 'the release of AltGr'
+    Assert-True (-not (Send-Key $lctrl $up)) 'the release of Ctrl'
+    Assert-True (-not (Send-Key $keyA $down)) 'A types into the field'
+}
+
 Complete-Cases

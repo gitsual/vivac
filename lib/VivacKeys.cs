@@ -45,6 +45,7 @@ public static class VivacKeys {
     // While vivac's lock is up: the keys that would get around it go nowhere.
     public static bool LockMode = false;
     private static bool altHeld = false;
+    private static bool altGrHeld = false;
     private static bool ctrlHeld = false;
     public static bool TakeVolume = false;
     // Set by the tests: the keys the hook would send are written here as
@@ -87,7 +88,7 @@ public static class VivacKeys {
     }
     // Back to no key held and nothing counted (the tests, between cases).
     public static void Reset() {
-        winDown = false; committed = false; ownedVk = 0; altHeld = false; ctrlHeld = false;
+        winDown = false; committed = false; ownedVk = 0; altHeld = false; altGrHeld = false; ctrlHeld = false;
         Array.Clear(held, 0, held.Length);
         LockMode = false; MaskWin = false; TakeVolume = false;
         menuPresses = 0; clipPresses = 0; lockPresses = 0; volumeSteps = 0; muteToggles = 0;
@@ -142,10 +143,14 @@ public static class VivacKeys {
     }
 
     private static bool Decide(uint vk, uint scan, uint flags, bool down, bool up, byte was) {
-        bool isAlt = vk == 0x12 || vk == 0xA4 || vk == 0xA5;
+        // The right Alt is AltGr on most layouts (Spanish among them): it
+        // types @ # | \ [ ] { } and the euro sign, so it is not taken for an Alt.
+        bool isAltGr = vk == 0xA5;
+        bool isAlt = vk == 0x12 || vk == 0xA4;
         bool isCtrl = vk == 0x11 || vk == 0xA2 || vk == 0xA3;
         bool isWin = vk == 0x5B || vk == 0x5C;
         if (isAlt) altHeld = down;
+        if (isAltGr) altGrHeld = down;
         if (isCtrl) ctrlHeld = down;
         // The lock screen. Typing reaches it; the Windows key, anything
         // with Alt (Alt+Tab, Alt+F4, Alt+Esc) and Ctrl+Esc (the Start
@@ -172,6 +177,10 @@ public static class VivacKeys {
             if (up) return false;
             if (isAlt || isWin) return true;
             if (altHeld) return true;
+            // AltGr reaches the field, or a password with an @ in it could
+            // never be typed there. On a layout without AltGr it is a plain
+            // Alt, so what it would switch or close with stays turned away.
+            if (altGrHeld && (vk == 0x09 || vk == 0x1B || vk == 0x73 || vk == 0x20)) return true;
             if (ctrlHeld && vk == 0x1B) return true;
             return false;
         }
