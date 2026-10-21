@@ -4,8 +4,9 @@
 #
 #   --print   list the menu's rows, one per line, and exit
 #
-# The drop tray in both directions, the clipboard to the paired machine, and
-# Restart in Windows when the firmware has an entry for it. As in the power
+# The drop tray in both directions, the clipboard to the paired machine, a
+# phone through LocalSend (send to it; receive from it on or off, with its PIN),
+# and Restart in Windows when the firmware has an entry for it. As in the power
 # menu, the action is chosen by position and never by the label it printed.
 set -Eeuo pipefail
 
@@ -23,8 +24,8 @@ i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
 # Each command is a program beside this one and its arguments, split on spaces
 # here and run with the directory prefixed, so a $HOME with a space survives.
 bin="$(dirname -- "$self")"
-keys=(drop.title drop.send link.send_clip)
-commands=('vivac-drop --open-in' 'vivac-drop --open-out' 'vivac-link send-clip')
+keys=(drop.title drop.send link.send_clip localsend.menu_send localsend.menu_toggle)
+commands=('vivac-drop --open-in' 'vivac-drop --open-out' 'vivac-link send-clip' 'vivac-localsend pick' 'vivac-localsend toggle')
 if "$bin/vivac-reboot-other" --available 2>/dev/null; then
 	keys+=(power.reboot_windows)
 	commands+=(vivac-reboot-other)

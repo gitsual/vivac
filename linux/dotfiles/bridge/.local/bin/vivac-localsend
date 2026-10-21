@@ -1,0 +1,1331 @@
+#!/usr/bin/env python3
+"""vivac phone drop: LocalSend on the Linux side, receiving and sending.
+
+    vivac-localsend serve [--bind ADDR] [--port N] [--no-multicast]
+    vivac-localsend send [--to ALIAS | --peer HOST:PORT] [--pin PIN] [--text TEXT] [FILE...]
+    vivac-localsend pick            rofi: files or the clipboard's text, then a phone
+    vivac-localsend devices         what answers LocalSend on this network
+    vivac-localsend status          on or off, the PIN, where files go
+    vivac-localsend on | off        start or stop receiving (vivac-localsend.service)
+    vivac-localsend toggle          on when off, off when on, said in a notification
+    vivac-localsend pin [--new]     print the PIN, or make a new one
+
+A phone with the stock LocalSend app sends here and receives from here, with
+no vivac app on it: the protocol is LocalSend's v2 (github.com/localsend/protocol),
+multicast discovery on 224.0.0.167:53317 and HTTP on TCP 53317. This side
+serves plain http, so phones send to it over http; it sends to phones over
+whatever they announce, https with a self-signed certificate as a rule, and
+only once the certificate's SHA-256 is the fingerprint the phone announced.
+
+Receiving needs the PIN (localsend_pin in the settings, else the one in
+${XDG_STATE_HOME:-~/.local/state}/vivac/localsend.pin, six random digits made
+the first time it is turned on): without it 401, five wrong ones in a minute
+from one address 429. Files go into Downloads/vivac-link under a safe name,
+never over another file; a text is shown in a notification and goes nowhere
+else. docs/bridge.md at the root of the product, "Phones: LocalSend".
+Python standard library only.
+"""
+
+from __future__ import annotations
+
+import getpass
+import hashlib
+import hmac
+import http.client
+import ipaddress
+import json
+import mimetypes
+import os
+import re
+import secrets
+import shutil
+import socket
+import ssl
+import struct
+import subprocess
+import sys
+import threading
+import time
+import urllib.parse
+from dataclasses import dataclass, field
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+# LocalSend's port, for HTTP and for discovery alike; the gates move it (and keep
+# discovery on the loopback with VIVAC_LOCALSEND_INTERFACES) so nothing leaves the machine.
+PORT = int(os.environ.get("VIVAC_LOCALSEND_PORT") or 53317)
+GROUP = "224.0.0.167"
+API = "/api/localsend/v2"
+VERSION = "2.1"
+FILE_LIMIT = 2 * 1024 * 1024 * 1024
+JSON_LIMIT = 1024 * 1024
+TEXT_SHOWN = 2000
+PIN_TRIES = 5
+PIN_WINDOW = 60
+SESSION_IDLE = 300
+SELF = Path(__file__).resolve()
+SERVICE = "vivac-localsend.service"
+PIN_SHAPE = re.compile(r"[0-9A-Za-z]{4,32}")
+
+
+# --- where things are (as vivac-link finds them) ---------------------------------------------
+
+
+def repo_root() -> Path:
+    """The checkout this file is stowed from: dotfiles/bridge/.local/bin/ is four up."""
+    return Path(os.environ.get("VIVAC_REPO") or SELF.parents[4])
+
+
+def state_dir() -> Path:
+    return Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "vivac"
+
+
+def config_home() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+
+
+def settings_path() -> Path:
+    return Path(os.environ.get("SETTINGS_FILE") or config_home() / "vivac" / "settings")
+
+
+def read_kv(path: Path) -> dict[str, str]:
+    """A flat KEY=value file, read as data: comments, blank and malformed lines skipped,
+    CR dropped, %XX decoded as lib/kv.sh writes it. Never raises."""
+    values: dict[str, str] = {}
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return values
+    for line in text.lstrip("﻿").splitlines():
+        line = line.rstrip("\r")
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", key):
+            values[key] = re.sub(r"%([0-9A-Fa-f]{2})", lambda m: chr(int(m.group(1), 16)), value)
+    return values
+
+
+def inbox() -> Path:
+    """Downloads/vivac-link, the folder vivac link fills too (VIVAC_LINK_INBOX in the gates)."""
+    if os.environ.get("VIVAC_LINK_INBOX"):
+        return Path(os.environ["VIVAC_LINK_INBOX"])
+    raw = read_kv(config_home() / "user-dirs.dirs").get("XDG_DOWNLOAD_DIR", "").strip('"')
+    raw = raw.replace("$HOME", str(Path.home()), 1)
+    downloads = Path(raw) if raw.startswith("/") else Path.home() / "Downloads"
+    return downloads / "vivac-link"
+
+
+def write_private(path: Path, text: str) -> None:
+    """Replace PATH with TEXT, readable and writable by this user only, atomically."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    scratch = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    descriptor = os.open(scratch, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    os.chmod(scratch, 0o600)
+    os.replace(scratch, path)
+
+
+# --- the session's language (lib/i18n.sh, same tables, same rules) -----------------------------
+
+
+def session_language() -> str:
+    """VIVAC_LANG, then the language setting unless auto, then LANG, then English."""
+    short = re.compile(r"[a-z]{2,3}")
+    wanted = os.environ.get("VIVAC_LANG")
+    if wanted:
+        candidate = re.split(r"[._@]", wanted)[0]
+        return candidate if short.fullmatch(candidate) else "en"
+    for candidate in (read_kv(settings_path()).get("language", ""), os.environ.get("LANG", "")):
+        if candidate == "auto":
+            continue
+        candidate = re.split(r"[._@]", candidate)[0]
+        if short.fullmatch(candidate):
+            return candidate
+    return "en"
+
+
+class Text:
+    """i18n/<lang>.conf over i18n/en.conf. A key only English has is marked [en];
+    placeholders are {1}, {2}, ... replaced as plain text, never a format string."""
+
+    def __init__(self) -> None:
+        directory = Path(os.environ.get("I18N_DIR") or repo_root() / "i18n")
+        self.reference = read_kv(directory / "en.conf")
+        language = session_language()
+        self.table = read_kv(directory / f"{language}.conf") if language != "en" else {}
+
+    def get(self, key: str, *args: object) -> str:
+        if key in self.table:
+            text = self.table[key]
+        elif key in self.reference:
+            text = self.reference[key] if not self.table else "[en] " + self.reference[key]
+        else:
+            return f"[{key}]"
+        for index, arg in enumerate(args, 1):
+            text = text.replace("{%d}" % index, str(arg))
+        return text
+
+
+TEXT = Text()
+
+
+def say(key: str, *args: object) -> None:
+    print(TEXT.get(key, *args), flush=True)
+
+
+def complain(key: str, *args: object) -> None:
+    print("vivac-localsend: " + TEXT.get(key, *args), file=sys.stderr, flush=True)
+
+
+def log(message: str) -> None:
+    print("vivac-localsend: " + message, file=sys.stderr, flush=True)
+
+
+# --- the desktop: notifications, opening, rofi --------------------------------------------------
+
+
+def desktop_env() -> dict[str, str]:
+    """The service starts before the compositor and so has no WAYLAND_DISPLAY: find
+    the compositor's socket in the runtime directory when the variable is missing."""
+    env = dict(os.environ)
+    runtime = Path(env.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
+    display = env.get("WAYLAND_DISPLAY", "")
+    if not display or not (runtime / display).exists():
+        try:
+            sockets = sorted(p.name for p in runtime.glob("wayland-*") if not p.name.endswith(".lock") and p.is_socket())
+        except OSError:
+            sockets = []
+        if sockets:
+            env["WAYLAND_DISPLAY"] = sockets[0]
+    return env
+
+
+def open_detached(target: str) -> None:
+    """xdg-open, outside this service, so a restart of it does not take the window along."""
+    command = ["xdg-open", target]
+    if os.environ.get("INVOCATION_ID") and shutil.which("systemd-run"):
+        command = ["systemd-run", "--user", "--collect", "--quiet", "--", *command]
+    try:
+        subprocess.Popen(command, env=desktop_env(), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError as error:
+        log(f"cannot open {target!r}: {error}")
+
+
+def notify(title: str, body: str, action: str | None = None, target: str | None = None) -> None:
+    """A notification; with ACTION, a click on it opens TARGET. Never blocks the caller.
+    With VIVAC_LOCALSEND_SINK set (the gates), a line in that file instead."""
+    sink = os.environ.get("VIVAC_LOCALSEND_SINK")
+    if sink:
+        with open(sink, "a", encoding="utf-8") as handle:
+            handle.write(f"{title}|{body}|{target or ''}\n".replace("\r", ""))
+        return
+    if not shutil.which("notify-send"):
+        log(f"{title}: {body}")
+        return
+    command = ["notify-send", "--app-name=vivac"]
+    clickable = bool(action and target)
+    if clickable:
+        command.append(f"--action=open={action}")
+    command += ["--", title, body]
+
+    def run() -> None:
+        try:
+            answer = subprocess.run(command, env=desktop_env(), stdin=subprocess.DEVNULL, capture_output=True, text=True).stdout.strip()
+        except OSError as error:
+            log(f"notify-send failed: {error}")
+            return
+        if clickable and answer == "open" and target:
+            open_detached(target)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def rofi(rows: list[str], prompt: str, *extra: str) -> list[int] | None:
+    """Indexes of what was chosen in rofi, None when it was closed or is missing."""
+    if not shutil.which("rofi"):
+        return None
+    try:
+        done = subprocess.run(["rofi", "-dmenu", "-i", "-format", "i", "-p", prompt, *extra], input="\n".join(rows), capture_output=True, text=True, env=desktop_env())
+    except OSError:
+        return None
+    chosen = [int(line) for line in done.stdout.split() if line.isdigit() and int(line) < len(rows)]
+    return chosen if done.returncode == 0 and chosen else None
+
+
+# --- this device: alias, fingerprint, PIN --------------------------------------------------------
+
+
+def alias() -> str:
+    return os.environ.get("VIVAC_LOCALSEND_ALIAS") or socket.gethostname() or "vivac"
+
+
+def fingerprint() -> str:
+    """Over http LocalSend's fingerprint is a random string: made once, kept, so
+    phones remember this machine and it never takes its own announcement for another's."""
+    path = state_dir() / "localsend-id"
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+        if re.fullmatch(r"[0-9a-f]{32}", text):
+            return text
+    except OSError:
+        pass
+    text = secrets.token_hex(16)
+    write_private(path, text + "\n")
+    return text
+
+
+def pin_path() -> Path:
+    return state_dir() / "localsend.pin"
+
+
+def current_pin() -> str:
+    """localsend_pin from the settings unless auto, else the stored one; empty when none yet."""
+    chosen = read_kv(settings_path()).get("localsend_pin", "auto")
+    if chosen != "auto" and PIN_SHAPE.fullmatch(chosen):
+        return chosen
+    try:
+        stored = pin_path().read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+    return stored if PIN_SHAPE.fullmatch(stored) else ""
+
+
+def ensure_pin(new: bool = False) -> str:
+    """The PIN, made (six random digits) when there is none, or anew when asked."""
+    chosen = read_kv(settings_path()).get("localsend_pin", "auto")
+    if chosen != "auto" and PIN_SHAPE.fullmatch(chosen):
+        return chosen
+    pin = "" if new else current_pin()
+    if not pin:
+        pin = "".join(secrets.choice("0123456789") for _ in range(6))
+        write_private(pin_path(), pin + "\n")
+    return pin
+
+
+def info(port: int = PORT, announce: bool | None = None) -> dict[str, object]:
+    """What this device says about itself (LocalSend's register/announce body)."""
+    body: dict[str, object] = {
+        "alias": alias(),
+        "version": VERSION,
+        "deviceModel": "Linux",
+        "deviceType": "desktop",
+        "fingerprint": fingerprint(),
+        "port": port,
+        "protocol": "http",
+        "download": False,
+    }
+    if announce is not None:
+        body["announce"] = announce
+    return body
+
+
+# --- other devices ---------------------------------------------------------------------------------
+
+
+@dataclass
+class Device:
+    alias: str
+    address: str
+    port: int
+    protocol: str
+    fingerprint: str
+    model: str = ""
+    seen: float = field(default_factory=time.time)
+
+    def label(self) -> str:
+        model = f"{self.model}, " if self.model else ""
+        return f"{self.alias} ({model}{self.address})"
+
+
+def device_from(message: object, address: str) -> Device | None:
+    """A device from what it announced or registered with; None for anything malformed."""
+    if not isinstance(message, dict):
+        return None
+    name, mark, port = message.get("alias"), message.get("fingerprint"), message.get("port", PORT)
+    protocol = message.get("protocol", "https")
+    if not isinstance(name, str) or not isinstance(mark, str) or not mark or not isinstance(port, int) or not 0 < port <= 65535:
+        return None
+    if protocol not in ("http", "https"):
+        return None
+    model = message.get("deviceModel")
+    clean = re.sub(r"[\x00-\x1f\x7f]", "", name)[:64] or "?"
+    return Device(clean, address, port, protocol, mark[:128], re.sub(r"[\x00-\x1f\x7f]", "", model)[:40] if isinstance(model, str) else "")
+
+
+def devices_path() -> Path:
+    return state_dir() / "localsend-devices.json"
+
+
+_DEVICES_LOCK = threading.Lock()
+
+
+def remember(device: Device) -> None:
+    """What the receiver hears goes into a small file the sender reads while the receiver
+    holds the port; older than ten minutes is forgotten."""
+    with _DEVICES_LOCK:
+        known = {d.fingerprint: d for d in recall(600)}
+        known[device.fingerprint] = device
+        write_private(devices_path(), json.dumps([d.__dict__ for d in known.values()]))
+
+
+def recall(newer_than: float) -> list[Device]:
+    try:
+        rows = json.loads(devices_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    found = []
+    for row in rows if isinstance(rows, list) else []:
+        try:
+            device = Device(**row)
+        except TypeError:
+            continue
+        if time.time() - device.seen <= newer_than:
+            found.append(device)
+    return found
+
+
+def own_addresses() -> set[str]:
+    """This machine's IPv4 addresses, to join the group on each of them."""
+    if os.environ.get("VIVAC_LOCALSEND_INTERFACES"):
+        return set(os.environ["VIVAC_LOCALSEND_INTERFACES"].split(","))
+    found: set[str] = set()
+    try:
+        listing = subprocess.run(["ip", "-o", "-4", "addr", "show"], capture_output=True, text=True, timeout=5).stdout
+        found.update(re.findall(r"\binet (\d+\.\d+\.\d+\.\d+)/", listing))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return {a for a in found if not ipaddress.ip_address(a).is_loopback}
+
+
+def multicast_socket(port: int) -> socket.socket | None:
+    """A UDP socket in LocalSend's group, sharing the port with anyone else in it (the
+    receiver and a sender on one machine both are). None when it cannot join."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if hasattr(socket, "SO_REUSEPORT"):
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        except OSError:
+            pass
+    try:
+        sock.bind(("", port))
+    except OSError as error:
+        log(f"cannot listen on UDP {port}, discovery is off: {error}")
+        sock.close()
+        return None
+    joined = False
+    for local in sorted(own_addresses()) or ["0.0.0.0"]:
+        try:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, socket.inet_aton(GROUP) + socket.inet_aton(local))
+            joined = True
+        except OSError:
+            continue
+    if not joined:
+        try:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, struct.pack("4sl", socket.inet_aton(GROUP), socket.INADDR_ANY))
+        except OSError as error:
+            log(f"cannot join {GROUP}, discovery is off: {error}")
+            sock.close()
+            return None
+    return sock
+
+
+def shout(message: dict[str, object], port: int = PORT) -> None:
+    """One datagram to the group, from every interface that has an address."""
+    data = json.dumps(message).encode("utf-8")
+    for local in sorted(own_addresses()) or [""]:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) as sender:
+                sender.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+                if local:
+                    sender.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(local))
+                sender.sendto(data, (GROUP, port))
+        except OSError:
+            continue
+
+
+# --- talking to a device (http, or https checked against its fingerprint) ----------------------
+
+
+class Untrusted(Exception):
+    """The device's certificate is not the one its fingerprint names."""
+
+
+def normal_fingerprint(text: str) -> str:
+    return re.sub(r"[^0-9a-f]", "", text.lower())
+
+
+def connect(device: Device, timeout: float) -> http.client.HTTPConnection:
+    """A connection to DEVICE. Over https the certificate is self-signed, so no authority
+    vouches for it: LocalSend's trust is that its SHA-256 is the fingerprint the device
+    announced, checked here before anything is sent."""
+    if device.protocol == "http":
+        return http.client.HTTPConnection(device.address, device.port, timeout=timeout)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    connection = http.client.HTTPSConnection(device.address, device.port, timeout=timeout, context=context)
+    connection.connect()
+    der = connection.sock.getpeercert(binary_form=True) if connection.sock else None
+    if not der or not hmac.compare_digest(hashlib.sha256(der).hexdigest(), normal_fingerprint(device.fingerprint)):
+        connection.close()
+        raise Untrusted(device.label())
+    return connection
+
+
+def call(device: Device, method: str, path: str, body: object = None, timeout: float = 10, headers: dict[str, str] | None = None) -> tuple[int, bytes]:
+    """One request; BODY is JSON-encoded unless it is bytes or a file."""
+    connection = connect(device, timeout)
+    try:
+        sent_headers = dict(headers or {})
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body).encode("utf-8")
+            sent_headers["Content-Type"] = "application/json"
+        connection.request(method, path, body=body, headers=sent_headers)
+        response = connection.getresponse()
+        return response.status, response.read(JSON_LIMIT)
+    finally:
+        connection.close()
+
+
+def register_with(device: Device, port: int) -> bool:
+    """Answer an announcement the preferred way: our info, POSTed to its register."""
+    try:
+        status, _ = call(device, "POST", f"{API}/register", info(port), timeout=3)
+    except (OSError, http.client.HTTPException, Untrusted):
+        return False
+    return status == 200
+
+
+# --- receiving --------------------------------------------------------------------------------------
+
+
+def safe_name(raw: str) -> str:
+    """The received name, made safe to write: no folder, no control character, no
+    leading dot (a hidden file nobody would see arrive), never empty."""
+    leaf = re.split(r"[\\/]", raw)[-1]
+    leaf = "".join("_" if ord(char) < 32 or char == "\x7f" else char for char in leaf)
+    leaf = leaf.strip().lstrip(".").strip()
+    while len(leaf.encode("utf-8")) > 200:
+        leaf = leaf[:-1]
+    return leaf or "file"
+
+
+def reserve(folder: Path, name: str) -> Path:
+    """An empty file at NAME in FOLDER, or NAME (2), NAME (3)...: never over anything.
+    O_EXCL also refuses a symlink planted at the name."""
+    folder.mkdir(parents=True, exist_ok=True)
+    stem, dot, extension = name.rpartition(".")
+    if not stem:
+        stem, dot, extension = name, "", ""
+    attempt = 1
+    while True:
+        candidate = name if attempt == 1 else f"{stem} ({attempt}){dot}{extension}"
+        try:
+            os.close(os.open(folder / candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644))
+        except FileExistsError:
+            attempt += 1
+            continue
+        return folder / candidate
+
+
+def shown_text(text: str) -> str:
+    """A text for a notification: no control characters but line breaks, not too long."""
+    text = re.sub(r"[\x00-\x09\x0b-\x1f\x7f]", "", text)
+    return text if len(text) <= TEXT_SHOWN else text[:TEXT_SHOWN] + "…"
+
+
+@dataclass
+class Incoming:
+    name: str
+    size: int
+    sha256: str
+    token: str
+    done: bool = False
+
+
+@dataclass
+class Session:
+    id: str
+    address: str
+    sender: str
+    files: dict[str, Incoming]
+    received: list[Path] = field(default_factory=list)
+    busy: int = 0
+    touched: float = field(default_factory=time.monotonic)
+
+
+class Refusal(Exception):
+    def __init__(self, status: int, reason: str) -> None:
+        super().__init__(reason)
+        self.status = status
+
+
+def is_message(entry: dict[str, object]) -> bool:
+    """LocalSend sends a text as a .txt whose preview is the text itself."""
+    return isinstance(entry.get("preview"), str) and str(entry.get("fileType", "")).startswith("text/")
+
+
+class Receiver:
+    def __init__(self, port: int) -> None:
+        self.port = port
+        self.lock = threading.Lock()
+        self.session: Session | None = None
+        self.failures: dict[str, list[float]] = {}
+
+    def check_pin(self, address: str, given: str | None) -> None:
+        """401 without the PIN or with a wrong one; 429 once an address has had five
+        wrong ones in the last minute, even if the sixth is right."""
+        pin = current_pin()
+        now = time.monotonic()
+        with self.lock:
+            recent = [when for when in self.failures.get(address, []) if now - when < PIN_WINDOW]
+            self.failures[address] = recent
+            if len(recent) >= PIN_TRIES:
+                raise Refusal(429, "too many wrong PINs")
+            if not given:
+                raise Refusal(401, "PIN required")
+            if not pin or not hmac.compare_digest(given.encode("utf-8", "replace"), pin.encode("utf-8")):
+                recent.append(now)
+                raise Refusal(401, "wrong PIN")
+
+    def prepare(self, address: str, body: object, pin: str | None) -> tuple[int, dict[str, object] | None]:
+        self.check_pin(address, pin)
+        if not isinstance(body, dict) or not isinstance(body.get("files"), dict) or not body["files"]:
+            raise Refusal(400, "no files")
+        sender = device_from(body.get("info"), address)
+        who = sender.alias if sender else TEXT.get("localsend.someone")
+        files: dict[str, Incoming] = {}
+        texts: list[str] = []
+        for key, entry in body["files"].items():
+            if not isinstance(entry, dict) or not isinstance(entry.get("fileName"), str) or not isinstance(entry.get("size"), int) or entry["size"] < 0:
+                raise Refusal(400, "malformed file")
+            digest = entry.get("sha256")
+            if digest is not None and (not isinstance(digest, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", digest)):
+                digest = None
+            if entry["size"] > FILE_LIMIT:
+                raise Refusal(413, "larger than 2 GiB")
+            if is_message(entry):
+                texts.append(str(entry["preview"]))
+                continue
+            files[str(key)] = Incoming(safe_name(entry["fileName"]), entry["size"], (digest or "").lower(), secrets.token_hex(16))
+        for text in texts:
+            notify(TEXT.get("localsend.text_from", who), shown_text(text))
+        if not files:
+            return 204, None
+        with self.lock:
+            old = self.session
+            if old and old.address != address and (old.busy or time.monotonic() - old.touched < SESSION_IDLE):
+                raise Refusal(409, "another session is running")
+            if old and old.received:
+                self.announce(old)
+            self.session = Session(secrets.token_hex(16), address, who, files)
+            return 200, {"sessionId": self.session.id, "files": {key: f.token for key, f in files.items()}}
+
+    def claim(self, address: str, query: dict[str, str]) -> tuple[Session, Incoming]:
+        session_id, file_id, given = query.get("sessionId"), query.get("fileId"), query.get("token")
+        if not session_id or not file_id or not given:
+            raise Refusal(400, "missing parameters")
+        with self.lock:
+            session = self.session
+            if not session or not hmac.compare_digest(session.id, session_id) or session.address != address:
+                raise Refusal(403, "no such session from this address")
+            incoming = session.files.get(file_id)
+            if not incoming or incoming.done or not hmac.compare_digest(incoming.token, given):
+                raise Refusal(403, "bad token")
+            session.busy += 1
+            session.touched = time.monotonic()
+            return session, incoming
+
+    def finish(self, session: Session, incoming: Incoming, path: Path | None) -> None:
+        with self.lock:
+            session.busy -= 1
+            session.touched = time.monotonic()
+            if path is None:
+                return
+            incoming.done = True
+            session.received.append(path)
+            if all(f.done for f in session.files.values()) and self.session is session:
+                self.session = None
+                self.announce(session)
+
+    def cancel(self, address: str, session_id: str | None) -> None:
+        with self.lock:
+            session = self.session
+            if session and session_id and hmac.compare_digest(session.id, session_id) and session.address == address:
+                self.session = None
+                if session.received:
+                    self.announce(session)
+
+    def announce(self, session: Session) -> None:
+        """One notification per batch, with a click that opens the folder."""
+        received = session.received
+        if len(received) == 1:
+            title = TEXT.get("localsend.received_one", session.sender, received[0].name)
+        else:
+            title = TEXT.get("localsend.received_many", len(received), session.sender)
+        folder = str(received[0].parent)
+        notify(title, folder, TEXT.get("localsend.open_folder"), folder)
+
+
+def body_chunks(handler: BaseHTTPRequestHandler, limit: int):
+    """The request body in pieces, by Content-Length or chunked transfer; Refusal 413 as
+    soon as it passes LIMIT, 400 when it ends early."""
+    if handler.headers.get("Transfer-Encoding", "").lower() == "chunked":
+        total = 0
+        while True:
+            line = handler.rfile.readline(1024)
+            try:
+                size = int(line.split(b";")[0].strip(), 16)
+            except ValueError:
+                raise Refusal(400, "bad chunk") from None
+            if size == 0:
+                while handler.rfile.readline(1024) not in (b"\r\n", b"\n", b""):
+                    pass
+                return
+            total += size
+            if total > limit:
+                raise Refusal(413, "too large")
+            left = size
+            while left:
+                piece = handler.rfile.read(min(left, 1 << 20))
+                if not piece:
+                    raise Refusal(400, "short body")
+                left -= len(piece)
+                yield piece
+            handler.rfile.readline(16)
+    length_header = handler.headers.get("Content-Length", "")
+    if not re.fullmatch(r"[0-9]{1,13}", length_header):
+        raise Refusal(411, "length required")
+    left = int(length_header)
+    if left > limit:
+        raise Refusal(413, "too large")
+    while left:
+        piece = handler.rfile.read(min(left, 1 << 20))
+        if not piece:
+            raise Refusal(400, "short body")
+        left -= len(piece)
+        yield piece
+
+
+def store(handler: BaseHTTPRequestHandler, incoming: Incoming) -> Path:
+    """The upload streamed into a hidden part file beside the inbox, checked, then moved to
+    a free name: the inbox never holds half a file under a real name. 422 when the SHA-256
+    differs, 413 past the announced size, and the part file goes either way."""
+    folder = inbox()
+    folder.mkdir(parents=True, exist_ok=True)
+    part = folder / f".localsend-{secrets.token_hex(8)}.part"
+    digest = hashlib.sha256()
+    written = 0
+    try:
+        descriptor = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            for piece in body_chunks(handler, min(incoming.size, FILE_LIMIT)):
+                written += len(piece)
+                digest.update(piece)
+                handle.write(piece)
+        if written != incoming.size:
+            raise Refusal(400, "size differs from the one announced")
+        if incoming.sha256 and not hmac.compare_digest(digest.hexdigest(), incoming.sha256):
+            raise Refusal(422, "sha256 mismatch")
+        os.chmod(part, 0o644)
+        final = reserve(folder, incoming.name)
+        os.replace(part, final)
+        return final
+    finally:
+        try:
+            part.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def make_handler(receiver: Receiver) -> type[BaseHTTPRequestHandler]:
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+        server_version = "vivac-localsend/1"
+        timeout = 60
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A002 (the base class names it)
+            # What arrives is not always HTTP (a TLS hello, a scan): printable, and short.
+            # The query is left out: it carries the PIN and the upload tokens.
+            line = re.sub(r"[^\x20-\x7e]", "?", re.sub(r"\?\S*", "", format % args))[:200]
+            log(f"{self.client_address[0]} {line}")
+
+        def answer(self, status: int, payload: object = None) -> None:
+            data = json.dumps(payload).encode("utf-8") if payload is not None else b""
+            self.send_response(status)
+            if data:
+                self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            if status >= 400:
+                # The rest of a refused body is not read: the connection ends here.
+                self.close_connection = True
+                self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def json_body(self) -> object:
+            data = b"".join(body_chunks(self, JSON_LIMIT))
+            try:
+                return json.loads(data.decode("utf-8")) if data else None
+            except (UnicodeDecodeError, ValueError):
+                raise Refusal(400, "not JSON") from None
+
+        def route(self, method: str) -> None:
+            parts = urllib.parse.urlsplit(self.path)
+            query = dict(urllib.parse.parse_qsl(parts.query))
+            address = self.client_address[0]
+            route = (method, parts.path)
+            try:
+                if route == ("GET", f"{API}/info"):
+                    self.answer(200, info(receiver.port))
+                elif route == ("POST", f"{API}/register"):
+                    device = device_from(self.json_body(), address)
+                    if device and device.fingerprint != fingerprint():
+                        remember(device)
+                    self.answer(200, info(receiver.port))
+                elif route == ("POST", f"{API}/prepare-upload"):
+                    status, payload = receiver.prepare(address, self.json_body(), query.get("pin"))
+                    self.answer(status, payload)
+                elif route == ("POST", f"{API}/upload"):
+                    session, incoming = receiver.claim(address, query)
+                    path = None
+                    try:
+                        path = store(self, incoming)
+                    finally:
+                        receiver.finish(session, incoming, path)
+                    log(f"{address} sent {path.name if path else '?'} ({incoming.size} bytes)")
+                    self.answer(200)
+                elif route == ("POST", f"{API}/cancel"):
+                    receiver.cancel(address, query.get("sessionId"))
+                    self.answer(200)
+                else:
+                    self.answer(404, {"message": "not found"})
+            except Refusal as refusal:
+                log(f"{address} refused {parts.path}: {refusal.status} {refusal}")
+                self.answer(refusal.status, {"message": str(refusal)})
+            except OSError as error:
+                log(f"{address} {parts.path}: {error}")
+                try:
+                    self.answer(500, {"message": "receiver error"})
+                except OSError:
+                    pass
+
+        def do_GET(self) -> None:  # noqa: N802 (the base class names it)
+            self.route("GET")
+
+        def do_POST(self) -> None:  # noqa: N802
+            self.route("POST")
+
+        def refuse_method(self) -> None:
+            self.answer(404, {"message": "not found"})
+
+        do_PUT = do_DELETE = do_PATCH = refuse_method  # noqa: N815
+
+    return Handler
+
+
+def listen_multicast(port: int, http_port: int) -> None:
+    """Announce once, then answer every announcement: register by HTTP, the preferred
+    way, else a UDP answer in the group. What is heard is remembered for the sender."""
+    sock = multicast_socket(port)
+    if sock is None:
+        return
+    own = fingerprint()
+    shout(info(http_port, announce=True), port)
+    while True:
+        try:
+            data, (address, _) = sock.recvfrom(65536)
+            message = json.loads(data.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            continue
+        except OSError as error:
+            log(f"multicast: {error}")
+            time.sleep(1)
+            continue
+        device = device_from(message, address)
+        if device is None or device.fingerprint == own:
+            continue
+        remember(device)
+        # v1 called it "announcement"; both mean "answer me".
+        if message.get("announce") is True or message.get("announcement") is True:
+            def answer(device: Device = device) -> None:
+                if not register_with(device, http_port):
+                    shout(info(http_port, announce=False), port)
+
+            threading.Thread(target=answer, daemon=True).start()
+
+
+def serve(arguments: list[str]) -> int:
+    bind, port, multicast = "0.0.0.0", PORT, True
+    while arguments:
+        option = arguments.pop(0)
+        if option == "--bind" and arguments:
+            bind = arguments.pop(0)
+        elif option == "--port" and arguments and arguments[0].isdigit():
+            port = int(arguments.pop(0))
+        elif option == "--no-multicast":
+            multicast = False
+        else:
+            return usage()
+    ensure_pin()
+    receiver = Receiver(port)
+    server = ThreadingHTTPServer((bind, port), make_handler(receiver))
+    server.daemon_threads = True
+    host, bound = server.server_address[:2]
+    receiver.port = bound
+    print(f"vivac-localsend: listening on {host}:{bound} (http)", flush=True)
+    if multicast:
+        threading.Thread(target=listen_multicast, args=(PORT, bound), daemon=True).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
+# --- sending ---------------------------------------------------------------------------------------
+
+
+def discover(wait: float = 2.0) -> list[Device]:
+    """Who answers LocalSend here: announce, then listen for wait seconds to UDP answers
+    and to /register, on a short-lived HTTP listener of our own on 53317 or, while the
+    receiver holds that port, through what the receiver writes down."""
+    own = fingerprint()
+    found: dict[str, Device] = {}
+    lock = threading.Lock()
+
+    def add(device: Device | None) -> None:
+        if device and device.fingerprint != own:
+            with lock:
+                found[device.fingerprint] = device
+
+    class Register(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+            pass
+
+        def do_POST(self) -> None:  # noqa: N802
+            length = self.headers.get("Content-Length", "0")
+            raw = self.rfile.read(int(length)) if length.isdigit() and int(length) <= JSON_LIMIT else b""
+            if urllib.parse.urlsplit(self.path).path == f"{API}/register":
+                try:
+                    add(device_from(json.loads(raw.decode("utf-8")), self.client_address[0]))
+                except (UnicodeDecodeError, ValueError):
+                    pass
+            data = json.dumps(info(port)).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    server = None
+    try:
+        server = ThreadingHTTPServer(("0.0.0.0", PORT), Register)
+        server.daemon_threads = True
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+    except OSError:
+        server = None
+    port = PORT
+    started = time.time()
+    sock = multicast_socket(PORT)
+    try:
+        for attempt in range(3):
+            shout(info(port, announce=True))
+            until = started + wait * (attempt + 1) / 3
+            while time.time() < until:
+                if sock is None:
+                    time.sleep(0.1)
+                    continue
+                sock.settimeout(max(0.05, until - time.time()))
+                try:
+                    data, (address, _) = sock.recvfrom(65536)
+                    add(device_from(json.loads(data.decode("utf-8")), address))
+                except (TimeoutError, socket.timeout, UnicodeDecodeError, ValueError):
+                    continue
+    finally:
+        if sock is not None:
+            sock.close()
+        if server is not None:
+            server.shutdown()
+            server.server_close()
+    if server is None:
+        for device in recall(time.time() - started + 1):
+            add(device)
+    return sorted(found.values(), key=lambda d: d.alias.lower())
+
+
+def probe(peer: str) -> Device | None:
+    """A device at a known address (--peer), for when multicast does not get through:
+    https first, as phones speak it, then http. Over https the certificate seen now is
+    the one every later connection must show."""
+    match = re.fullmatch(r"(?:(https?)://)?(\[[^]]+\]|[^:/]+)(?::(\d+))?/?", peer.strip())
+    if not match:
+        return None
+    host = match.group(2).strip("[]")
+    port = int(match.group(3) or PORT)
+    for protocol in [match.group(1)] if match.group(1) else ["https", "http"]:
+        try:
+            if protocol == "https":
+                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                context.check_hostname = False
+                context.verify_mode = ssl.CERT_NONE
+                connection: http.client.HTTPConnection = http.client.HTTPSConnection(host, port, timeout=5, context=context)
+                connection.connect()
+                der = connection.sock.getpeercert(binary_form=True) if connection.sock else b""
+                seen = hashlib.sha256(der or b"").hexdigest()
+            else:
+                connection = http.client.HTTPConnection(host, port, timeout=5)
+                seen = ""
+            connection.request("GET", f"{API}/info")
+            response = connection.getresponse()
+            body = json.loads(response.read(JSON_LIMIT).decode("utf-8"))
+            connection.close()
+        except (OSError, ssl.SSLError, http.client.HTTPException, UnicodeDecodeError, ValueError):
+            continue
+        if response.status != 200 or not isinstance(body, dict):
+            continue
+        body.update({"port": port, "protocol": protocol})
+        if seen:
+            body["fingerprint"] = seen
+        device = device_from(body, host)
+        if device:
+            return device
+    return None
+
+
+def choose(devices: list[Device], wanted: str | None) -> Device | None:
+    """By alias (case aside, the whole name, else the only one it starts), else rofi,
+    else a numbered question on the terminal."""
+    if wanted:
+        lower = wanted.lower()
+        exact = [d for d in devices if d.alias.lower() == lower]
+        starts = [d for d in devices if d.alias.lower().startswith(lower)]
+        return exact[0] if exact else starts[0] if len(starts) == 1 else None
+    if not devices:
+        return None
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        for index, device in enumerate(devices, 1):
+            print(f"  {index}. {device.label()}")
+        answer = input(TEXT.get("localsend.which") + " ").strip()
+        return devices[int(answer) - 1] if answer.isdigit() and 0 < int(answer) <= len(devices) else None
+    chosen = rofi([d.label() for d in devices], TEXT.get("localsend.send_to"))
+    return devices[chosen[0]] if chosen else None
+
+
+@dataclass
+class Outgoing:
+    id: str
+    name: str
+    size: int
+    kind: str
+    sha256: str
+    path: Path | None = None
+    text: str | None = None
+
+    def entry(self) -> dict[str, object]:
+        body: dict[str, object] = {"id": self.id, "fileName": self.name, "size": self.size, "fileType": self.kind, "sha256": self.sha256, "preview": self.text}
+        if self.path is not None:
+            modified = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.path.stat().st_mtime))
+            body["metadata"] = {"modified": modified, "accessed": modified}
+        return body
+
+
+def outgoing_file(path: Path) -> Outgoing:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for piece in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(piece)
+    kind = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    return Outgoing(secrets.token_hex(8), path.name, path.stat().st_size, kind, digest.hexdigest(), path=path)
+
+
+def outgoing_text(text: str) -> Outgoing:
+    data = text.encode("utf-8")
+    key = secrets.token_hex(8)
+    return Outgoing(key, f"{key}.txt", len(data), "text/plain", hashlib.sha256(data).hexdigest(), text=text)
+
+
+class SendFailed(Exception):
+    def __init__(self, key: str, *args: object) -> None:
+        super().__init__(TEXT.get(key, *args))
+
+
+def transfer(device: Device, items: list[Outgoing], pin: str | None, ask_pin) -> int:
+    """prepare-upload (the phone may ask its owner first: up to five minutes), then each
+    file the phone took, streamed. Returns how many were sent."""
+    body = {"info": info(), "files": {item.id: item.entry() for item in items}}
+    for _ in range(2):
+        path = f"{API}/prepare-upload" + (f"?pin={urllib.parse.quote(pin)}" if pin else "")
+        try:
+            status, raw = call(device, "POST", path, body, timeout=300)
+        except Untrusted:
+            raise SendFailed("localsend.untrusted", device.label()) from None
+        except (OSError, http.client.HTTPException) as error:
+            raise SendFailed("localsend.unreachable", device.label(), error) from None
+        if status == 401 and not pin:
+            pin = ask_pin()
+            if pin:
+                continue
+        break
+    if status == 204:
+        return len(items)
+    if status == 401 and not pin:
+        raise SendFailed("localsend.needs_pin", device.alias)
+    reasons = {401: "localsend.refused_pin", 403: "localsend.refused", 409: "localsend.busy", 429: "localsend.refused_tries"}
+    if status != 200:
+        raise SendFailed(reasons.get(status, "localsend.refused_other"), device.alias, status)
+    try:
+        answer = json.loads(raw.decode("utf-8"))
+        session, tokens = str(answer["sessionId"]), answer["files"]
+        assert isinstance(tokens, dict)
+    except (UnicodeDecodeError, ValueError, KeyError, AssertionError, TypeError):
+        raise SendFailed("localsend.refused_other", device.alias, status) from None
+    # A text the receiver gets no token for was taken from its preview, already.
+    sent = sum(1 for item in items if item.text is not None and not isinstance(tokens.get(item.id), str))
+    try:
+        for item in items:
+            ticket = tokens.get(item.id)
+            if not isinstance(ticket, str):
+                continue
+            query = urllib.parse.urlencode({"sessionId": session, "fileId": item.id, "token": ticket})
+            headers = {"Content-Length": str(item.size), "Content-Type": "application/octet-stream"}
+            if item.path is not None:
+                with item.path.open("rb") as handle:
+                    status, _ = call(device, "POST", f"{API}/upload?{query}", handle, timeout=120, headers=headers)
+            else:
+                status, _ = call(device, "POST", f"{API}/upload?{query}", (item.text or "").encode("utf-8"), timeout=120, headers=headers)
+            if status != 200:
+                raise SendFailed("localsend.refused_other", device.alias, status)
+            sent += 1
+    except (OSError, http.client.HTTPException, Untrusted, SendFailed) as error:
+        try:
+            call(device, "POST", f"{API}/cancel?" + urllib.parse.urlencode({"sessionId": session}), timeout=5)
+        except (OSError, http.client.HTTPException, Untrusted):
+            pass
+        if isinstance(error, SendFailed):
+            raise
+        raise SendFailed("localsend.unreachable", device.label(), error) from None
+    return sent
+
+
+def ask_pin_terminal() -> str:
+    if not sys.stdin.isatty():
+        return ""
+    return getpass.getpass(TEXT.get("localsend.ask_pin") + " ").strip()
+
+
+def ask_pin_rofi() -> str:
+    if not shutil.which("rofi"):
+        return ""
+    done = subprocess.run(["rofi", "-dmenu", "-password", "-p", TEXT.get("localsend.ask_pin")], input="", capture_output=True, text=True, env=desktop_env())
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def send(arguments: list[str]) -> int:
+    wanted = peer = pin = None
+    texts: list[str] = []
+    paths: list[Path] = []
+    while arguments:
+        option = arguments.pop(0)
+        if option == "--to" and arguments:
+            wanted = arguments.pop(0)
+        elif option == "--peer" and arguments:
+            peer = arguments.pop(0)
+        elif option == "--pin" and arguments:
+            pin = arguments.pop(0)
+        elif option == "--text" and arguments:
+            texts.append(arguments.pop(0))
+        elif option == "--":
+            paths += [Path(a) for a in arguments]
+            arguments = []
+        elif option.startswith("--"):
+            return usage()
+        else:
+            paths.append(Path(option))
+    if not paths and not texts:
+        return usage()
+    for path in paths:
+        if not path.is_file():
+            complain("localsend.no_file", path)
+            return 1
+        if path.stat().st_size > FILE_LIMIT:
+            complain("localsend.too_large", path)
+            return 1
+    items = [outgoing_text(text) for text in texts] + [outgoing_file(path) for path in paths]
+    return deliver(items, wanted, peer, pin, ask_pin_terminal, say_on_screen=False)
+
+
+def deliver(items: list[Outgoing], wanted: str | None, peer: str | None, pin: str | None, ask_pin, say_on_screen: bool) -> int:
+    def fail(key: str, *args: object) -> int:
+        if say_on_screen:
+            notify(TEXT.get("localsend.title"), TEXT.get(key, *args))
+        complain(key, *args)
+        return 1
+
+    if peer:
+        device = probe(peer)
+        if device is None:
+            return fail("localsend.unreachable", peer, "no LocalSend there")
+    else:
+        devices = discover()
+        if not devices:
+            return fail("localsend.none_found")
+        device = choose(devices, wanted)
+        if device is None:
+            if wanted:
+                return fail("localsend.not_found", wanted, ", ".join(d.alias for d in devices))
+            return 1
+    try:
+        sent = transfer(device, items, pin, ask_pin)
+    except SendFailed as error:
+        if say_on_screen:
+            notify(TEXT.get("localsend.title"), str(error))
+        print(f"vivac-localsend: {error}", file=sys.stderr, flush=True)
+        return 1
+    if say_on_screen:
+        notify(TEXT.get("localsend.title"), TEXT.get("localsend.sent", sent, device.alias))
+    say("localsend.sent", sent, device.alias)
+    return 0
+
+
+def clipboard_text() -> str:
+    try:
+        done = subprocess.run(["wl-paste", "--no-newline", "--type", "text"], capture_output=True, timeout=10, env=desktop_env())
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout.decode("utf-8", errors="replace") if done.returncode == 0 else ""
+
+
+def recent_files(limit: int = 300) -> list[Path]:
+    """What a person is likely to send: the newest files in the usual folders, two deep."""
+    home = Path.home()
+    dirs = read_kv(config_home() / "user-dirs.dirs")
+    roots = []
+    for key, fallback in (("XDG_DOWNLOAD_DIR", "Downloads"), ("XDG_PICTURES_DIR", "Pictures"), ("XDG_DOCUMENTS_DIR", "Documents"), ("XDG_DESKTOP_DIR", "Desktop"), ("XDG_VIDEOS_DIR", "Videos"), ("XDG_MUSIC_DIR", "Music")):
+        raw = dirs.get(key, "").strip('"').replace("$HOME", str(home), 1)
+        root = Path(raw) if raw.startswith("/") else home / fallback
+        if root.is_dir() and root != home and root not in roots:
+            roots.append(root)
+    found: list[tuple[float, Path]] = []
+    for root in roots:
+        for depth, pattern in enumerate(("*", "*/*")):
+            for path in root.glob(pattern):
+                try:
+                    if path.is_file() and not any(part.startswith(".") for part in path.relative_to(root).parts):
+                        found.append((path.stat().st_mtime, path))
+                except OSError:
+                    continue
+    found.sort(reverse=True)
+    return [path for _, path in found[:limit]]
+
+
+def pick() -> int:
+    """The bridge menu's "Send to phone…": the clipboard's text or files (Shift+Enter picks
+    several), then a phone, all in rofi; what happened is said in a notification."""
+    text = clipboard_text()
+    files = recent_files()
+    home = str(Path.home())
+    rows = ([TEXT.get("localsend.pick_clip", len(text))] if text else []) + [str(p).replace(home, "~", 1) for p in files]
+    if not rows:
+        notify(TEXT.get("localsend.title"), TEXT.get("localsend.nothing"))
+        return 1
+    chosen = rofi(rows, TEXT.get("localsend.pick"), "-multi-select")
+    if not chosen:
+        return 0
+    items: list[Outgoing] = []
+    offset = 1 if text else 0
+    for index in chosen:
+        if text and index == 0:
+            items.append(outgoing_text(text))
+        else:
+            items.append(outgoing_file(files[index - offset]))
+    return deliver(items, None, None, None, ask_pin_rofi, say_on_screen=True)
+
+
+def devices_command() -> int:
+    found = discover()
+    if not found:
+        complain("localsend.none_found")
+        return 1
+    for device in found:
+        print(f"{device.alias}\t{device.address}:{device.port}\t{device.protocol}\t{device.model}")
+    return 0
+
+
+# --- on, off, status ---------------------------------------------------------------------------------
+
+
+def systemctl(*arguments: str) -> int:
+    if not shutil.which("systemctl"):
+        return 1
+    return subprocess.run(["systemctl", "--user", *arguments], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False).returncode
+
+
+def is_on() -> bool:
+    return systemctl("is-active", "--quiet", SERVICE) == 0
+
+
+def switch(on: bool, say_on_screen: bool = False) -> int:
+    if on:
+        pin = ensure_pin()
+        done = systemctl("enable", "--now", SERVICE) == 0
+        key, args = ("localsend.now_on", (pin,)) if done else ("localsend.cannot", (SERVICE,))
+    else:
+        done = systemctl("disable", "--now", SERVICE) == 0
+        key, args = ("localsend.now_off", ()) if done else ("localsend.cannot", (SERVICE,))
+    if say_on_screen:
+        notify(TEXT.get("localsend.title"), TEXT.get(key, *args))
+    (say if done else complain)(key, *args)
+    return 0 if done else 1
+
+
+def status() -> int:
+    say("localsend.status_on" if is_on() else "localsend.status_off")
+    pin = current_pin()
+    if pin:
+        say("localsend.status_pin", pin)
+    else:
+        say("localsend.status_no_pin")
+    say("localsend.status_name", alias(), PORT)
+    say("localsend.status_inbox", inbox())
+    return 0
+
+
+def usage() -> int:
+    print(__doc__.split("\n\n")[1], file=sys.stderr)
+    return 2
+
+
+def main(arguments: list[str]) -> int:
+    if not arguments or arguments[0] in ("-h", "--help"):
+        print(__doc__.split("\n\n")[1])
+        return 0 if arguments else 2
+    command, rest = arguments[0], arguments[1:]
+    if command == "serve":
+        return serve(rest)
+    if command == "send":
+        return send(rest)
+    if command == "pick" and not rest:
+        return pick()
+    if command == "devices" and not rest:
+        return devices_command()
+    if command == "status" and not rest:
+        return status()
+    if command in ("on", "off") and not rest:
+        return switch(command == "on")
+    if command == "toggle" and not rest:
+        return switch(not is_on(), say_on_screen=True)
+    if command == "pin" and rest in ([], ["--new"]):
+        # The receiver reads the PIN at every request: nothing to restart.
+        print(ensure_pin(new=bool(rest)))
+        return 0
+    return usage()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

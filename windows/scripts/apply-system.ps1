@@ -40,6 +40,11 @@
     -Link       vivac link reachable from the local network: TCP and UDP
                 47321 in, private networks and the local subnet only
                 (docs/bridge.md at the product root)
+    -LocalSend  the phone drop reachable from phones with LocalSend: TCP and
+                UDP 53317 in, private networks and the local subnet only. A
+                rule of its own, apart from -Link: phones are other devices
+                than the paired machine, and either may be wanted alone. The
+                receiver itself starts only with vivac-localsend.ps1 on
     -Boot       GRUB's menu and the boot logo in the theme, following every
                 theme switch: HackBGRT (pinned, checked) and a GRUB theme on
                 the EFI partition shared with Arch, carried there by a SYSTEM
@@ -59,7 +64,7 @@
 [CmdletBinding()]
 param(
     [switch]$Session, [switch]$Idle, [switch]$Taskbar, [switch]$DesktopIcons, [switch]$WinKeys, [switch]$Toasts,
-    [switch]$Firewall, [switch]$Defender, [switch]$SecurityQuiet, [switch]$LockScreen, [switch]$AutoLogin, [switch]$Boot, [switch]$Link,
+    [switch]$Firewall, [switch]$Defender, [switch]$SecurityQuiet, [switch]$LockScreen, [switch]$AutoLogin, [switch]$Boot, [switch]$Link, [switch]$LocalSend,
     [switch]$DryRun
 )
 Set-StrictMode -Version 2.0
@@ -69,12 +74,12 @@ Import-Module (Join-Path $PSScriptRoot '..\lib\Apps.psm1') -Force
 [void](Import-VivacStrings (Read-VivacSettings)['language'])
 
 $restartExplorer = $false
-if (-not ($Session -or $Idle -or $Taskbar -or $DesktopIcons -or $WinKeys -or $Toasts -or $Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot -or $Link)) {
+if (-not ($Session -or $Idle -or $Taskbar -or $DesktopIcons -or $WinKeys -or $Toasts -or $Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot -or $Link -or $LocalSend)) {
     Write-Host (T 'system.none_chosen')
     return
 }
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (($Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot -or $Link) -and -not $admin -and -not $DryRun) {
+if (($Firewall -or $Defender -or $SecurityQuiet -or $LockScreen -or $AutoLogin -or $Boot -or $Link -or $LocalSend) -and -not $admin -and -not $DryRun) {
     throw (T 'system.needs_admin')
 }
 
@@ -279,6 +284,20 @@ if ($Link) {
         Remove-NetFirewallRule -DisplayName 'vivac link' -ErrorAction SilentlyContinue
         foreach ($protocol in 'TCP', 'UDP') {
             New-NetFirewallRule -DisplayName 'vivac link' -Group 'vivac' -Direction Inbound -Protocol $protocol -LocalPort 47321 -Profile Private -RemoteAddress LocalSubnet -Action Allow | Out-Null
+        }
+    }
+}
+
+# The phone drop (bin/vivac-localsend.ps1) listens on LocalSend's 53317:
+# HTTP on TCP, discovery on UDP. The local subnet, private networks only.
+if ($LocalSend) {
+    Write-Host (T 'system.localsend')
+    Save-Original 'localsend' $true
+    Step (T 'system.localsend_step')
+    if (-not $DryRun) {
+        Remove-NetFirewallRule -DisplayName 'vivac phone drop' -ErrorAction SilentlyContinue
+        foreach ($protocol in 'TCP', 'UDP') {
+            New-NetFirewallRule -DisplayName 'vivac phone drop' -Group 'vivac' -Direction Inbound -Protocol $protocol -LocalPort 53317 -Profile Private -RemoteAddress LocalSubnet -Action Allow | Out-Null
         }
     }
 }

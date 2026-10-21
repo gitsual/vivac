@@ -66,20 +66,22 @@ and of what does not carry over.
 ## 🔗 Together
 
 What you get when you run both — on one machine with a dual boot, on two machines on one network, or
-both. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
+both — and what either half does with a phone. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
 
-| | Dual boot | Two machines |
-|---|:---:|:---:|
-| **Shared choices** — the theme, the weather location and the language follow you to the other system, through a file on a disk both mount | ✅ | |
-| **Restart into the other system** — one entry in each power menu; it sets the firmware's *BootNext* for one boot only, never the boot order or GRUB's default | ✅ | |
-| **The drop tray** — leave files in a folder on one side; the other says, at sign-in, that they are waiting | ✅ | |
-| **vivac link** — send the clipboard, a link, a file or a notification to the other machine; paired once with a code, every request signed | | ✅ |
+| | Dual boot | Two machines | A phone |
+|---|:---:|:---:|:---:|
+| **Shared choices** — the theme, the weather location and the language follow you to the other system, through a file on a disk both mount | ✅ | | |
+| **Restart into the other system** — one entry in each power menu; it sets the firmware's *BootNext* for one boot only, never the boot order or GRUB's default | ✅ | | |
+| **The drop tray** — leave files in a folder on one side; the other says, at sign-in, that they are waiting | ✅ | | |
+| **vivac link** — send the clipboard, a link, a file or a notification to the other machine; paired once with a code, every request signed | | ✅ | |
+| **Phone drop** — a phone with the stock [LocalSend](https://localsend.org) app sends files and texts to either half, and either half sends files to it; no vivac app on the phone, a PIN to receive | | | ✅ |
 
 **Safe by construction.** vivac link never runs what it receives, never opens a link without a click,
 writes files only into `Downloads/vivac-link/` under a name stripped of any path, and refuses a request
 whose signature, clock or nonce is wrong. Each system's firewall lets in the local subnet only, and only
 once you ask (`apply-system.ps1 -Link` on Windows, `apply-system.sh --bridge` on Linux). The restart needs administrator
-rights on both sides; each grants exactly that one command and nothing more.
+rights on both sides; each grants exactly that one command and nothing more. The phone drop listens only
+once you turn it on, wants its PIN, and treats a text as something to show, never to run or paste.
 
 ```text
 linux                                    windows
@@ -114,6 +116,10 @@ To join the two once both are installed:
    On Windows the command is `bin\vivac-link.ps1`, then `-Register` to listen at sign-in and
    `apply-system.ps1 -Link` (elevated) to let the other machine in. `Super+Shift+B` on Linux and the
    menu on Windows hold the rest.
+4. **Phone drop** — `vivac-localsend on` (Linux) or `binivac-localsend.ps1 on` (Windows), or **Phone
+   drop: on/off + PIN** in the bridge menu, says the PIN to give the phone; `apply-system.sh --bridge` or
+   `apply-system.ps1 -LocalSend` (elevated) lets phones on the local network in. **Send to phone…** in the
+   same menu sends the other way.
 
 ---
 

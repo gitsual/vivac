@@ -801,6 +801,51 @@ function Show-ThemePicker([switch]$NoShow, [hashtable]$Registry) {
     [void]$window.ShowDialog()
 }
 
+# ----------------------------------------------------------------- a choice
+
+# One choice from a list, as the theme picker looks: arrows and Enter, or a
+# double click; Escape chooses nothing. Returns the index, or -1. Used where
+# a program asks one question (the phone to send to, bin/vivac-localsend.ps1).
+function Select-VivacItem([string]$Title, [string[]]$Rows, [string]$Hint = '', [switch]$NoShow) {
+    Update-SurfaceContext
+    $p = Get-Palette
+    $body = @"
+<DockPanel>
+  <TextBlock DockPanel.Dock="Top" Margin="0,0,0,12" FontSize="16" Foreground="#$($p['COLOR_ACCENT'])" Text="$(ConvertTo-XmlText $Title)"/>
+  <TextBlock DockPanel.Dock="Bottom" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="#$($p['COLOR_MUTED'])" Text="$(ConvertTo-XmlText $Hint)"/>
+  <ListBox x:Name="Rows" Background="Transparent" BorderThickness="0" Foreground="#$($p['COLOR_FG'])">
+    <ListBox.Resources>
+      <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#$($p['COLOR_SURFACE_ALT'])"/>
+      <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#$($p['COLOR_SURFACE_ALT'])"/>
+      <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#$($p['COLOR_FG'])"/>
+    </ListBox.Resources>
+  </ListBox>
+</DockPanel>
+"@
+    $window = New-VivacWindow (Get-WindowXaml 'vivac - choose' 560 (160 + 34 * [Math]::Min(10, $Rows.Count)) $body)
+    $list = $window.FindName('Rows')
+    foreach ($r in $Rows) {
+        $label = New-Object Windows.Controls.TextBlock
+        $label.Margin = '4,6'
+        $label.Text = $r
+        [void]$list.Items.Add($label)
+    }
+    if ($Rows.Count) { $list.SelectedIndex = 0 }
+    $state = @{ Chosen = -1 }
+    $pick = { $state.Chosen = $list.SelectedIndex; $window.Close() }
+    $window.Add_PreviewKeyDown({
+        param($s, $e)
+        $k = [string]$e.Key
+        if ($k -eq 'Escape') { $window.Close(); return }
+        if ($k -eq 'Return') { & $pick; $e.Handled = $true; return }
+    })
+    $list.Add_MouseDoubleClick({ & $pick })
+    $window.Add_ContentRendered({ $list.Focus() | Out-Null })
+    if ($NoShow) { return $window }
+    [void]$window.ShowDialog()
+    $state.Chosen
+}
+
 # ------------------------------------------------------------------- the menu
 
 # The menu of the Start menu's contents: what MOD+R opens. Everything the
@@ -902,6 +947,9 @@ function Get-VivacMenuEntries {
         $e.Add((New-MenuEntry 'session' (T 'bridge.drop_out') 'bridge' 'drop-out' $false 0xE898))
     }
     if (Test-Path -LiteralPath (Get-VivacLinkConfPath)) { $e.Add((New-MenuEntry 'session' (T 'bridge.link_clip') 'bridge' 'link-clip' $false 0xE8C8)) }
+    # A phone with LocalSend (docs/bridge.md, "Phones: LocalSend"): needs nothing set up to send.
+    $e.Add((New-MenuEntry 'session' (T 'localsend.menu_send') 'bridge' 'localsend-send' $false 0xE8EA))
+    $e.Add((New-MenuEntry 'session' (T 'localsend.menu_toggle') 'bridge' 'localsend-toggle' $false 0xE8EA))
     $e
 }
 
@@ -927,6 +975,10 @@ function Invoke-BridgeAction([string]$Id) {
             Start-Process explorer.exe -ArgumentList "`"$folder`""
         }
         'link-clip' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-link.ps1`"", 'send-clip', '-Notify') }
+        # The phone drop says what it did in a card of its own.
+        { $_ -in 'localsend-send', 'localsend-toggle' } {
+            Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-localsend.ps1`"", ($Id.Substring(10) -replace '^send$', 'pick'), '-Notify')
+        }
     }
 }
 

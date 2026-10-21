@@ -203,6 +203,9 @@ $script:SettingDefaults = [ordered]@{
     mod              = 'lwin'
     weather_location = 'auto'
     shared_settings  = 'none'
+    # The PIN a phone gives to send here (bin/vivac-localsend.ps1): auto is the
+    # one made when the phone drop is first turned on, kept in its state.
+    localsend_pin    = 'auto'
 }
 $script:SettingRules = @{
     language         = '^(es|en)$'
@@ -213,6 +216,7 @@ $script:SettingRules = @{
     # C:/x) or one under the profile (~\x, ~/x). No characters Windows refuses
     # in a name.
     shared_settings  = '^(none|([A-Za-z]:[\\/]|~[\\/])[^\x00-\x1f"<>|*?]+)$'
+    localsend_pin    = '^(auto|[0-9A-Za-z]{4,32})$'
 }
 
 function Read-VivacSettings {
