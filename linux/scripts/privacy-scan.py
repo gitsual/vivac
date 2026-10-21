@@ -18,9 +18,11 @@ RULES = {
     "private-key": re.compile(r"BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY"),
     "github-token": re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
     "aws-access-key": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+    # A sudoers rule names its program right after NOPASSWD:, and a path under
+    # /usr/bin/ is a program, not a password; anything else after it still counts.
     "credential-assignment": re.compile(
         r"(?i)(?:token|api[_-]?key|password|passwd|secret|oauth|credential)"
-        r"\s*[:=]\s*[\"']?(?!example|placeholder|changeme|\$\{|<)[^\s\"']{8,}"
+        r"\s*[:=]\s*[\"']?(?!example|placeholder|changeme|\$\{|<|/usr/bin/)[^\s\"']{8,}"
     ),
     # A systemd template instance (serial-getty@ttyS0.service) has the shape of
     # an address and is not one. The unit suffixes are excluded by name rather

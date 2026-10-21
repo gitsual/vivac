@@ -29,6 +29,7 @@ stage 'structured configuration'
 python -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/privacy-scan.py").read_text())'
 python -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/configure-audio.py").read_text())'
 python -c 'import ast, pathlib; ast.parse(pathlib.Path("dotfiles/automation/.local/bin/workstation-task-runner").read_text())'
+python -c 'import ast, pathlib; ast.parse(pathlib.Path("dotfiles/bridge/.local/bin/vivac-link").read_text())'
 python -m json.tool profiles/automation/example.json >/dev/null
 while IFS= read -r -d '' file; do
 	nvim --headless --clean -u NONE -c "lua assert(loadfile([[${file}]]))" -c qa
@@ -37,7 +38,8 @@ systemd-analyze verify \
 	dotfiles/security/.config/systemd/user/*.service \
 	dotfiles/security/.config/systemd/user/*.timer \
 	dotfiles/automation/.config/systemd/user/*.service \
-	dotfiles/automation/.config/systemd/user/*.timer
+	dotfiles/automation/.config/systemd/user/*.timer \
+	dotfiles/bridge/.config/systemd/user/*.service
 
 stage 'package manifests'
 for manifest in packages/*.txt; do

@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# The drop tray: a folder per direction under the shared root, the folder that
+# holds the shared settings file (docs/bridge.md at the root of the product).
+#
+#   --notify     session start: say how many things came from Windows, with a
+#                click that opens the folder; silent when there are none
+#   --open-in    open drop/to-linux, what came for this side
+#   --open-out   open drop/to-windows, where this side leaves things
+#   --count      print how many things are waiting in drop/to-linux
+#
+# Nothing is moved or deleted: the folder is the tray. While shared_settings is
+# none, or its folder is away (an unmounted disk), every action says so and
+# does nothing else; at session start that goes to the log, not on screen, so
+# a machine that shares nothing is not reminded of it at every login.
+set -Eeuo pipefail
+
+self="$(readlink -f -- "${BASH_SOURCE[0]}")"
+repo_root="${VIVAC_REPO:-$(cd -- "$(dirname -- "$self")/../../../.." && pwd -P)}"
+# shellcheck source=lib/kv.sh
+source "$repo_root/lib/kv.sh"
+# shellcheck source=lib/settings.sh
+source "$repo_root/lib/settings.sh"
+# shellcheck source=lib/i18n.sh
+source "$repo_root/lib/i18n.sh"
+
+settings_file="${SETTINGS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/vivac/settings}"
+language="$(i18n_session_language "$settings_file")"
+i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
+	i18n_load en "${I18N_DIR:-$repo_root/i18n}"
+
+action="${1:-}"
+case "$action" in
+--notify | --open-in | --open-out | --count) ;;
+-h | --help)
+	sed -n '2,15p' "$self"
+	exit 0
+	;;
+*)
+	printf 'Usage: vivac-drop --notify | --open-in | --open-out | --count\n' >&2
+	exit 2
+	;;
+esac
+
+# tell TEXT — stderr always; on screen too unless this is the session-start pass.
+tell() {
+	printf 'vivac-drop: %s\n' "$1" >&2
+	[[ "$action" != --notify ]] || return 0
+	command -v notify-send >/dev/null || return 0
+	notify-send --app-name=vivac -- "$(i18n_get drop.title)" "$1" || true
+}
+
+root="$(settings_shared_root "$settings_file")" || {
+	tell "$(i18n_get bridge.no_shared)"
+	[[ "$action" == --notify ]] && exit 0
+	exit 1
+}
+[[ -d "$root" ]] || {
+	tell "$(i18n_format bridge.shared_missing "$root")"
+	[[ "$action" == --notify ]] && exit 0
+	exit 1
+}
+incoming="$root/drop/to-linux"
+outgoing="$root/drop/to-windows"
+
+# What is waiting: files and folders, not the dot files and the desktop.ini or
+# Thumbs.db a file manager leaves behind (the Windows half counts the same).
+waiting() {
+	[[ -d "$incoming" ]] || {
+		printf '0'
+		return 0
+	}
+	find "$incoming" -mindepth 1 -maxdepth 1 ! -name '.*' ! -name desktop.ini ! -name Thumbs.db -printf . | wc -c
+}
+
+open_folder() {
+	mkdir -p -- "$1"
+	xdg-open "$1" >/dev/null 2>&1 &
+	disown
+}
+
+case "$action" in
+--count) printf '%s\n' "$(waiting)" ;;
+--open-in) open_folder "$incoming" ;;
+--open-out) open_folder "$outgoing" ;;
+--notify)
+	count="$(waiting)"
+	((count > 0)) || exit 0
+	if ((count == 1)); then body="$(i18n_get drop.waiting_one)"; else body="$(i18n_format drop.waiting_many "$count")"; fi
+	command -v notify-send >/dev/null || {
+		printf 'vivac-drop: %s\n' "$body" >&2
+		exit 0
+	}
+	# --action waits for the click (or for the notification to go away), and
+	# prints the name of the action that was clicked.
+	answer="$(notify-send --app-name=vivac --action="open=$(i18n_get drop.open)" -- "$(i18n_get drop.title)" "$body" 2>/dev/null || true)"
+	[[ "$answer" != open ]] || xdg-open "$incoming" >/dev/null 2>&1 || true
+	;;
+esac

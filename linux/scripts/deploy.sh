@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-packages=(hypr waybar kitty dunst rofi wofi nvim shell theme audio security automation ricer welcome)
+packages=(hypr waybar kitty dunst rofi wofi nvim shell theme audio security automation ricer welcome bridge)
 dry_run=false
 protected=()
 reapply_theme=true
@@ -12,6 +12,7 @@ usage() {
 Usage: scripts/deploy.sh [--all] [--dry-run] [--protect REL]... [--no-theme] [package ...]
 
 Packages: hypr waybar kitty dunst rofi wofi nvim shell theme audio security automation
+          ricer welcome bridge
 Existing files are moved to a timestamped backup; nothing is deleted.
 
   --protect REL  leave $HOME/REL alone: not backed up, not linked (repeatable)

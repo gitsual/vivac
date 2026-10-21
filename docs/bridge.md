@@ -44,9 +44,10 @@ and the firmware's boot order are never changed.
 
 - **Linux**: `efibootmgr` finds the entry whose label is `Windows Boot
   Manager` and runs `efibootmgr --bootnext XXXX`. Root is needed; a sudoers
-  drop-in (`/etc/sudoers.d/vivac-bootnext`, installed by the host deploy)
+  drop-in (`/etc/sudoers.d/vivac-bootnext`, installed by `apply-system.sh --bridge`)
   allows exactly `efibootmgr --bootnext` followed by four hex digits, without
-  a password, to members of `wheel`. Then `systemctl reboot`.
+  a password, to members of `wheel`.
+  Then `systemctl reboot`.
 - **Windows**: `bcdedit /enum firmware` finds the first entry whose
   description names a Linux loader (`GRUB`, `Arch`, `Linux`, `vivac`,
   `systemd-boot`, `rEFInd`; never `Windows Boot Manager`) and runs
@@ -144,7 +145,7 @@ receives, never opens a URL without a click, and writes files only into its
 - Both listen on all interfaces, so each system's firewall decides who may
   reach the port. Windows: `apply-system.ps1 -Link` adds one inbound rule
   for TCP and UDP 47321, private networks and the local subnet only. Linux:
-  the host deploy opens the same in the firewall vivac configures, on the
+  `apply-system.sh --bridge` opens the same in UFW, the firewall vivac configures, for the
   local subnet only.
 
 ## Versions

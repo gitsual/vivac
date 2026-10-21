@@ -1,0 +1,14 @@
+[Unit]
+Description=vivac link: what the paired machine sends (clipboard, links, files, notifications)
+ConditionPathExists=%S/vivac/link.conf
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 %h/.local/bin/vivac-link serve
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

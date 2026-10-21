@@ -378,7 +378,7 @@ printf 'kept\n' >"$sandbox/ext/.local/share/elsewhere/file"
 ln -s -- "$sandbox/ext/.local" "$host/.local"
 before="$(snap "$host")" ext_before="$(snap "$sandbox/ext")"
 out="$(hl "$host" --dry-run 2>&1)" || fail "dry run over a symlinked .local failed: $out"
-grep -q 'would stow: hypr nvim ricer welcome' <<<"$out" || fail "the dry run does not plan the stow: $out"
+grep -q 'would stow: hypr nvim ricer welcome bridge' <<<"$out" || fail "the dry run does not plan the stow: $out"
 [[ "$(snap "$host")" == "$before" && "$(snap "$sandbox/ext")" == "$ext_before" ]] || fail 'the dry run changed a host with a symlinked .local'
 out="$(hl "$host" 2>&1)" || fail "deploy over a symlinked .local failed: $out"
 [[ -L "$host/.local" && "$(readlink -- "$host/.local")" == "$sandbox/ext/.local" ]] || fail 'the .local symlink itself was changed'

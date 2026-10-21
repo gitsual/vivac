@@ -78,7 +78,7 @@ both. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
 **Safe by construction.** vivac link never runs what it receives, never opens a link without a click,
 writes files only into `Downloads/vivac-link/` under a name stripped of any path, and refuses a request
 whose signature, clock or nonce is wrong. Each system's firewall lets in the local subnet only, and only
-once you ask (`apply-system -Link` on Windows, the host deploy on Linux). The restart needs administrator
+once you ask (`apply-system.ps1 -Link` on Windows, `apply-system.sh --bridge` on Linux). The restart needs administrator
 rights on both sides; each grants exactly that one command and nothing more.
 
 ```text
@@ -107,11 +107,13 @@ To join the two once both are installed:
 
 1. **Shared choices and the drop tray** — point `shared_settings` at the same file on a disk both systems
    mount, on each side (`~/.config/vivac/settings` on Linux, `%APPDATA%\vivac\settings` on Windows).
-2. **Restart into the other system** — Linux: the host deploy installs the one sudo rule it needs.
-   Windows: `bin\vivac-reboot-other.ps1 -Register`, once, from an elevated PowerShell.
-3. **vivac link** — `vivac link pair` on one machine prints a code; `vivac link pair CODE` on the other.
+2. **Restart into the other system** — Linux: `./scripts/apply-system.sh --bridge` installs the one sudo
+   rule it needs (with the firewall rule and the link service). Windows: `bin\vivac-reboot-other.ps1
+   -Register`, once, from an elevated PowerShell.
+3. **vivac link** — `vivac-link pair` on one machine prints a code; `vivac-link pair CODE` on the other.
    On Windows the command is `bin\vivac-link.ps1`, then `-Register` to listen at sign-in and
-   `apply-system.ps1 -Link` (elevated) to let the other machine in.
+   `apply-system.ps1 -Link` (elevated) to let the other machine in. `Super+Shift+B` on Linux and the
+   menu on Windows hold the rest.
 
 ---
 

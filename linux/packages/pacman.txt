@@ -9,6 +9,7 @@ cryptsetup
 curl
 dmenu
 dunst
+efibootmgr
 fd
 git
 gitleaks

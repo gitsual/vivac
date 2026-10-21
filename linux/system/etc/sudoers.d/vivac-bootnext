@@ -1,0 +1,6 @@
+# Restart in Windows (docs/bridge.md at the root of the product): members of
+# wheel may set the firmware's BootNext, and nothing else, without a password.
+# The argument is a sudo regular expression (sudo 1.9.10 and later): exactly
+# --bootnext and four hex digits, so no other efibootmgr option gets through.
+# Installed mode 0440 by scripts/apply-system.sh --bridge after visudo -cf.
+%wheel ALL=(root) NOPASSWD: /usr/bin/efibootmgr ^--bootnext [0-9A-Fa-f]{4}$

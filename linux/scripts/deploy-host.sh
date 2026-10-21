@@ -22,7 +22,7 @@ config="$HOME/.config"
 state="${XDG_STATE_HOME:-$HOME/.local/state}"
 # waybar, kitty, dunst, rofi and wofi are never packages here, not even with
 # --all: they are the owner's own layouts and only get the palette (colour overlay).
-packages=(hypr nvim ricer welcome)
+packages=(hypr nvim ricer welcome bridge)
 dry_run=false rollback=false force=false backup_arg=''
 default_packages=("${packages[@]}")
 without=()
@@ -35,7 +35,7 @@ die() {
 while (($#)); do
 	case "$1" in
 	--dry-run) dry_run=true ;;
-	--all) packages=(hypr nvim shell theme audio security automation ricer welcome) ;;
+	--all) packages=(hypr nvim shell theme audio security automation ricer welcome bridge) ;;
 	--without)
 		(($# >= 2)) || {
 			printf 'deploy-host: --without needs a package name\n' >&2

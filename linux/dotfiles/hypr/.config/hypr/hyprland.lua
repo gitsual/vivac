@@ -142,6 +142,8 @@ hl.bind("SUPER + SHIFT + E", hl.dsp.exec_cmd("$HOME/.config/rofi/power/powermenu
 hl.bind("SUPER + SHIFT + Q", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-power"))
 -- @help: hypr help.hypr.theme
 hl.bind("SUPER + SHIFT + T", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-theme"))
+-- @help: hypr help.hypr.bridge
+hl.bind("SUPER + SHIFT + B", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-bridge"))
 -- @help: hypr help.hypr.clipboard
 hl.bind("SUPER + V", hl.dsp.exec_cmd("cliphist list | rofi -dmenu -i -p Clipboard | cliphist decode | wl-copy"))
 -- @help: hypr help.hypr.reload
@@ -235,6 +237,9 @@ hl.window_rule({ name = "vivac-welcome", match = { class = "^(vivac-welcome)$" }
 -- not finish before the bar starts. That is fine: a theme it changes goes
 -- through apply-theme, which reloads the bar and the notifications itself.
 table.insert(vivac.autostart, { id = "sync-shared", cmd = "${VIVAC_REPO:-$HOME/vivac}/scripts/sync-shared-settings.sh --pull" })
+-- What came from Windows through the drop tray: a notification when there is
+-- something, silence otherwise, and nothing on screen without a shared folder.
+table.insert(vivac.autostart, { id = "drop-tray", cmd = "$HOME/.local/bin/vivac-drop --notify" })
 table.insert(vivac.autostart, { id = "waybar", cmd = "waybar" })
 table.insert(vivac.autostart, { id = "hypridle", cmd = "hypridle" })
 -- Clipboard history for the picker above; harmless when cliphist is absent.

@@ -124,7 +124,7 @@ to a timestamped backup under `$XDG_STATE_HOME/vivac/backups/`.
 
 ```sh
 git clone https://github.com/gitsual/vivac.git
-cd vivac
+cd vivac/linux
 ./scripts/bootstrap.sh --dry-run
 ./scripts/bootstrap.sh
 ```
@@ -176,13 +176,14 @@ the build — it is not quietly downgraded, because the claim is what is wrong.
 - **🌍 Three language axes, one writer each.** Locale, console keymap and compositor layout are separate choices; a test pins that exactly one place writes each.
 - **🧭 A first run that teaches.** Three questions and a ten-step tour that waits for you to actually press the key.
 - **🖥️ No GPU assumed.** Hardware facts are detected, rendered into `$XDG_CONFIG_HOME`, and never written into the checkout.
+- **🔗 The Windows half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Windows** sits in the power menu, and a drop tray hands files across. With a second machine: `vivac-link` sends the clipboard, links, files and notifications to it. `Super+Shift+B` opens it all; `apply-system.sh --bridge` sets up the system side. See [the bridge](../docs/bridge.md).
 - **🔐 Sanitized on purpose.** No credentials, device IDs, UUIDs, hostnames or private paths — enforced by a scanner over the staged objects and the Git history, not by memory.
 - **✅ 47 gates before anything ships.** Shell, Python, JSON, Lua, systemd units, manifests, asset checksums, privacy patterns, a two-pass deployment regression and a real Arch VM.
 
 ### ⚡ 60-second tour
 
 ```bash
-git clone https://github.com/gitsual/vivac.git && cd vivac
+git clone https://github.com/gitsual/vivac.git && cd vivac/linux
 ./scripts/bootstrap.sh --dry-run   # what it would install and link, touching nothing
 ./scripts/check.sh                 # the whole gate suite
 ./scripts/test-vm.sh --gui         # the real thing, in a QEMU/KVM Arch guest
@@ -677,6 +678,8 @@ scripts/               Bootstrap, deploy, render, audit and real-VM test tools
 | [Virtual-machine validation](docs/virtual-machine.md) | What the guest actually proves |
 | [The downloadable image](docs/vm-image.md) | How the published image is built |
 | [Keys](docs/keys.md) | The help registry, for readers without a session |
+| [The bridge](../docs/bridge.md) | What the Linux and Windows halves do together |
+| [The Windows half](../windows/README.md) | The same workstation on Windows 11 |
 | [Sanitization decisions](docs/design-notes.md) | What was removed and why |
 | [Workstation coverage matrix](docs/coverage-matrix.md) | What is reproduced and what is not |
 | [Destination tests](docs/destination-tests.md) | Claim by claim: hardware, VM, or not at all |
@@ -684,7 +687,7 @@ scripts/               Bootstrap, deploy, render, audit and real-VM test tools
 
 ## 📄 License
 
-[MIT](LICENSE)
+[MIT](../LICENSE)
 
 ---
 

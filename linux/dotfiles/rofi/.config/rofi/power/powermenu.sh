@@ -24,10 +24,18 @@ i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
 # longer ships a gdk-pixbuf loader, so rofi cannot open an .svg either, and one
 # rasterizer is better than two.
 icons="$("$HOME/.local/bin/vivac-power" --icons)"
-keys=(power.lock power.suspend power.logout power.reboot power.poweroff)
-files=(lock suspend log-out reboot power-off)
+keys=(power.lock power.suspend power.logout power.reboot)
+files=(lock suspend log-out reboot)
 # shellcheck disable=SC2016  # $HOME is expanded by the bash -c that runs the command
-commands=(hyprlock 'systemctl suspend' '"$HOME/.config/hypr/scripts/dispatch.sh" exit' 'systemctl reboot' 'systemctl poweroff')
+commands=(hyprlock 'systemctl suspend' '"$HOME/.config/hypr/scripts/dispatch.sh" exit' 'systemctl reboot')
+# Restart in Windows, only where the firmware has a Windows entry to restart
+# into (the bridge package; it asks twice before it does anything).
+if "$HOME/.local/bin/vivac-reboot-other" --available 2>/dev/null; then
+	keys+=(power.reboot_windows) files+=(reboot)
+	# shellcheck disable=SC2016  # as above
+	commands+=('"$HOME/.local/bin/vivac-reboot-other"')
+fi
+keys+=(power.poweroff) files+=(power-off) commands+=('systemctl poweroff')
 
 # rofi's dmenu mode takes a per-row icon after a US separator, which is how the
 # two menus end up showing the same drawing.

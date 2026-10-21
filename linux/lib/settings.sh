@@ -130,6 +130,15 @@ settings_shared_path() {
 	printf '%s' "${raw/#\~\//$HOME/}"
 }
 
+# settings_shared_root FILE — print the shared root (docs/bridge.md at the root
+# of the product): the folder that holds the shared file, where the drop tray
+# lives too. Silent failure while shared_settings=none, as above.
+settings_shared_root() {
+	local shared
+	shared="$(settings_shared_path "$1")" || return 1
+	dirname -- "$shared"
+}
+
 # settings_shared_write PATH KEY VALUE — set one key of the shared file in
 # place. The file is read by another OS, so its other lines (a `mod=` of the
 # Windows side, say) and their order are kept; CR and a BOM are dropped on

@@ -76,8 +76,13 @@ entries=(
 	'power.suspend	suspend	systemctl suspend'
 	"power.logout	log-out	$runtime/logout"
 	'power.reboot	reboot	systemctl reboot'
-	'power.poweroff	power-off	systemctl poweroff'
 )
+# Restart in Windows, only where the firmware has a Windows entry to restart
+# into; a launcher like the logout one, for the same reason. It asks twice.
+if "$HOME/.local/bin/vivac-reboot-other" --available 2>/dev/null; then
+	entries+=("power.reboot_windows	reboot	$runtime/reboot-windows")
+fi
+entries+=('power.poweroff	power-off	systemctl poweroff')
 
 # JSON by hand, but only over values we control: the icon paths and commands
 # are literals from above, and a label is the one field that could carry a
@@ -89,19 +94,28 @@ json_escape() {
 	printf '%s' "$text"
 }
 
-# The logout launcher: the dispatcher path is quoted here, once, for a shell.
-write_logout_launcher() {
-	local launcher="$runtime/logout" scratch
+# The launchers: each path is quoted here, once, for a shell.
+write_launcher() { # write_launcher NAME COMMAND [ARG...]
+	local launcher="$runtime/$1" scratch
+	shift
 	mkdir -p -- "$runtime"
 	scratch="$(mktemp -- "$launcher.XXXXXX")"
-	printf '#!/usr/bin/env bash\nexec %q exit\n' "$HOME/.config/hypr/scripts/dispatch.sh" >"$scratch"
+	{
+		printf '#!/usr/bin/env bash\nexec'
+		printf ' %q' "$@"
+		printf '\n'
+	} >"$scratch"
 	chmod +x "$scratch"
 	mv -T -- "$scratch" "$launcher"
+}
+write_launchers() {
+	write_launcher logout "$HOME/.config/hypr/scripts/dispatch.sh" exit
+	write_launcher reboot-windows "$HOME/.local/bin/vivac-reboot-other"
 }
 
 generate() {
 	local first=true key icon command label
-	write_logout_launcher
+	write_launchers
 	printf '[\n'
 	for entry in "${entries[@]}"; do
 		IFS=$'\t' read -r key icon command <<<"$entry"

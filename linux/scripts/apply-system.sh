@@ -17,12 +17,13 @@ bluetooth=false
 desktop_login=false
 greeter=false
 vm_profile=false
+bridge=false
 selection_made=false
 
 usage() {
 	cat <<'USAGE'
 Usage: scripts/apply-system.sh [--dry-run] [--security] [--bluetooth] [--desktop-login] [--vm]
-                               [--greeter] [--locale] [--keymap]
+                               [--greeter] [--locale] [--keymap] [--bridge]
 
 With no module selector, the backward-compatible security and Bluetooth profiles
 are applied. Selectors compose without enabling unrelated services.
@@ -35,6 +36,12 @@ XKB_DEFAULT_LAYOUT for its keyboard, each written only there.
 /etc/vconsole.conf. Both read their value from the user settings file
 ($XDG_CONFIG_HOME/vivac/settings, see settings.example) and are
 the only writers of those files in this repository.
+
+--bridge is the system half of the bridge with Windows (docs/bridge.md at the
+root of the product): the sudoers rule that lets wheel set the firmware's
+BootNext for "Restart in Windows", UFW rules that open the vivac link port
+(TCP and UDP 47321) to the local IPv4 subnets only, and the user's
+vivac-link service, which stays idle until the machine is paired.
 USAGE
 }
 
@@ -48,6 +55,7 @@ while (($#)); do
 	--vm) vm_profile=true; selection_made=true ;;
 	--locale) locale_axis=true; selection_made=true ;;
 	--keymap) keymap_axis=true; selection_made=true ;;
+	--bridge) bridge=true; selection_made=true ;;
 	-h | --help)
 		usage
 		exit 0
@@ -174,10 +182,55 @@ if $vm_profile; then
 	start_services+=(qemu-guest-agent.service)
 fi
 
+# local_subnets — the IPv4 networks this machine is on now, as network address
+# and prefix (a.b.c.0/24), from `ip`. The link port is opened to these and
+# to nothing wider; a network joined later needs --bridge again.
+local_subnets() {
+	local address prefix a b c d mask network
+	while read -r address; do
+		[[ "$address" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]] || continue
+		prefix="${address#*/}" address="${address%/*}"
+		((prefix > 0 && prefix <= 32)) || continue
+		IFS=. read -r a b c d <<<"$address"
+		mask=$(((0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF))
+		network=$((((a << 24) | (b << 16) | (c << 8) | d) & mask))
+		printf '%d.%d.%d.%d/%d\n' $((network >> 24 & 255)) $((network >> 16 & 255)) $((network >> 8 & 255)) $((network & 255)) "$prefix"
+	done < <(ip -o -4 addr show scope global 2>/dev/null | awk '{ print $4 }') | LC_ALL=C sort -u
+}
+
+if $bridge; then
+	# The rule is parsed by visudo before it goes in: a broken file in
+	# sudoers.d makes sudo refuse every command, not only this one. A backup
+	# named vivac-bootnext.vivac-backup.* has a dot in it, which sudo's
+	# includedir skips, so it is never read as a second rule.
+	sudoers_source="$repo_root/system/etc/sudoers.d/vivac-bootnext"
+	if $dry_run; then
+		printf 'would install %s -> /etc/sudoers.d/vivac-bootnext (mode 0440, checked by visudo -cf first)\n' "$sudoers_source"
+	else
+		sudo visudo -cf "$sudoers_source" >/dev/null
+		if sudo test -e /etc/sudoers.d/vivac-bootnext; then
+			sudo cp -a -- /etc/sudoers.d/vivac-bootnext "/etc/sudoers.d/vivac-bootnext.vivac-backup.$(date -u +%Y%m%dT%H%M%SZ)"
+		fi
+		sudo install -Dm440 -o root -g root -- "$sudoers_source" /etc/sudoers.d/vivac-bootnext
+	fi
+	mapfile -t subnets < <(local_subnets)
+	((${#subnets[@]})) || printf '%s\n' 'no IPv4 network is up: the vivac link port stays closed; run --bridge again once connected'
+	for subnet in "${subnets[@]}"; do
+		for protocol in tcp udp; do
+			if $dry_run; then
+				printf 'would allow %s 47321 from %s in UFW (vivac link)\n' "$protocol" "$subnet"
+			else
+				sudo ufw allow proto "$protocol" from "$subnet" to any port 47321 comment 'vivac link'
+			fi
+		done
+	done
+fi
+
 if $dry_run; then
 	((${#services[@]})) && printf 'would enable services: %s\n' "${services[*]}"
 	((${#start_services[@]})) && printf 'would start device-activated services: %s\n' "${start_services[*]}"
 	$security && printf '%s\n' 'would enable the user ClamAV scan timer'
+	$bridge && printf '%s\n' 'would enable the user vivac-link service'
 	exit 0
 fi
 
@@ -186,5 +239,10 @@ fi
 if $security; then
 	systemctl --user daemon-reload
 	systemctl --user enable --now clamav-home-scan.timer
+fi
+# Enabled at once; it only starts once link.conf exists (vivac-link pair).
+if $bridge; then
+	systemctl --user daemon-reload
+	systemctl --user enable --now vivac-link.service
 fi
 printf '%s\n' 'selected system profiles applied; replaced files were backed up'
