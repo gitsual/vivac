@@ -203,6 +203,11 @@ $script:SettingDefaults = [ordered]@{
     mod              = 'lwin'
     weather_location = 'auto'
     shared_settings  = 'none'
+    # vivac ask (lib/Ask.psm1): the Ollama server, the model (none: the first
+    # one the server lists) and whether the server may be on the local network.
+    ask_url          = 'http://localhost:11434'
+    ask_model        = 'none'
+    ask_allow_lan    = 'false'
 }
 $script:SettingRules = @{
     language         = '^(es|en)$'
@@ -213,6 +218,10 @@ $script:SettingRules = @{
     # C:/x) or one under the profile (~\x, ~/x). No characters Windows refuses
     # in a name.
     shared_settings  = '^(none|([A-Za-z]:[\\/]|~[\\/])[^\x00-\x1f"<>|*?]+)$'
+    # http://HOST:PORT and nothing after it; where HOST may be is lib/Ask.psm1's call.
+    ask_url          = '^http://[A-Za-z0-9.:_\[\]-]+/?$'
+    ask_model        = '^[A-Za-z0-9][A-Za-z0-9._:/-]*$'
+    ask_allow_lan    = '^(true|false)$'
 }
 
 function Read-VivacSettings {

@@ -82,6 +82,11 @@ whose signature, clock or nonce is wrong. Each system's firewall lets in the loc
 once you ask (`apply-system.ps1 -Link` on Windows, `apply-system.sh --bridge` on Linux). The restart needs administrator
 rights on both sides; each grants exactly that one command and nothing more.
 
+**And on each side alone:** `vivac ask` (`Super+Shift+A` / `Win+Shift+A`) is a side panel for a
+language model served by your own [Ollama](https://ollama.com) — ask, explain the clipboard, sum up the
+vivac inbox. It talks to `localhost` only, unless you let it reach an Ollama on your local network
+(the other machine's GPU, say: [the bridge, section 5](docs/bridge.md#5-vivac-ask-across-machines)); never to the internet.
+
 ```text
 linux                                    windows
   power menu: Restart in Windows  ───►     boots once into Windows

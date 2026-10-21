@@ -121,7 +121,8 @@ ornament it has not earned fails the build.
 - **🔒 A lock that wears the theme.** `Win+L`; an empty Enter asks Windows Hello, Ctrl+Alt+Del hands over to Windows' own lock. AltGr works in the password field, so `@ # | \ [ ] { } €` type on any layout.
 - **📋 A clipboard history that stays in memory.** `Win+V`, never written to disk.
 - **🖥️ A bar that only shows what the machine has — and never goes blank.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts. It loads nothing from the network, and a watcher brings it back if it dies or comes up empty; see [The bar](#-the-bar).
-- **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `binivac-link.ps1` sends the clipboard, links, files and notifications to it, encrypted, `wake` wakes it up, and `binivac-mouse.ps1` lends it this keyboard and mouse (lan-mouse). See [the bridge](../docs/bridge.md).
+- **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it, encrypted, `wake` wakes it up, and `bin\vivac-mouse.ps1` lends it this keyboard and mouse (lan-mouse). See [the bridge](../docs/bridge.md).
+- **💬 A local model, one key away.** `Win+Shift+A`: a side panel that talks to your own Ollama and to nothing else — ask, explain the clipboard, or sum up what arrived in the vivac inbox. Answers are text, never run. See [vivac ask](#vivac-ask).
 - **🛡️ UAC left whole.** Nothing elevated runs a file you can change without elevation; see [What it asks of Windows](#-what-it-asks-of-windows).
 - **✅ 19 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
 
@@ -324,6 +325,38 @@ the help pane.
 | `bin\vivac.ps1 welcome` | The first-run wizard again |
 | `scripts\sync-shared-settings.ps1 -Pull` | Take in the shared choices now (see below) |
 | `bin\vivac-bar-watch.ps1 [-DryRun]` | Check the bar once and restart it if it needs it |
+
+### vivac ask
+
+`Win+Shift+A` (`bin\vivac.ps1 ask`) opens a panel against the right edge of the screen, in the
+palette, for a conversation with a language model served by [Ollama](https://ollama.com) on this
+machine. The answer streams in as it is written, on a thread of its own, so the panel keeps
+answering keys while a model loads. `vivac ask clip` takes the clipboard's text as context for your
+first question; `vivac ask inbox` summarises what arrived in `Downloads\vivac-link`: each entry's
+name and size and the first KiB of the text files, read without following a link or a junction or
+entering a folder. `Enter` sends, `Shift+Enter` starts a new line, **Copy answer**
+(`Ctrl+Shift+C`) puts the last answer on the clipboard, **Save** (`Ctrl+S`) writes the conversation
+as Markdown where you choose, **Clear** forgets it, `Esc` closes. Unlike the other surfaces it stays
+open when another window takes the focus, so you can read beside it. The conversation lives in the
+window only. `vivac ask --dry-run` says where the request would go and what it would carry, and
+sends nothing.
+
+What the model writes is text: it is never run and reaches the clipboard only through Copy answer.
+The request goes to `ask_url` and nowhere else, never through the system proxy. Three settings in
+`%APPDATA%\vivac\settings`, all local:
+
+| Setting | Default | |
+|---|---|---|
+| `ask_url` | `http://localhost:11434` | The Ollama server: `http://HOST:PORT`, nothing after it |
+| `ask_model` | `none` | `none` takes the first model Ollama lists, and says which; or a name as `ollama list` prints it |
+| `ask_allow_lan` | `false` | `true` lets `ask_url` name a machine on the local network |
+
+Without `ask_allow_lan=true` only this machine is accepted; with it, a private or link-local
+address too, and a public address never. Ollama has no password: anyone who can reach its port can
+use it, so point `ask_url` at another machine only on a network you trust (see
+[the bridge](../docs/bridge.md)). There is no error mode: the panel opens from a key, outside any
+shell, so the last failing command is not something it can see. Ollama itself is not installed by
+vivac.
 
 ### Sharing choices with the Linux side
 

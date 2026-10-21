@@ -177,6 +177,7 @@ the build — it is not quietly downgraded, because the claim is what is wrong.
 - **🧭 A first run that teaches.** Three questions and a ten-step tour that waits for you to actually press the key.
 - **🖥️ No GPU assumed.** Hardware facts are detected, rendered into `$XDG_CONFIG_HOME`, and never written into the checkout.
 - **🔗 The Windows half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Windows** sits in the power menu, and a drop tray hands files across. With a second machine: `vivac-link` sends the clipboard, links, files and notifications to it, encrypted, `vivac-link wake` wakes it up, and `vivac-mouse` lends it this keyboard and mouse (lan-mouse). `Super+Shift+B` opens it all; `apply-system.sh --bridge` sets up the system side. See [the bridge](../docs/bridge.md).
+- **💬 A local model, one key away.** `Super+Shift+A` opens `vivac-ask`, a side panel that talks to your own Ollama and to nothing else: ask, explain the clipboard (`--clip`), or sum up what arrived in the vivac inbox (`--inbox`). Answers are text, never run. See [vivac ask](#vivac-ask).
 - **🔐 Sanitized on purpose.** No credentials, device IDs, UUIDs, hostnames or private paths — enforced by a scanner over the staged objects and the Git history, not by memory.
 - **✅ 47 gates before anything ships.** Shell, Python, JSON, Lua, systemd units, manifests, asset checksums, privacy patterns, a two-pass deployment regression and a real Arch VM.
 
@@ -531,6 +532,37 @@ line above it, and `check.sh` refuses a bind without one, a registry row without
 label missing from the English table. A description is text: selecting a row acts on the
 registry's action column, never on the translation. `docs/keys.md` is the same registry for
 readers without a session.
+
+### vivac ask
+
+`Super+Shift+A` opens a floating kitty against the right edge of the screen running
+`vivac-ask`, a small conversation with a language model served by [Ollama](https://ollama.com)
+on this machine. It streams the answer as it is written. `vivac-ask --clip` takes the clipboard's
+text as context for your first question ("explain this", "translate it"); `vivac-ask --inbox`
+summarises what arrived in `Downloads/vivac-link`: each entry's name and size and the first KiB of
+the text files, read without following a link or entering a folder. Inside, `/copy` puts the last
+answer on the clipboard, `/save [FILE]` writes the conversation as Markdown (mode 600, never over
+an existing file), `/clear` forgets it and `/quit` or `Ctrl+D` closes; `Ctrl+C` stops an answer.
+The conversation is kept in memory only. `--dry-run` says where the request would go and what it
+would carry, and sends nothing.
+
+What the model writes is text on the screen: it is never run and reaches the clipboard only
+through `/copy`. The request goes to `ask_url` and nowhere else. Three settings, all local (they
+never travel through `shared_settings`):
+
+| Setting | Default | |
+|---|---|---|
+| `ask_url` | `http://localhost:11434` | The Ollama server: `http://HOST:PORT`, nothing after it |
+| `ask_model` | `none` | `none` takes the first model Ollama lists, and says which; or a name as `ollama list` prints it |
+| `ask_allow_lan` | `false` | `true` lets `ask_url` name a machine on the local network |
+
+Without `ask_allow_lan=true` only this machine is accepted; with it, a private or link-local
+address too (a name is looked up once and every address it has must be one), and a public
+address never. Ollama has no password: anyone who can reach its port can use it, so point
+`ask_url` at another machine only on a network you trust (and see [the bridge](../docs/bridge.md)
+for using the GPU of the other half). There is no `--error` mode: the panel opens from a key, outside
+any shell, so the last failing command is not something it can see reliably. Ollama itself is not
+installed by vivac.
 
 ### Status bar
 

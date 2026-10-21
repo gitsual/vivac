@@ -12,7 +12,7 @@
 #
 # Sourced, not executed. Requires lib/kv.sh.
 
-SETTINGS_ALLOWED_KEYS=(locale keymap xkb_layout ime theme weather_location shared_settings language)
+SETTINGS_ALLOWED_KEYS=(locale keymap xkb_layout ime theme weather_location shared_settings language ask_url ask_model ask_allow_lan)
 # The only keys that may travel to the optional shared file. OS locale, keymap
 # and layout stay local: the other OS names them differently.
 SETTINGS_SHARED_KEYS=(theme weather_location language)
@@ -29,6 +29,9 @@ settings_defaults() {
 		[weather_location]=auto
 		[shared_settings]=none
 		[language]=auto
+		[ask_url]=http://localhost:11434
+		[ask_model]=none
+		[ask_allow_lan]=false
 	)
 }
 
@@ -48,6 +51,13 @@ settings_defaults() {
 #               none, or where the file shared with another OS lives: an
 #               absolute path or one under ~/
 #   language    auto (follow LANG) or a table name from i18n/
+#   ask_url     the Ollama server vivac-ask talks to: http://HOST:PORT and no
+#               path. Whether the host may be off this machine is vivac-ask's
+#               call (ask_allow_lan); here only the shape is checked.
+#   ask_model   none (the first model the server lists) or a model name as
+#               Ollama writes them (qwen2.5:7b, library/name:tag)
+#   ask_allow_lan
+#               true lets ask_url name a machine on the local network
 settings_valid() {
 	local key="$1" value="$2"
 	case "$key" in
@@ -59,6 +69,14 @@ settings_valid() {
 	weather_location) [[ "$value" =~ ^[A-Za-z0-9_.,+-]+$ ]] ;;
 	shared_settings) [[ "$value" == none || "$value" =~ ^(/|~/)[[:print:]]+$ ]] ;;
 	language) [[ "$value" == auto || "$value" =~ ^[a-z]{2,3}$ ]] ;;
+	ask_url)
+		# Host (a name, an IPv4 or a bracketed IPv6) and port; ] first in the
+		# bracket is a literal ].
+		local pattern='^http://[][A-Za-z0-9.:_-]+/?$'
+		[[ "$value" =~ $pattern ]]
+		;;
+	ask_model) [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._:/-]*$ ]] ;;
+	ask_allow_lan) [[ "$value" == true || "$value" == false ]] ;;
 	*) return 1 ;;
 	esac
 }
