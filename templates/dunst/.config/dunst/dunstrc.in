@@ -1,7 +1,7 @@
 [global]
-    width = 300
+    width = (300, 420)
     height = 100
-    offset = 10x50
+    offset = 15x15
     origin = top-right
     transparency = 10
     corner_radius = 10
@@ -10,8 +10,12 @@
     font = JetBrains Mono Nerd Font 10
     icon_theme = Papirus
     icon_position = left
-    min_icon_size = 32
-    max_icon_size = 64
+    min_icon_size = 48
+    max_icon_size = 48
+    text_icon_padding = 12
+    padding = 12
+    horizontal_padding = 12
+    vertical_alignment = center
     frame_color = "#@COLOR_ACCENT@"
     separator_color = "#@COLOR_MUTED@"
     background = "#@COLOR_BG@"
