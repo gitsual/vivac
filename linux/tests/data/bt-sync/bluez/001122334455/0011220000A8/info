@@ -1,0 +1,10 @@
+[General]
+Name=Fake gamepad
+SupportedTechnologies=BR/EDR;
+Trusted=true
+Blocked=false
+
+[LinkKey]
+Key=FFEEDDCCBBAA998877665544332211A8
+Type=4
+PINLength=0

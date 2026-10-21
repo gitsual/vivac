@@ -1,0 +1,24 @@
+[General]
+Name=Fake trackball
+Appearance=0x03c2
+AddressType=static
+SupportedTechnologies=LE;
+Trusted=true
+Blocked=false
+
+[IdentityResolvingKey]
+Key=00112233445566778899AABBCCDDEEA4
+
+[PeripheralLongTermKey]
+Key=FFEEDDCCBBAA998877665544332211A4
+Authenticated=2
+EncSize=16
+EDiv=0
+Rand=0
+
+[SlaveLongTermKey]
+Key=FFEEDDCCBBAA998877665544332211A4
+Authenticated=2
+EncSize=16
+EDiv=0
+Rand=0

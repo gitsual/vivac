@@ -5,7 +5,7 @@ stands on its own. Together they also share state across a dual boot and talk
 live across a local network. This file is the contract both halves implement;
 a change here is a change to both.
 
-Four features, each usable alone:
+Five features, each usable alone:
 
 | Feature | When it helps | Needs |
 |---|---|---|
@@ -13,6 +13,7 @@ Four features, each usable alone:
 | [Reboot into the other system](#2-reboot-into-the-other-system) | dual boot | UEFI |
 | [The drop tray](#3-the-drop-tray) | dual boot | a disk both systems mount |
 | [vivac link](#4-vivac-link) | two machines on one network | a pairing code |
+| [Bluetooth across the dual boot](#5-bluetooth-across-the-dual-boot) | dual boot | the Windows partition mounted on Linux |
 
 ## The shared root
 
@@ -147,6 +148,86 @@ receives, never opens a URL without a click, and writes files only into its
   for TCP and UDP 47321, private networks and the local subnet only. Linux:
   `apply-system.sh --bridge` opens the same in UFW, the firewall vivac configures, for the
   local subnet only.
+
+## 5. Bluetooth across the dual boot
+
+Both systems use the same Bluetooth adapter, so a device sees one computer.
+Pairing creates a new key, and each system keeps its own, so only the system
+that paired last can connect. vivac copies Windows' keys into Linux, and
+then both systems hold the same keys:
+
+1. Pair the device on Linux.
+2. Restart in Windows and pair it again there.
+3. Shut Windows down fully, or use **Restart in Linux**, which restarts
+   fully. Shift and Shut down also works. A plain Shut down with Fast
+   Startup turned on is not enough.
+4. On Linux, choose **Bluetooth: take pairings from Windows** in the bridge
+   menu (`Super+Shift+B`).
+
+After that, the device works on both systems with no more pairing. Pair it
+again on either system and the steps start over.
+
+The copy goes only from Windows to Linux. Linux reads the Windows registry
+and never writes to it. On Windows, `bin\vivac-bt-sync.ps1` lists the paired
+devices (name, address, Classic or LE). It only reads Plug and Play device
+names and never touches the registry.
+
+### The Linux side: `vivac-bt-sync`
+
+- **Finds Windows.** It looks for a mounted NTFS file system that has
+  `Windows/System32/config/SYSTEM`. `--windows DIR` names the mount,
+  `--hive PATH` names a hive file or a copy of one, and `--reg FILE` reads a
+  `.reg` export of `BTHPORT\Parameters\Keys` instead (regedit run as SYSTEM,
+  or chntpw's `reged -x`). A partition encrypted with BitLocker cannot be
+  read from Linux, so it is not found.
+- **Reads the hive** with python-hivex (`hivex`, in the package list) and
+  opens it read-only. An offline hive has no `CurrentControlSet`, so it
+  reads the control set from `Select\Current`. The keys live under
+  `Services\BTHPORT\Parameters\Keys\<adapter>`. A Classic device is a value
+  named after its address. A Low Energy device is a subkey named after its
+  address, holding `LTK`, `KeyLength`, `ERand`, `EDIV`, `IRK`, `CSRK`, and
+  so on. Device names come from `Parameters\Devices\<address>\Name`.
+- **Writes BlueZ's files**, `/var/lib/bluetooth/<adapter>/<device>/info`.
+  It changes only the lines that need it and keeps every other byte:
+
+  | Windows value | BlueZ key | Conversion |
+  |---|---|---|
+  | `<address>` (Classic, 16 bytes) | `[LinkKey] Key` | the bytes in stored order, upper-case hex |
+  | `LTK` | `[LongTermKey] Key` | the same; written to `[PeripheralLongTermKey]` and `[SlaveLongTermKey]` instead when BlueZ has no `[LongTermKey]` for the device |
+  | `KeyLength` (DWORD) | `EncSize` | decimal |
+  | `EDIV` (DWORD) | `EDiv` | decimal |
+  | `ERand` (QWORD, 8 bytes little-endian) | `Rand` | the bytes reversed, then decimal: `63 02 84 B8 5D 40 44 DF` is `16088054540146049635` |
+  | `IRK` | `[IdentityResolvingKey] Key` | left alone when it matches in either byte order; otherwise stored order |
+  | `CSRK`, `CSRKInbound` | `[LocalSignatureKey]`, `[RemoteSignatureKey]` `Key` | stored order, only when BlueZ has that section |
+
+- **Writes only for devices both systems know.** A device that only Windows
+  has paired is listed, but nothing is written for it. Pair it on Linux
+  first. Some devices take a new address each time they pair. When Windows
+  has a new address that Linux lacks, and the identity key matches a device
+  Linux has under an old address, the device folder moves to the new address.
+- **Changes nothing by default.** Without options it prints the plan: each
+  device, and which keys would change. It never prints key values.
+  `--apply` stops `bluetooth.service`, which would otherwise write its own
+  copy back on exit. Then it saves each changed file as
+  `info.vivac-bak-<UTC time>`, writes the new file in its place with the
+  same mode, and starts the service again. `--ask` shows the plan and asks
+  before applying. The bridge menu runs it that way, in a kitty window.
+- **Refuses** to apply when Windows is hibernated (`hiberfil.sys` starts
+  with `HIBR`, which Fast Startup also leaves) or when the hive was not
+  closed cleanly (the two sequence numbers in its header differ). In both
+  cases the file on disk may hold older keys than Windows uses.
+- **Root**: `/var/lib/bluetooth` is readable by root only, so the tool runs
+  itself through `sudo`, which asks for the password in the terminal. It
+  adds no sudoers rule. A rule that let a program in your home directory run
+  as root without a password would hand root to anything that can write
+  there.
+
+The conversions follow the ArchWiki (*Bluetooth*, "Dual boot pairing") and
+the tools it links to. The Classic key, LTK, EDIV and ERand conversions are
+the same in every source. The section an LTK belongs in, and the IRK byte
+order, depend on the device. The rules above cover both cases the ArchWiki
+lists. Copying from Linux to Windows would mean writing the Windows registry
+from outside Windows. vivac does not do that.
 
 ## Versions
 

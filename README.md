@@ -73,6 +73,7 @@ both. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
 | **Shared choices** — the theme, the weather location and the language follow you to the other system, through a file on a disk both mount | ✅ | |
 | **Restart into the other system** — one entry in each power menu; it sets the firmware's *BootNext* for one boot only, never the boot order or GRUB's default | ✅ | |
 | **The drop tray** — leave files in a folder on one side; the other says, at sign-in, that they are waiting | ✅ | |
+| **Bluetooth, paired once** — pair a device on Linux, then on Windows; Linux copies Windows' keys from the Windows partition and both systems keep working with it. It reads the Windows registry and never writes it | ✅ | |
 | **vivac link** — send the clipboard, a link, a file or a notification to the other machine; paired once with a code, every request signed | | ✅ |
 
 **Safe by construction.** vivac link never runs what it receives, never opens a link without a click,
@@ -114,6 +115,9 @@ To join the two once both are installed:
    On Windows the command is `bin\vivac-link.ps1`, then `-Register` to listen at sign-in and
    `apply-system.ps1 -Link` (elevated) to let the other machine in. `Super+Shift+B` on Linux and the
    menu on Windows hold the rest.
+4. **Bluetooth, paired once** — pair the device on Linux, then on Windows, and restart in Linux. Then choose
+   **Bluetooth: take pairings from Windows** in `Super+Shift+B`. The Windows partition has to be mounted
+   on Linux.
 
 ---
 
