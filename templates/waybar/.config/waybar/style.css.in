@@ -1,8 +1,10 @@
 * { border: none; border-radius: 0; font-family: "JetBrains Mono Nerd Font", "Font Awesome 6 Free"; font-size: 13px; min-height: 0; }
 window#waybar { background: rgba(@COLOR_BG:rgb@, 0.95); border-radius: 12px; border-bottom: 3px solid #@COLOR_ACCENT@; color: #@COLOR_FG@; }
-#custom-ws, #clock, #cpu, #memory, #disk, #network, #pulseaudio, #custom-updates, #custom-gpu, #bluetooth, #backlight, #battery, #temperature, #custom-weather, #window, #submap { background: rgba(@COLOR_SURFACE:rgb@, 0.7); padding: 0 12px; margin: 5px 2px; border-radius: 10px; border-bottom: 2px solid #@COLOR_MUTED@; }
-#custom-ws { color: #@COLOR_FG@; padding: 0 10px; }
-#custom-ws.urgent { border-bottom: 2px solid #@COLOR_URGENT@; }
+#workspaces, #clock, #cpu, #memory, #disk, #network, #pulseaudio, #custom-updates, #custom-gpu, #bluetooth, #backlight, #battery, #temperature, #custom-weather, #window, #submap { background: rgba(@COLOR_SURFACE:rgb@, 0.7); padding: 0 12px; margin: 5px 2px; border-radius: 10px; border-bottom: 2px solid #@COLOR_MUTED@; }
+#workspaces { padding: 0 4px; }
+#workspaces label { color: #@COLOR_FG@; padding: 0 6px; border-radius: 8px; }
+#workspaces label:hover { background: rgba(@COLOR_FG:rgb@, 0.15); }
+#workspaces label.urgent { box-shadow: inset 0 -2px #@COLOR_URGENT@; }
 #custom-updates { color: #@COLOR_MUTED@; }
 #network { color: #@COLOR_INFO@; }
 /* Two network gauges, one per adapter: a missing link recedes, a link with

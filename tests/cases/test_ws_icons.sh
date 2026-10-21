@@ -57,6 +57,25 @@ done
 grep -q '&lt;shell&gt;' <<<"$(jq -r .tooltip <<<"$out")" || fail 'a title with markup reached the tooltip unescaped'
 [[ "$text" != *shell* && "$text" != *Firefox* ]] || fail 'window text leaked into the strip markup'
 
+# --- one button: the same label as the strip, its own class and tooltip -------------------------------------
+button() { render_n "$sandbox/cache.json" "$1"; }
+render_n() {
+	WS_CACHE="$1" WS_ICONS="$waybar/workspace-icons.json" bash "$waybar/scripts/ws-render.sh" "$2"
+}
+for n in 1 2 3 4 5 6 7 8 9 10; do
+	label="$(button "$n" | jq -r .text)"
+	[[ "$text" == "$label"* || "$text" == *"  $label"* ]] || fail "button $n label is not the one the strip shows: $label"
+done
+jq -e '.class == "active"' <<<"$(button 2)" >/dev/null || fail 'button 2 is not classed active'
+jq -e '.class == "urgent"' <<<"$(button 1)" >/dev/null || fail 'button 1 is not classed urgent'
+jq -e '.class == "occupied"' <<<"$(button 3)" >/dev/null || fail 'button 3 is not classed occupied'
+jq -e '.class == "empty" and .text == "6"' <<<"$(button 6)" >/dev/null || fail 'button 6 is not an empty number'
+jq -e '.tooltip == "paper.pdf"' <<<"$(button 2)" >/dev/null || fail 'button 2 tooltip is not its own window titles'
+jq -e '.tooltip | contains("&lt;shell&gt;")' <<<"$(button 1)" >/dev/null || fail 'a button tooltip carries unescaped markup'
+for bad in 0 11 x; do
+	render_n "$sandbox/cache.json" "$bad" >/dev/null 2>&1 && fail "ws-render.sh accepted workspace $bad"
+done
+
 # --- precedence: initialClass beats class beats title beats default --------------------------------------
 glyph() { jq -r --arg k "$1" '.classes[$k]' "$waybar/workspace-icons.json"; }
 [[ "$plain" == *"4 $(glyph kitty)"* ]] || fail 'initialClass kitty did not beat class Spotify'
