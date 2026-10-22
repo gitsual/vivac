@@ -1,0 +1,7 @@
+# Every text file is LF in the repository and in every checkout, whatever
+# core.autocrlf says: both halves compare files byte for byte (renders against
+# templates, windows/data and linux/data against shared/data), and shell
+# scripts with CRLF do not run. windows/.gitattributes says the same for the
+# half that was a repository of its own.
+* text=auto eol=lf
+*.png binary
