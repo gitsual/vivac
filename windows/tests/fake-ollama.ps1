@@ -44,6 +44,7 @@ while (-not (Test-Flag 'stop')) {
         $body = (New-Object IO.StreamReader($ctx.Request.InputStream, $utf8)).ReadToEnd()
         [IO.File]::WriteAllText((Join-Path $State 'request.json'), $body, $utf8)
         $model = ($body | ConvertFrom-Json).model
+        if ($model -eq 'none') { $res.StatusCode = 404; Write-Line $res '{"error":"model ''none'' not found"}'; continue }
         if ($model -eq 'missing') { $res.StatusCode = 404; Write-Line $res '{"error":"model ''missing'' not found"}'; continue }
         $res.ContentType = 'application/x-ndjson'
         $res.SendChunked = $true

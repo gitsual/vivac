@@ -102,7 +102,12 @@ function Show-Ask([string]$Mode = '', [switch]$NoShow) {
     $startJob = {
         param([string]$Kind, [object[]]$Messages)
         $ui.JobKind = $Kind
-        $ui.Job = Start-VivacAskJob $Kind $ui.Endpoint $cfg.Model $Messages $cfg.Timeout
+        # Looking for a model starts from the setting; a question goes to the
+        # model that was found. ask_model=none means "the first one Ollama
+        # lists", and Ollama has no model called none.
+        $model = $cfg.Model
+        if ($Kind -eq 'chat') { $model = $ui.Model }
+        $ui.Job = Start-VivacAskJob $Kind $ui.Endpoint $model $Messages $cfg.Timeout
         $sendButton.Content = T 'ask.stop'
         $timer.Start()
     }

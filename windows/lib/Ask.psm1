@@ -185,8 +185,11 @@ function Get-VivacAskMessages([object[]]$Turns) {
 
 # Stream /api/chat: each NDJSON line's message.content goes to $OnText as it
 # arrives; the whole answer is returned. $Cancel['Stop'] = $true (with an
-# Abort of $Cancel['Request']) stops it from another thread.
+# Abort of $Cancel['Request']) stops it from another thread. A model of none
+# (the setting's default) is never sent: Ollama has no model by that name, so
+# the first one it lists is asked instead.
 function Get-VivacAskAnswer($Endpoint, [string]$Model, [object[]]$Messages, [scriptblock]$OnText, [int]$Timeout = 180, [hashtable]$Cancel) {
+    $Model = (Resolve-VivacAskModel $Endpoint $Model ([Math]::Min($Timeout, 30))).Name
     $body = @{ model = $Model; messages = @($Messages); stream = $true } | ConvertTo-Json -Depth 5 -Compress
     $res = Open-AskResponse $Endpoint 'POST' '/api/chat' $body $Timeout $Cancel
     $answer = New-Object Text.StringBuilder
