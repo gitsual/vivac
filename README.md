@@ -90,7 +90,7 @@ once you turn it on, wants its PIN, and treats a text as something to show, neve
 **And on each side alone:** `vivac ask` (`Super+Shift+A` / `Win+Shift+A`) is a side panel for a
 language model served by your own [Ollama](https://ollama.com) — ask, explain the clipboard, sum up the
 vivac inbox. It talks to `localhost` only, unless you let it reach an Ollama on your local network
-(the other machine's GPU, say: [the bridge, section 5](docs/bridge.md#5-vivac-ask-across-machines)); never to the internet.
+(the other machine's GPU, say: [the bridge, section 10](docs/bridge.md#10-vivac-ask-across-machines)); never to the internet.
 
 ```text
 linux                                    windows
@@ -134,7 +134,7 @@ To join the two once both are installed:
    on Linux.
 6. **The phone** — install the KDE Connect app on the phone and pair it with each system (KDE Connect
    comes with the Linux packages; on Windows, `bootstrap.ps1 -Phone`). On Linux, `vivac-phone commands`
-   then lists vivac's actions on the phone. See [the phone](docs/bridge.md#5-the-phone-kde-connect).
+   then lists vivac's actions on the phone. See [the phone](docs/bridge.md#9-the-phone-kde-connect).
 7. **Phone drop** — `vivac-localsend on` (Linux) or `bin\vivac-localsend.ps1 on` (Windows), or **Phone
    drop: on/off + PIN** in the bridge menu, says the PIN to give the phone; `apply-system.sh --bridge` or
    `apply-system.ps1 -LocalSend` (elevated) lets phones on the local network in. **Send to phone…** in the

@@ -5,7 +5,7 @@ stands on its own. Together they also share state across a dual boot and talk
 live across a local network. This file is the contract both halves implement;
 a change here is a change to both.
 
-Five features, each usable alone:
+Nine features, each usable alone (and vivac ask, which can reach across, in section 10):
 
 | Feature | When it helps | Needs |
 |---|---|---|
@@ -14,10 +14,10 @@ Five features, each usable alone:
 | [The drop tray](#3-the-drop-tray) | dual boot | a disk both systems mount |
 | [vivac link](#4-vivac-link) | two machines on one network | a pairing code |
 | [One keyboard and mouse](#5-one-keyboard-and-mouse) | two machines on one network | lan-mouse on both, each trusting the other's certificate |
-| [Palettes from a picture](#5-palettes-from-a-picture) | dual boot (or one system alone) | a disk both systems mount, to share them |
-| [Bluetooth across the dual boot](#5-bluetooth-across-the-dual-boot) | dual boot | the Windows partition mounted on Linux |
-| [The phone](#5-the-phone-kde-connect) | a phone on the same network | KDE Connect on both |
-| [Phones: LocalSend](#5-phones-localsend) | a phone on the same network | the LocalSend app on the phone, a PIN |
+| [Palettes from a picture](#6-palettes-from-a-picture) | dual boot (or one system alone) | a disk both systems mount, to share them |
+| [Bluetooth across the dual boot](#7-bluetooth-across-the-dual-boot) | dual boot | the Windows partition mounted on Linux |
+| [Phones: LocalSend](#8-phones-localsend) | a phone on the same network | the LocalSend app on the phone, a PIN |
+| [The phone](#9-the-phone-kde-connect) | a phone on the same network | KDE Connect on both |
 
 ## The shared root
 
@@ -41,7 +41,7 @@ and does nothing else.
 Already in both halves (`sync-shared-settings`): `theme`, `weather_location`
 and `language` follow the shared file; `mod` and everything else stay local.
 A `theme` that names a palette made from a picture is accepted when that
-palette is in `<shared root>/themes/` (section 5); otherwise the other side
+palette is in `<shared root>/themes/` (section 6); otherwise the other side
 ignores it and says so, as it does for any name it does not know.
 
 ## 2. Reboot into the other system
@@ -328,17 +328,7 @@ the sender stores the same way. Neither side ever turns lan-mouse on because
 of it. Both need lan-mouse to have made its certificate (`vivac-mouse enable`
 once) first.
 
-## 5. vivac ask across machines
-
-`vivac ask` is a feature of each half on its own (`linux/README.md`, `windows/README.md`): a
-side panel for a language model served by Ollama, talking to `ask_url`, `http://localhost:11434`
-by default. It is not part of the bridge protocol and carries nothing of vivac link. One machine
-can still use the other's Ollama, typically the one with the larger GPU: set
-`ask_url=http://ADDRESS:11434` and `ask_allow_lan=true` on the asking side, and make Ollama listen
-on the network on the serving side (`OLLAMA_HOST=0.0.0.0`), with the firewall letting in the local
-subnet only. Ollama has no authentication: whoever reaches the port can use it, so only on a
-network you trust. A public address is refused even with `ask_allow_lan=true`.
-## 5. Palettes from a picture
+## 6. Palettes from a picture
 
 `vivac theme from-image IMAGE [--name NAME]` makes a new palette, a ninth,
 a tenth, from a PNG or JPEG: on Linux `vivac-theme from-image`, on Windows
@@ -389,7 +379,8 @@ the palettes both halves must make from them, and each half's tests compare
 byte for byte. A JPEG can decode a shade differently on each side (libjpeg
 against Windows' own decoder); the snapping to the corpus almost always
 absorbs it, but only a PNG is guaranteed identical.
-## 5. Bluetooth across the dual boot
+
+## 7. Bluetooth across the dual boot
 
 Both systems use the same Bluetooth adapter, so a device sees one computer.
 Pairing creates a new key, and each system keeps its own, so only the system
@@ -468,61 +459,8 @@ the same in every source. The section an LTK belongs in, and the IRK byte
 order, depend on the device. The rules above cover both cases the ArchWiki
 lists. Copying from Linux to Windows would mean writing the Windows registry
 from outside Windows. vivac does not do that.
-## 5. The phone: KDE Connect
 
-A phone running the KDE Connect app (Android, GrapheneOS included, from
-F-Droid or the Play Store) pairs with either system and becomes part of
-vivac. vivac does not speak KDE Connect's protocol itself: it asks the
-KDE Connect daemon on the same machine, through its command line
-(`kdeconnect-cli`) and, on Linux, its D-Bus interface. Pairing is KDE
-Connect's own, done once on each system from the phone or KDE Connect's
-window. Everything here hides itself when KDE Connect is not installed or
-no paired phone is in reach: no bar module, no menu entry, no error.
-
-| | Linux | Windows |
-|---|---|---|
-| Install | `kdeconnect` in the base packages; `kdeconnectd` starts with the session | optional: `bootstrap.ps1 -Phone` (winget `KDE.KDEConnect`) |
-| The phone's notifications | through the notification daemon, as any program's; dunst marks them with a phone glyph (rule `vivac-phone`) | KDE Connect's own Windows notifications |
-| The bar | `custom/phone`: the first reachable phone's battery, `charging` and `low` (20 % or less) classes, every phone in the tooltip | a phone glyph while a phone is reachable, a count when there are several, the names on hover; no battery (the Windows build has no D-Bus client to read it with) |
-| The menu | **Phone…** in the bridge menu (`vivac-phone menu`): ring, send a file, send the clipboard, open the link on the clipboard on the phone (http and https only), browse the phone's files (sshfs), pair | a **Phone** category in the menu, also opened by a click on the bar: ring, send a file, send the clipboard, pair |
-
-### What the phone may run on Linux
-
-KDE Connect's *Run command* plugin lets the phone run commands the computer
-lists. `vivac-phone commands` writes vivac's list for each paired device
-(the groups of `~/.config/kdeconnect/trusted_devices`), into
-`~/.config/kdeconnect/<device id>/kdeconnect_runcommand/config`, the file KDE
-Connect's settings page writes: QSettings INI, key `commands` in `[General]`,
-the value a quoted `@ByteArray(...)` of JSON
-
-```json
-{"vivac-lock": {"name": "Lock the screen", "command": "\"$HOME/.local/bin/vivac-phone\" run lock"}}
-```
-
-The list is fixed: `lock` (`loginctl lock-session`), `suspend`, `clip-other`
-(this clipboard to the machine paired through vivac link, when there is one)
-and `reboot-windows` (when the firmware has a Windows entry; it runs
-`vivac-reboot-other --yes`: the tap on the phone is the confirmation, since
-nobody may be at the screen to answer). Each entry only names one of these,
-and `vivac-phone run` refuses any other name, so what the phone can do is
-decided by vivac, not by the file. Entries whose key starts `vivac-` are
-replaced on every run; any other is the user's own and is kept. A second run
-changes nothing, `--dry-run` prints what it would write, `--device ID` limits
-it to one phone. After writing, the daemon is told (D-Bus signal
-`org.kde.kdeconnect.config.configChanged` on
-`/kdeconnect/<device id>/kdeconnect_runcommand`) and sends the new list to
-the phone. On Windows the phone runs nothing of vivac's.
-
-### Not verified with a real phone
-
-The gates exercise all of it against fake `kdeconnect-cli`, `busctl` and
-`rofi` (Linux) and a fake `kdeconnect-cli` (Windows). The runcommand file is
-read back by Qt's own QSettings and rewritten byte for byte. What still needs
-a phone: the battery property names (`charge`, `isCharging` on
-`org.kde.kdeconnect.device.battery`, taken from the 26.x sources), the
-notification's app name (`KDE Connect`, from its notifyrc) that the dunst rule
-matches, and KDE Connect for Windows' install path.
-## 5. Phones: LocalSend
+## 8. Phones: LocalSend
 
 The **phone drop**. A phone (Android or iOS) with the stock
 [LocalSend](https://localsend.org) app, from F-Droid or a store, sends files
@@ -636,6 +574,72 @@ lists the clipboard's text and the newest files of the usual folders
 `title|body|folder` instead of showing it (on Windows the sign-in task is a
 file beside it); `VIVAC_LOCALSEND_PORT` and `VIVAC_LOCALSEND_INTERFACES` keep
 discovery on the gates' own port and on the loopback.
+
+## 9. The phone: KDE Connect
+
+A phone running the KDE Connect app (Android, GrapheneOS included, from
+F-Droid or the Play Store) pairs with either system and becomes part of
+vivac. vivac does not speak KDE Connect's protocol itself: it asks the
+KDE Connect daemon on the same machine, through its command line
+(`kdeconnect-cli`) and, on Linux, its D-Bus interface. Pairing is KDE
+Connect's own, done once on each system from the phone or KDE Connect's
+window. Everything here hides itself when KDE Connect is not installed or
+no paired phone is in reach: no bar module, no menu entry, no error.
+
+| | Linux | Windows |
+|---|---|---|
+| Install | `kdeconnect` in the base packages; `kdeconnectd` starts with the session | optional: `bootstrap.ps1 -Phone` (winget `KDE.KDEConnect`) |
+| The phone's notifications | through the notification daemon, as any program's; dunst marks them with a phone glyph (rule `vivac-phone`) | KDE Connect's own Windows notifications |
+| The bar | `custom/phone`: the first reachable phone's battery, `charging` and `low` (20 % or less) classes, every phone in the tooltip | a phone glyph while a phone is reachable, a count when there are several, the names on hover; no battery (the Windows build has no D-Bus client to read it with) |
+| The menu | **Phone…** in the bridge menu (`vivac-phone menu`): ring, send a file, send the clipboard, open the link on the clipboard on the phone (http and https only), browse the phone's files (sshfs), pair | a **Phone** category in the menu, also opened by a click on the bar: ring, send a file, send the clipboard, pair |
+
+### What the phone may run on Linux
+
+KDE Connect's *Run command* plugin lets the phone run commands the computer
+lists. `vivac-phone commands` writes vivac's list for each paired device
+(the groups of `~/.config/kdeconnect/trusted_devices`), into
+`~/.config/kdeconnect/<device id>/kdeconnect_runcommand/config`, the file KDE
+Connect's settings page writes: QSettings INI, key `commands` in `[General]`,
+the value a quoted `@ByteArray(...)` of JSON
+
+```json
+{"vivac-lock": {"name": "Lock the screen", "command": "\"$HOME/.local/bin/vivac-phone\" run lock"}}
+```
+
+The list is fixed: `lock` (`loginctl lock-session`), `suspend`, `clip-other`
+(this clipboard to the machine paired through vivac link, when there is one)
+and `reboot-windows` (when the firmware has a Windows entry; it runs
+`vivac-reboot-other --yes`: the tap on the phone is the confirmation, since
+nobody may be at the screen to answer). Each entry only names one of these,
+and `vivac-phone run` refuses any other name, so what the phone can do is
+decided by vivac, not by the file. Entries whose key starts `vivac-` are
+replaced on every run; any other is the user's own and is kept. A second run
+changes nothing, `--dry-run` prints what it would write, `--device ID` limits
+it to one phone. After writing, the daemon is told (D-Bus signal
+`org.kde.kdeconnect.config.configChanged` on
+`/kdeconnect/<device id>/kdeconnect_runcommand`) and sends the new list to
+the phone. On Windows the phone runs nothing of vivac's.
+
+### Not verified with a real phone
+
+The gates exercise all of it against fake `kdeconnect-cli`, `busctl` and
+`rofi` (Linux) and a fake `kdeconnect-cli` (Windows). The runcommand file is
+read back by Qt's own QSettings and rewritten byte for byte. What still needs
+a phone: the battery property names (`charge`, `isCharging` on
+`org.kde.kdeconnect.device.battery`, taken from the 26.x sources), the
+notification's app name (`KDE Connect`, from its notifyrc) that the dunst rule
+matches, and KDE Connect for Windows' install path.
+
+## 10. vivac ask across machines
+
+`vivac ask` is a feature of each half on its own (`linux/README.md`, `windows/README.md`): a
+side panel for a language model served by Ollama, talking to `ask_url`, `http://localhost:11434`
+by default. It is not part of the bridge protocol and carries nothing of vivac link. One machine
+can still use the other's Ollama, typically the one with the larger GPU: set
+`ask_url=http://ADDRESS:11434` and `ask_allow_lan=true` on the asking side, and make Ollama listen
+on the network on the serving side (`OLLAMA_HOST=0.0.0.0`), with the firewall letting in the local
+subnet only. Ollama has no authentication: whoever reaches the port can use it, so only on a
+network you trust. A public address is refused even with `ask_allow_lan=true`.
 
 ## Versions
 

@@ -1,5 +1,5 @@
 # The Bluetooth devices Windows has paired, by name and address, for "pair
-# once, both systems" (docs/bridge.md at the product root, section 5). The
+# once, both systems" (docs/bridge.md at the product root, section 7). The
 # keys themselves are copied by the Linux half, which reads this system's
 # registry from its own side; nothing here reads or writes them.
 
