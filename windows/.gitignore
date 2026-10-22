@@ -1,0 +1,6 @@
+# Generated: wallpapers and banners rendered by scripts/make-wallpaper.ps1.
+/dist/
+# Never committed: they describe one machine or one person.
+hardware-facts
+!tests/golden/*/hardware-facts
+settings

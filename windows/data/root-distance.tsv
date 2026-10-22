@@ -1,0 +1,41 @@
+# Maximum bidirectional distance between the eight formal roots, as verified
+# in the author's corpus (TABLA_RAIZ_X_RAIZ, matriz 8x8). A theme declares the
+# root of its dominant ramp and the root of its accent; the distance below is
+# what tests/cases/test_theme_catalogue.sh checks the declaration against.
+#
+#  0-1 affinity · 2 high affinity · 3-4 tension, needs mediation · >=5 RUPTURE
+#
+# A rupture does not close without diluting one of the two identities, so a
+# theme that declares one must also declare the mediator that carries it. The
+# default theme is such a case on purpose: cold night with coral is Flor+Luna,
+# the documented bridge diad, mediated by muted gold.
+#
+# root_a	root_b	distance
+Flor	Fuego	4
+Flor	Luna	5
+Flor	Sol	4
+Flor	Piedra	2
+Flor	Tierra	1
+Flor	Montana	3
+Flor	Champinon	3
+Fuego	Luna	3
+Fuego	Sol	4
+Fuego	Piedra	2
+Fuego	Tierra	3
+Fuego	Montana	5
+Fuego	Champinon	5
+Luna	Sol	4
+Luna	Piedra	3
+Luna	Tierra	4
+Luna	Montana	6
+Luna	Champinon	6
+Sol	Piedra	4
+Sol	Tierra	5
+Sol	Montana	4
+Sol	Champinon	4
+Piedra	Tierra	1
+Piedra	Montana	3
+Piedra	Champinon	3
+Tierra	Montana	4
+Tierra	Champinon	4
+Montana	Champinon	0

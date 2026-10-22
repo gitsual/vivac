@@ -1,0 +1,170 @@
+#!/usr/bin/env bash
+# The graphical power menu: nwg-bar, in the session's language, with icons the
+# repository draws itself.
+#
+#   --lang LANG   table to use (default: $LANG)
+#   --print       write the generated bar definition to stdout and exit
+#   --icons       rasterize the icons, print the directory they are in, exit
+#
+# nwg-bar reads its entries from a JSON file, so a translated menu cannot be a
+# committed file: the language is a setting that changes without a redeploy.
+# The definition is therefore generated per run into the runtime directory, out
+# of the same i18n tables every other surface reads, and handed to nwg-bar with
+# -t. The labels come from the tables; the commands never do (ADR-6).
+#
+# The icons are ours. The shipped icon themes carry these names only at 16-24px
+# with Type=Fixed and inherit from themes that are not installed, so a 64px
+# button got a 2px smudge for `system-suspend` and `system-reboot` and borrowed
+# the other three from AdwaitaLegacy -- three icons in two styles and two gaps.
+#
+# They are committed as palette templates and rasterized here, because librsvg
+# stopped shipping a gdk-pixbuf loader: /usr/lib/gdk-pixbuf-2.0/2.10.0/loaders
+# is empty on a current Arch, so a GTK program handed an .svg path reports that
+# it cannot recognise the image format. rsvg-convert is still there, so the
+# PNGs are produced once per palette beside the generated menu and reused
+# until the source is newer.
+set -Eeuo pipefail
+
+self="$(readlink -f -- "${BASH_SOURCE[0]}")"
+repo_root="${VIVAC_REPO:-$(cd -- "$(dirname -- "$self")/../../../.." && pwd -P)}"
+# shellcheck source=lib/kv.sh
+source "$repo_root/lib/kv.sh"
+# shellcheck source=lib/i18n.sh
+source "$repo_root/lib/i18n.sh"
+
+language="${VIVAC_LANG:-${LANG:-en}}"
+print_only=false
+icons_only=false
+while (($#)); do
+	case "$1" in
+	--lang)
+		language="${2:-}"
+		shift
+		;;
+	--print) print_only=true ;;
+	--icons) icons_only=true ;;
+	-h | --help)
+		sed -n '2,8p' "$self"
+		exit 0
+		;;
+	*)
+		printf 'Unknown option: %s\n' "$1" >&2
+		exit 2
+		;;
+	esac
+	shift
+done
+language="${language%%[._@]*}"
+i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
+	i18n_load en "${I18N_DIR:-$repo_root/i18n}"
+
+sources="$HOME/.config/nwg-bar/icons"
+runtime="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/vivac"
+icons="$runtime/icons"
+
+# label key, icon file, command. The command is a literal here and never comes
+# from a table, so a translation can change what a button says and can never
+# change what it does.
+#
+# nwg-bar does not run the string through a shell: it splits it on single spaces
+# and hands the pieces to exec.Command (nwg-bar tools.go, launch()). There is no
+# $HOME, no quoting, and a space in a path cuts it in two. So an entry whose path
+# can carry a space is a small launcher written under the runtime directory, and
+# the entry is that launcher's path alone.
+entries=(
+	'power.lock	lock	hyprlock'
+	'power.suspend	suspend	systemctl suspend'
+	"power.logout	log-out	$runtime/logout"
+	'power.reboot	reboot	systemctl reboot'
+)
+# Restart in Windows, only where the firmware has a Windows entry to restart
+# into; a launcher like the logout one, for the same reason. It asks twice.
+if "$HOME/.local/bin/vivac-reboot-other" --available 2>/dev/null; then
+	entries+=("power.reboot_windows	reboot	$runtime/reboot-windows")
+fi
+entries+=('power.poweroff	power-off	systemctl poweroff')
+
+# JSON by hand, but only over values we control: the icon paths and commands
+# are literals from above, and a label is the one field that could carry a
+# quote or a backslash, so that is the one field that is escaped.
+json_escape() {
+	local text="$1"
+	text="${text//\\/\\\\}"
+	text="${text//\"/\\\"}"
+	printf '%s' "$text"
+}
+
+# The launchers: each path is quoted here, once, for a shell.
+write_launcher() { # write_launcher NAME COMMAND [ARG...]
+	local launcher="$runtime/$1" scratch
+	shift
+	mkdir -p -- "$runtime"
+	scratch="$(mktemp -- "$launcher.XXXXXX")"
+	{
+		printf '#!/usr/bin/env bash\nexec'
+		printf ' %q' "$@"
+		printf '\n'
+	} >"$scratch"
+	chmod +x "$scratch"
+	mv -T -- "$scratch" "$launcher"
+}
+write_launchers() {
+	write_launcher logout "$HOME/.config/hypr/scripts/dispatch.sh" exit
+	write_launcher reboot-windows "$HOME/.local/bin/vivac-reboot-other"
+}
+
+generate() {
+	local first=true key icon command label
+	write_launchers
+	printf '[\n'
+	for entry in "${entries[@]}"; do
+		IFS=$'\t' read -r key icon command <<<"$entry"
+		label="$(i18n_get "$key")"
+		$first || printf ',\n'
+		first=false
+		printf '  {"label": "%s", "exec": "%s", "icon": "%s/%s.png"}' \
+			"$(json_escape "$label")" "$command" "$icons" "$icon"
+	done
+	printf '\n]\n'
+}
+
+# rsvg-convert renders beside the target and moves it into place: a GTK program
+# that opens a half-written PNG shows the same "cannot recognise the format"
+# this whole function exists to avoid.
+rasterize() {
+	local entry name source target scratch
+	mkdir -p -- "$icons"
+	for entry in "${entries[@]}"; do
+		name="$(cut -f2 <<<"$entry")"
+		source="$sources/$name.svg"
+		target="$icons/$name.png"
+		[[ -f "$source" ]] || continue
+		[[ -f "$target" && "$target" -nt "$source" ]] && continue
+		scratch="$(mktemp -- "$target.XXXXXX")"
+		if rsvg-convert -w 128 -h 128 -o "$scratch" "$source" 2>/dev/null; then
+			mv -T -- "$scratch" "$target"
+		else
+			rm -f -- "$scratch"
+		fi
+	done
+}
+
+if $print_only; then
+	generate
+	exit 0
+fi
+
+# --icons is how the keyboard menu gets the same drawings: it rasterizes and
+# prints where they landed, so there is one rasterizer and not two.
+if $icons_only; then
+	mkdir -p -- "$icons"
+	rasterize
+	printf '%s\n' "$icons"
+	exit 0
+fi
+
+mkdir -p -- "$runtime"
+rasterize
+bar="$runtime/nwg-bar.json"
+generate >"$bar"
+exec nwg-bar -t "$bar"

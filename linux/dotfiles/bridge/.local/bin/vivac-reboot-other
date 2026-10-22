@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Restart in Windows: point the firmware's BootNext at the Windows Boot Manager
+# entry and reboot (docs/bridge.md at the root of the product).
+#
+#   --dry-run     name the entry it would choose and change nothing
+#   --yes         skip the two confirmations (the caller already asked twice)
+#   --available   exit 0 when there is an entry to restart into, 1 otherwise
+#
+# BootNext is honoured for exactly one boot and then forgotten: GRUB's default
+# and the firmware's boot order are never touched. Setting it needs root, and
+# /etc/sudoers.d/vivac-bootnext (scripts/apply-system.sh --bridge) lets wheel
+# run exactly `efibootmgr --bootnext XXXX` without a password. sudo -n turns a
+# missing rule into an error on screen instead of a password prompt nobody sees.
+set -Eeuo pipefail
+
+self="$(readlink -f -- "${BASH_SOURCE[0]}")"
+repo_root="${VIVAC_REPO:-$(cd -- "$(dirname -- "$self")/../../../.." && pwd -P)}"
+# shellcheck source=lib/kv.sh
+source "$repo_root/lib/kv.sh"
+# shellcheck source=lib/i18n.sh
+source "$repo_root/lib/i18n.sh"
+
+language="$(i18n_session_language)"
+i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
+	i18n_load en "${I18N_DIR:-$repo_root/i18n}"
+
+label='Windows Boot Manager'
+dry_run=false assume_yes=false probe=false
+while (($#)); do
+	case "$1" in
+	--dry-run) dry_run=true ;;
+	--yes) assume_yes=true ;;
+	--available) probe=true ;;
+	-h | --help)
+		sed -n '2,13p' "$self"
+		exit 0
+		;;
+	*)
+		printf 'Unknown option: %s\n' "$1" >&2
+		exit 2
+		;;
+	esac
+	shift
+done
+
+# tell TEXT — to the terminal, or on screen when started from a menu.
+tell() {
+	printf 'vivac-reboot-other: %s\n' "$1" >&2
+	[[ -t 2 ]] && return 0
+	command -v notify-send >/dev/null || return 0
+	notify-send --app-name=vivac -- "$(i18n_get power.reboot_windows)" "$1" || true
+}
+
+# windows_entry — print the four hex digits of the Windows Boot Manager entry.
+# efibootmgr lists `BootXXXX* Label<TAB>device path` (no `*` when the entry is
+# inactive, and no path before efibootmgr 18); the label has to match exactly.
+# An active entry wins over an inactive one, the first over the later ones.
+windows_entry() {
+	local line number active name inactive=''
+	while IFS= read -r line; do
+		[[ "$line" =~ ^Boot([0-9A-Fa-f]{4})(\*?)[[:space:]]+(.*)$ ]] || continue
+		number="${BASH_REMATCH[1]}" active="${BASH_REMATCH[2]}" name="${BASH_REMATCH[3]%%$'\t'*}"
+		name="${name%"${name##*[![:space:]]}"}"
+		[[ "$name" == "$label" ]] || continue
+		if [[ -n "$active" ]]; then
+			printf '%s' "$number"
+			return 0
+		fi
+		[[ -n "$inactive" ]] || inactive="$number"
+	done < <(efibootmgr 2>/dev/null || true)
+	[[ -n "$inactive" ]] || return 1
+	printf '%s' "$inactive"
+}
+
+# confirm TEXT — yes or no: at a terminal on it, otherwise in rofi with No
+# first, so Enter on a menu opened by mistake restarts nothing.
+confirm() {
+	local answer
+	if [[ -t 0 && -t 2 ]]; then
+		printf '%s [%s/%s] ' "$1" "$(i18n_get bridge.yes)" "$(i18n_get bridge.no)" >&2
+		read -r answer || return 1
+		[[ -n "$answer" && "${answer,,}" == "$(i18n_get bridge.yes | cut -c1 | tr '[:upper:]' '[:lower:]')"* ]]
+		return
+	fi
+	command -v rofi >/dev/null || return 1
+	answer="$(printf '%s\n%s\n' "$(i18n_get bridge.no)" "$(i18n_get bridge.yes)" |
+		rofi -dmenu -i -format i -p "$1" 2>/dev/null)" || return 1
+	[[ "$answer" == 1 ]]
+}
+
+entry="$(windows_entry)" || {
+	$probe && exit 1
+	tell "$(i18n_get reboot.no_entry)"
+	exit 1
+}
+$probe && exit 0
+if $dry_run; then
+	printf '%s\n' "$(i18n_format reboot.dry_run "$label" "$entry")"
+	exit 0
+fi
+if ! $assume_yes; then
+	if ! confirm "$(i18n_format reboot.confirm_first "$label")" || ! confirm "$(i18n_get reboot.confirm_second)"; then
+		tell "$(i18n_get reboot.cancelled)"
+		exit 1
+	fi
+fi
+sudo -n efibootmgr --bootnext "$entry" >/dev/null || {
+	tell "$(i18n_get reboot.no_sudo)"
+	exit 1
+}
+exec systemctl reboot

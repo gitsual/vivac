@@ -1,0 +1,9 @@
+# The base profile: what the desktop needs to be the desktop. One winget
+# package id per line; bootstrap.ps1 installs what is missing and skips what
+# is already there.
+glzr-io.glazewm
+glzr-io.zebar
+Flow-Launcher.Flow-Launcher
+Microsoft.WindowsTerminal
+DEVCOM.JetBrainsMonoNerdFont
+Git.Git

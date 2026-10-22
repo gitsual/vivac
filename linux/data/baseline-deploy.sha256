@@ -1,0 +1,74 @@
+# Frozen baseline of the default deploy, captured before phase 0 of the
+# daily-driver-distro program. Later units assert that the default profile
+# (no selector flags) is byte-identical to this. A unit that changes a file
+# here intentionally updates this manifest in its own PR, which makes the
+# change visible in review instead of silently moving the baseline.
+# Regenerate: scripts/freeze-baseline.sh --update
+664dfe5c8557c3cf15fc390a7fada37b289d782574c72aa547adff29c23cbdac  dotfiles/audio/.config/pipewire/pipewire-pulse.conf.d/60-stability.conf
+b841c27d9111e24ab047b845c23ed0495091750142047eb8068ab1df2d0eb2e5  dotfiles/audio/.config/pipewire/pipewire.conf.d/60-workstation-rates.conf
+d41c8a7443dca0a4871539a652020666549f453c6d6c10f10e49661e132d687b  dotfiles/audio/.config/wireplumber/wireplumber.conf.d/50-bluetooth-balanced.conf
+5e69d3cd2e19ea5c3364bfaa2a591c62f065622557922104d345c9f559da62a7  dotfiles/automation/.config/systemd/user/workstation-task@.service
+48bf41bedb732183af62dd480869cb0df58b835218ecc2d9902c48d50904845d  dotfiles/automation/.config/systemd/user/workstation-task@.timer
+153439fa8e31f1565fadb2fe4b5bf5bd33a064619e2354bfe2c6c720d459b3cc  dotfiles/automation/.local/bin/workstation-task-runner
+97a20e1e58ac4e9f1f63bac63468d392e89d987210079be0823e4131e712c0dc  dotfiles/bridge/.config/systemd/user/vivac-link.service
+c74dc9d4c9014b0645a6f48eb5f630d7dd8dba3e51b78101c62dbb289c712817  dotfiles/bridge/.local/bin/vivac-bridge
+0f52e24a87149a37819272b9669ae47db02fc9fe57d47ce1f84558ecd4e8091a  dotfiles/bridge/.local/bin/vivac-drop
+e2db77b8cd97138a9070e4bd4beab977021a01f9c20427da44fca02b7d64a956  dotfiles/bridge/.local/bin/vivac-link
+63568be632e3d793c545bba796ee7d0e9b286924e6e547acfc62d52d1615f2b2  dotfiles/bridge/.local/bin/vivac-reboot-other
+753e22bd5b60e9631aa14f52025ed214e324c9f499175ed774dc498b173800c9  dotfiles/dunst/.config/dunst/dunstrc
+675a3b616ec6bc42bf06674c4b11f3e9e6fc60562d99dc0f6f6d4d255d74be06  dotfiles/hypr/.config/hypr/hypridle.conf
+9d12ccdb99d2db9819b28ea8c08b5efa261692a8b55fd344c28abfe936e39dbb  dotfiles/hypr/.config/hypr/hyprland.lua
+f6fb631aef275fc624a390f5b9281168497f596a92e9e687c0618c3674bc54e8  dotfiles/hypr/.config/hypr/hyprlock.conf
+86aaa6f67e286bdb49b5a63cab6d65133f6686d814b0ff509142f1302dea3b0a  dotfiles/hypr/.config/hypr/hyprpaper.conf
+366af025965f0db167d6fe763bd002a5b5a8b558f07ad3c6cf4d5890dcaa1518  dotfiles/hypr/.config/hypr/local.lua.example
+7e9935040c68504651ed755dc07a143e4ee66ab0a930b7f8394214844a465ee5  dotfiles/hypr/.config/hypr/scripts/dispatch.sh
+da121733a866112fe0a40725b4fe7a2854574a766dac030b9762234a1da67e54  dotfiles/hypr/.config/hypr/scripts/help-pane.sh
+584b11b7333d31a8b07c2ea778646c772c8f74f8d6c5bd5660ab86073fcf6bbc  dotfiles/hypr/.config/hypr/scripts/screenshot.sh
+554e66cfef5cfc6dfe9bc1daee97990d562bcc66a187467dd887312f6127be0d  dotfiles/hypr/.config/hypr/scripts/wallpaper.sh
+050ce188c04d7546ab466d9378dafb147596e034c4d271a1909da53b2b5f2ec1  dotfiles/hypr/.local/share/wallpapers/bad-romance.png
+3b6c72b566aa62eccb786001ed9597e2a05417315b7732bac3c47abe96036098  dotfiles/hypr/.local/share/wallpapers/bad-romance.svg
+da2bd4e135e304b68ce0d70d074eba9afc476a17c77d5e1c34806735421066bb  dotfiles/kitty/.config/kitty/kitty.conf
+29a57c607a4e1415422b6fdc4f1be89dcc7dc30af840a3921933f4bbc1236c8d  dotfiles/nvim/.config/nvim/.stylua.toml
+006c8b46dbc0975287eb0a400b09fde6bb4b9f45b19509553daa53d4a41407d0  dotfiles/nvim/.config/nvim/init.lua
+ba2874b1aaff006e2fb1a45ef743f8f9071c6cba273e3d3e67fb8381fb309123  dotfiles/nvim/.config/nvim/lazy-lock.json
+fecc9755f377d475bf5025f29c7028afac1440f9b799222ae76dadd613406039  dotfiles/nvim/.config/nvim/lua/chadrc.lua
+35fe734cc409202bf3254cb726fd9abcc09c0a7dfc42676b99d80056a1cdd6c8  dotfiles/nvim/.config/nvim/lua/configs/conform.lua
+44d9f844aa46fbfd1357f8fed00180eafbca9a87beed499fcfd5a19c75ffe8c4  dotfiles/nvim/.config/nvim/lua/configs/lazy.lua
+e6d68f9187b3d36b69e35e46fcc14c306db0b474d2f1b9df95fd27f796817035  dotfiles/nvim/.config/nvim/lua/configs/lspconfig.lua
+9a2057839d52ae5e9bda14eba75691c3383e60c3aa6426fb669e514592ddbaf4  dotfiles/nvim/.config/nvim/lua/configs/spectre.lua
+960335166abf109c5908ba78ad69b7a091128b8110fdb498a1c5887a7f957caf  dotfiles/nvim/.config/nvim/lua/custom/clipboard.lua
+8413cf1a53f0d901f36d19655f1cd6e73dfc3effe0910d77c7b993a3ae6f9ccc  dotfiles/nvim/.config/nvim/lua/custom/configs/ai_agents.lua
+2acec2547072b43b7da72412575ddaea362c75211cd86e21c6603915fdf4b015  dotfiles/nvim/.config/nvim/lua/custom/configs/ai_context.lua
+0dda0ff0356caa8c9344b3e9fc3ed919f4a339f9e911cb6f913c39d9858e777e  dotfiles/nvim/.config/nvim/lua/custom/configs/avante_compat.lua
+40460f807308aaddd4d659d3e25ce02f1a1452dc48101cc73ebcfbb106ac1f75  dotfiles/nvim/.config/nvim/lua/custom/configs/cmp.lua
+af3994ef8c9cb44374819c49a6d882c50260226eb4c579845f332c104c170429  dotfiles/nvim/.config/nvim/lua/custom/configs/treesitter_compat.lua
+2dbdb419b89ff973088c27787913b67721548fd619bfa7c33e41ba2baf909b90  dotfiles/nvim/.config/nvim/lua/mappings.lua
+b79eec5b1fc081aacc33c09d9ee41554d2e5ff6bde83b36360d98eeef8e1d8d1  dotfiles/nvim/.config/nvim/lua/options.lua
+678211fcda42157bf799f21704a9fdf2f16146370ebdb910f18efc5731e52a71  dotfiles/nvim/.config/nvim/lua/plugins/init.lua
+0c6430d0fcf197bf74b9ef850557988efe251c80dc9bbfa33e58ff1a5f3efe70  dotfiles/nvim/.config/nvim/lua/themes/vivac.lua
+045956c9ee14710fb4f06f92abb4a8e24c04213faede93163fc6af0fce41e611  dotfiles/ricer/.config/nwg-bar/icons/lock.svg
+5c374f86a7aa6d55e472809d8401d7ec0b3b4d818b667bd3afc56555e3e23c9e  dotfiles/ricer/.config/nwg-bar/icons/log-out.svg
+f9522fbc197ec8a3fbc9c197bfeeb839f1a5e8307f8b5718f9db53c641a3686d  dotfiles/ricer/.config/nwg-bar/icons/power-off.svg
+4c02a7e36c8884fd36380eed7dad622c7d5e6bfd7237fb70ff6f08884d1dfe8d  dotfiles/ricer/.config/nwg-bar/icons/reboot.svg
+f83792888aaa59994790ed530bb7dafcda08e3a0f3f97774839c8a3faf4dec86  dotfiles/ricer/.config/nwg-bar/icons/suspend.svg
+a163273069081fc3949fea32ed15907e77e00d82a7e570456752ef280409d10c  dotfiles/ricer/.config/nwg-bar/style.css
+b3afd5a2c0ab32532ebe629773f3486148c2bd26eac1b076086a91bdf95a9fd8  dotfiles/ricer/.local/bin/vivac-power
+1530ca18fe9f48bb6571140ce9df0cf2e131ba08246c79e964e333a5642f4050  dotfiles/ricer/.local/bin/vivac-theme
+090766eccd45ca35ee79c791aeab3c383a6bbd1056b9d1c8ee15ca5dd7121f56  dotfiles/rofi/.config/rofi/config.rasi
+0e9510c7a93a30cdfd96f9e809b452d5e73153779a916d4c0338310463f8bdbd  dotfiles/rofi/.config/rofi/power/powermenu.sh
+7052c1d2e4c778acbbcdafd72a91e444481be1ffef37c1e988281366081cc521  dotfiles/rofi/.config/rofi/themes/bad-romance.rasi
+b6859c9e44bd1c1c8c294c047f76ff4be949518764269cd7ba07dbfda7e56e9d  dotfiles/security/.config/systemd/user/clamav-home-scan.service
+a7f6d6e31fa8111b724b1b06d46311866ea490845b7377797fca481072550e6d  dotfiles/security/.config/systemd/user/clamav-home-scan.timer
+7d15c37ed2d0df0ce9c6588a1dc0d2a5399ccf7cfafcfdddab4f42e5a587430f  dotfiles/security/.local/bin/workstation-security-audit
+410205a9b66267208e995bae4aa8b7797acb85f9931a02e7c50277cd0786357b  dotfiles/shell/.bashrc
+497102907be39a6e82346d1f24ab4f7b34c36cab1fd3eb2a271d812066414993  dotfiles/theme/.config/gtk-3.0/settings.ini
+497102907be39a6e82346d1f24ab4f7b34c36cab1fd3eb2a271d812066414993  dotfiles/theme/.config/gtk-4.0/settings.ini
+7120b38f5a9ec3b00e22fac420218c406c8fddd8c62ff5359a275102a70e303c  dotfiles/theme/.config/kdeglobals
+25c572c4b4f84a8342bd763e4429f6f3c5025f3fef2c3ec77232eb71aab30012  dotfiles/waybar/.config/waybar/scripts/net-wired.sh
+6688b4714fa5be29c249fbc72567e3de67c908df0a8daa3c0e8afdc5a24f7c95  dotfiles/waybar/.config/waybar/scripts/net-wireless.sh
+ac81224fc768b751e3c5ac3b10ff1c8ef6c6f8b00ab7fd075b40d9dfbc9417ec  dotfiles/waybar/.config/waybar/scripts/ws-refresh.sh
+647f0d9a165bf0db975c3ae7f585931e2fc8e1a9e6a8e2660722e4d4835b4620  dotfiles/waybar/.config/waybar/scripts/ws-render.sh
+d33c2318adee756c29da805c2cafbcc1700499bd764d0b27f61bddfdfbf49a55  dotfiles/waybar/.config/waybar/style.css
+d92b7d39cd2f0ded3acd33a61edf70a3d9d9fdef9f95c4929cf9bf4d483abc31  dotfiles/waybar/.config/waybar/workspace-icons.json
+b716454b9108b0f4a8d8c13081a1e6277d3e5d29c1b6f27264fc4ff50f009a83  dotfiles/welcome/.local/bin/vivac-welcome
+16e0f8c1f5ed428ec0c8da4e8775f7c3ae967171ab62f337dc365c076514a411  dotfiles/wofi/.config/wofi/style.css

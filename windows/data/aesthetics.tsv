@@ -1,0 +1,15 @@
+# The named aesthetics of the author's corpus, and what a theme has to show to
+# claim one. A claim is not a label: a theme that says it is Verdigrís
+# Nocturno has to actually carry the hexes the doctrine fixes for it, and
+# tests/cases/test_theme_ornament.sh checks that it does.
+#
+# The last column is whether the aesthetic tolerates ornament at all. El Ancla
+# does not: the doctrine calls it anti-ornamento, functional neutrals and Deep
+# Winter contrast, and an aesthetic that refuses decoration keeps refusing it
+# here.
+#
+# name	axis	required_hexes	ornament
+Nostalgeclaire	02-EL-LABERINTO-SAGRADO	253850,5B1339,AAA875	yes
+VerdigrisNocturno	03-LA-TORRE-DE-CRISTAL	0E1513,1C2B27,E8C66A	yes
+Hipurbeclaire	00-EL-ABISMO	302541,E1777D,55A185	yes
+ElAncla	01-LA-ROCA-MADRE	302B21,B9B9B9,C9C9C8	no

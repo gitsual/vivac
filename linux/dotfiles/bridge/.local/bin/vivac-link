@@ -1,0 +1,790 @@
+#!/usr/bin/env python3
+"""vivac link: two paired machines on one network, the Linux side.
+
+    vivac-link serve [--bind ADDR] [--port N] [--no-beacon]
+    vivac-link pair [CODE]          print a new pairing code, or store one
+    vivac-link status               the pairing, the peer, and whether it answers
+    vivac-link send-clip [TEXT]     the clipboard (or TEXT) onto the peer's
+    vivac-link send-url URL         a link the peer is offered, never opened unasked
+    vivac-link send-file PATH       a file into the peer's Downloads/vivac-link
+    vivac-link notify TITLE BODY    a notification on the peer
+    vivac-link ping                 the peer's name, system and version
+
+The protocol is docs/bridge.md at the root of the product, section 4, and the
+Windows half speaks the same one. `serve` is what vivac-link.service runs: it
+answers signed requests over TCP and finds the peer by UDP beacon, both on the
+link port. It never runs what it receives, never opens a link without a click,
+and writes files only into Downloads/vivac-link, under a name stripped of any
+path. Python standard library only.
+
+The pairing lives in ${XDG_STATE_HOME:-~/.local/state}/vivac/link.conf, mode
+600, and never anywhere else; the address discovery last saw, in link-peer
+beside it.
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import hashlib
+import hmac
+import http.client
+import ipaddress
+import json
+import os
+import re
+import secrets
+import shutil
+import socket
+import subprocess
+import sys
+import threading
+import time
+import urllib.parse
+from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+PROTOCOL = 1
+DEFAULT_PORT = 47321
+VERBS = ("clip", "url", "file", "notify", "ping")
+TEXT_LIMIT = 64 * 1024
+FILE_LIMIT = 64 * 1024 * 1024
+CLOCK_WINDOW = 60
+NONCE_MEMORY = 120
+BEACON_EVERY = 30
+NONCE = re.compile(r"[0-9a-f]{32}")
+STAMP = re.compile(r"-?[0-9]{1,12}")
+SELF = Path(__file__).resolve()
+
+
+# --- where things are ------------------------------------------------------------------------
+
+
+def repo_root() -> Path:
+    """The checkout this file is stowed from: dotfiles/bridge/.local/bin/ is four up."""
+    return Path(os.environ.get("VIVAC_REPO") or SELF.parents[4])
+
+
+def state_dir() -> Path:
+    return Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "vivac"
+
+
+def config_home() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+
+
+def read_kv(path: Path) -> dict[str, str]:
+    """A flat KEY=value file, read as data: comments, blank and malformed lines skipped,
+    CR dropped, %XX decoded as lib/kv.sh writes it. Never raises."""
+    values: dict[str, str] = {}
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return values
+    for line in text.lstrip("﻿").splitlines():
+        line = line.rstrip("\r")
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", key):
+            values[key] = re.sub(r"%([0-9A-Fa-f]{2})", lambda m: chr(int(m.group(1), 16)), value)
+    return values
+
+
+def version() -> str:
+    try:
+        return (repo_root() / "VERSION").read_text(encoding="utf-8").strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+def inbox() -> Path:
+    """Downloads/vivac-link: the download folder xdg-user-dirs names, else ~/Downloads."""
+    raw = read_kv(config_home() / "user-dirs.dirs").get("XDG_DOWNLOAD_DIR", "").strip('"')
+    raw = raw.replace("$HOME", str(Path.home()), 1)
+    downloads = Path(raw) if raw.startswith("/") else Path.home() / "Downloads"
+    return downloads / "vivac-link"
+
+
+# --- the session's language (lib/i18n.sh, same tables, same rules) -----------------------------
+
+
+def session_language() -> str:
+    """VIVAC_LANG, then the language setting unless auto, then LANG, then English."""
+    short = re.compile(r"[a-z]{2,3}")
+    wanted = os.environ.get("VIVAC_LANG")
+    if wanted:
+        candidate = re.split(r"[._@]", wanted)[0]
+        return candidate if short.fullmatch(candidate) else "en"
+    settings = Path(os.environ.get("SETTINGS_FILE") or config_home() / "vivac" / "settings")
+    for candidate in (read_kv(settings).get("language", ""), os.environ.get("LANG", "")):
+        if candidate == "auto":
+            continue
+        candidate = re.split(r"[._@]", candidate)[0]
+        if short.fullmatch(candidate):
+            return candidate
+    return "en"
+
+
+class Text:
+    """i18n/<lang>.conf over i18n/en.conf. A key only English has is marked [en];
+    placeholders are {1}, {2}, ... replaced as plain text, never a format string."""
+
+    def __init__(self) -> None:
+        directory = Path(os.environ.get("I18N_DIR") or repo_root() / "i18n")
+        self.reference = read_kv(directory / "en.conf")
+        language = session_language()
+        self.table = read_kv(directory / f"{language}.conf") if language != "en" else {}
+
+    def get(self, key: str, *args: object) -> str:
+        if key in self.table:
+            text = self.table[key]
+        elif key in self.reference:
+            text = self.reference[key] if not self.table else "[en] " + self.reference[key]
+        else:
+            return f"[{key}]"
+        for index, arg in enumerate(args, 1):
+            text = text.replace("{%d}" % index, str(arg))
+        return text
+
+
+TEXT = Text()
+
+
+def say(key: str, *args: object) -> None:
+    print(TEXT.get(key, *args), flush=True)
+
+
+def complain(key: str, *args: object) -> None:
+    print("vivac-link: " + TEXT.get(key, *args), file=sys.stderr, flush=True)
+
+
+def log(message: str) -> None:
+    print("vivac-link: " + message, file=sys.stderr, flush=True)
+
+
+# --- the pairing ------------------------------------------------------------------------------
+
+
+def encode_secret(raw: bytes) -> str:
+    """RFC 4648 base32 without padding: 32 bytes are 52 characters."""
+    return base64.b32encode(raw).decode("ascii").rstrip("=")
+
+
+def decode_secret(text: str) -> bytes | None:
+    """A pairing code or a stored secret back to its 32 bytes; dashes, spaces and case
+    do not matter. None when it is not one."""
+    clean = re.sub(r"[\s=-]", "", text).upper()
+    if not re.fullmatch(r"[A-Z2-7]+", clean):
+        return None
+    try:
+        raw = base64.b32decode(clean + "=" * (-len(clean) % 8))
+    except (binascii.Error, ValueError):
+        return None
+    return raw if len(raw) == 32 else None
+
+
+def format_code(raw: bytes) -> str:
+    """What a person types on the other machine: base32 in groups of five."""
+    text = encode_secret(raw)
+    return "-".join(text[index : index + 5] for index in range(0, len(text), 5))
+
+
+def signature(secret: bytes, verb: str, stamp: str, nonce: str, body: bytes) -> str:
+    message = f"{verb}\n{stamp}\n{nonce}\n{hashlib.sha256(body).hexdigest()}"
+    return hmac.new(secret, message.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def link_id(secret: bytes) -> str:
+    """What a beacon carries: proves nothing, lets two paired machines find each other."""
+    return hmac.new(secret, b"vivac-link-id", hashlib.sha256).hexdigest()[:16]
+
+
+@dataclass
+class Pairing:
+    secret: bytes
+    name: str
+    port: int
+    peer: str
+
+
+def conf_path() -> Path:
+    return state_dir() / "link.conf"
+
+
+def peer_path() -> Path:
+    return state_dir() / "link-peer"
+
+
+def load_pairing() -> Pairing | None:
+    values = read_kv(conf_path())
+    key = decode_secret(values.get("secret", ""))
+    if key is None:
+        return None
+    try:
+        port = int(values.get("port", DEFAULT_PORT))
+    except ValueError:
+        port = DEFAULT_PORT
+    if not 0 < port <= 65535:
+        port = DEFAULT_PORT
+    return Pairing(key, values.get("name") or socket.gethostname(), port, values.get("peer", ""))
+
+
+def write_private(path: Path, text: str) -> None:
+    """Replace PATH with TEXT, readable and writable by this user only, atomically."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    scratch = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    descriptor = os.open(scratch, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(text)
+    os.chmod(scratch, 0o600)
+    os.replace(scratch, path)
+
+
+def save_pairing(pairing: Pairing) -> None:
+    values = [("secret", encode_secret(pairing.secret)), ("name", pairing.name), ("port", str(pairing.port))]
+    if pairing.peer:
+        values.append(("peer", pairing.peer))
+    header = "# vivac link pairing (docs/bridge.md). The secret is a password: it stays here.\n"
+    write_private(conf_path(), header + "".join(f"{key}={value}\n" for key, value in values))
+
+
+def split_peer(peer: str, default_port: int) -> tuple[str, int]:
+    """host:port, [v6]:port or host alone."""
+    match = re.fullmatch(r"\[([^]]+)\](?::(\d+))?|([^:]+)(?::(\d+))?", peer.strip())
+    if not match:
+        raise ValueError(peer)
+    host = match.group(1) or match.group(3)
+    port = int(match.group(2) or match.group(4) or default_port)
+    if not 0 < port <= 65535:
+        raise ValueError(peer)
+    return host, port
+
+
+def current_peer(pairing: Pairing) -> str:
+    """The address in link.conf, else the one discovery last saw."""
+    if pairing.peer:
+        return pairing.peer
+    try:
+        return peer_path().read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+# --- the desktop: clipboard, notifications, opening -------------------------------------------
+
+
+def desktop_env() -> dict[str, str]:
+    """The service starts before the compositor and so has no WAYLAND_DISPLAY: find
+    the compositor's socket in the runtime directory when the variable is missing."""
+    env = dict(os.environ)
+    runtime = Path(env.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")
+    display = env.get("WAYLAND_DISPLAY", "")
+    if not display or not (runtime / display).exists():
+        try:
+            sockets = sorted(p.name for p in runtime.glob("wayland-*") if not p.name.endswith(".lock") and p.is_socket())
+        except OSError:
+            sockets = []
+        if sockets:
+            env["WAYLAND_DISPLAY"] = sockets[0]
+    return env
+
+
+_ACTIONS: bool | None = None
+
+
+def notify_supports_actions() -> bool:
+    """notify-send has --action from libnotify 0.7.10 on; older ones lack it."""
+    global _ACTIONS
+    if _ACTIONS is None:
+        try:
+            helptext = subprocess.run(["notify-send", "--help"], capture_output=True, text=True, timeout=5).stdout
+        except (OSError, subprocess.SubprocessError):
+            helptext = ""
+        _ACTIONS = "--action" in helptext
+    return _ACTIONS
+
+
+def open_detached(target: str) -> None:
+    """xdg-open, outside this service: started under systemd, what opens is a unit of
+    its own, so a restart of the link does not take the browser with it."""
+    command = ["xdg-open", target]
+    if os.environ.get("INVOCATION_ID") and shutil.which("systemd-run"):
+        command = ["systemd-run", "--user", "--collect", "--quiet", "--", *command]
+    try:
+        subprocess.Popen(command, env=desktop_env(), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except OSError as error:
+        log(f"cannot open {target!r}: {error}")
+
+
+def notify(title: str, body: str, action: str | None = None, target: str | None = None) -> None:
+    """A notification; with ACTION, a click on it opens TARGET. Never blocks the caller:
+    notify-send waits for the click, so that wait runs in a thread of its own."""
+    if not shutil.which("notify-send"):
+        log(f"{title}: {body}")
+        return
+    command = ["notify-send", "--app-name=vivac"]
+    clickable = bool(action and target and notify_supports_actions())
+    if clickable:
+        command.append(f"--action=open={action}")
+    command += ["--", title, body]
+
+    def run() -> None:
+        try:
+            answer = subprocess.run(command, env=desktop_env(), stdin=subprocess.DEVNULL, capture_output=True, text=True).stdout.strip()
+        except OSError as error:
+            log(f"notify-send failed: {error}")
+            return
+        if clickable and answer == "open" and target:
+            open_detached(target)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def clipboard_set(text: str) -> bool:
+    if not shutil.which("wl-copy"):
+        return False
+    try:
+        # wl-copy forks to keep serving the selection: its output must not be a pipe
+        # this process waits on, or the wait would last until the next copy.
+        done = subprocess.run(["wl-copy", "--type", "text/plain;charset=utf-8"], input=text.encode("utf-8"), env=desktop_env(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return done.returncode == 0
+
+
+def clipboard_get() -> str:
+    try:
+        done = subprocess.run(["wl-paste", "--no-newline", "--type", "text"], capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout.decode("utf-8", errors="replace") if done.returncode == 0 else ""
+
+
+# --- receiving --------------------------------------------------------------------------------
+
+
+def safe_name(raw: str) -> str:
+    """The received name, made safe to write: no folder, no control character, no
+    leading dot (a hidden file nobody would see arrive), never empty."""
+    leaf = re.split(r"[\\/]", raw)[-1]
+    leaf = "".join("_" if ord(char) < 32 or char == "\x7f" else char for char in leaf)
+    leaf = leaf.strip().lstrip(".").strip()
+    while len(leaf.encode("utf-8")) > 200:
+        leaf = leaf[:-1]
+    return leaf or "file"
+
+
+def store(folder: Path, name: str, data: bytes) -> Path:
+    """Write DATA under NAME in FOLDER, or NAME (2), NAME (3)...: never over anything.
+    O_EXCL also refuses a symlink planted at the name."""
+    folder.mkdir(parents=True, exist_ok=True)
+    stem, dot, extension = name.rpartition(".")
+    if not stem:
+        stem, dot, extension = name, "", ""
+    attempt = 1
+    while True:
+        candidate = name if attempt == 1 else f"{stem} ({attempt}){dot}{extension}"
+        try:
+            descriptor = os.open(folder / candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            attempt += 1
+            continue
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+        return folder / candidate
+
+
+class Refused(Exception):
+    """A request that was signed but cannot be done: a 400 with this reason."""
+
+
+class Receiver:
+    def __init__(self, pairing: Pairing) -> None:
+        self.pairing = pairing
+        self.seen: dict[str, float] = {}
+        self.lock = threading.Lock()
+        self.peer_name = ""
+
+    def refusal(self, verb: str, stamp: str, nonce: str, sign: str, body: bytes) -> str | None:
+        """Why a request is refused (a 401), or None: the clock first, then the nonce,
+        then the signature. A good request's nonce is remembered for two minutes."""
+        now = time.time()
+        if not STAMP.fullmatch(stamp):
+            return "no time"
+        if abs(now - int(stamp)) > CLOCK_WINDOW:
+            return "time too far from ours"
+        if not NONCE.fullmatch(nonce):
+            return "no nonce"
+        expected = signature(self.pairing.secret, verb, stamp, nonce, body)
+        with self.lock:
+            for old in [key for key, when in self.seen.items() if now - when > NONCE_MEMORY]:
+                del self.seen[old]
+            if nonce in self.seen:
+                return "nonce already seen"
+            if not hmac.compare_digest(expected.encode("ascii"), sign.lower().encode("utf-8", errors="replace")):
+                return "bad signature"
+            self.seen[nonce] = now
+        return None
+
+    def sender(self) -> str:
+        return self.peer_name or TEXT.get("link.someone")
+
+    def act(self, verb: str, body: bytes, name_header: str) -> dict[str, object]:
+        if verb == "ping":
+            return {"ok": True, "name": self.pairing.name, "os": "linux", "version": version(), "protocol": PROTOCOL}
+        if verb == "file":
+            name = safe_name(urllib.parse.unquote(name_header, encoding="utf-8", errors="replace"))
+            path = store(inbox(), name, body)
+            notify(TEXT.get("link.file_received", self.sender(), path.name), str(path.parent), TEXT.get("link.open_folder"), str(path.parent))
+            return {"ok": True}
+        try:
+            text = body.decode("utf-8")
+        except UnicodeDecodeError:
+            raise Refused("not UTF-8") from None
+        if verb == "clip":
+            if not clipboard_set(text):
+                raise Refused("no clipboard")
+            # The text itself stays off the screen: a clipboard often holds a password.
+            notify(TEXT.get("link.clip_received", self.sender()), TEXT.get("link.clip_size", len(text)))
+        elif verb == "url":
+            url = text.strip()
+            parts = urllib.parse.urlsplit(url)
+            if parts.scheme not in ("http", "https") or not parts.netloc or any(ord(c) < 33 for c in url):
+                raise Refused("only http and https links")
+            notify(TEXT.get("link.url_received", self.sender()), url, TEXT.get("link.open"), url)
+        elif verb == "notify":
+            try:
+                message = json.loads(text)
+            except json.JSONDecodeError:
+                raise Refused("not JSON") from None
+            if not isinstance(message, dict) or not isinstance(message.get("title", ""), str) or not isinstance(message.get("body", ""), str):
+                raise Refused("title and body are text")
+            notify(message.get("title", "")[:200] or TEXT.get("link.title"), message.get("body", "")[:2000])
+        return {"ok": True}
+
+
+def make_handler(receiver: Receiver) -> type[BaseHTTPRequestHandler]:
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+        server_version = "vivac-link/1"
+        timeout = 30
+
+        def log_message(self, format: str, *args: object) -> None:  # noqa: A002 (the base class names it)
+            log(f"{self.client_address[0]} {format % args}")
+
+        def answer(self, status: int, payload: dict[str, object]) -> None:
+            data = json.dumps(payload).encode("utf-8")
+            self.close_connection = True
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_POST(self) -> None:  # noqa: N802 (the base class names it)
+            match = re.fullmatch(r"/v(\d+)/([a-z]+)", self.path)
+            if not match or match.group(1) != str(PROTOCOL) or match.group(2) not in VERBS:
+                self.answer(404, {"ok": False, "error": "unknown verb"})
+                return
+            verb = match.group(2)
+            length_header = self.headers.get("Content-Length", "")
+            if not re.fullmatch(r"[0-9]{1,12}", length_header):
+                self.answer(411, {"ok": False, "error": "length required"})
+                return
+            length = int(length_header)
+            if length > (FILE_LIMIT if verb == "file" else TEXT_LIMIT):
+                self.answer(413, {"ok": False, "error": "too large"})
+                return
+            body = self.rfile.read(length) if length else b""
+            if len(body) != length:
+                self.answer(400, {"ok": False, "error": "short body"})
+                return
+            why = receiver.refusal(verb, self.headers.get("X-Vivac-Time", ""), self.headers.get("X-Vivac-Nonce", ""), self.headers.get("X-Vivac-Sign", ""), body)
+            if why:
+                log(f"{self.client_address[0]} refused {verb}: {why}")
+                self.answer(401, {"ok": False, "error": "unauthorized"})
+                return
+            try:
+                payload = receiver.act(verb, body, self.headers.get("X-Vivac-Name", ""))
+            except Refused as reason:
+                self.answer(400, {"ok": False, "error": str(reason)})
+                return
+            self.answer(200, payload)
+
+        def refuse_method(self) -> None:
+            self.answer(404, {"ok": False, "error": "unknown verb"})
+
+        do_GET = do_PUT = do_DELETE = do_PATCH = refuse_method  # noqa: N815
+
+    return Handler
+
+
+# --- discovery --------------------------------------------------------------------------------
+
+
+def local_addresses() -> set[str]:
+    """This machine's own IPv4 addresses: its own beacon carries the same id, and must
+    not make it its own peer. Loopback is refused apart, by ipaddress."""
+    found: set[str] = set()
+    try:
+        listing = subprocess.run(["ip", "-o", "-4", "addr", "show"], capture_output=True, text=True, timeout=5).stdout
+        found.update(re.findall(r"\binet (\d+\.\d+\.\d+\.\d+)/", listing))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        # A UDP connect sends nothing; it only picks the address a packet would leave from.
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            found.add(probe.getsockname()[0])
+    except OSError:
+        pass
+    return found
+
+
+def beacon_sender(pairing: Pairing) -> None:
+    message = json.dumps({"v": PROTOCOL, "name": pairing.name, "os": "linux", "port": pairing.port, "id": link_id(pairing.secret)}, separators=(",", ":")).encode("utf-8")
+    quiet = False
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
+        sender.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        while True:
+            try:
+                sender.sendto(message, ("<broadcast>", DEFAULT_PORT))
+                quiet = False
+            except OSError as error:
+                if not quiet:
+                    log(f"cannot send the beacon (no network?): {error}")
+                quiet = True
+            time.sleep(BEACON_EVERY)
+
+
+def beacon_listener(pairing: Pairing, receiver: Receiver) -> None:
+    own = link_id(pairing.secret)
+    mine, checked = local_addresses(), time.monotonic()
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            listener.bind(("", DEFAULT_PORT))
+        except OSError as error:
+            log(f"cannot listen for beacons, discovery is off (set peer= in link.conf): {error}")
+            return
+        while True:
+            data, (address, _) = listener.recvfrom(2048)
+            try:
+                beacon = json.loads(data.decode("utf-8"))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            if not isinstance(beacon, dict) or beacon.get("v") != PROTOCOL or beacon.get("id") != own:
+                continue
+            port = beacon.get("port")
+            if not isinstance(port, int) or not 0 < port <= 65535:
+                continue
+            if time.monotonic() - checked > 60:
+                mine, checked = local_addresses(), time.monotonic()
+            if address in mine or ipaddress.ip_address(address).is_loopback:
+                continue
+            if isinstance(beacon.get("name"), str):
+                receiver.peer_name = re.sub(r"[\x00-\x1f\x7f]", "", beacon["name"])[:64]
+            found = f"{address}:{port}"
+            try:
+                known = peer_path().read_text(encoding="utf-8").strip()
+            except OSError:
+                known = ""
+            if found != known:
+                write_private(peer_path(), found + "\n")
+                log(f"peer found at {found}")
+
+
+def serve(arguments: list[str]) -> int:
+    bind, port, beacons = "0.0.0.0", None, True
+    while arguments:
+        option = arguments.pop(0)
+        if option == "--bind" and arguments:
+            bind = arguments.pop(0)
+        elif option == "--port" and arguments and arguments[0].isdigit():
+            port = int(arguments.pop(0))
+        elif option == "--no-beacon":
+            beacons = False
+        else:
+            return usage()
+    pairing = load_pairing()
+    if pairing is None:
+        complain("link.not_paired")
+        return 1
+    receiver = Receiver(pairing)
+    server = ThreadingHTTPServer((bind, pairing.port if port is None else port), make_handler(receiver))
+    server.daemon_threads = True
+    host, bound = server.server_address[:2]
+    print(f"vivac-link: listening on {host}:{bound}", flush=True)
+    if beacons:
+        threading.Thread(target=beacon_sender, args=(pairing,), daemon=True).start()
+        threading.Thread(target=beacon_listener, args=(pairing, receiver), daemon=True).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
+# --- sending ----------------------------------------------------------------------------------
+
+
+def send(verb: str, body: bytes = b"", name: str | None = None, timeout: float = 15) -> tuple[int, dict[str, object]]:
+    """One signed request to the peer. Exits with a message when there is no pairing
+    or no peer; returns the status and the JSON answer otherwise."""
+    pairing = load_pairing()
+    if pairing is None:
+        complain("link.not_paired")
+        raise SystemExit(1)
+    peer = current_peer(pairing)
+    if not peer:
+        complain("link.no_peer", conf_path())
+        raise SystemExit(1)
+    try:
+        host, port = split_peer(peer, pairing.port or DEFAULT_PORT)
+    except ValueError:
+        complain("link.no_peer", conf_path())
+        raise SystemExit(1) from None
+    stamp, nonce = str(int(time.time())), secrets.token_hex(16)
+    headers = {
+        "Content-Length": str(len(body)),
+        "X-Vivac-Time": stamp,
+        "X-Vivac-Nonce": nonce,
+        "X-Vivac-Sign": signature(pairing.secret, verb, stamp, nonce, body),
+    }
+    if name is not None:
+        headers["X-Vivac-Name"] = urllib.parse.quote(name, safe="")
+    try:
+        connection = http.client.HTTPConnection(host, port, timeout=timeout)
+        connection.request("POST", f"/v{PROTOCOL}/{verb}", body=body, headers=headers)
+        response = connection.getresponse()
+        raw = response.read()
+        connection.close()
+    except (OSError, http.client.HTTPException) as error:
+        complain("link.unreachable", peer, error)
+        raise SystemExit(1) from None
+    try:
+        answer = json.loads(raw.decode("utf-8")) if raw else {}
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        answer = {}
+    return response.status, answer if isinstance(answer, dict) else {}
+
+
+def report(status: int, peer_key: str = "link.sent") -> int:
+    pairing = load_pairing()
+    peer = current_peer(pairing) if pairing else ""
+    if status == 200:
+        say(peer_key, peer)
+        return 0
+    reasons = {401: "link.refused_auth", 413: "link.refused_size", 404: "link.refused_verb"}
+    if status in reasons:
+        complain(reasons[status], peer)
+    else:
+        complain("link.refused_other", peer, status)
+    return 1
+
+
+def ping() -> int:
+    status, answer = send("ping", timeout=5)
+    if status != 200:
+        return report(status)
+    say("link.pong", answer.get("name", "?"), answer.get("os", "?"), answer.get("version", "?"))
+    return 0
+
+
+def pair(arguments: list[str]) -> int:
+    old = load_pairing()
+    name = old.name if old else socket.gethostname()
+    port = old.port if old else DEFAULT_PORT
+    peer = old.peer if old else ""
+    if arguments:
+        key = decode_secret("".join(arguments))
+        if key is None:
+            complain("link.bad_code")
+            return 2
+    else:
+        key = secrets.token_bytes(32)
+    save_pairing(Pairing(key, name, port, peer))
+    if not arguments:
+        say("link.code", format_code(key))
+        say("link.code_hint", format_code(key))
+    say("link.paired", name, conf_path())
+    # A running service holds the old secret; an enabled one that was waiting for
+    # link.conf can start now.
+    if shutil.which("systemctl"):
+        quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+        if subprocess.run(["systemctl", "--user", "is-enabled", "--quiet", "vivac-link.service"], check=False, **quiet).returncode == 0:
+            subprocess.run(["systemctl", "--user", "restart", "vivac-link.service"], check=False, **quiet)
+    return 0
+
+
+def status() -> int:
+    pairing = load_pairing()
+    if pairing is None:
+        complain("link.not_paired")
+        return 1
+    say("link.status_name", pairing.name, pairing.port)
+    peer = current_peer(pairing)
+    if not peer:
+        say("link.status_peer_none")
+        return 1
+    say("link.status_peer", peer)
+    return ping()
+
+
+def usage() -> int:
+    print(__doc__.split("\n\n")[1], file=sys.stderr)
+    return 2
+
+
+def main(arguments: list[str]) -> int:
+    if not arguments or arguments[0] in ("-h", "--help"):
+        print(__doc__.split("\n\n")[1])
+        return 0 if arguments else 2
+    command, rest = arguments[0], arguments[1:]
+    if command == "serve":
+        return serve(rest)
+    if command == "pair" and len(rest) <= 10:
+        return pair(rest)
+    if command == "status" and not rest:
+        return status()
+    if command == "ping" and not rest:
+        return ping()
+    if command == "send-clip" and len(rest) <= 1:
+        text = rest[0] if rest else clipboard_get()
+        if not text:
+            complain("link.empty_clip")
+            return 1
+        body = text.encode("utf-8")
+        if len(body) > TEXT_LIMIT:
+            complain("link.too_large")
+            return 1
+        return report(send("clip", body)[0])
+    if command == "send-url" and len(rest) == 1:
+        parts = urllib.parse.urlsplit(rest[0].strip())
+        if parts.scheme not in ("http", "https") or not parts.netloc:
+            complain("link.bad_url")
+            return 2
+        return report(send("url", rest[0].strip().encode("utf-8"))[0])
+    if command == "send-file" and len(rest) == 1:
+        path = Path(rest[0])
+        if not path.is_file():
+            complain("link.no_file", path)
+            return 1
+        if path.stat().st_size > FILE_LIMIT:
+            complain("link.too_large")
+            return 1
+        return report(send("file", path.read_bytes(), name=path.name, timeout=120)[0])
+    if command == "notify" and len(rest) == 2:
+        body = json.dumps({"title": rest[0], "body": rest[1]}).encode("utf-8")
+        if len(body) > TEXT_LIMIT:
+            complain("link.too_large")
+            return 1
+        return report(send("notify", body)[0])
+    return usage()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

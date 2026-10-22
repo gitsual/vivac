@@ -1,0 +1,7 @@
+# The editor: Neovim with NvChad, as in the source. Git fetches the plugins,
+# ripgrep and fd feed Telescope, and zig is the C compiler nvim-treesitter
+# builds its parsers with (Windows ships none).
+Neovim.Neovim
+BurntSushi.ripgrep.MSVC
+sharkdp.fd
+zig.zig
