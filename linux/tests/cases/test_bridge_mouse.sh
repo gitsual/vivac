@@ -131,8 +131,8 @@ grep -q 'lan-mouse' "$calls" && fail 'lan-mouse itself was run'
 # --- the bridge menu and the firewall ---------------------------------------------------------------------------------
 menu() { PATH="$sandbox/bin:$PATH" HOME="$sandbox/user" XDG_STATE_HOME="$sandbox/user/.local/state" VIVAC_LANG=en \
 	VIVAC_REPO="$repo_root" "$repo_root/dotfiles/bridge/.local/bin/vivac-bridge" --print; }
-menu | grep -qx 'Shared mouse: off' || fail "the menu has no shared mouse row: $(menu)"
-LAN_MOUSE="$sandbox/none" menu | grep -q 'Shared mouse' && fail 'the menu offers the mouse without lan-mouse'
+grep -qx 'Shared mouse: off' <<<"$(menu)" || fail "the menu has no shared mouse row: $(menu)"
+grep -q 'Shared mouse' <<<"$(LAN_MOUSE="$sandbox/none" menu)" && fail 'the menu offers the mouse without lan-mouse'
 cat >"$sandbox/bin/ip" <<'FAKE'
 #!/usr/bin/env bash
 printf '2: eth0    inet 198.51.100.20/24 brd 198.51.100.255 scope global dynamic eth0\n'

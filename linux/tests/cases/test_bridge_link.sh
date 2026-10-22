@@ -262,7 +262,7 @@ eventually test "$(wc -l <"$sandbox/wol")" -ge 2 || fail 'no magic packet arrive
 [[ "$(sed -n 2p "$sandbox/wol")" == "ffffffffffff$(printf '0a1b2c3d4e5f%.0s' {1..16})" ]] || fail "the magic packet is wrong: $(sed -n 2p "$sandbox/wol")"
 
 # mouse: both sides' lan-mouse placed and trusted through vivac-mouse config. Here both
-# ends share one profile, so the daemon's write (the sender at 127.0.0.1, on the left)
+# ends share one profile, so the daemon's write (the sender at the loopback, on the left)
 # is followed by the client's (the peer at localhost, on the right).
 sed -i "s/^peer=.*/peer=localhost:$port/" "$conf"
 mkdir -p "$sandbox/user/.config/lan-mouse"
@@ -270,10 +270,11 @@ printf '%s\n' '-----BEGIN CERTIFICATE-----' 'dml2YWMgbGluazogYSB0ZXN0' '-----END
 fp="$(python3 -c 'import base64, hashlib; print(":".join(f"{b:02x}" for b in hashlib.sha256(base64.b64decode("dml2YWMgbGluazogYSB0ZXN0")).digest()))')"
 : >"$calls"
 link mouse right >/dev/null 2>"$sandbox/err" || fail "vivac-link mouse failed: $(cat "$sandbox/err")"
-eventually grep -q 'notify .*Shared mouse paired: 127.0.0.1 is beyond the left edge' "$calls" || fail "the receiver did not place the sender: $(cat "$calls")"
+eventually grep -q 'notify .*Shared mouse paired: 127[.]0[.]0[.]1 is beyond the left edge' "$calls" || fail "the receiver did not place the sender: $(cat "$calls")"
 mouse_conf="$sandbox/state/vivac/mouse.conf"
-grep -qx 'peer=localhost' "$mouse_conf" && grep -qx 'side=right' "$mouse_conf" && grep -qx "fingerprint=$fp" "$mouse_conf" ||
-	fail "the sender did not store the peer's answer: $(cat "$mouse_conf")"
+for line in peer=localhost side=right "fingerprint=$fp"; do
+	grep -qx "$line" "$mouse_conf" || fail "the sender did not store the peer's answer ($line): $(cat "$mouse_conf")"
+done
 grep -qx 'enabled=yes' "$mouse_conf" && fail 'pairing the mouse turned it on'
 if link mouse sideways 2>/dev/null; then fail 'a side that is not one was accepted'; fi
 printf '{"fingerprint":"zz","port":4242,"side":"left"}' >"$sandbox/badmouse"

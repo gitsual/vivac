@@ -247,7 +247,8 @@ grep -q 'There is no inbox at' "$sandbox/err" || fail "an inbox that is a link: 
 rm -f "$sandbox/copied"
 printf 'hi\n/save %s\n/copy\n/quit\n' "$sandbox/talk.md" | ask >"$sandbox/out" 2>&1 || fail "the panel failed: $(cat "$sandbox/out")"
 [[ "$(cat "$sandbox/copied")" == 'Hello world' ]] || fail '/copy did not put the last answer on the clipboard'
-grep -q '^## You' "$sandbox/talk.md" && grep -q '^Hello world$' "$sandbox/talk.md" || fail "/save: $(cat "$sandbox/talk.md")"
+grep -q '^## You' "$sandbox/talk.md" || fail "/save: $(cat "$sandbox/talk.md")"
+grep -q '^Hello world$' "$sandbox/talk.md" || fail "/save: $(cat "$sandbox/talk.md")"
 [[ "$(stat -c %a "$sandbox/talk.md")" == 600 ]] || fail '/save left the conversation readable by others'
 printf '/save %s\n/quit\n' "$sandbox/talk.md" | ask >/dev/null 2>&1 || true
 grep -q '^Hello world$' "$sandbox/talk.md" || fail '/save overwrote an existing file'

@@ -119,7 +119,8 @@ bridge_rows() {
 		VIVAC_KDECONNECT_CLI="${CLI:-$sandbox/bin/kdeconnect-cli}" "$bridge" --print
 }
 grep -Fxq 'Phone…' <<<"$(bridge_rows)" || fail 'the bridge menu has no Phone row with KDE Connect installed'
-grep -Fq 'Phone' <<<"$(CLI=vivac-no-such-cli bridge_rows)" && fail 'the bridge menu offers the phone without KDE Connect'
+# Exactly the row: the phone drop's rows (LocalSend) say "phone" too.
+grep -Fxq 'Phone…' <<<"$(CLI=vivac-no-such-cli bridge_rows)" && fail 'the bridge menu offers the phone without KDE Connect'
 [[ -z "$(CLI=vivac-no-such-cli phone --print)" ]] || fail 'the phone menu has rows without KDE Connect'
 if CLI=vivac-no-such-cli phone --available; then fail '--available says yes without KDE Connect'; fi
 

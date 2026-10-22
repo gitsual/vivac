@@ -159,6 +159,8 @@ while IFS= read -r template; do
 	# would call ws-render.sh and friends that are not there and draw a blank
 	# workspace strip over the owner's working one. Keep what is there.
 	missing=()
+	# The pattern matches a literal $HOME in the rendered file.
+	# shellcheck disable=SC2016
 	while IFS= read -r called; do
 		[[ -e "$HOME/$called" ]] || missing+=("$called")
 	done < <(grep -o '\$HOME/[A-Za-z0-9._/-]*' "$rendered" | sed 's|^\$HOME/||' | LC_ALL=C sort -u)

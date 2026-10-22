@@ -32,6 +32,8 @@ backups() { compgen -G "$state/vivac/backups/*/.config/$1" || true; }
 # a full deploy would. A render is only written once what it calls exists.
 stow_referenced() {
 	local into="$1" path source
+	# The pattern matches a literal $HOME in the template.
+	# shellcheck disable=SC2016
 	while IFS= read -r path; do
 		source="$(find "$repo_root/dotfiles" -path "*/dotfiles/*/${path}" -print -quit)"
 		[[ -n "$source" ]] || fail "no package provides $path"

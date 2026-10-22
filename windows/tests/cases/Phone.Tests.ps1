@@ -35,6 +35,10 @@ $name = 'Test "phone" <&> ' + [char]0x00F1
 [IO.File]::WriteAllText($env:FAKE_DEVICES, "a1b2c3d4e5f60718_29 $name`n../evil x`n", $utf8)
 
 function Invoke-Phone([string[]]$PhoneArgs) {
+    # vivac-phone.ps1 writes UTF-8 (what Zebar reads); a native command's output
+    # is decoded with the console's encoding, which is the OEM code page unless
+    # set here.
+    try { [Console]::OutputEncoding = $utf8 } catch { }
     $out = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $phoneScript @PhoneArgs 2>&1
     [pscustomobject]@{ Code = $LASTEXITCODE; Text = (@($out | ForEach-Object { "$_" }) -join "`n") }
 }
