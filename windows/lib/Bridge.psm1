@@ -42,7 +42,7 @@ function Get-VivacDropItems([string]$Folder) {
 
 $script:LinkPort = 47321
 $script:LinkProtocol = 2
-$script:LinkVerbs = @('clip', 'url', 'file', 'notify', 'ping')
+$script:LinkVerbs = @('clip', 'url', 'file', 'notify', 'ping', 'mouse')
 $script:Base32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
 # A file's name rides inside its sealed body, before a NUL.
 $script:LinkNameLimit = 1024

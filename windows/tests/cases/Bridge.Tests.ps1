@@ -162,6 +162,27 @@ try {
             Write-VivacLinkConf $secret 'gate' $port "127.0.0.1:$port"
         }
     }
+    # Both ends share one scratch profile here, so the listener's write (the
+    # sender at 127.0.0.1, on the left) is followed by the client's (the peer
+    # at 127.0.0.1, on the right).
+    Case 'link: mouse places and trusts both sides'' lan-mouse, never turning it on' {
+        $lm = Join-Path $env:VIVAC_LOCALAPPDATA 'lan-mouse'
+        [void](New-Item -ItemType Directory -Force -Path $lm)
+        $b64 = 'dml2YWMgbGluazogYSB0ZXN0'
+        [IO.File]::WriteAllText((Join-Path $lm 'lan-mouse.pem'), "-----BEGIN CERTIFICATE-----`n$b64`n-----END CERTIFICATE-----`n")
+        $sha = [Security.Cryptography.SHA256]::Create()
+        $fp = ((@($sha.ComputeHash([Convert]::FromBase64String($b64))) | ForEach-Object { $_.ToString('x2') }) -join ':')
+        $r = Invoke-Link @('mouse', 'right')
+        Assert-Equal 0 $r.Code $r.Text
+        $cards = [IO.File]::ReadAllText((Join-Path $env:VIVAC_LINK_SINK 'cards.txt'))
+        Assert-True ($cards -match '127\.0\.0\.1') "the listener placed the sender: $cards"
+        $mc = [IO.File]::ReadAllText((Join-Path $env:VIVAC_LOCALAPPDATA 'vivac\mouse.conf'))
+        Assert-True ($mc -match '(?m)^side=right') "the sender stored its side: $mc"
+        Assert-True ($mc -match "(?m)^fingerprint=$fp") 'and the peer''s fingerprint'
+        Assert-True ($mc -notmatch '(?m)^enabled=yes') 'pairing the mouse turned it on'
+        Assert-True ((Invoke-Link @('mouse', 'sideways')).Code -ne 0) 'a side that is not one'
+        Assert-Equal 400 (Send-Request 'mouse' $utf8.GetBytes('{"fingerprint":"zz","port":4242,"side":"left"}'))
+    }
     Case 'link: wake sends the magic packet to the address a ping learnt' {
         Remove-Item -LiteralPath (Get-VivacLinkPeerMacPath) -Force -ErrorAction SilentlyContinue
         $r = Invoke-Link @('wake')

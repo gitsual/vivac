@@ -17,6 +17,8 @@
     send-url URL      send a link (the other side offers it, never opens it)
     send-file PATH    send a file (up to 64 MiB)
     notify TITLE BODY show a notification there
+    mouse SIDE        pair the shared mouse with the other machine, which
+                      lies beyond SIDE (left, right, top, bottom) of this screen
     wake              wake the other machine (Wake-on-LAN; a ping first
                       learns its hardware address)
 
@@ -46,6 +48,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $root 'lib\Vivac.psm1') -Force
 Import-Module (Join-Path $root 'lib\Bridge.psm1') -Force
+Import-Module (Join-Path $root 'lib\Mouse.psm1') -Force
 [void](Import-VivacStrings (Read-VivacSettings)['language'])
 
 $paths = Get-VivacPaths
@@ -184,12 +187,55 @@ function Write-LinkResponse([Net.Sockets.NetworkStream]$Stream, [int]$Status, [s
 }
 
 # What each verb does here. Returns the JSON answer.
+# ------------------------------------------- the shared mouse, over the link
+
+# This machine's lan-mouse: certificate fingerprint and port; $null before
+# lan-mouse has made its certificate.
+function Get-MouseOffer {
+    $mine = Get-VivacOwnFingerprint
+    if (-not $mine) { return $null }
+    [pscustomobject]@{ Fingerprint = $mine; Port = [int](Read-VivacMouseConf).port }
+}
+
+# The fingerprint, port and side of a mouse offer, each checked; throws
+# otherwise (a 400 on the listener, "not trusted" on the sender).
+function Get-MouseFields($Offer) {
+    if (-not $Offer) { throw 'a mouse offer is a JSON object' }
+    $names = @($Offer.PSObject.Properties | ForEach-Object { $_.Name })
+    if ($names -notcontains 'fingerprint' -or $names -notcontains 'port' -or $names -notcontains 'side') { throw 'fingerprint, port and side' }
+    $f = ConvertTo-VivacFingerprint ([string]$Offer.fingerprint)
+    if (-not $f -or [string]$Offer.fingerprint -cne $f) { throw 'no fingerprint' }
+    if ($Offer.port -isnot [int] -and $Offer.port -isnot [long]) { throw 'no port' }
+    $p = [int]$Offer.port
+    if ($p -lt 1 -or $p -gt 65535) { throw 'no port' }
+    if ((Get-VivacMouseSides) -cnotcontains [string]$Offer.side) { throw 'no side' }
+    [pscustomobject]@{ Fingerprint = $f; Port = $p; Side = [string]$Offer.side }
+}
+
+# vivac-mouse config, as a person would run it: the same checks, the same
+# files, lan-mouse restarted only when it is on.
+function Invoke-VivacMouseConfig([string]$Peer, [string]$Side, [string]$Fingerprint, [int]$Port) {
+    $out = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'bin\vivac-mouse.ps1') config -Peer $Peer -Side $Side -Fingerprint $Fingerprint -Port $Port 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "vivac-mouse config: $($out -join ' ')" }
+}
+
 # What each verb does here, with the body already opened. Returns the JSON
 # answer; throws for a body the verb cannot take (a 400).
-function Invoke-LinkVerb([string]$Verb, [byte[]]$Body, $Conf, [string]$Local) {
+function Invoke-LinkVerb([string]$Verb, [byte[]]$Body, $Conf, [string]$Local, [string]$Remote) {
     $from = Get-PeerName
     if ($Verb -ne 'file' -and $Body.Length -gt (Get-VivacLinkLimit $Verb)) { throw 'too large' }
     switch ($Verb) {
+        'mouse' {
+            # The other machine's lan-mouse, placed where it says and trusted,
+            # through vivac-mouse config; answered with this machine's.
+            # lan-mouse is never turned on from here.
+            $offer = Get-MouseFields ($utf8.GetString($Body) | ConvertFrom-Json)
+            $mine = Get-MouseOffer
+            if (-not $mine) { throw 'lan-mouse has no certificate here yet' }
+            Invoke-VivacMouseConfig $Remote $offer.Side $offer.Fingerprint $offer.Port
+            Show-LinkCard (T 'link.title') (T 'link.mouse_paired' @($Remote, $offer.Side))
+            return (@{ ok = $true; fingerprint = $mine.Fingerprint; port = $mine.Port; side = (Get-VivacMouseOpposite $offer.Side) } | ConvertTo-Json -Compress)
+        }
         'ping' {
             $version = ''
             $vf = Join-Path $root 'VERSION'
@@ -249,7 +295,7 @@ function Invoke-LinkConnection([Net.Sockets.TcpClient]$Client, [hashtable]$Seen)
         # verb, is a 400.
         try {
             $plain = Unprotect-VivacLinkBody $keys.Seal $req.Body
-            $answer = Invoke-LinkVerb $req.Verb $plain $conf ($Client.Client.LocalEndPoint.Address.ToString())
+            $answer = Invoke-LinkVerb $req.Verb $plain $conf ($Client.Client.LocalEndPoint.Address.ToString()) ($remote.Address.ToString())
         } catch {
             Write-LinkResponse $stream 400 '{"ok":false}'
             Write-LinkLog "refused 400 $($req.Verb) from ${remote}: $($_.Exception.Message)"
@@ -423,6 +469,23 @@ switch ($Verb) {
         try { $mac = [string]($answer | ConvertFrom-Json).mac } catch { $mac = '' }
         if ($mac -match '^([0-9a-f]{2}:){5}[0-9a-f]{2}$') { Write-VivacFile -Path (Get-VivacLinkPeerMacPath) -Text "$mac`n" }
         $answer
+    }
+    'mouse' {
+        # The peer lies beyond this side of the screen; it is told the
+        # opposite, where to place this machine.
+        $side = [string]($Rest -join '')
+        if ((Get-VivacMouseSides) -cnotcontains $side) { throw (T 'link.mouse_side' @($side)) }
+        $mine = Get-MouseOffer
+        if (-not $mine) { throw (T 'link.mouse_no_cert') }
+        $json = @{ fingerprint = $mine.Fingerprint; port = $mine.Port; side = (Get-VivacMouseOpposite $side) } | ConvertTo-Json -Compress
+        $r = Assert-LinkOk (Send-LinkRequest 'mouse' $utf8.GetBytes($json))
+        $conf = Read-VivacLinkConf
+        $peer = Get-VivacLinkPeer $conf
+        if ($peer -and $peer.StartsWith('{')) { $peer = [string]($peer | ConvertFrom-Json).address }
+        $peerHost = $peer -replace ':\d+$', ''
+        try { $theirs = Get-MouseFields ($r.Body | ConvertFrom-Json) } catch { throw (T 'link.bad_answer' @($peer)) }
+        Invoke-VivacMouseConfig $peerHost $side $theirs.Fingerprint $theirs.Port
+        T 'link.mouse_paired' @($peerHost, $side)
     }
     'wake' {
         $macPath = Get-VivacLinkPeerMacPath

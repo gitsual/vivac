@@ -10,6 +10,7 @@
     vivac-link notify TITLE BODY    a notification on the peer
     vivac-link ping                 the peer's name, system and version
     vivac-link wake                 wake the peer from sleep or off (Wake-on-LAN)
+    vivac-link mouse SIDE           pair the shared mouse with the peer, beyond SIDE of this screen
 
 The protocol is docs/bridge.md at the root of the product, section 4, and the
 Windows half speaks the same one. `serve` is what vivac-link.service runs: it
@@ -55,7 +56,9 @@ except ImportError:  # nothing works without it; the message says what to instal
 
 PROTOCOL = 2
 DEFAULT_PORT = 47321
-VERBS = ("clip", "url", "file", "notify", "ping")
+VERBS = ("clip", "url", "file", "notify", "ping", "mouse")
+SIDES = {"left": "right", "right": "left", "top": "bottom", "bottom": "top"}
+FINGERPRINT = re.compile(r"([0-9a-f]{2}:){31}[0-9a-f]{2}")
 TEXT_LIMIT = 64 * 1024
 FILE_LIMIT = 64 * 1024 * 1024
 NAME_LIMIT = 1024
@@ -487,9 +490,11 @@ class Receiver:
     def sender(self) -> str:
         return self.peer_name or TEXT.get("link.someone")
 
-    def act(self, verb: str, body: bytes, local: str) -> dict[str, object]:
+    def act(self, verb: str, body: bytes, local: str, remote: str) -> dict[str, object]:
         if verb == "ping":
             return {"ok": True, "name": self.pairing.name, "os": "linux", "version": version(), "protocol": PROTOCOL, "mac": mac_of(local)}
+        if verb == "mouse":
+            return mouse_exchange(body, remote)
         if verb == "file":
             raw_name, nul, data = body.partition(b"\0")
             if not nul or len(raw_name) > NAME_LIMIT or len(data) > FILE_LIMIT:
@@ -522,6 +527,87 @@ class Receiver:
                 raise Refused("title and body are text")
             notify(message.get("title", "")[:200] or TEXT.get("link.title"), message.get("body", "")[:2000])
         return {"ok": True}
+
+
+# --- the shared mouse, paired over the link (docs/bridge.md, "One keyboard and mouse") ----------
+
+
+def vivac_mouse(*arguments: str) -> subprocess.CompletedProcess[str]:
+    """vivac-mouse beside this file: the same checks and the same files as by hand."""
+    return subprocess.run([sys.executable, str(SELF.parent / "vivac-mouse"), *arguments], capture_output=True, text=True, timeout=30, check=False)
+
+
+def mouse_offer() -> dict[str, object] | None:
+    """This machine's lan-mouse certificate fingerprint and port; None before lan-mouse
+    has made its certificate."""
+    done = vivac_mouse("fingerprint")
+    mine = done.stdout.strip()
+    if done.returncode != 0 or not FINGERPRINT.fullmatch(mine):
+        return None
+    try:
+        port = int(read_kv(state_dir() / "mouse.conf").get("port", "4242"))
+    except ValueError:
+        port = 4242
+    return {"fingerprint": mine, "port": port}
+
+
+def mouse_fields(message: object) -> tuple[str, int, str]:
+    """The fingerprint, port and side of a mouse offer, each checked; Refused otherwise."""
+    if not isinstance(message, dict):
+        raise Refused("a mouse offer is a JSON object")
+    fingerprint, port, side = message.get("fingerprint"), message.get("port"), message.get("side")
+    if not isinstance(fingerprint, str) or not FINGERPRINT.fullmatch(fingerprint):
+        raise Refused("no fingerprint")
+    if not isinstance(port, int) or isinstance(port, bool) or not 0 < port <= 65535:
+        raise Refused("no port")
+    if side not in SIDES:
+        raise Refused("no side")
+    return fingerprint, port, side
+
+
+def mouse_exchange(body: bytes, remote: str) -> dict[str, object]:
+    """The other machine's lan-mouse, placed where it says and trusted, through vivac-mouse
+    config; answered with this machine's. lan-mouse is never turned on from here."""
+    try:
+        fingerprint, port, side = mouse_fields(json.loads(body.decode("utf-8")))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise Refused("not JSON") from None
+    offer = mouse_offer()
+    if offer is None:
+        raise Refused("lan-mouse has no certificate here yet")
+    done = vivac_mouse("config", "--peer", remote, "--side", side, "--fingerprint", fingerprint, "--port", str(port))
+    if done.returncode != 0:
+        raise Refused("vivac-mouse config refused it")
+    notify(TEXT.get("link.mouse_paired", remote, side), "")
+    return {"ok": True, **offer, "side": SIDES[side]}
+
+
+def pair_mouse(side: str) -> int:
+    """Send this machine's lan-mouse to the peer, which lies beyond SIDE of this screen,
+    and take the peer's in return: both then trust each other and nothing else."""
+    if side not in SIDES:
+        complain("link.mouse_side", side)
+        return 2
+    offer = mouse_offer()
+    if offer is None:
+        complain("link.mouse_no_cert")
+        return 1
+    status, answer = send("mouse", json.dumps({**offer, "side": SIDES[side]}).encode("utf-8"))
+    if status != 200:
+        return report(status)
+    try:
+        fingerprint, port, _ = mouse_fields(answer)
+    except Refused:
+        complain("link.bad_answer", current_peer(load_pairing()) if load_pairing() else "")
+        return 1
+    pairing = load_pairing()
+    host, _ = split_peer(current_peer(pairing), DEFAULT_PORT) if pairing else ("", 0)
+    done = vivac_mouse("config", "--peer", host, "--side", side, "--fingerprint", fingerprint, "--port", str(port))
+    if done.returncode != 0:
+        print(done.stderr, end="", file=sys.stderr)
+        return 1
+    say("link.mouse_paired", host, side)
+    return 0
 
 
 def make_handler(receiver: Receiver) -> type[BaseHTTPRequestHandler]:
@@ -578,7 +664,7 @@ def make_handler(receiver: Receiver) -> type[BaseHTTPRequestHandler]:
                 plain = unseal(receiver.pairing.seal_key, body)
                 if verb != "file" and len(plain) > TEXT_LIMIT:
                     raise Refused("too large")
-                payload = receiver.act(verb, plain, self.connection.getsockname()[0])
+                payload = receiver.act(verb, plain, self.connection.getsockname()[0], self.client_address[0])
             except ValueError:
                 self.answer(400, {"ok": False, "error": "not a sealed body"})
                 return
@@ -883,6 +969,8 @@ def main(arguments: list[str]) -> int:
         return ping()
     if command == "wake" and not rest:
         return wake()
+    if command == "mouse" and len(rest) == 1:
+        return pair_mouse(rest[0])
     if command == "send-clip" and len(rest) <= 1:
         text = rest[0] if rest else clipboard_get()
         if not text:

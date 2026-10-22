@@ -88,6 +88,7 @@ local network, paired once. Then from either one:
 | `file` | saves it under `Downloads/vivac-link/` with a safe name, never overwriting, and says so |
 | `notify` | shows the title and body as a notification |
 | `ping` | answers with its name, system, version and hardware address |
+| `mouse` | places and trusts the sender's lan-mouse and answers with its own ([One keyboard and mouse](#5-one-keyboard-and-mouse)) |
 
 And one that is not a request: `wake` sends a Wake-on-LAN packet to the
 other machine's hardware address, the one its last `ping` gave, so a machine
@@ -309,17 +310,22 @@ after `--port N`, open N by hand.
 - Windows' own elevated windows (UAC prompts, administrator programs) do not
   take input from a lan-mouse running at the normal level.
 
-### Pairing over vivac link (after protocol v2)
+### Pairing over vivac link
 
-`pair` and `trust` are the manual exchange. Once vivac link speaks v2, one
-verb carries it: `mouse`, body JSON `{"fingerprint":"aa:...","port":4242,"side":"right"}`,
-where `side` is where the *receiver* should place the sender (the sender's
-own side, reversed). The receiver checks each field as `vivac-mouse config`
-does, stores the fingerprint and side through the same code path as
-`vivac-mouse config --peer <sender's address> --side <side> --fingerprint <fp>`,
-restarts lan-mouse if it is enabled, and answers with its own
-`{"fingerprint","port","side"}`, which the sender stores the same way. It
-never enables lan-mouse by itself.
+`pair` and `trust` are the manual exchange. With vivac link paired, one
+command does both sides: `vivac-link mouse right` (Windows:
+`bin\vivac-link.ps1 mouse right`), where `right` is the edge of this screen
+the other machine sits beyond. It sends the link verb `mouse`, body JSON
+`{"fingerprint":"aa:...","port":4242,"side":"left"}`, where `side` is where
+the *receiver* should place the sender (the sender's own side, reversed).
+The receiver checks each field, runs
+`vivac-mouse config --peer <sender's address> --side <side> --fingerprint <fp> --port <port>`
+(so the same checks and files as by hand, and a restart of lan-mouse only if
+it is on), and answers with its own `{"fingerprint","port","side"}`, which
+the sender stores the same way. Neither side ever turns lan-mouse on because
+of it. Both need lan-mouse to have made its certificate (`vivac-mouse enable`
+once) first.
+
 ## 5. vivac ask across machines
 
 `vivac ask` is a feature of each half on its own (`linux/README.md`, `windows/README.md`): a
