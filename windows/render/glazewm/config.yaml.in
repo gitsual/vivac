@@ -172,6 +172,11 @@ keybindings:
   # @help: wm help.wm.theme
   - commands: ['shell-exec --hide-window cmd.exe /c echo theme>\\.\pipe\@PIPE_NAME@ 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 theme']
     bindings: ['@SET_MOD@+shift+t']
+  # vivac ask runs in a process of its own, not in the resident host: the
+  # panel stays open beside your work and streams on a thread of its own.
+  # @help: wm help.wm.ask
+  - commands: ['shell-exec --hide-window conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 ask']
+    bindings: ['@SET_MOD@+shift+a']
   # vivac's clipboard history. With Win as the modifier the resident host's
   # keyboard hook answers Win+V itself, before Windows or GlazeWM see it, so
   # the binding is only rendered for Alt.

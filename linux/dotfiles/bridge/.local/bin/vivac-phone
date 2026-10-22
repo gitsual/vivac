@@ -1,0 +1,490 @@
+#!/usr/bin/env bash
+# The phone: KDE Connect, as part of vivac (docs/bridge.md at the root of the
+# product, "The phone").
+#
+#   waybar              one line of JSON for the bar's custom/phone: the first
+#                       reachable phone's battery; empty (hidden) without one
+#   menu                rofi: ring, send a file, the clipboard or the link on
+#                       it, browse the phone's files, pair
+#   commands [--dry-run] [--device ID]
+#                       write the fixed vivac actions the phone may trigger
+#                       into KDE Connect's Run command list for each paired
+#                       device; other commands there are kept
+#   run ACTION          what those entries call: lock, suspend, clip-other
+#                       or reboot-windows, and nothing else
+#   --available         exit 0 when KDE Connect is installed, 1 otherwise
+#   --print             list the menu's rows, one per line, and exit
+#
+# The phone's notifications need nothing from here: kdeconnectd (started with
+# the session) sends them to the notification daemon like any program's.
+# Everything is silent without KDE Connect or a paired phone: the bar shows
+# nothing and the bridge menu leaves the row out.
+set -Eeuo pipefail
+
+self="$(readlink -f -- "${BASH_SOURCE[0]}")"
+repo_root="${VIVAC_REPO:-$(cd -- "$(dirname -- "$self")/../../../.." && pwd -P)}"
+# shellcheck source=lib/kv.sh
+source "$repo_root/lib/kv.sh"
+# shellcheck source=lib/i18n.sh
+source "$repo_root/lib/i18n.sh"
+
+language="$(i18n_session_language)"
+i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
+	i18n_load en "${I18N_DIR:-$repo_root/i18n}"
+
+bin="$(dirname -- "$self")"
+kdeconnect_dir="${XDG_CONFIG_HOME:-$HOME/.config}/kdeconnect"
+# The daemon answers at once when it runs; a few seconds is a daemon gone wrong,
+# and the bar must not wait on it.
+# The programs, by name on the PATH; the gates point these at fakes.
+kdeconnect_cli="${VIVAC_KDECONNECT_CLI:-kdeconnect-cli}"
+kdeconnect_app="${VIVAC_KDECONNECT_APP:-kdeconnect-app}"
+installed() { command -v "$kdeconnect_cli" >/dev/null; }
+cli() { timeout 8 "$kdeconnect_cli" "$@" 2>/dev/null; }
+
+# tell TEXT — stderr always; on screen too when there is no terminal.
+tell() {
+	printf 'vivac-phone: %s\n' "$1" >&2
+	[[ -t 2 ]] && return 0
+	command -v notify-send >/dev/null || return 0
+	notify-send --app-name=vivac -- "$(i18n_get phone.title)" "$1" || true
+}
+
+# A device id names folders and D-Bus paths: letters, digits, _ and - only,
+# and never a leading -, so it cannot pass for an option.
+valid_id() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$ ]]; }
+
+# devices — "id<TAB>name" per paired and reachable device.
+devices() {
+	local id name
+	while IFS=' ' read -r id name; do
+		valid_id "$id" || continue
+		printf '%s\t%s\n' "$id" "${name//[$'\t\r']/ }"
+	done < <(cli --list-available --id-name-only || true)
+}
+
+# battery ID — "charge charging" (charge -1 when the phone has not said yet).
+battery() {
+	local path="/modules/kdeconnect/devices/$1/battery" iface=org.kde.kdeconnect.device.battery charge charging
+	charge="$(timeout 3 busctl --user get-property org.kde.kdeconnect "$path" "$iface" charge 2>/dev/null || true)"
+	charging="$(timeout 3 busctl --user get-property org.kde.kdeconnect "$path" "$iface" isCharging 2>/dev/null || true)"
+	# busctl prints the D-Bus type before the value: "i 87", "b true".
+	charge="${charge#i }"
+	[[ "$charge" =~ ^[0-9]+$ ]] && ((charge <= 100)) || charge=-1
+	[[ "$charging" == 'b true' ]] && charging=true || charging=false
+	printf '%s %s\n' "$charge" "$charging"
+}
+
+# JSON string, and Pango text for the tooltip (Waybar reads it as markup).
+json() {
+	local s="${1//\\/\\\\}"
+	s="${s//\"/\\\"}"
+	s="${s//$'\n'/\\n}"
+	printf '"%s"' "$(tr -d '\000-\011\013-\037' <<<"$s")"
+}
+pango() {
+	# Quoted replacements: since bash 5.2 a bare & in one stands for the match.
+	local s="${1//&/"&amp;"}"
+	s="${s//</"&lt;"}"
+	printf '%s' "${s//>/"&gt;"}"
+}
+
+# ---------------------------------------------------------------------- bar
+
+# Nerd Font glyphs (cellphone U+F011C, battery-charging U+F0084), as UTF-8
+# bytes so they come out the same whatever the locale.
+glyph_phone=$'\xf3\xb0\x84\x9c'
+glyph_charging=$'\xf3\xb0\x82\x84'
+
+waybar_json() {
+	local absent='{"text":"","class":"absent"}'
+	installed || {
+		printf '%s\n' "$absent"
+		return 0
+	}
+	# Only while the daemon runs: the bar is polled from the first second of
+	# the session, and a query would otherwise start it by D-Bus activation,
+	# before the session's environment (Wayland, for the clipboard) is in.
+	pgrep -u "$(id -u)" -x kdeconnectd >/dev/null 2>&1 || {
+		printf '%s\n' "$absent"
+		return 0
+	}
+	local id name charge charging text='' class='' tip=() line
+	while IFS=$'\t' read -r id name; do
+		read -r charge charging < <(battery "$id")
+		if ((charge < 0)); then
+			line="$(i18n_format phone.battery_unknown "$name")"
+		elif [[ "$charging" == true ]]; then
+			line="$(i18n_format phone.battery_charging "$name" "$charge")"
+		else
+			line="$(i18n_format phone.battery "$name" "$charge")"
+		fi
+		tip+=("$(pango "$line")")
+		[[ -z "$text" ]] || continue
+		# The first phone is the one on the bar; the rest are in the tooltip.
+		text="$glyph_phone"
+		class=normal
+		if ((charge >= 0)); then
+			text+=" $charge%"
+			if [[ "$charging" == true ]]; then
+				text="$glyph_phone $glyph_charging $charge%"
+				class=charging
+			elif ((charge <= 20)); then
+				class=low
+			fi
+		fi
+	done < <(devices)
+	[[ -n "$text" ]] || {
+		printf '%s\n' "$absent"
+		return 0
+	}
+	local joined
+	joined="$(printf '%s\n' "${tip[@]}")"
+	printf '{"text":%s,"tooltip":%s,"class":"%s"}\n' "$(json "$text")" "$(json "$joined")" "$class"
+}
+
+# --------------------------------------------------------------------- menu
+
+# pick_device — the id of the phone to act on: the only one, or the one
+# chosen in rofi; nothing when there is none or the choice was abandoned.
+pick_device() {
+	local list=() names=() id name chosen
+	while IFS=$'\t' read -r id name; do
+		list+=("$id")
+		names+=("$name")
+	done < <(devices)
+	((${#list[@]})) || return 1
+	if ((${#list[@]} == 1)); then
+		printf '%s\t%s\n' "${list[0]}" "${names[0]}"
+		return 0
+	fi
+	chosen="$(printf '%s\n' "${names[@]}" | rofi -dmenu -i -format i -p "$(i18n_get phone.pick_device)")" || return 1
+	[[ "$chosen" =~ ^[0-9]+$ ]] && ((chosen < ${#list[@]})) || return 1
+	printf '%s\t%s\n' "${list[$chosen]}" "${names[$chosen]}"
+}
+
+# pick_file — a file under $HOME, in rofi: what fd lists (no hidden files,
+# nothing a .gitignore leaves out), five levels deep.
+pick_file() {
+	local rel
+	rel="$({
+		if command -v fd >/dev/null; then
+			fd --base-directory "$HOME" --type f --max-depth 5 2>/dev/null
+		else
+			find "$HOME" -mindepth 1 -maxdepth 5 -not -path '*/.*' -type f -printf '%P\n' 2>/dev/null
+		fi
+	} | head -n 50000 | rofi -dmenu -i -p "$(i18n_get phone.pick_file)")" || return 1
+	[[ -n "$rel" && -f "$HOME/$rel" ]] || return 1
+	printf '%s\n' "$HOME/$rel"
+}
+
+# The rows, and what each does, in the same order. As in the bridge menu, the
+# action is chosen by position and never by the label it printed.
+menu_rows() {
+	keys=() actions=()
+	if [[ "${1:-}" == paired ]]; then
+		keys+=(phone.ring phone.send_file phone.send_clip phone.send_url)
+		actions+=(ring send-file send-clip send-url)
+		if command -v sshfs >/dev/null; then
+			keys+=(phone.browse)
+			actions+=(browse)
+		fi
+	fi
+	keys+=(phone.manage)
+	actions+=(manage)
+}
+menu_labels() {
+	local key
+	for key in "${keys[@]}"; do printf '%s\n' "$(i18n_get "$key")"; done
+}
+
+manage() {
+	if command -v "$kdeconnect_app" >/dev/null; then
+		"$kdeconnect_app" >/dev/null 2>&1 &
+		disown
+	else
+		tell "$(i18n_get phone.pair_hint)"
+	fi
+}
+
+menu() {
+	installed || {
+		tell "$(i18n_get phone.not_installed)"
+		return 1
+	}
+	local picked='' id='' name='' chosen action file clip mount
+	# With several phones, one is chosen first; leaving that choice ends here.
+	if [[ -n "$(devices)" ]]; then picked="$(pick_device)" || return 0; fi
+	if [[ -n "$picked" ]]; then
+		IFS=$'\t' read -r id name <<<"$picked"
+		menu_rows paired
+	else
+		menu_rows
+	fi
+	chosen="$(menu_labels | rofi -dmenu -i -format i -p "$(i18n_get phone.title)${name:+: $name}")" || return 0
+	[[ "$chosen" =~ ^[0-9]+$ ]] && ((chosen < ${#actions[@]})) || return 0
+	action="${actions[$chosen]}"
+	case "$action" in
+	manage)
+		[[ -n "$id" ]] || tell "$(i18n_get phone.none)"
+		manage
+		;;
+	ring)
+		if cli -d "$id" --ring >/dev/null; then tell "$(i18n_format phone.ringing "$name")"; else tell "$(i18n_format phone.failed "$name")"; fi
+		;;
+	send-file)
+		file="$(pick_file)" || return 0
+		if cli -d "$id" --share "$file" >/dev/null; then tell "$(i18n_format phone.sent "$name")"; else tell "$(i18n_format phone.failed "$name")"; fi
+		;;
+	send-clip)
+		if cli -d "$id" --send-clipboard >/dev/null; then tell "$(i18n_format phone.sent "$name")"; else tell "$(i18n_format phone.failed "$name")"; fi
+		;;
+	send-url)
+		# Only a link, and only http(s): the phone opens what it is shared.
+		clip="$(wl-paste --no-newline --type text 2>/dev/null || true)"
+		[[ "$clip" =~ ^https?://[^[:space:]]+$ ]] || {
+			tell "$(i18n_get phone.no_link)"
+			return 0
+		}
+		if cli -d "$id" --share "$clip" >/dev/null; then tell "$(i18n_format phone.sent "$name")"; else tell "$(i18n_format phone.failed "$name")"; fi
+		;;
+	browse)
+		cli -d "$id" --mount >/dev/null || true
+		mount="$(cli -d "$id" --get-mount-point | head -n 1 || true)"
+		if [[ -n "$mount" && -d "$mount" ]]; then
+			xdg-open "$mount" >/dev/null 2>&1 &
+			disown
+		else
+			tell "$(i18n_format phone.no_mount "$name")"
+		fi
+		;;
+	esac
+}
+
+# ----------------------------------------------------------------- commands
+
+# The fixed list the phone may trigger. Each entry runs `vivac-phone run`
+# with one of the names below, so what the phone can do is decided here and
+# nowhere else; the config only says which name.
+command_entries() {
+	printf 'vivac-lock\t%s\tlock\n' "$(i18n_get phone.cmd_lock)"
+	printf 'vivac-suspend\t%s\tsuspend\n' "$(i18n_get phone.cmd_suspend)"
+	# The other machine, once vivac link is paired.
+	[[ -f "${XDG_STATE_HOME:-$HOME/.local/state}/vivac/link.conf" ]] &&
+		printf 'vivac-clip-other\t%s\tclip-other\n' "$(i18n_get phone.cmd_clip_other)"
+	# Restart in Windows, when the firmware has an entry for it. The phone's
+	# tap is the confirmation: from the phone, nobody is at this screen to
+	# answer the two questions the menu asks.
+	"$bin/vivac-reboot-other" --available >/dev/null 2>&1 &&
+		printf 'vivac-reboot-windows\t%s\treboot-windows\n' "$(i18n_get power.reboot_windows)"
+	return 0
+}
+
+# paired_devices — the ids KDE Connect trusts: the groups of its
+# trusted_devices file, whether or not the phone is reachable now.
+paired_devices() {
+	local file="$kdeconnect_dir/trusted_devices" line id
+	[[ -f "$file" ]] || return 0
+	while IFS= read -r line; do
+		[[ "$line" =~ ^\[([^]]+)\][[:space:]]*$ ]] || continue
+		id="${BASH_REMATCH[1]}"
+		[[ "$id" != General ]] && valid_id "$id" && printf '%s\n' "$id"
+	done <"$file"
+}
+
+# write_commands ID DRY — merge the entries into the device's runcommand
+# config. KDE Connect keeps it as QSettings INI: [General], key commands, the
+# value a quoted @ByteArray of JSON, {"key": {"name": ..., "command": ...}}.
+# Keys starting vivac- are ours and replaced; any other is the user's own and
+# kept as it is. Python reads and writes it (standard library only).
+write_commands() {
+	local id="$1" dry="$2" file="$kdeconnect_dir/$1/kdeconnect_runcommand/config"
+	VIVAC_PHONE_ENTRIES="$(command_entries)" VIVAC_PHONE_CMD="\"\$HOME/.local/bin/vivac-phone\" run" \
+		python3 - "$file" "$dry" <<'PY'
+import json, os, sys
+
+path, dry = sys.argv[1], sys.argv[2] == "true"
+
+def unescape(raw):
+    """A QSettings INI value back to its string: quotes and backslash escapes."""
+    out, i, quoted = [], 0, False
+    while i < len(raw):
+        c = raw[i]
+        if c == '"':
+            quoted = not quoted
+        elif c == "\\" and i + 1 < len(raw):
+            i += 1
+            e = raw[i]
+            simple = {"a": "\a", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
+            if e in simple:
+                out.append(simple[e])
+            elif e == "x":
+                j = i + 1
+                while j < len(raw) and j - i <= 4 and raw[j].lower() in "0123456789abcdef":
+                    j += 1
+                out.append(chr(int(raw[i + 1:j] or "0", 16)))
+                i = j - 1
+            else:
+                out.append(e)
+        elif c == ";" and not quoted:
+            break
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out).strip() if not quoted else None
+
+lines = []
+if os.path.exists(path):
+    with open(path, encoding="utf-8") as f:
+        lines = f.read().splitlines()
+
+existing, at, section = {}, None, None
+for n, line in enumerate(lines):
+    s = line.strip()
+    if s.startswith("[") and s.endswith("]"):
+        section = s[1:-1]
+    elif section == "General" and s.split("=", 1)[0].strip() == "commands":
+        at = n
+        value = unescape(s.split("=", 1)[1].strip())
+        if value is None:
+            sys.exit(3)
+        if value.startswith("@ByteArray(") and value.endswith(")"):
+            value = value[len("@ByteArray("):-1]
+        try:
+            existing = json.loads(value or "{}")
+        except ValueError:
+            sys.exit(3)
+        if not isinstance(existing, dict):
+            sys.exit(3)
+
+commands = {k: v for k, v in existing.items() if not k.startswith("vivac-")}
+base = os.environ["VIVAC_PHONE_CMD"]
+for row in os.environ["VIVAC_PHONE_ENTRIES"].splitlines():
+    key, name, action = row.split("\t")
+    commands[key] = {"name": name, "command": f"{base} {action}"}
+
+# ASCII JSON (\u escapes), so the INI line needs no codec; then the two
+# escapes QSettings reads back inside quotes.
+blob = json.dumps(commands, sort_keys=True, separators=(",", ":"))
+entry = 'commands="@ByteArray(' + blob.replace("\\", "\\\\").replace('"', '\\"') + ')"'
+if at is not None:
+    lines[at] = entry
+elif "[General]" in [l.strip() for l in lines]:
+    lines.insert([l.strip() for l in lines].index("[General]") + 1, entry)
+else:
+    lines = ["[General]", entry] + ([""] + lines if lines else [])
+text = "\n".join(lines) + "\n"
+
+old = open(path, encoding="utf-8").read() if os.path.exists(path) else None
+ours = sorted(k for k in commands if k.startswith("vivac-"))
+if old == text:
+    print("unchanged")
+elif dry:
+    print("would " + " ".join(ours))
+    sys.stdout.write(text)
+else:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".vivac-new"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(text)
+    os.replace(tmp, path)
+    print("wrote " + " ".join(ours))
+PY
+}
+
+commands() {
+	local dry=false only='' ids=() id out status
+	while (($#)); do
+		case "$1" in
+		--dry-run) dry=true ;;
+		--device)
+			if (($# < 2)) || ! valid_id "$2"; then
+				printf 'vivac-phone: --device needs a device id\n' >&2
+				return 2
+			fi
+			only="$2"
+			shift
+			;;
+		*)
+			printf 'Unknown option: %s\n' "$1" >&2
+			return 2
+			;;
+		esac
+		shift
+	done
+	while IFS= read -r id; do
+		[[ -z "$only" || "$id" == "$only" ]] && ids+=("$id")
+	done < <(paired_devices)
+	((${#ids[@]})) || {
+		tell "$(i18n_format phone.cmd_no_device "$kdeconnect_dir")"
+		return 1
+	}
+	for id in "${ids[@]}"; do
+		status=0
+		out="$(write_commands "$id" "$dry")" || status=$?
+		if ((status == 3)); then
+			tell "$(i18n_format phone.cmd_unreadable "$kdeconnect_dir/$id/kdeconnect_runcommand/config")"
+			return 1
+		fi
+		((status == 0)) || return "$status"
+		case "$out" in
+		unchanged) printf '%s\n' "$(i18n_format phone.cmd_unchanged "$id")" ;;
+		would*)
+			printf '%s\n' "$(i18n_format phone.cmd_would "$kdeconnect_dir/$id/kdeconnect_runcommand/config")"
+			printf '%s\n' "${out#*$'\n'}"
+			;;
+		*)
+			printf '%s\n' "$(i18n_format phone.cmd_written "$id" "${out#wrote }")"
+			# The daemon re-reads the file on this signal and sends the new
+			# list to the phone; without it, at the phone's next connection.
+			timeout 3 busctl --user emit "/kdeconnect/$id/kdeconnect_runcommand" \
+				org.kde.kdeconnect.config configChanged >/dev/null 2>&1 || true
+			;;
+		esac
+	done
+}
+
+# ---------------------------------------------------------------------- run
+
+# What a Run command entry on the phone calls. A fixed set: anything else is
+# refused, whatever the config says.
+run() {
+	local output
+	case "${1:-}" in
+	lock) exec loginctl lock-session ;;
+	suspend) exec systemctl suspend ;;
+	# The two questions of any restart are asked on this screen: a tap on a
+	# phone is not a yes from whoever is working here.
+	reboot-windows) exec "$bin/vivac-reboot-other" ;;
+	clip-other)
+		output="$("$bin/vivac-link" send-clip 2>&1)" || true
+		command -v notify-send >/dev/null && notify-send --app-name=vivac -- "$(i18n_get link.title)" "$output"
+		return 0
+		;;
+	*)
+		printf 'vivac-phone: not an action: %s\n' "${1:-}" >&2
+		return 2
+		;;
+	esac
+}
+
+case "${1:-}" in
+waybar) waybar_json ;;
+menu) menu ;;
+commands)
+	shift
+	commands "$@"
+	;;
+run) run "${2:-}" ;;
+--available) installed ;;
+--print)
+	installed || exit 0
+	if [[ -n "$(devices)" ]]; then menu_rows paired; else menu_rows; fi
+	menu_labels
+	;;
+-h | --help) sed -n '2,21p' "$self" ;;
+*)
+	printf 'Usage: vivac-phone waybar | menu | commands [--dry-run] [--device ID] | run ACTION | --available | --print\n' >&2
+	exit 2
+	;;
+esac

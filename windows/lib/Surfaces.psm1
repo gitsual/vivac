@@ -9,6 +9,8 @@
 Set-StrictMode -Version 2.0
 Import-Module (Join-Path $PSScriptRoot 'Vivac.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Bridge.psm1')
+Import-Module (Join-Path $PSScriptRoot 'Mouse.psm1')
+Import-Module (Join-Path $PSScriptRoot 'Phone.psm1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $script:VivacEntry = Join-Path $root 'bin\vivac.ps1'
@@ -94,6 +96,8 @@ function New-VivacWindow([string]$Xaml) {
                     [Action[object]] { param($w) try { if ($w.IsVisible) { Set-VivacForeground $w } } catch { } }, $s)
                 return
             }
+            # A panel you work beside (vivac ask) sets vivac.keep and stays.
+            if ($s.Resources['vivac.keep']) { return }
             try { $s.Close() } catch { }
         })
     $window
@@ -778,11 +782,30 @@ function Show-ThemePicker([switch]$NoShow, [hashtable]$Registry) {
         [void]$panel.Children.Add($label)
         [void]$rows.Items.Add($panel)
     }
+    # The last row makes a new palette from a picture (lib/Picture.psm1).
+    $fromPicture = New-Object Windows.Controls.TextBlock
+    $fromPicture.Margin = '4,10'
+    $fromPicture.Tag = ':picture'
+    $fromPicture.Foreground = "#$($p['COLOR_ACCENT'])"
+    $fromPicture.Text = T 'picture.menu'
+    [void]$rows.Items.Add($fromPicture)
     $rows.SelectedIndex = [Math]::Max(0, [array]::IndexOf($names, $current))
 
     $apply = {
         $sel = $rows.SelectedItem
         if (-not $sel) { return }
+        if ([string]$sel.Tag -eq ':picture') {
+            $dialog = New-Object Microsoft.Win32.OpenFileDialog
+            $dialog.Title = T 'picture.dialog_title'
+            $dialog.Filter = (T 'picture.filter') + '|*.png;*.jpg;*.jpeg'
+            $dialog.InitialDirectory = [Environment]::GetFolderPath('MyPictures')
+            if (-not $dialog.ShowDialog($window)) { return }
+            $window.Close()
+            # Made and worn in the background, like any switch. Start-Process
+            # quotes nothing, so the path is quoted here.
+            Invoke-Detached (Join-Path $root 'scripts\theme-from-image.ps1') @("`"$($dialog.FileName)`"", '-Apply')
+            return
+        }
         $window.Close()
         # Applied in the background: a theme switch restarts the bar and may
         # render a wallpaper, and the picker should not sit on screen for it.
@@ -799,6 +822,51 @@ function Show-ThemePicker([switch]$NoShow, [hashtable]$Registry) {
     if ($NoShow) { return $window }
     if ($Registry) { $Registry[$surfaceName] = $window }
     [void]$window.ShowDialog()
+}
+
+# ----------------------------------------------------------------- a choice
+
+# One choice from a list, as the theme picker looks: arrows and Enter, or a
+# double click; Escape chooses nothing. Returns the index, or -1. Used where
+# a program asks one question (the phone to send to, bin/vivac-localsend.ps1).
+function Select-VivacItem([string]$Title, [string[]]$Rows, [string]$Hint = '', [switch]$NoShow) {
+    Update-SurfaceContext
+    $p = Get-Palette
+    $body = @"
+<DockPanel>
+  <TextBlock DockPanel.Dock="Top" Margin="0,0,0,12" FontSize="16" Foreground="#$($p['COLOR_ACCENT'])" Text="$(ConvertTo-XmlText $Title)"/>
+  <TextBlock DockPanel.Dock="Bottom" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="#$($p['COLOR_MUTED'])" Text="$(ConvertTo-XmlText $Hint)"/>
+  <ListBox x:Name="Rows" Background="Transparent" BorderThickness="0" Foreground="#$($p['COLOR_FG'])">
+    <ListBox.Resources>
+      <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#$($p['COLOR_SURFACE_ALT'])"/>
+      <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#$($p['COLOR_SURFACE_ALT'])"/>
+      <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#$($p['COLOR_FG'])"/>
+    </ListBox.Resources>
+  </ListBox>
+</DockPanel>
+"@
+    $window = New-VivacWindow (Get-WindowXaml 'vivac - choose' 560 (160 + 34 * [Math]::Min(10, $Rows.Count)) $body)
+    $list = $window.FindName('Rows')
+    foreach ($r in $Rows) {
+        $label = New-Object Windows.Controls.TextBlock
+        $label.Margin = '4,6'
+        $label.Text = $r
+        [void]$list.Items.Add($label)
+    }
+    if ($Rows.Count) { $list.SelectedIndex = 0 }
+    $state = @{ Chosen = -1 }
+    $pick = { $state.Chosen = $list.SelectedIndex; $window.Close() }
+    $window.Add_PreviewKeyDown({
+        param($s, $e)
+        $k = [string]$e.Key
+        if ($k -eq 'Escape') { $window.Close(); return }
+        if ($k -eq 'Return') { & $pick; $e.Handled = $true; return }
+    })
+    $list.Add_MouseDoubleClick({ & $pick })
+    $window.Add_ContentRendered({ $list.Focus() | Out-Null })
+    if ($NoShow) { return $window }
+    [void]$window.ShowDialog()
+    $state.Chosen
 }
 
 # ------------------------------------------------------------------- the menu
@@ -902,7 +970,35 @@ function Get-VivacMenuEntries {
         $e.Add((New-MenuEntry 'session' (T 'bridge.drop_out') 'bridge' 'drop-out' $false 0xE898))
     }
     if (Test-Path -LiteralPath (Get-VivacLinkConfPath)) { $e.Add((New-MenuEntry 'session' (T 'bridge.link_clip') 'bridge' 'link-clip' $false 0xE8C8)) }
+    # Waking needs the other machine's hardware address, which a ping learns.
+    if (Test-Path -LiteralPath (Get-VivacLinkPeerMacPath)) { $e.Add((New-MenuEntry 'session' (T 'bridge.link_wake') 'bridge' 'link-wake' $false 0xE7E8)) }
+    # The shared mouse, once lan-mouse is installed; the row says what it is now.
+    if (Find-VivacLanMouse) {
+        $mouseKey = 'bridge.mouse_off'
+        if ((Read-VivacMouseConf).enabled -eq 'yes') { $mouseKey = 'bridge.mouse_on' }
+        $e.Add((New-MenuEntry 'session' (T $mouseKey) 'bridge' 'mouse-toggle' $false 0xE962))
+    }
+    # The phone, a category of its own while KDE Connect is installed
+    # (lib/Phone.psm1); read from what the bar last saw, never asked here.
+    foreach ($p in @(Get-VivacPhoneMenuEntries ${function:New-MenuEntry})) { $e.Add($p) }
+    # A phone with LocalSend (docs/bridge.md, "Phones: LocalSend"): needs nothing set up to send.
+    $e.Add((New-MenuEntry 'session' (T 'localsend.menu_send') 'bridge' 'localsend-send' $false 0xE8EA))
+    $e.Add((New-MenuEntry 'session' (T 'localsend.menu_toggle') 'bridge' 'localsend-toggle' $false 0xE8EA))
     $e
+}
+
+# The phone's actions, each in a process of its own: the menu closes at once
+# and the result comes as a notification (bin/vivac-phone.ps1).
+function Invoke-PhoneAction([string]$Target) {
+    $action, $id, $name = $Target -split '\|', 3
+    $switch = @{ ring = '-Ring'; 'send-file' = '-SendFile'; 'send-clip' = '-SendClipboard'; manage = '-Manage' }[$action]
+    if (-not $switch) { return }
+    $phoneArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$(Join-Path (Get-VivacPaths).Repo 'bin\vivac-phone.ps1')`"", $switch)
+    if ($action -ne 'manage') {
+        if (-not (Test-VivacPhoneId $id)) { return }
+        $phoneArgs += @('-Device', $id, '-Name', (ConvertTo-VivacArgument $name))
+    }
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList $phoneArgs
 }
 
 # Whether "restart in Linux" is set up: its task is registered. Asked once per
@@ -927,6 +1023,12 @@ function Invoke-BridgeAction([string]$Id) {
             Start-Process explorer.exe -ArgumentList "`"$folder`""
         }
         'link-clip' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-link.ps1`"", 'send-clip', '-Notify') }
+        'link-wake' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-link.ps1`"", 'wake', '-Notify') }
+        'mouse-toggle' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-mouse.ps1`"", 'toggle', '-Notify') }
+        # The phone drop says what it did in a card of its own.
+        { $_ -in 'localsend-send', 'localsend-toggle' } {
+            Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-localsend.ps1`"", ($Id.Substring(10) -replace '^send$', 'pick'), '-Notify')
+        }
     }
 }
 
@@ -1005,6 +1107,7 @@ function Invoke-MenuEntry($Entry, [string]$Query, [switch]$Admin) {
         'run-admin' { Start-Process $Entry.Target -Verb RunAs }
         'power'     { Invoke-PowerAction $Entry.Target }
         'bridge'    { Invoke-BridgeAction $Entry.Target }
+        'phone'     { Invoke-PhoneAction $Entry.Target }
         'copy'      { Set-Clipboard -Value $Entry.Target }
         'find-files' {
             $q = [Uri]::EscapeDataString($Query)
@@ -1121,7 +1224,7 @@ $(Get-KitResourcesXaml $p)
 "@
 }
 
-function Show-Menu([switch]$NoShow, [hashtable]$Registry) {
+function Show-Menu([switch]$NoShow, [hashtable]$Registry, [string]$Category = '') {
     Update-SurfaceContext
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'menu' }
     Import-VivacMenu
@@ -1131,7 +1234,9 @@ function Show-Menu([switch]$NoShow, [hashtable]$Registry) {
     $entries = @(Get-VivacMenuEntries)
     $uses = Read-VivacMenuUsage
     $groupOrder = @('apps', 'recent', 'folders', 'settings', 'tools', 'session')
-    $groupGlyph = @{ all = 0xE80F; apps = 0xE71D; recent = 0xE823; folders = 0xE8B7; settings = 0xE713; tools = 0xE90F; session = 0xE7E8 }
+    # The phone's category exists only while KDE Connect is installed.
+    if (@($entries | Where-Object { $_.Group -eq 'phone' }).Count) { $groupOrder += 'phone' }
+    $groupGlyph = @{ all = 0xE80F; apps = 0xE71D; recent = 0xE823; folders = 0xE8B7; settings = 0xE713; tools = 0xE90F; session = 0xE7E8; phone = 0xE8EA }
     $sectionLabel = @{}
     foreach ($g in @('all') + $groupOrder) { $sectionLabel[$g] = T "menu.section.$g" }
 
@@ -1184,6 +1289,8 @@ function Show-Menu([switch]$NoShow, [hashtable]$Registry) {
     }
     $cats.ItemsSource = $catRows
     $cats.SelectedIndex = 0
+    # Opened on one category (the bar's phone opens the Phone one).
+    for ($i = 0; $i -lt $catRows.Count; $i++) { if ($catRows[$i].Group -eq $Category) { $cats.SelectedIndex = $i } }
 
     $newAction = {
         param([string]$Kind, [string]$Label, [int]$Code, [string]$Target = '')
@@ -1326,7 +1433,7 @@ function Show-Menu([switch]$NoShow, [hashtable]$Registry) {
                 $cats.SelectedIndex = ($cats.SelectedIndex + $step + $n) % $n
                 $e.Handled = $true; return
             }
-            if ($ctrl -and $k -match '^D([1-7])$') { $cats.SelectedIndex = [int]$Matches[1] - 1; $e.Handled = $true; return }
+            if ($ctrl -and $k -match '^D([1-8])$' -and [int]$Matches[1] -le $catRows.Count) { $cats.SelectedIndex = [int]$Matches[1] - 1; $e.Handled = $true; return }
             if ($k -eq 'Return') { & $act $ctrl; $e.Handled = $true; return }
         })
     # One click opens, as in a launcher; the scroll bar is not a row.

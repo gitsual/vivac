@@ -157,29 +157,80 @@ function Get-VivacDefaultTheme { $script:DefaultTheme }
 function Get-VivacThemePath([string]$Name) {
     if ($Name -eq $script:DefaultTheme) { return (Join-Path $script:Root 'data\theme.conf') }
     if ($Name -notmatch '^[a-z0-9][a-z0-9-]*$') { throw "vivac: not a theme name: '$Name'" }
-    Join-Path $script:Root "data\themes\$Name.conf"
+    $shipped = Join-Path $script:Root "data\themes\$Name.conf"
+    if (Test-Path -LiteralPath $shipped) { return $shipped }
+    foreach ($dir in Get-VivacUserThemeDirs) {
+        $mine = Join-Path $dir "$Name.conf"
+        if (Test-Path -LiteralPath $mine -PathType Leaf) { return $mine }
+    }
+    $shipped
+}
+
+# Palettes made from a picture (lib/Picture.psm1) live outside the checkout:
+# in the shared root's themes/ when sharing is set up, so the other system
+# finds the palette the shared theme setting names, and in this system's own
+# config folder. The shared one is looked in first.
+function Get-VivacUserThemeDirs {
+    $dirs = @()
+    $shared = Get-VivacSharedPath
+    if ($shared) { $dirs += Join-Path (Split-Path -Parent $shared) 'themes' }
+    $dirs += Join-Path (Get-VivacPaths).Config 'themes'
+    $dirs
 }
 
 # The catalogue is the directory itself, the default first: a picker that kept
-# its own list would drift from it.
+# its own list would drift from it. Then the palettes made from pictures, by
+# name; one that takes a shipped name, or breaks the corpus rule, is left out.
 function Get-VivacCatalogue {
     $names = @($script:DefaultTheme)
     $names += Get-ChildItem -LiteralPath (Join-Path $script:Root 'data\themes') -Filter '*.conf' |
         ForEach-Object { $_.BaseName } | Sort-Object
-    $names
+    $mine = @()
+    foreach ($dir in Get-VivacUserThemeDirs) {
+        if (-not (Test-Path -LiteralPath $dir -PathType Container)) { continue }
+        foreach ($file in @(Get-ChildItem -LiteralPath $dir -Filter '*.conf' -File)) {
+            $name = $file.BaseName
+            if ($name -cnotmatch '^[a-z][a-z0-9-]*$' -or $names -contains $name -or $mine -contains $name) { continue }
+            try { [void](Read-VivacTheme $name) } catch { continue }
+            $mine += $name
+        }
+    }
+    $names + @($mine | Sort-Object)
+}
+
+# Every hex the corpus holds, read once: the rule a palette made outside the
+# checkout is held to when it is read.
+$script:CorpusHexes = $null
+function Get-VivacCorpusHexes {
+    if ($null -eq $script:CorpusHexes) {
+        $script:CorpusHexes = @{}
+        foreach ($line in [IO.File]::ReadAllLines((Join-Path $script:Root 'data\palette-corpus.tsv'))) {
+            if ($line -match '^([0-9A-F]{6})\t') { $script:CorpusHexes[$Matches[1]] = $true }
+        }
+    }
+    $script:CorpusHexes
 }
 
 # A palette is exactly the thirteen tokens, each bare upper-case hex. Anything
-# else is refused here so no template ever has to guess.
+# else is refused here so no template ever has to guess. A palette from
+# outside the checkout must also take every colour from the corpus, and may
+# name a wallpaper only beside itself.
 function Read-VivacTheme([string]$Name) {
     $path = Get-VivacThemePath $Name
     if (-not (Test-Path -LiteralPath $path)) { throw "vivac: no theme named '$Name'" }
     $kv = Read-VivacKeyValue $path
+    $outside = -not $path.StartsWith((Join-Path $script:Root 'data'), [StringComparison]::OrdinalIgnoreCase)
     foreach ($key in $kv.Values.Keys) {
         if ($script:TokenNames -notcontains $key) { throw "vivac: ${path}: unknown token $key" }
         if ($kv.Values[$key] -cnotmatch '^[0-9A-F]{6}$') {
             throw "vivac: ${path}: $key is not bare upper-case 6-digit hex: '$($kv.Values[$key])'"
         }
+        if ($outside -and -not (Get-VivacCorpusHexes).ContainsKey($kv.Values[$key])) {
+            throw "vivac: ${path}: $key is $($kv.Values[$key]), which is not in the corpus"
+        }
+    }
+    if ($kv.Meta.Contains('wallpaper') -and ($kv.Meta['wallpaper'] -cnotmatch '^[a-z][a-z0-9-]*\.(png|jpg)$' -or -not $outside)) {
+        throw "vivac: ${path}: the wallpaper must be a picture beside a palette made from one"
     }
     foreach ($key in $script:TokenNames) {
         if (-not $kv.Values.Contains($key)) { throw "vivac: ${path}: missing token $key" }
@@ -188,9 +239,15 @@ function Read-VivacTheme([string]$Name) {
     if ($kv.Meta.Contains('title')) { $title = $kv.Meta['title'] }
     $essence = ''
     if ($kv.Meta.Contains('essence')) { $essence = $kv.Meta['essence'] }
+    # The picture a palette was made from is its wallpaper, when it is there.
+    $picture = $null
+    if ($kv.Meta.Contains('wallpaper')) {
+        $candidate = Join-Path (Split-Path -Parent $path) $kv.Meta['wallpaper']
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $picture = $candidate }
+    }
     [pscustomobject]@{
         Name = $Name; Path = $path; Tokens = $kv.Values; Meta = $kv.Meta
-        Title = $title; Essence = $essence
+        Title = $title; Essence = $essence; Picture = $picture
     }
 }
 
@@ -203,6 +260,14 @@ $script:SettingDefaults = [ordered]@{
     mod              = 'lwin'
     weather_location = 'auto'
     shared_settings  = 'none'
+    # vivac ask (lib/Ask.psm1): the Ollama server, the model (none: the first
+    # one the server lists) and whether the server may be on the local network.
+    ask_url          = 'http://localhost:11434'
+    ask_model        = 'none'
+    ask_allow_lan    = 'false'
+    # The PIN a phone gives to send here (bin/vivac-localsend.ps1): auto is the
+    # one made when the phone drop is first turned on, kept in its state.
+    localsend_pin    = 'auto'
 }
 $script:SettingRules = @{
     language         = '^(es|en)$'
@@ -213,6 +278,11 @@ $script:SettingRules = @{
     # C:/x) or one under the profile (~\x, ~/x). No characters Windows refuses
     # in a name.
     shared_settings  = '^(none|([A-Za-z]:[\\/]|~[\\/])[^\x00-\x1f"<>|*?]+)$'
+    # http://HOST:PORT and nothing after it; where HOST may be is lib/Ask.psm1's call.
+    ask_url          = '^http://[A-Za-z0-9.:_\[\]-]+/?$'
+    ask_model        = '^[A-Za-z0-9][A-Za-z0-9._:/-]*$'
+    ask_allow_lan    = '^(true|false)$'
+    localsend_pin    = '^(auto|[0-9A-Za-z]{4,32})$'
 }
 
 function Read-VivacSettings {

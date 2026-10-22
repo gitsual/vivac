@@ -27,6 +27,7 @@ SUPER+SHIFT+E	hypr	exec	$HOME/.config/rofi/power/powermenu.sh	help.hypr.power
 SUPER+SHIFT+Q	hypr	exec	$HOME/.local/bin/vivac-power	help.hypr.power_bar
 SUPER+SHIFT+T	hypr	exec	$HOME/.local/bin/vivac-theme	help.hypr.theme
 SUPER+SHIFT+B	hypr	exec	$HOME/.local/bin/vivac-bridge	help.hypr.bridge
+SUPER+SHIFT+A	hypr	exec	kitty --class vivac-ask -e $HOME/.local/bin/vivac-ask	help.hypr.ask
 SUPER+V	hypr	exec	cliphist list | rofi -dmenu -i -p Clipboard | cliphist decode | wl-copy	help.hypr.clipboard
 SUPER+SHIFT+R	hypr	exec	hyprctl reload	help.hypr.reload
 SUPER+left	hypr	dispatch	movefocus l	help.hypr.focus_left

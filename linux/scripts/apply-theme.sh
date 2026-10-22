@@ -32,25 +32,21 @@ source "$repo_root/lib/kv.sh"
 source "$repo_root/lib/render.sh"
 # shellcheck source=lib/settings.sh
 source "$repo_root/lib/settings.sh"
+# shellcheck source=lib/themes.sh
+source "$repo_root/lib/themes.sh"
 
 settings_file="${SETTINGS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/vivac/settings}"
 state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/vivac"
 manifest="$state_dir/theme-overlay"
 templates_dir="${TEMPLATES_DIR:-$repo_root/templates}"
-default_theme='bad-romance'
+default_theme="$THEMES_DEFAULT"
+# The palettes made from pictures are found through the same settings file
+# (the shared root is one of its keys), here and in every script run below.
+export SETTINGS_FILE="$settings_file"
 
-theme_file_for() {
-	if [[ "$1" == "$default_theme" ]]; then
-		printf '%s' "$repo_root/data/theme.conf"
-	else
-		printf '%s' "$repo_root/data/themes/$1.conf"
-	fi
-}
-
+# The shipped palettes and the ones made from pictures (lib/themes.sh).
 catalogue() {
-	printf '%s\n' "$default_theme"
-	find "$repo_root/data/themes" -type f -name '*.conf' -printf '%f\n' |
-		sed 's/\.conf$//' | LC_ALL=C sort
+	theme_catalogue "$repo_root"
 }
 
 chosen='' reload=true
@@ -91,7 +87,7 @@ if [[ -n "$chosen" ]]; then
 fi
 settings_load "$settings_file"
 theme="${SETTINGS[theme]}"
-theme_file="$(theme_file_for "$theme")"
+theme_file="$(theme_file_for "$repo_root" "$theme")" || theme_file=''
 [[ -f "$theme_file" ]] || {
 	printf 'apply-theme: %s names no palette\n' "$theme" >&2
 	exit 1

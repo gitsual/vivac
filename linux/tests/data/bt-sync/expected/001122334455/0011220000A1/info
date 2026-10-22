@@ -1,0 +1,17 @@
+[General]
+Name=Fake headphones
+Class=0x240404
+SupportedTechnologies=BR/EDR;
+Trusted=true
+Blocked=false
+
+[DeviceID]
+Source=2
+Vendor=1
+Product=2
+Version=3
+
+[LinkKey]
+Key=00112233445566778899AABBCCDDEEFF
+Type=4
+PINLength=0

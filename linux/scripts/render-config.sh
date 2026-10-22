@@ -24,6 +24,8 @@ source "$repo_root/lib/selectors.sh"
 source "$repo_root/lib/render.sh"
 # shellcheck source=lib/settings.sh
 source "$repo_root/lib/settings.sh"
+# shellcheck source=lib/themes.sh
+source "$repo_root/lib/themes.sh"
 
 render_dir="${RENDER_DIR:-$repo_root/render}"
 facts_file="${FACTS_FILE:-${XDG_STATE_HOME:-$HOME/.local/state}/vivac/hardware-facts}"
@@ -85,10 +87,10 @@ if [[ -n "${THEME_FILE:-}" ]]; then
 elif [[ "${SETTINGS[theme]}" == bad-romance ]]; then
 	theme="$repo_root/data/theme.conf"
 else
-	theme="$repo_root/data/themes/${SETTINGS[theme]}.conf"
-	[[ -f "$theme" ]] || {
+	# A shipped name, or a palette made from a picture (lib/themes.sh).
+	theme="$(SETTINGS_FILE="$settings_file" theme_file_for "$repo_root" "${SETTINGS[theme]}")" || {
 		printf 'no theme named %s; the catalogue holds: %s\n' "${SETTINGS[theme]}" \
-			"$(find "$repo_root/data/themes" -name '*.conf' -printf '%f\n' | sed 's/\.conf$//' | LC_ALL=C sort | tr '\n' ' ')" >&2
+			"$(SETTINGS_FILE="$settings_file" theme_catalogue "$repo_root" | tr '\n' ' ')" >&2
 		exit 1
 	}
 fi
@@ -157,6 +159,8 @@ while IFS= read -r template; do
 	# would call ws-render.sh and friends that are not there and draw a blank
 	# workspace strip over the owner's working one. Keep what is there.
 	missing=()
+	# The pattern matches a literal $HOME in the rendered file.
+	# shellcheck disable=SC2016
 	while IFS= read -r called; do
 		[[ -e "$HOME/$called" ]] || missing+=("$called")
 	done < <(grep -o '\$HOME/[A-Za-z0-9._/-]*' "$rendered" | sed 's|^\$HOME/||' | LC_ALL=C sort -u)

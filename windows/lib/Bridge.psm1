@@ -41,12 +41,18 @@ function Get-VivacDropItems([string]$Folder) {
 # --------------------------------------------------------------------- link
 
 $script:LinkPort = 47321
-$script:LinkProtocol = 1
-$script:LinkVerbs = @('clip', 'url', 'file', 'notify', 'ping')
+$script:LinkProtocol = 2
+$script:LinkVerbs = @('clip', 'url', 'file', 'notify', 'ping', 'mouse')
 $script:Base32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+# A file's name rides inside its sealed body, before a NUL.
+$script:LinkNameLimit = 1024
+# What sealing adds to a body: the IV, a block of padding at most, a file's name and its NUL.
+$script:LinkSealRoom = 16 + 16 + 1024 + 1
 
 function Get-VivacLinkDefaultPort { $script:LinkPort }
+function Get-VivacLinkProtocol { $script:LinkProtocol }
 function Get-VivacLinkVerbs { $script:LinkVerbs }
+function Get-VivacLinkNameLimit { $script:LinkNameLimit }
 
 # RFC 4648 base32, no padding: what the pairing code is written in.
 function ConvertTo-VivacBase32([byte[]]$Bytes) {
@@ -102,16 +108,94 @@ function Get-VivacSha256Hex([byte[]]$Bytes) {
     try { ConvertTo-VivacHex $sha.ComputeHash($Bytes) } finally { $sha.Dispose() }
 }
 
-function Get-VivacHmacHex([byte[]]$Secret, [string]$Text) {
-    $h = New-Object Security.Cryptography.HMACSHA256 (, $Secret)
-    try { ConvertTo-VivacHex $h.ComputeHash($script:Utf8.GetBytes($Text)) } finally { $h.Dispose() }
+function Get-VivacHmac([byte[]]$Key, [string]$Text) {
+    $h = New-Object Security.Cryptography.HMACSHA256 (, $Key)
+    try { , $h.ComputeHash($script:Utf8.GetBytes($Text)) } finally { $h.Dispose() }
 }
 
-# What every request is signed with: the verb, the time, the nonce and the
-# body's hash, one per line (docs/bridge.md, "Requests").
-function Get-VivacLinkSignature([byte[]]$Secret, [string]$Verb, [string]$Time, [string]$Nonce, [byte[]]$Body) {
+function Get-VivacHmacHex([byte[]]$Key, [string]$Text) { ConvertTo-VivacHex (Get-VivacHmac $Key $Text) }
+
+# One key per use from the shared secret: never the same key to encrypt and
+# to sign (docs/bridge.md, "Requests").
+function Get-VivacLinkKeys([byte[]]$Secret) {
+    [pscustomobject]@{
+        Seal = Get-VivacHmac $Secret "vivac-link v$($script:LinkProtocol) encrypt"
+        Sign = Get-VivacHmac $Secret "vivac-link v$($script:LinkProtocol) sign"
+    }
+}
+
+function New-VivacAes([byte[]]$Key) {
+    $aes = New-Object Security.Cryptography.AesCryptoServiceProvider
+    $aes.Mode = [Security.Cryptography.CipherMode]::CBC
+    $aes.Padding = [Security.Cryptography.PaddingMode]::PKCS7
+    $aes.Key = $Key
+    $aes
+}
+
+# AES-256-CBC under a fresh IV, PKCS#7 padded: the IV, then the ciphertext.
+# What is sealed is signed after (encrypt-then-MAC), and checked before it is
+# opened.
+function Protect-VivacLinkBody([byte[]]$Key, [byte[]]$Plain) {
+    if ($null -eq $Plain) { $Plain = New-Object byte[] 0 }
+    $aes = New-VivacAes $Key
+    try {
+        $aes.GenerateIV()
+        $enc = $aes.CreateEncryptor()
+        $cipher = $enc.TransformFinalBlock($Plain, 0, $Plain.Length)
+        $out = New-Object byte[] (16 + $cipher.Length)
+        [Array]::Copy($aes.IV, 0, $out, 0, 16)
+        [Array]::Copy($cipher, 0, $out, 16, $cipher.Length)
+        , $out
+    } finally { $aes.Dispose() }
+}
+
+# The plain bytes back; throws when $Sealed is not a sealed body.
+function Unprotect-VivacLinkBody([byte[]]$Key, [byte[]]$Sealed) {
+    if ($null -eq $Sealed -or $Sealed.Length -lt 32 -or $Sealed.Length % 16) { throw 'vivac link: not a sealed body' }
+    $aes = New-VivacAes $Key
+    try {
+        $iv = New-Object byte[] 16
+        [Array]::Copy($Sealed, 0, $iv, 0, 16)
+        $aes.IV = $iv
+        $dec = $aes.CreateDecryptor()
+        , $dec.TransformFinalBlock($Sealed, 16, $Sealed.Length - 16)
+    } finally { $aes.Dispose() }
+}
+
+# What every request is signed with: the protocol, the verb, the time, the
+# nonce and the sealed body's hash, one per line (docs/bridge.md, "Requests").
+function Get-VivacLinkSignature([byte[]]$Key, [string]$Verb, [string]$Time, [string]$Nonce, [byte[]]$Body) {
     if ($null -eq $Body) { $Body = New-Object byte[] 0 }
-    Get-VivacHmacHex $Secret ("$Verb`n$Time`n$Nonce`n" + (Get-VivacSha256Hex $Body))
+    Get-VivacHmacHex $Key ("v$($script:LinkProtocol)`n$Verb`n$Time`n$Nonce`n" + (Get-VivacSha256Hex $Body))
+}
+
+# An answer is signed over its request's nonce: it cannot be passed off for
+# the answer to another.
+function Get-VivacLinkAnswerSignature([byte[]]$Key, [string]$Nonce, [byte[]]$Body) {
+    Get-VivacHmacHex $Key ("v$($script:LinkProtocol) answer`n$Nonce`n" + (Get-VivacSha256Hex $Body))
+}
+
+# Wake-on-LAN: six 0xFF, then the hardware address sixteen times.
+function Get-VivacMagicPacket([string]$Mac) {
+    if ($Mac -notmatch '^([0-9a-f]{2}:){5}[0-9a-f]{2}$') { throw "vivac link: '$Mac' is not a hardware address" }
+    $address = [byte[]]@($Mac -split ':' | ForEach-Object { [Convert]::ToByte($_, 16) })
+    $packet = New-Object byte[] 102
+    for ($i = 0; $i -lt 6; $i++) { $packet[$i] = 0xFF }
+    for ($i = 0; $i -lt 16; $i++) { [Array]::Copy($address, 0, $packet, 6 + 6 * $i, 6) }
+    , $packet
+}
+
+# The hardware address of the interface holding $Address, for the peer to wake
+# this machine with; '' when there is none (loopback, a tunnel).
+function Get-VivacMacOf([string]$Address) {
+    foreach ($nic in [Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()) {
+        $ips = @($nic.GetIPProperties().UnicastAddresses | ForEach-Object { $_.Address.ToString() })
+        if ($ips -notcontains $Address) { continue }
+        $bytes = $nic.GetPhysicalAddress().GetAddressBytes()
+        if ($bytes.Length -ne 6 -or -not ($bytes | Where-Object { $_ })) { return '' }
+        return (($bytes | ForEach-Object { $_.ToString('x2') }) -join ':')
+    }
+    ''
 }
 
 # What a beacon carries so two paired machines find each other without
@@ -127,11 +211,13 @@ function New-VivacLinkNonce {
 
 function Get-VivacUnixTime { [long][Math]::Floor(([DateTime]::UtcNow - [DateTime]'1970-01-01').TotalSeconds) }
 
-# The most a verb's body may weigh.
+# The most a verb's body may weigh, before sealing; on the wire, sealing adds
+# up to Get-VivacLinkSealRoom.
 function Get-VivacLinkLimit([string]$Verb) {
     if ($Verb -eq 'file') { return 64MB }
     64KB
 }
+function Get-VivacLinkSealRoom { $script:LinkSealRoom }
 
 # Equal strings, compared in a time that does not depend on where they differ.
 function Test-VivacSameText([string]$A, [string]$B) {
@@ -144,24 +230,25 @@ function Test-VivacSameText([string]$A, [string]$B) {
 # Why a request is refused, or $null when it is good. $Seen is the receiver's
 # memory of nonces (nonce -> unix time); a good request is added to it, and
 # entries older than two minutes are forgotten.
-function Test-VivacLinkRequest([byte[]]$Secret, [string]$Verb, [string]$Time, [string]$Nonce, [string]$Sign, [byte[]]$Body, [hashtable]$Seen, [long]$Now = (Get-VivacUnixTime)) {
+function Test-VivacLinkRequest([byte[]]$Key, [string]$Verb, [string]$Time, [string]$Nonce, [string]$Sign, [byte[]]$Body, [hashtable]$Seen, [long]$Now = (Get-VivacUnixTime)) {
     $t = 0L
     if (-not [long]::TryParse($Time, [ref]$t)) { return 'no time' }
     if ([Math]::Abs($Now - $t) -gt 60) { return 'time too far from ours' }
     if ($Nonce -notmatch '^[0-9a-f]{32}$') { return 'no nonce' }
     foreach ($k in @($Seen.Keys)) { if ($Now - $Seen[$k] -gt 120) { $Seen.Remove($k) } }
     if ($Seen.ContainsKey($Nonce)) { return 'nonce already seen' }
-    if (-not (Test-VivacSameText (Get-VivacLinkSignature $Secret $Verb $Time $Nonce $Body) "$Sign".ToLowerInvariant())) { return 'bad signature' }
+    if (-not (Test-VivacSameText (Get-VivacLinkSignature $Key $Verb $Time $Nonce $Body) "$Sign".ToLowerInvariant())) { return 'bad signature' }
     $Seen[$Nonce] = $Now
     $null
 }
 
-# One request to a vivac link listener, headers as given (the client signs
-# them; the gates also send what no client would). Returns the status and
-# the body of the answer.
-function Invoke-VivacLinkHttp([string]$PeerHost, [int]$Port, [string]$Verb, [byte[]]$Body, [Collections.IDictionary]$Headers, [int]$ConnectMs = 5000) {
+# One request to a vivac link listener, headers as given (the client seals
+# and signs; the gates also send what no client would). Returns the status,
+# the headers (lower-case names), the body's bytes and the body as text.
+function Invoke-VivacLinkHttp([string]$PeerHost, [int]$Port, [string]$Verb, [byte[]]$Body, [Collections.IDictionary]$Headers, [int]$ConnectMs = 5000, [string]$Path = '') {
     if ($null -eq $Body) { $Body = New-Object byte[] 0 }
-    $head = "POST /v1/$Verb HTTP/1.1`r`nHost: $PeerHost`r`nContent-Length: $($Body.Length)`r`n"
+    if (-not $Path) { $Path = "/v$($script:LinkProtocol)/$Verb" }
+    $head = "POST $Path HTTP/1.1`r`nHost: $PeerHost`r`nContent-Length: $($Body.Length)`r`n"
     foreach ($k in $Headers.Keys) { $head += "${k}: $($Headers[$k])`r`n" }
     $head += "Connection: close`r`n`r`n"
     $client = New-Object Net.Sockets.TcpClient
@@ -176,17 +263,36 @@ function Invoke-VivacLinkHttp([string]$PeerHost, [int]$Port, [string]$Verb, [byt
         # A listener that refuses on the headers alone closes before taking a
         # large body; its answer is still read.
         try { $stream.Write($Body, 0, $Body.Length) } catch { }
-        $answer = (New-Object IO.StreamReader ($stream, $script:Utf8)).ReadToEnd()
+        $received = New-Object IO.MemoryStream
+        $stream.CopyTo($received)
+        $raw = $received.ToArray()
     } finally { $client.Close() }
+    # The head is text up to the first blank line; the body is bytes (sealed).
+    $split = -1
+    for ($i = 0; $i -le $raw.Length - 4; $i++) {
+        if ($raw[$i] -eq 13 -and $raw[$i + 1] -eq 10 -and $raw[$i + 2] -eq 13 -and $raw[$i + 3] -eq 10) { $split = $i; break }
+    }
+    $headText = if ($split -ge 0) { [Text.Encoding]::ASCII.GetString($raw, 0, $split) } else { [Text.Encoding]::ASCII.GetString($raw) }
+    $bytes = New-Object byte[] 0
+    if ($split -ge 0) {
+        $bytes = New-Object byte[] ($raw.Length - $split - 4)
+        [Array]::Copy($raw, $split + 4, $bytes, 0, $bytes.Length)
+    }
     $status = 0
-    if ($answer -match '^HTTP/1\.[01] (\d{3})') { $status = [int]$Matches[1] }
-    [pscustomobject]@{ Status = $status; Body = ($answer -split "`r`n`r`n", 2)[-1] }
+    if ($headText -match '^HTTP/1\.[01] (\d{3})') { $status = [int]$Matches[1] }
+    $answerHeaders = @{}
+    foreach ($l in @($headText -split "`r`n" | Select-Object -Skip 1)) {
+        $c = $l.IndexOf(':')
+        if ($c -gt 0) { $answerHeaders[$l.Substring(0, $c).Trim().ToLowerInvariant()] = $l.Substring($c + 1).Trim() }
+    }
+    [pscustomobject]@{ Status = $status; Headers = $answerHeaders; Bytes = $bytes; Body = $script:Utf8.GetString($bytes) }
 }
 
 # ---------------------------------------------------------------- link state
 
 function Get-VivacLinkConfPath { Join-Path (Get-VivacPaths).State 'link.conf' }
 function Get-VivacLinkPeerPath { Join-Path (Get-VivacPaths).State 'link-peer' }
+function Get-VivacLinkPeerMacPath { Join-Path (Get-VivacPaths).State 'link-peer-mac' }
 
 # The pairing: secret (bytes), name, port and peer. $null when not paired.
 function Read-VivacLinkConf {

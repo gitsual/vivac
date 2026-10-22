@@ -12,7 +12,7 @@ This is the Windows half of <a href="../README.md">vivac</a>: the <a href="../li
   <img alt="Windows 11" src="https://img.shields.io/badge/os-Windows%2011-0E1513?style=for-the-badge&labelColor=0E1513&color=6CA4B1">
   <img alt="GlazeWM" src="https://img.shields.io/badge/wm-GlazeWM-0E1513?style=for-the-badge&labelColor=0E1513&color=55A185">
   <img alt="8 palettes" src="https://img.shields.io/badge/8%20palettes-one%20source-0E1513?style=for-the-badge&labelColor=0E1513&color=E1777D">
-  <img alt="19 gate files" src="https://img.shields.io/badge/19%20gate%20files-author--run-0E1513?style=for-the-badge&labelColor=0E1513&color=AAA875">
+  <img alt="25 gate files" src="https://img.shields.io/badge/25%20gate%20files-author--run-0E1513?style=for-the-badge&labelColor=0E1513&color=AAA875">
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-0E1513?style=for-the-badge&labelColor=0E1513&color=6CA4B1">
 </p>
 
@@ -72,7 +72,7 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Editor
 ```
 
 `bootstrap.ps1` installs the base packages with winget (plus the optional
-sets you ask for: `-Editor`, `-Desktop`, `-Security`; `-ListSelectors` says
+sets you ask for: `-Editor`, `-Desktop`, `-Security`, `-Mouse`, `-Phone`; `-ListSelectors` says
 which apply here), detects the hardware, deploys every configuration, starts
 GlazeWM and opens the first-run wizard.
 
@@ -116,14 +116,17 @@ ornament it has not earned fails the build.
 
 - **🎨 Eight palettes, one switch.** `Win+Shift+T` or `scripts\apply-theme.ps1 -Theme NAME` — wallpaper, accent colour, window borders, bar, lock screen, every vivac window and every terminal already open.
 - **🧭 A menu instead of the Start menu.** `Win+R`: every application, recent file, folder, settings page and Win+X tool, with real icons, categories, what you use most first, a calculator and a run box. Explorer's own Win+R is switched off (`apply-system.ps1 -WinKeys`) so nothing opens behind it.
+- **🏞️ A palette from a picture.** The theme picker's last row, or `bin\vivac.ps1 theme from-image IMAGE`, makes a ninth palette from a wallpaper of yours: every colour still comes from the corpus and clears the same contrast floors, the picture becomes its wallpaper, and with a shared folder Linux lists it too. `-DryRun` shows it as swatches. See [the bridge](../docs/bridge.md#6-palettes-from-a-picture).
 - **🔔 Notifications in the palette.** Other programs' notifications arrive as vivac's cards at the top right, under the bar; Windows' banners at the bottom right are switched off program by program (`-Toasts`), and every switch is put back by uninstall. Windows Security keeps its own, on purpose.
 - **🎛️ The quick settings, redrawn.** Sound with a mixer, Bluetooth with pairing, Wi-Fi and Ethernet with the key asked in the panel, Defender and Malwarebytes in one security view, Windows Update and winget in one updates view — each a click on the bar.
 - **🔒 A lock that wears the theme.** `Win+L`; an empty Enter asks Windows Hello, Ctrl+Alt+Del hands over to Windows' own lock. AltGr works in the password field, so `@ # | \ [ ] { } €` type on any layout.
 - **📋 A clipboard history that stays in memory.** `Win+V`, never written to disk.
 - **🖥️ A bar that only shows what the machine has — and never goes blank.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts. It loads nothing from the network, and a watcher brings it back if it dies or comes up empty; see [The bar](#-the-bar).
-- **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, and a drop tray hands files across. With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it. See [the bridge](../docs/bridge.md).
+- **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, a drop tray hands files across, and a Bluetooth device paired on both systems keeps working on both (the Linux side copies the keys; `bin\vivac-bt-sync.ps1` lists what is paired here). With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it, encrypted, `wake` wakes it up, and `bin\vivac-mouse.ps1` lends it this keyboard and mouse (lan-mouse). With a phone: `bin\vivac-localsend.ps1` takes files and texts from the stock LocalSend app (behind a PIN) and sends files to it. See [the bridge](../docs/bridge.md).
+- **💬 A local model, one key away.** `Win+Shift+A`: a side panel that talks to your own Ollama and to nothing else — ask, explain the clipboard, or sum up what arrived in the vivac inbox. Answers are text, never run. See [vivac ask](#vivac-ask).
+- **📱 The phone in the bar.** With KDE Connect (`bootstrap.ps1 -Phone`), a paired phone shows on the bar while it is in reach, and the menu's **Phone** category rings it or sends it a file or the clipboard. Without KDE Connect none of it shows. See [the phone](../docs/bridge.md#9-the-phone-kde-connect).
 - **🛡️ UAC left whole.** Nothing elevated runs a file you can change without elevation; see [What it asks of Windows](#-what-it-asks-of-windows).
-- **✅ 19 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
+- **✅ 25 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
 
 ### ⚡ 60-second tour
 
@@ -292,6 +295,7 @@ put back by uninstall:
 | `-LockScreen` | the theme's wallpaper on the lock and sign-in screens |
 | `-Firewall` · `-Defender` · `-SecurityQuiet` | every firewall profile on; PUA blocking and cloud protection; Windows Security without its tray icon (threat alerts stay Windows' own) |
 | `-Boot` | GRUB's menu and the boot logo in the theme |
+| `-Mouse` | the shared mouse (lan-mouse) reachable from the other machine: UDP 4242 in, private networks and the local subnet only |
 
 **UAC stays whole.** A few things run elevated without a prompt — updating installed programs through
 winget, the key guard that keeps the Windows key vivac's in front of an administrator's window — and a
@@ -323,6 +327,38 @@ the help pane.
 | `bin\vivac.ps1 welcome` | The first-run wizard again |
 | `scripts\sync-shared-settings.ps1 -Pull` | Take in the shared choices now (see below) |
 | `bin\vivac-bar-watch.ps1 [-DryRun]` | Check the bar once and restart it if it needs it |
+
+### vivac ask
+
+`Win+Shift+A` (`bin\vivac.ps1 ask`) opens a panel against the right edge of the screen, in the
+palette, for a conversation with a language model served by [Ollama](https://ollama.com) on this
+machine. The answer streams in as it is written, on a thread of its own, so the panel keeps
+answering keys while a model loads. `vivac ask clip` takes the clipboard's text as context for your
+first question; `vivac ask inbox` summarises what arrived in `Downloads\vivac-link`: each entry's
+name and size and the first KiB of the text files, read without following a link or a junction or
+entering a folder. `Enter` sends, `Shift+Enter` starts a new line, **Copy answer**
+(`Ctrl+Shift+C`) puts the last answer on the clipboard, **Save** (`Ctrl+S`) writes the conversation
+as Markdown where you choose, **Clear** forgets it, `Esc` closes. Unlike the other surfaces it stays
+open when another window takes the focus, so you can read beside it. The conversation lives in the
+window only. `vivac ask --dry-run` says where the request would go and what it would carry, and
+sends nothing.
+
+What the model writes is text: it is never run and reaches the clipboard only through Copy answer.
+The request goes to `ask_url` and nowhere else, never through the system proxy. Three settings in
+`%APPDATA%\vivac\settings`, all local:
+
+| Setting | Default | |
+|---|---|---|
+| `ask_url` | `http://localhost:11434` | The Ollama server: `http://HOST:PORT`, nothing after it |
+| `ask_model` | `none` | `none` takes the first model Ollama lists, and says which; or a name as `ollama list` prints it |
+| `ask_allow_lan` | `false` | `true` lets `ask_url` name a machine on the local network |
+
+Without `ask_allow_lan=true` only this machine is accepted; with it, a private or link-local
+address too, and a public address never. Ollama has no password: anyone who can reach its port can
+use it, so point `ask_url` at another machine only on a network you trust (see
+[the bridge](../docs/bridge.md)). There is no error mode: the panel opens from a key, outside any
+shell, so the last failing command is not something it can see. Ollama itself is not installed by
+vivac.
 
 ### Sharing choices with the Linux side
 
@@ -404,7 +440,7 @@ tests/       The gates, fixtures, golden files and the off-screen surface render
 | [Mapping](docs/mapping.md) | Every part of the source and what it became here — or why it did not carry over |
 | [Keys](docs/keys.md) | The help registry, for readers without a session |
 | [The Linux half](../linux/README.md) | The Arch Linux workstation this is pitched from |
-| [The bridge](../docs/bridge.md) | What the two halves do together: shared choices, restart into the other system, the drop tray, vivac link |
+| [The bridge](../docs/bridge.md) | What the two halves do together: shared choices, restart into the other system, the drop tray, vivac link, one keyboard and mouse, the phone (LocalSend), palettes from a picture, Bluetooth across the dual boot |
 
 ## 📄 License
 

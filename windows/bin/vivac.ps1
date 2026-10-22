@@ -4,9 +4,12 @@
 
 .DESCRIPTION
     menu        the menu of the Start menu's contents (MOD+R)
+    phone       the same menu, open on the phone's category (KDE Connect)
     help [pane] the key help pane (F1-F5 switch panes, Esc closes)
     power       the power menu: lock, sign out, sleep, restart, shut down
     theme       the theme picker
+    theme from-image IMAGE [-Name N] [-DryRun] [-Apply]
+                a new palette from a picture (scripts\theme-from-image.ps1)
     sound       the sound panel: devices, volumes and the mixer
     bluetooth   the Bluetooth panel: the radio, paired devices, pairing new ones
     network     the network panel: Wi-Fi networks and the wired adapters
@@ -17,6 +20,9 @@
     welcome     the first-run wizard, in a terminal of its own
     security    Defender's state, in the palette: quick scan, signatures, history
     audit       the security audit
+    ask [clip|inbox] [--dry-run]
+                a local model (Ollama) in a side panel; clip puts the clipboard's
+                text in as context, inbox summarises Downloads\vivac-link
 
   The windows themselves live in lib/Surfaces.psm1; this file only picks one.
 #>
@@ -30,13 +36,21 @@ $root = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
 # Without the resident host a surface takes a couple of seconds more to
 # build: "Loading..." meanwhile, so the key does not look dead.
-if (@('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'security') -contains $Verb) { Start-VivacLoading }
+$fromImage = $Verb -eq 'theme' -and $Rest -and $Rest[0] -eq 'from-image'
+if (@('menu', 'phone', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'security') -contains $Verb -and -not $fromImage) { Start-VivacLoading }
 
 switch ($Verb) {
     'help'      { $pane = 'wm'; if ($Rest) { $pane = $Rest[0] }; Show-Help $pane }
     'menu'      { Show-Menu }
+    'phone'     { Show-Menu -Category phone }
     'power'     { Show-Power }
-    'theme'     { Show-ThemePicker }
+    'theme'     {
+        if ($fromImage) {
+            $pictureArgs = @(@($Rest) | Select-Object -Skip 1)
+            & (Join-Path $root 'scripts\theme-from-image.ps1') @pictureArgs
+        }
+        else { Show-ThemePicker }
+    }
     'sound'     { Show-Sound }
     'bluetooth' { Import-Module (Join-Path $root 'lib\Bluetooth.psm1') -Force; Show-Bluetooth }
     'network'   { Import-Module (Join-Path $root 'lib\Network.psm1') -Force; Show-Network }
@@ -51,5 +65,24 @@ switch ($Verb) {
         Start-Process -FilePath 'wt.exe' -ArgumentList $wtArgs
     }
     'audit'     { & (Join-Path $root 'scripts\security-audit.ps1') @Rest }
-    default     { throw "vivac: unknown verb '$Verb' (menu, help, power, theme, sound, bluetooth, network, updates, security, clipboard, notify, welcome, audit)" }
+    'ask'       {
+        $askMode = ''; $dryRun = $false
+        foreach ($a in @($Rest | Where-Object { $_ })) {
+            $w = $a.TrimStart('-').ToLowerInvariant()
+            if ($w -eq 'dry-run' -or $w -eq 'dryrun') { $dryRun = $true }
+            elseif (@('clip', 'inbox') -contains $w) { $askMode = $w }
+            else { throw "vivac ask: unknown option '$a' (clip, inbox, --dry-run)" }
+        }
+        if ($dryRun) {
+            Import-Module (Join-Path $root 'lib\Ask.psm1') -Force
+            Import-Module (Join-Path $root 'lib\Bridge.psm1') -Force
+            $clipText = ''
+            if ($askMode -eq 'clip') { $clipText = [string](Get-Clipboard -Raw) }
+            Get-VivacAskDryRun $askMode $clipText (Get-VivacLinkInbox)
+        } else {
+            Import-Module (Join-Path $root 'lib\AskPanel.psm1') -Force
+            Show-Ask $askMode
+        }
+    }
+    default     { throw "vivac: unknown verb '$Verb' (menu, phone, help, power, theme, sound, bluetooth, network, updates, security, clipboard, notify, welcome, audit, ask)" }
 }

@@ -144,6 +144,8 @@ hl.bind("SUPER + SHIFT + Q", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-power"))
 hl.bind("SUPER + SHIFT + T", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-theme"))
 -- @help: hypr help.hypr.bridge
 hl.bind("SUPER + SHIFT + B", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-bridge"))
+-- @help: hypr help.hypr.ask
+hl.bind("SUPER + SHIFT + A", hl.dsp.exec_cmd(vivac.terminal .. " --class vivac-ask -e $HOME/.local/bin/vivac-ask"))
 -- @help: hypr help.hypr.clipboard
 hl.bind("SUPER + V", hl.dsp.exec_cmd("cliphist list | rofi -dmenu -i -p Clipboard | cliphist decode | wl-copy"))
 -- @help: hypr help.hypr.reload
@@ -230,6 +232,9 @@ hl.window_rule({ name = "nm-connection-editor", match = { class = "^(nm-connecti
 -- The wizard is the only thing on screen while it runs: floating, centred and
 -- large enough to read without leaning in.
 hl.window_rule({ name = "vivac-welcome", match = { class = "^(vivac-welcome)$" }, float = true, center = true, size = "1100 700" })
+-- vivac ask is a side panel: floating against the right edge, the height of
+-- the screen less a margin, so what it is asked about stays in view.
+hl.window_rule({ name = "vivac-ask", match = { class = "^(vivac-ask)$" }, float = true, size = "560 (monitor_h*0.9)", move = "(monitor_w-window_w-16) (monitor_h*0.05)" })
 
 -- Started with the session, in this order, once the compositor is up.
 -- The pull of the optional shared settings (it does nothing when none are
@@ -240,6 +245,8 @@ table.insert(vivac.autostart, { id = "sync-shared", cmd = "${VIVAC_REPO:-$HOME/v
 -- What came from Windows through the drop tray: a notification when there is
 -- something, silence otherwise, and nothing on screen without a shared folder.
 table.insert(vivac.autostart, { id = "drop-tray", cmd = "$HOME/.local/bin/vivac-drop --notify" })
+-- The shared keyboard and mouse (lan-mouse), back on only if it was left on.
+table.insert(vivac.autostart, { id = "mouse", cmd = "$HOME/.local/bin/vivac-mouse resume" })
 table.insert(vivac.autostart, { id = "waybar", cmd = "waybar" })
 table.insert(vivac.autostart, { id = "hypridle", cmd = "hypridle" })
 -- Clipboard history for the picker above; harmless when cliphist is absent.
@@ -250,6 +257,10 @@ table.insert(vivac.autostart, { id = "wallpaper", cmd = "bash " .. vivac.scripts
 table.insert(vivac.autostart, { id = "polkit", cmd = "/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1" })
 table.insert(vivac.autostart, { id = "keyring", cmd = "/usr/bin/gnome-keyring-daemon --start --components=secrets,ssh,pkcs11" })
 table.insert(vivac.autostart, { id = "dbus-env", cmd = "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP" })
+-- KDE Connect: the phone's notifications, battery and the actions of
+-- vivac-phone. Started here because Hyprland does not read the XDG autostart
+-- entry the package ships; a machine without it only logs a missing program.
+table.insert(vivac.autostart, { id = "kdeconnect", cmd = "/usr/bin/kdeconnectd" })
 -- The first session, and only the first: the wizard writes a marker and
 -- --first-run is a no-op afterwards. It is started last so the bar, the
 -- wallpaper and the notification daemon are already up to be previewed.

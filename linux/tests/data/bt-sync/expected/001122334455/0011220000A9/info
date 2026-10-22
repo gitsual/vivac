@@ -1,0 +1,21 @@
+[General]
+Name=Fake remote
+AddressType=public
+SupportedTechnologies=LE;
+Trusted=true
+Blocked=false
+
+[IdentityResolvingKey]
+Key=00112233445566778899AABBCCDDEE99
+
+[LocalSignatureKey]
+Key=00112233445566778899AABBCCDDEEC9
+Counter=0
+Authenticated=false
+
+[LongTermKey]
+Key=00112233445566778899AABBCCDDEE09
+Authenticated=0
+EncSize=16
+EDiv=2
+Rand=1

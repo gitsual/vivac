@@ -81,22 +81,35 @@ port="$(sed -nE 's/.*listening on [^ ]+:([0-9]+)$/\1/p' "$sandbox/serve.log")"
 
 # The test's own signer: request VERB BODY_FILE [options] prints the HTTP status.
 cat >"$sandbox/request.py" <<'PY'
-import base64, hashlib, hmac, http.client, os, secrets, sys, time, urllib.parse
+import base64, hashlib, hmac, http.client, json, os, secrets, sys, time
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 verb, body_file, *options = sys.argv[1:]
 body = open(body_file, "rb").read() if body_file != "-" else b""
 opts = dict(o.split("=", 1) for o in options)
-key = base64.b32decode(os.environ["SECRET"] + "=" * (-len(os.environ["SECRET"]) % 8))
+shared = base64.b32decode(os.environ["SECRET"] + "=" * (-len(os.environ["SECRET"]) % 8))
+seal_key = hmac.new(shared, b"vivac-link v2 encrypt", hashlib.sha256).digest()
+sign_key = hmac.new(shared, b"vivac-link v2 sign", hashlib.sha256).digest()
+if "name" in opts:
+    body = opts["name"].encode() + b"\0" + body
+if "raw" not in opts:
+    # AES-256-CBC, PKCS#7, the IV in front: docs/bridge.md, "Requests".
+    iv = secrets.token_bytes(16)
+    padder = padding.PKCS7(128).padder()
+    encryptor = Cipher(algorithms.AES(seal_key), modes.CBC(iv)).encryptor()
+    body = iv + encryptor.update(padder.update(body) + padder.finalize()) + encryptor.finalize()
 stamp = str(int(time.time()) + int(opts.get("skew", 0)))
 nonce = opts.get("nonce") or secrets.token_hex(16)
-message = f"{opts.get('signverb', verb)}\n{stamp}\n{nonce}\n{hashlib.sha256(body).hexdigest()}"
-sign = hmac.new(key, message.encode(), hashlib.sha256).hexdigest()
+message = f"v2\n{opts.get('signverb', verb)}\n{stamp}\n{nonce}\n{hashlib.sha256(body).hexdigest()}"
+sign = hmac.new(sign_key, message.encode(), hashlib.sha256).hexdigest()
 if "badsign" in opts:
     sign = sign[:-1] + ("0" if sign[-1] != "0" else "1")
+if "tamper" in opts:
+    # Signed as sent, then changed on the way: the signature no longer matches.
+    body = body[:-1] + bytes([body[-1] ^ 1])
 headers = {"X-Vivac-Time": stamp, "X-Vivac-Nonce": nonce, "X-Vivac-Sign": sign}
-if "name" in opts:
-    headers["X-Vivac-Name"] = urllib.parse.quote(opts["name"], safe="")
 connection = http.client.HTTPConnection("localhost", int(os.environ["PORT"]), timeout=10)
-path = opts.get("path", f"/v1/{verb}")
+path = opts.get("path", f"/v2/{verb}")
 if "length" in opts:
     # Only the headers: the receiver must answer from Content-Length alone.
     connection.putrequest("POST", path)
@@ -107,10 +120,16 @@ if "length" in opts:
 else:
     connection.request("POST", path, body=body, headers=headers)
 response = connection.getresponse()
-answer = response.read().decode()
+answer = response.read()
 print(response.status)
 if "show" in opts:
-    print(answer)
+    # A 200 is sealed and signed over this request's nonce.
+    expected = hmac.new(sign_key, f"v2 answer\n{nonce}\n{hashlib.sha256(answer).hexdigest()}".encode(), hashlib.sha256).hexdigest()
+    assert hmac.compare_digest(expected, response.getheader("X-Vivac-Sign", "")), "the answer is not signed"
+    decryptor = Cipher(algorithms.AES(seal_key), modes.CBC(answer[:16])).decryptor()
+    unpadder = padding.PKCS7(128).unpadder()
+    plain = unpadder.update(decryptor.update(answer[16:]) + decryptor.finalize()) + unpadder.finalize()
+    print(json.dumps(json.loads(plain)))
 PY
 request() { SECRET="$secret" PORT="$port" python3 "$sandbox/request.py" "$@"; }
 printf 'hello from windows\n' >"$sandbox/clip"
@@ -131,19 +150,25 @@ nonce="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
 [[ "$(request clip "$sandbox/clip" skew=-30)" == 200 ]] || fail 'a request 30 s old was refused'
 [[ "$(request clip "$sandbox/clip" signverb=ping)" == 401 ]] || fail 'a signature made for another verb was accepted'
 [[ "$(request clip "$sandbox/clip" nonce=NOT-A-NONCE)" == 401 ]] || fail 'a malformed nonce was accepted'
+[[ "$(request clip "$sandbox/clip" tamper=1)" == 401 ]] || fail 'a body changed after signing was accepted'
+# Signed, but not sealed: a sender with the keys who skips the encryption is refused too.
+[[ "$(request clip "$sandbox/clip" raw=1)" == 400 ]] || fail 'an unsealed body was accepted'
 
-# 413 on the declared length alone; 404 for an unknown verb, protocol or method.
-[[ "$(request clip - length=65537)" == 413 ]] || fail 'a clip over 64 KiB was not refused'
-[[ "$(request notify - length=65537)" == 413 ]] || fail 'a notify over 64 KiB was not refused'
-[[ "$(request file - length=67108865)" == 413 ]] || fail 'a file over 64 MiB was not refused'
+# 413 on the declared length alone (the limit plus what sealing adds: 1057 bytes);
+# 404 for an unknown verb, protocol or method.
+[[ "$(request clip - length=66594)" == 413 ]] || fail 'a clip over 64 KiB was not refused'
+[[ "$(request notify - length=66594)" == 413 ]] || fail 'a notify over 64 KiB was not refused'
+[[ "$(request file - length=67109922)" == 413 ]] || fail 'a file over 64 MiB was not refused'
 head -c 65536 /dev/zero | tr '\0' a >"$sandbox/limit"
 [[ "$(request clip "$sandbox/limit")" == 200 ]] || fail 'a clip of exactly 64 KiB was refused'
+printf 'a' >>"$sandbox/limit"
+[[ "$(request clip "$sandbox/limit")" == 400 ]] || fail 'a clip one byte over 64 KiB, sealed, was accepted'
 [[ "$(request run "$sandbox/clip")" == 404 ]] || fail 'an unknown verb was not refused with 404'
-[[ "$(request clip "$sandbox/clip" path=/v2/clip)" == 404 ]] || fail 'another protocol version was not refused with 404'
+[[ "$(request clip "$sandbox/clip" path=/v1/clip)" == 404 ]] || fail 'another protocol version was not refused with 404'
 [[ "$(python3 -c '
 import http.client, sys
 connection = http.client.HTTPConnection("localhost", int(sys.argv[1]), timeout=10)
-connection.request("GET", "/v1/ping")
+connection.request("GET", "/v2/ping")
 print(connection.getresponse().status)' "$port")" == 404 ]] || fail 'a GET was answered'
 
 # file: the path stripped, never over an existing file, no hidden file made.
@@ -186,7 +211,7 @@ answer="$(request ping - show=1)"
 python3 -c '
 import json, sys
 a = json.loads(sys.argv[1])
-assert a["ok"] is True and a["os"] == "linux" and a["protocol"] == 1 and a["name"] and a["version"], a
+assert a["ok"] is True and a["os"] == "linux" and a["protocol"] == 2 and a["name"] and a["version"] and "mac" in a, a
 ' "$(tail -1 <<<"$answer")" || fail "the ping answer lacks name, system or version: $answer"
 
 # --- the client, against the same daemon --------------------------------------------------------------------------
@@ -206,7 +231,56 @@ printf 'peer=localhost:%s\n' "$port" >>"$sandbox/stranger/vivac/link.conf"
 if STATE=stranger link ping 2>"$sandbox/err"; then fail 'a client with another pairing was answered'; fi
 grep -q 'refused it' "$sandbox/err" || fail "the refusal was not explained: $(cat "$sandbox/err")"
 
+# An answer not signed with the pairing's keys is not taken: a stand-in on the port.
+python3 -c '
+import http.server, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        self.rfile.read(int(self.headers["Content-Length"]))
+        data = b"\0" * 32
+        self.send_response(200); self.send_header("Content-Length", "32"); self.send_header("X-Vivac-Sign", "0" * 64); self.end_headers(); self.wfile.write(data)
+    def log_message(self, *a): pass
+s = http.server.HTTPServer(("localhost", 0), H); print(s.server_address[1], flush=True); s.handle_request()' >"$sandbox/fake.port" &
+eventually test -s "$sandbox/fake.port" || fail 'the stand-in did not start'
+sed -i "s/^peer=.*/peer=localhost:$(cat "$sandbox/fake.port")/" "$conf"
+if link ping 2>"$sandbox/err"; then fail 'an unsigned answer was taken'; fi
+grep -q 'not trusted' "$sandbox/err" || fail "the unsigned answer was not explained: $(cat "$sandbox/err")"
+
+# wake: needs the address a ping learnt; sends the magic packet (6 x FF, the address x 16).
+if link wake 2>"$sandbox/err"; then fail 'wake ran without a known address'; fi
+grep -q 'not known yet' "$sandbox/err" || fail "wake did not say why: $(cat "$sandbox/err")"
+# Put together, not written out: a hardware address in the tree is what the privacy scan looks for.
+printf '%s:%s\n' 0a:1b:2c 3d:4e:5f >"$sandbox/state/vivac/link-peer-mac"
+python3 -c '
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.bind(("localhost", 0)); print(s.getsockname()[1], flush=True)
+s.settimeout(5); data, _ = s.recvfrom(200)
+print(data.hex(), flush=True)' >"$sandbox/wol" &
+eventually test -s "$sandbox/wol" || fail 'the packet listener did not start'
+VIVAC_WAKE_TARGET="localhost:$(head -1 "$sandbox/wol")" link wake >/dev/null || fail 'vivac-link wake failed'
+eventually test "$(wc -l <"$sandbox/wol")" -ge 2 || fail 'no magic packet arrived'
+[[ "$(sed -n 2p "$sandbox/wol")" == "ffffffffffff$(printf '0a1b2c3d4e5f%.0s' {1..16})" ]] || fail "the magic packet is wrong: $(sed -n 2p "$sandbox/wol")"
+
+# mouse: both sides' lan-mouse placed and trusted through vivac-mouse config. Here both
+# ends share one profile, so the daemon's write (the sender at the loopback, on the left)
+# is followed by the client's (the peer at localhost, on the right).
+sed -i "s/^peer=.*/peer=localhost:$port/" "$conf"
+mkdir -p "$sandbox/user/.config/lan-mouse"
+printf '%s\n' '-----BEGIN CERTIFICATE-----' 'dml2YWMgbGluazogYSB0ZXN0' '-----END CERTIFICATE-----' >"$sandbox/user/.config/lan-mouse/lan-mouse.pem"
+fp="$(python3 -c 'import base64, hashlib; print(":".join(f"{b:02x}" for b in hashlib.sha256(base64.b64decode("dml2YWMgbGluazogYSB0ZXN0")).digest()))')"
+: >"$calls"
+link mouse right >/dev/null 2>"$sandbox/err" || fail "vivac-link mouse failed: $(cat "$sandbox/err")"
+eventually grep -q 'notify .*Shared mouse paired: 127[.]0[.]0[.]1 is beyond the left edge' "$calls" || fail "the receiver did not place the sender: $(cat "$calls")"
+mouse_conf="$sandbox/state/vivac/mouse.conf"
+for line in peer=localhost side=right "fingerprint=$fp"; do
+	grep -qx "$line" "$mouse_conf" || fail "the sender did not store the peer's answer ($line): $(cat "$mouse_conf")"
+done
+grep -qx 'enabled=yes' "$mouse_conf" && fail 'pairing the mouse turned it on'
+if link mouse sideways 2>/dev/null; then fail 'a side that is not one was accepted'; fi
+printf '{"fingerprint":"zz","port":4242,"side":"left"}' >"$sandbox/badmouse"
+[[ "$(request mouse "$sandbox/badmouse")" == 400 ]] || fail 'a mouse offer with a bad fingerprint was accepted'
+
 kill "$daemon" 2>/dev/null || true
 wait "$daemon" 2>/dev/null || true
 daemon=''
-printf 'vivac link: pairing round-trips, signed requests accepted, 401/413/404 as specified, files confined, links only on a click\n'
+printf 'vivac link: pairing round-trips, sealed and signed requests accepted, answers verified, wake sent, 401/413/404 as specified, files confined, links only on a click\n'

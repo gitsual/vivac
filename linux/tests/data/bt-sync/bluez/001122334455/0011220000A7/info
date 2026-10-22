@@ -1,0 +1,13 @@
+[General]
+Name=Fake pen
+AddressType=static
+SupportedTechnologies=LE;
+Trusted=true
+Blocked=false
+
+[LongTermKey]
+Key=FFEEDDCCBBAA998877665544332211A7
+Authenticated=0
+EncSize=16
+EDiv=0
+Rand=0

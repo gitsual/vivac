@@ -20,6 +20,7 @@ const G = {
   shield: '\u{F0565}', shieldAlert: '\u{F0ECC}',
   bluetooth: '\u{F00AF}', bluetoothOff: '\u{F00B2}', usb: '\u{F129E}',
   update: '\u{F06B0}', restart: '\u{F0709}', bug: '\u{F00E4}',
+  phone: '\u{F011C}',
 };
 
 const weatherGlyph = {
@@ -352,6 +353,36 @@ function usbPill(d) {
     .join('');
 }
 
+// The phone, through KDE Connect (bin/vivac-phone.ps1, lib/Phone.psm1): a
+// glyph while a paired phone is reachable, its name on hover, a count when
+// there are several; nothing at all without KDE Connect or a phone. Asked
+// every minute; a click opens the menu on its Phone category.
+let phone = null;
+async function pollPhone() {
+  try {
+    const r = await zebar.shellExec(
+      'powershell.exe',
+      `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${config.repo}\\bin\\vivac-phone.ps1 -Status`,
+    );
+    phone = JSON.parse(String(r.stdout).trim());
+  } catch {
+    phone = null;
+  }
+  draw();
+}
+if (config.modules.includes('phone')) {
+  pollPhone();
+  setInterval(pollPhone, 60000);
+}
+
+function phonePill() {
+  const phones = Array.isArray(phone?.phones) ? phone.phones.filter((p) => p && typeof p.name === 'string') : [];
+  if (!phones.length) return '';
+  const tip = phones.map((p) => `${p.name}: ${config.labels.phone_reachable}`).join('\n');
+  const count = phones.length > 1 ? `<span class="badge">${phones.length}</span>` : '';
+  return `<button class="pill phone" data-act="phone" title="${esc(tip)}"><span class="glyph">${G.phone}</span>${count}</button>`;
+}
+
 // The update icon, always there at the bar's right end: it opens vivac's
 // updates panel (lib/Updates.psm1). A badge counts what Windows Update and
 // winget have waiting, in the urgent colour with a shield when a security
@@ -376,7 +407,7 @@ function updatesPill() {
 // controls, and the update icon closing it. config.modules says which exist;
 // this says where they sit. (Malwarebytes lives in the shield, with Defender.)
 const GROUPS = [
-  ['wireless', 'wired', 'bluetooth'],
+  ['wireless', 'wired', 'bluetooth', 'phone'],
   ['cpu', 'memory', 'disk', 'gpu', 'battery'],
   ['usb'],
   ['audio'],
@@ -398,6 +429,7 @@ function modulePill(m, out) {
     case 'bluetooth': return bluetoothPill();
     case 'usb': return usbPill(out.disk);
     case 'updates': return updatesPill();
+    case 'phone': return phonePill();
     case 'theme': return `<button class="pill theme" data-act="theme" title="${esc(config.labels.theme)}">${G.theme}</button>`;
     case 'power': return `<button class="pill power" data-act="power" title="${esc(config.labels.power)}">${G.power}</button>`;
   }

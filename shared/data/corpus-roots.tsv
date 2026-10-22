@@ -1,0 +1,91 @@
+# Which of the eight formal roots a corpus colour speaks for, for the colours
+# that can carry a theme's identity: a ground (role deep or base) names the
+# dominant root, an accent (role accent) names the accent root. A palette
+# made from a picture (vivac theme from-image) reads its two roots here and
+# then the distance between them in root-distance.tsv, exactly as a
+# hand-made theme declares them.
+#
+# The eight shipped themes are the anchors: each one's ground and accent are
+# filed under the roots that theme already declares (test_theme_from_image.sh
+# and ThemeFromImage.Tests.ps1 hold that line). The rest follow the family
+# their pack belongs to: night blues and violets are Luna, burgundy and wine
+# Fuego, rose and coral Flor, golds and ambers Sol, greens and teals Tierra,
+# greys, khaki and dark olive Piedra. Montana and Champinon have no colour of
+# their own in the corpus yet, so nothing is filed under them.
+#
+# basis: anchor, a colour one of the eight shipped themes uses, so its root is
+# the one that theme declares; family, filed by its pack's colour family and
+# open to review. The readers take the first two columns.
+#
+# hex	root	basis
+0E1513	Luna	anchor
+0B100F	Luna	family
+131313	Piedra	family
+0A0A0F	Luna	family
+14201D	Tierra	anchor
+253850	Luna	anchor
+302541	Luna	family
+283536	Luna	anchor
+2D1F2D	Luna	family
+241B0E	Piedra	family
+2A1520	Fuego	family
+302B21	Piedra	anchor
+18131B	Luna	family
+3D0115	Fuego	anchor
+1E1E1E	Piedra	family
+3C1331	Fuego	family
+4D011A	Fuego	family
+B56067	Flor	family
+C4686E	Flor	family
+D26F76	Flor	family
+E1777D	Flor	anchor
+C4A982	Sol	family
+D2B68F	Sol	family
+DFC39D	Sol	family
+F2D2BC	Sol	family
+519BC5	Luna	family
+6DC4F8	Luna	family
+AFC59E	Tierra	family
+BAD0AA	Tierra	family
+C4DBB5	Tierra	family
+CFE6C1	Tierra	family
+D5BC70	Sol	family
+E3D6A3	Sol	family
+EBCCA9	Sol	family
+80CFBB	Tierra	family
+92DA7D	Tierra	family
+B3E56B	Tierra	family
+C1E696	Tierra	family
+5AA9D6	Luna	family
+64B6E7	Luna	family
+6CA4B1	Luna	family
+77B0BD	Luna	family
+AAA875	Piedra	anchor
+DECD77	Sol	anchor
+E8C66A	Sol	anchor
+937E2F	Sol	family
+A8904A	Sol	family
+55A185	Tierra	anchor
+5FB3A1	Tierra	family
+5B1339	Fuego	family
+681038	Fuego	family
+731F51	Fuego	family
+63092F	Fuego	family
+7F2F6A	Fuego	family
+5DAC04	Tierra	family
+75BF18	Tierra	family
+8DD22C	Tierra	family
+A5E540	Tierra	family
+B79C74	Piedra	family
+B4B27C	Piedra	family
+E1997C	Flor	family
+E7AC91	Flor	family
+ECBFA7	Flor	family
+CEDC8C	Sol	family
+D1D77E	Sol	family
+D3D171	Sol	family
+D6CC63	Sol	family
+6E93C8	Luna	family
+9A7BC8	Luna	family
+B06A8F	Flor	family
+D79A57	Sol	family

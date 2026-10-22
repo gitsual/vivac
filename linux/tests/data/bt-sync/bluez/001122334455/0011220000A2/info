@@ -1,0 +1,11 @@
+[General]
+Name=Fake keyboard
+Class=0x000540
+SupportedTechnologies=BR/EDR;
+Trusted=true
+Blocked=false
+
+[LinkKey]
+Key=001122334455667700112233445566A2
+Type=5
+PINLength=0

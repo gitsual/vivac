@@ -66,20 +66,31 @@ and of what does not carry over.
 ## 🔗 Together
 
 What you get when you run both — on one machine with a dual boot, on two machines on one network, or
-both. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
+both — and what either half does with a phone. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
 
-| | Dual boot | Two machines |
-|---|:---:|:---:|
-| **Shared choices** — the theme, the weather location and the language follow you to the other system, through a file on a disk both mount | ✅ | |
-| **Restart into the other system** — one entry in each power menu; it sets the firmware's *BootNext* for one boot only, never the boot order or GRUB's default | ✅ | |
-| **The drop tray** — leave files in a folder on one side; the other says, at sign-in, that they are waiting | ✅ | |
-| **vivac link** — send the clipboard, a link, a file or a notification to the other machine; paired once with a code, every request signed | | ✅ |
+| | Dual boot | Two machines | A phone |
+|---|:---:|:---:|:---:|
+| **Shared choices** — the theme, the weather location and the language follow you to the other system, through a file on a disk both mount | ✅ | | |
+| **Restart into the other system** — one entry in each power menu; it sets the firmware's *BootNext* for one boot only, never the boot order or GRUB's default | ✅ | | |
+| **The drop tray** — leave files in a folder on one side; the other says, at sign-in, that they are waiting | ✅ | | |
+| **vivac link** — send the clipboard, a link, a file or a notification to the other machine, or wake it up; paired once with a code, everything encrypted (AES-256) and signed | | ✅ | |
+| **One keyboard and mouse** — push the pointer past a screen edge and keep typing on the other machine (lan-mouse, encrypted; each side trusts only the other's certificate) | | ✅ | |
+| **Palettes from a picture** — a new palette from a wallpaper of yours, every colour taken from the corpus; kept in the shared folder, so both systems list it and wear the same picture | ✅ | | |
+| **Bluetooth, paired once** — pair a device on Linux, then on Windows; Linux copies Windows' keys from the Windows partition and both systems keep working with it. It reads the Windows registry and never writes it | ✅ | | |
+| **The phone** — KDE Connect on either system: the phone's battery on the bar, its notifications as the desktop's own (Linux), and from the menu ring it, send it a file or the clipboard; on Linux the phone can lock, suspend or restart the machine into Windows from a fixed list | | | ✅ |
+| **Phone drop** — a phone with the stock [LocalSend](https://localsend.org) app sends files and texts to either half, and either half sends files to it; no vivac app on the phone, a PIN to receive | | | ✅ |
 
-**Safe by construction.** vivac link never runs what it receives, never opens a link without a click,
+**Safe by construction.** vivac link encrypts everything it sends and signs it both ways, never runs what it receives, never opens a link without a click,
 writes files only into `Downloads/vivac-link/` under a name stripped of any path, and refuses a request
 whose signature, clock or nonce is wrong. Each system's firewall lets in the local subnet only, and only
 once you ask (`apply-system.ps1 -Link` on Windows, `apply-system.sh --bridge` on Linux). The restart needs administrator
-rights on both sides; each grants exactly that one command and nothing more.
+rights on both sides; each grants exactly that one command and nothing more. The phone drop listens only
+once you turn it on, wants its PIN, and treats a text as something to show, never to run or paste.
+
+**And on each side alone:** `vivac ask` (`Super+Shift+A` / `Win+Shift+A`) is a side panel for a
+language model served by your own [Ollama](https://ollama.com) — ask, explain the clipboard, sum up the
+vivac inbox. It talks to `localhost` only, unless you let it reach an Ollama on your local network
+(the other machine's GPU, say: [the bridge, section 10](docs/bridge.md#10-vivac-ask-across-machines)); never to the internet.
 
 ```text
 linux                                    windows
@@ -114,6 +125,20 @@ To join the two once both are installed:
    On Windows the command is `bin\vivac-link.ps1`, then `-Register` to listen at sign-in and
    `apply-system.ps1 -Link` (elevated) to let the other machine in. `Super+Shift+B` on Linux and the
    menu on Windows hold the rest.
+4. **One keyboard and mouse** — `vivac-mouse enable` on each machine (on Windows `bin\vivac-mouse.ps1`,
+   after `bootstrap.ps1 -Mouse` installs lan-mouse and `apply-system.ps1 -Mouse` opens UDP 4242), then
+   `vivac-mouse config --peer HOST --side right` on one and `vivac-mouse pair` on each: it prints the
+   line to run on the other. See [One keyboard and mouse](docs/bridge.md#5-one-keyboard-and-mouse).
+5. **Bluetooth, paired once** — pair the device on Linux, then on Windows, and restart in Linux. Then choose
+   **Bluetooth: take pairings from Windows** in `Super+Shift+B`. The Windows partition has to be mounted
+   on Linux.
+6. **The phone** — install the KDE Connect app on the phone and pair it with each system (KDE Connect
+   comes with the Linux packages; on Windows, `bootstrap.ps1 -Phone`). On Linux, `vivac-phone commands`
+   then lists vivac's actions on the phone. See [the phone](docs/bridge.md#9-the-phone-kde-connect).
+7. **Phone drop** — `vivac-localsend on` (Linux) or `bin\vivac-localsend.ps1 on` (Windows), or **Phone
+   drop: on/off + PIN** in the bridge menu, says the PIN to give the phone; `apply-system.sh --bridge` or
+   `apply-system.ps1 -LocalSend` (elevated) lets phones on the local network in. **Send to phone…** in the
+   same menu sends the other way.
 
 ---
 
@@ -139,7 +164,7 @@ shared/sync.sh --check    # what the gates run
 | The product | [`VERSION`](VERSION) · 2.0.0 | `vX.Y.Z` |
 | The Linux half | [`linux/VERSION`](linux/VERSION) · 1.1.0 | `linux-vX.Y.Z` |
 | The Windows half | [`windows/VERSION`](windows/VERSION) · 1.0.0 | `windows-vX.Y.Z` |
-| The bridge protocol | `v1`, in every request path and beacon | — |
+| The bridge protocol | `v2`, in every request path and beacon | — |
 
 The product's 2.0.0 is the layout: until 1.0.0 this repository was the Linux half alone, at its root. The
 Windows half came from [gitsual/vivac-windows](https://github.com/gitsual/vivac-windows), merged with its

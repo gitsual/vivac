@@ -1,0 +1,5 @@
+# The phone: KDE Connect, which pairs with the KDE Connect app on Android
+# (GrapheneOS included) or iOS. vivac's bar shows the phone while it is
+# reachable and the menu can ring it and send it files and the clipboard
+# (lib/Phone.psm1, docs/bridge.md "The phone").
+KDE.KDEConnect

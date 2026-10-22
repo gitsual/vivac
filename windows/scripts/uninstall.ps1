@@ -52,6 +52,13 @@ if (-not $DryRun -and (Test-Path -LiteralPath $paths.Manifest)) { Remove-Item -L
 Write-Host (T 'uninstall.desktop')
 if (-not $DryRun) { [void](Restore-VivacWindowsOriginal) }
 
+# The shared mouse's sign-in task comes from vivac-mouse.ps1 enable, not from
+# a system profile, so it is looked for on its own.
+if (Get-ScheduledTask -TaskPath '\vivac\' -TaskName 'mouse' -ErrorAction SilentlyContinue) {
+    Write-Host '  [remove]    task \vivac\mouse'
+    if (-not $DryRun) { [void](& (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-mouse.ps1') disable) }
+}
+
 # System profiles: only the ones that were applied have a saved original.
 $sys = Join-Path $paths.State 'system-original.json'
 if (Test-Path -LiteralPath $sys) {
@@ -176,6 +183,23 @@ if (Test-Path -LiteralPath $sys) {
             $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
             if ($admin) { Remove-NetFirewallRule -DisplayName 'vivac link' -ErrorAction SilentlyContinue }
             else { Write-Warning 'the firewall rule "vivac link" is left: run scripts\uninstall.ps1 from an elevated PowerShell to remove it' }
+        }
+    }
+    if (& $has 'mouse') {
+        Write-Host '  [restore]   firewall rule "vivac mouse"'
+        if (-not $DryRun) {
+            $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            if ($admin) { Remove-NetFirewallRule -DisplayName 'vivac mouse' -ErrorAction SilentlyContinue }
+            else { Write-Warning 'the firewall rule "vivac mouse" is left: run scripts\uninstall.ps1 from an elevated PowerShell to remove it' }
+        }
+    }
+    if (& $has 'localsend') {
+        Write-Host '  [restore]   firewall rule "vivac phone drop", task \vivac\localsend'
+        if (-not $DryRun) {
+            [void](& (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-localsend.ps1') -Unregister)
+            $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            if ($admin) { Remove-NetFirewallRule -DisplayName 'vivac phone drop' -ErrorAction SilentlyContinue }
+            else { Write-Warning 'the firewall rule "vivac phone drop" is left: run scripts\uninstall.ps1 from an elevated PowerShell to remove it' }
         }
     }
     $machine = @('firewall', 'defender', 'security_quiet', 'lockscreen', 'lockscreen_acrylic') | Where-Object { & $has $_ }

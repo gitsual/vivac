@@ -4,10 +4,10 @@
   local network.
 
 .DESCRIPTION
-  The Windows side of docs/bridge.md, "vivac link". Every request is signed
-  with the secret the two machines share; this side never runs what it
-  receives, never opens a link unasked and writes received files only into
-  Downloads\vivac-link.
+  The Windows side of docs/bridge.md, "vivac link". Every request and answer
+  is sealed (AES-256) and signed with keys drawn from the secret the two
+  machines share; this side never runs what it receives, never opens a link
+  unasked and writes received files only into Downloads\vivac-link.
 
     pair              make a new pairing and print its code
     pair CODE         take the pairing code made on the other machine
@@ -17,6 +17,10 @@
     send-url URL      send a link (the other side offers it, never opens it)
     send-file PATH    send a file (up to 64 MiB)
     notify TITLE BODY show a notification there
+    mouse SIDE        pair the shared mouse with the other machine, which
+                      lies beyond SIDE (left, right, top, bottom) of this screen
+    wake              wake the other machine (Wake-on-LAN; a ping first
+                      learns its hardware address)
 
     -Serve       listen and announce (what the sign-in task runs)
     -Register    run -Serve at every sign-in, as \vivac\link, and start it
@@ -44,6 +48,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $root 'lib\Vivac.psm1') -Force
 Import-Module (Join-Path $root 'lib\Bridge.psm1') -Force
+Import-Module (Join-Path $root 'lib\Mouse.psm1') -Force
 [void](Import-VivacStrings (Read-VivacSettings)['language'])
 
 $paths = Get-VivacPaths
@@ -152,10 +157,10 @@ function Read-LinkRequest([Net.Sockets.NetworkStream]$Stream) {
         $i = $l.IndexOf(':')
         if ($i -gt 0) { $headers[$l.Substring(0, $i).Trim().ToLowerInvariant()] = $l.Substring($i + 1).Trim() }
     }
-    if ($protocol -ne 1 -or (Get-VivacLinkVerbs) -notcontains $verb) { return @{ Status = 404 } }
+    if ($protocol -ne (Get-VivacLinkProtocol) -or (Get-VivacLinkVerbs) -notcontains $verb) { return @{ Status = 404 } }
     $length = 0L
     if (-not [long]::TryParse([string]$headers['content-length'], [ref]$length) -or $length -lt 0) { return @{ Status = 411 } }
-    if ($length -gt (Get-VivacLinkLimit $verb)) { return @{ Status = 413 } }
+    if ($length -gt (Get-VivacLinkLimit $verb) + (Get-VivacLinkSealRoom)) { return @{ Status = 413 } }
     $body = New-Object byte[] $length
     $got = 0
     while ($got -lt $length) {
@@ -166,23 +171,76 @@ function Read-LinkRequest([Net.Sockets.NetworkStream]$Stream) {
     @{ Status = 0; Verb = $verb; Headers = $headers; Body = $body }
 }
 
-function Write-LinkResponse([Net.Sockets.NetworkStream]$Stream, [int]$Status, [string]$Json) {
+# A 200 is sealed and signed over the request's nonce ($Keys and $Nonce); a
+# refusal is plain JSON and says nothing the asker did not know.
+function Write-LinkResponse([Net.Sockets.NetworkStream]$Stream, [int]$Status, [string]$Json, $Keys = $null, [string]$Nonce = '') {
     $reason = @{ 200 = 'OK'; 400 = 'Bad Request'; 401 = 'Unauthorized'; 404 = 'Not Found'; 411 = 'Length Required'; 413 = 'Payload Too Large'; 431 = 'Request Header Fields Too Large'; 500 = 'Internal Server Error' }[$Status]
     $bytes = $utf8.GetBytes($Json)
-    $head = $utf8.GetBytes("HTTP/1.1 $Status $reason`r`nContent-Type: application/json`r`nContent-Length: $($bytes.Length)`r`nConnection: close`r`n`r`n")
+    $extra = "Content-Type: application/json`r`n"
+    if ($Status -eq 200 -and $Keys -and $Nonce) {
+        $bytes = Protect-VivacLinkBody $Keys.Seal $bytes
+        $extra = "Content-Type: application/octet-stream`r`nX-Vivac-Sign: $(Get-VivacLinkAnswerSignature $Keys.Sign $Nonce $bytes)`r`n"
+    }
+    $head = $utf8.GetBytes("HTTP/1.1 $Status $reason`r`n${extra}Content-Length: $($bytes.Length)`r`nConnection: close`r`n`r`n")
     $Stream.Write($head, 0, $head.Length)
     $Stream.Write($bytes, 0, $bytes.Length)
 }
 
 # What each verb does here. Returns the JSON answer.
-function Invoke-LinkVerb([string]$Verb, [hashtable]$Headers, [byte[]]$Body, $Conf) {
+# ------------------------------------------- the shared mouse, over the link
+
+# This machine's lan-mouse: certificate fingerprint and port; $null before
+# lan-mouse has made its certificate.
+function Get-MouseOffer {
+    $mine = Get-VivacOwnFingerprint
+    if (-not $mine) { return $null }
+    [pscustomobject]@{ Fingerprint = $mine; Port = [int](Read-VivacMouseConf).port }
+}
+
+# The fingerprint, port and side of a mouse offer, each checked; throws
+# otherwise (a 400 on the listener, "not trusted" on the sender).
+function Get-MouseFields($Offer) {
+    if (-not $Offer) { throw 'a mouse offer is a JSON object' }
+    $names = @($Offer.PSObject.Properties | ForEach-Object { $_.Name })
+    if ($names -notcontains 'fingerprint' -or $names -notcontains 'port' -or $names -notcontains 'side') { throw 'fingerprint, port and side' }
+    $f = ConvertTo-VivacFingerprint ([string]$Offer.fingerprint)
+    if (-not $f -or [string]$Offer.fingerprint -cne $f) { throw 'no fingerprint' }
+    if ($Offer.port -isnot [int] -and $Offer.port -isnot [long]) { throw 'no port' }
+    $p = [int]$Offer.port
+    if ($p -lt 1 -or $p -gt 65535) { throw 'no port' }
+    if ((Get-VivacMouseSides) -cnotcontains [string]$Offer.side) { throw 'no side' }
+    [pscustomobject]@{ Fingerprint = $f; Port = $p; Side = [string]$Offer.side }
+}
+
+# vivac-mouse config, as a person would run it: the same checks, the same
+# files, lan-mouse restarted only when it is on.
+function Invoke-VivacMouseConfig([string]$Peer, [string]$Side, [string]$Fingerprint, [int]$Port) {
+    $out = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'bin\vivac-mouse.ps1') config -Peer $Peer -Side $Side -Fingerprint $Fingerprint -Port $Port 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "vivac-mouse config: $($out -join ' ')" }
+}
+
+# What each verb does here, with the body already opened. Returns the JSON
+# answer; throws for a body the verb cannot take (a 400).
+function Invoke-LinkVerb([string]$Verb, [byte[]]$Body, $Conf, [string]$Local, [string]$Remote) {
     $from = Get-PeerName
+    if ($Verb -ne 'file' -and $Body.Length -gt (Get-VivacLinkLimit $Verb)) { throw 'too large' }
     switch ($Verb) {
+        'mouse' {
+            # The other machine's lan-mouse, placed where it says and trusted,
+            # through vivac-mouse config; answered with this machine's.
+            # lan-mouse is never turned on from here.
+            $offer = Get-MouseFields ($utf8.GetString($Body) | ConvertFrom-Json)
+            $mine = Get-MouseOffer
+            if (-not $mine) { throw 'lan-mouse has no certificate here yet' }
+            Invoke-VivacMouseConfig $Remote $offer.Side $offer.Fingerprint $offer.Port
+            Show-LinkCard (T 'link.title') (T 'link.mouse_paired' @($Remote, $offer.Side))
+            return (@{ ok = $true; fingerprint = $mine.Fingerprint; port = $mine.Port; side = (Get-VivacMouseOpposite $offer.Side) } | ConvertTo-Json -Compress)
+        }
         'ping' {
             $version = ''
             $vf = Join-Path $root 'VERSION'
             if (Test-Path -LiteralPath $vf) { $version = ([IO.File]::ReadAllText($vf)).Trim() }
-            return (@{ ok = $true; name = $Conf.Name; os = 'windows'; version = $version; protocol = 1 } | ConvertTo-Json -Compress)
+            return (@{ ok = $true; name = $Conf.Name; os = 'windows'; version = $version; protocol = (Get-VivacLinkProtocol); mac = (Get-VivacMacOf $Local) } | ConvertTo-Json -Compress)
         }
         'clip' {
             $text = $utf8.GetString($Body)
@@ -203,11 +261,15 @@ function Invoke-LinkVerb([string]$Verb, [hashtable]$Headers, [byte[]]$Body, $Con
             Show-LinkCard "$from - $title" $text
         }
         'file' {
-            $name = Get-VivacSafeFileName ([Uri]::UnescapeDataString([string]$Headers['x-vivac-name']))
+            # Its name, a NUL, its bytes.
+            $nul = [Array]::IndexOf($Body, [byte]0)
+            if ($nul -lt 0 -or $nul -gt (Get-VivacLinkNameLimit) -or $Body.Length - $nul - 1 -gt (Get-VivacLinkLimit 'file')) { throw 'a file is its name, a NUL, then its bytes' }
+            $name = Get-VivacSafeFileName ($utf8.GetString($Body, 0, $nul))
             $inbox = Get-VivacLinkInbox
             [void](New-Item -ItemType Directory -Force -Path $inbox)
             $dest = Get-VivacFreePath $inbox $name
-            [IO.File]::WriteAllBytes($dest, $Body)
+            $out = [IO.File]::Open($dest, [IO.FileMode]::CreateNew)
+            try { $out.Write($Body, $nul + 1, $Body.Length - $nul - 1) } finally { $out.Dispose() }
             Show-LinkCard (T 'link.title') (T 'link.got_file' @($from, (Split-Path -Leaf $dest))) '' $dest
         }
     }
@@ -225,10 +287,21 @@ function Invoke-LinkConnection([Net.Sockets.TcpClient]$Client, [hashtable]$Seen)
         $conf = Read-VivacLinkConf
         if (-not $conf) { Write-LinkResponse $stream 401 '{"ok":false,"error":"not paired"}'; return }
         $h = $req.Headers
-        $why = Test-VivacLinkRequest $conf.Secret $req.Verb ([string]$h['x-vivac-time']) ([string]$h['x-vivac-nonce']) ([string]$h['x-vivac-sign']) $req.Body $Seen
+        $keys = Get-VivacLinkKeys $conf.Secret
+        $nonce = [string]$h['x-vivac-nonce']
+        $why = Test-VivacLinkRequest $keys.Sign $req.Verb ([string]$h['x-vivac-time']) $nonce ([string]$h['x-vivac-sign']) $req.Body $Seen
         if ($why) { Write-LinkResponse $stream 401 '{"ok":false}'; Write-LinkLog "refused 401 $($req.Verb) from ${remote}: $why"; return }
-        $answer = Invoke-LinkVerb $req.Verb $h $req.Body $conf
-        Write-LinkResponse $stream 200 $answer
+        # Signed by the peer, so opened; what does not open, or does not fit the
+        # verb, is a 400.
+        try {
+            $plain = Unprotect-VivacLinkBody $keys.Seal $req.Body
+            $answer = Invoke-LinkVerb $req.Verb $plain $conf ($Client.Client.LocalEndPoint.Address.ToString()) ($remote.Address.ToString())
+        } catch {
+            Write-LinkResponse $stream 400 '{"ok":false}'
+            Write-LinkLog "refused 400 $($req.Verb) from ${remote}: $($_.Exception.Message)"
+            return
+        }
+        Write-LinkResponse $stream 200 $answer $keys $nonce
         Write-LinkLog "$($req.Verb) from $remote ($($req.Body.Length) bytes)"
     } catch {
         Write-LinkLog "error with ${remote}: $($_.Exception.Message)"
@@ -257,7 +330,7 @@ function Get-OwnAddresses {
 }
 
 function Send-LinkBeacon([Net.Sockets.UdpClient]$Udp, $Conf) {
-    $beacon = @{ v = 1; name = $Conf.Name; os = 'windows'; port = $Conf.Port; id = (Get-VivacLinkId $Conf.Secret) } | ConvertTo-Json -Compress
+    $beacon = @{ v = (Get-VivacLinkProtocol); name = $Conf.Name; os = 'windows'; port = $Conf.Port; id = (Get-VivacLinkId $Conf.Secret) } | ConvertTo-Json -Compress
     $bytes = $utf8.GetBytes($beacon)
     try { [void]$Udp.Send($bytes, $bytes.Length, (New-Object Net.IPEndPoint ([Net.IPAddress]::Broadcast, $Conf.Port))) } catch { }
 }
@@ -269,7 +342,7 @@ function Receive-LinkBeacons([Net.Sockets.UdpClient]$Udp, $Conf, [string[]]$Own)
         $sender = $ep.Address.ToString()
         if ($Own -contains $sender) { continue }
         try { $b = $utf8.GetString($bytes) | ConvertFrom-Json } catch { continue }
-        if ($b.v -ne 1 -or [string]$b.id -ne (Get-VivacLinkId $Conf.Secret)) { continue }
+        if ($b.v -ne (Get-VivacLinkProtocol) -or [string]$b.id -ne (Get-VivacLinkId $Conf.Secret)) { continue }
         $port = 0
         if (-not [int]::TryParse([string]$b.port, [ref]$port) -or $port -lt 1 -or $port -gt 65535) { continue }
         $peer = @{ address = "${sender}:$port"; name = [string]$b.name; os = [string]$b.os } | ConvertTo-Json -Compress
@@ -326,12 +399,26 @@ function Send-LinkRequest([string]$Verb, [byte[]]$Body, [string]$FileName = '') 
     $peerHost = $peer; $port = $conf.Port
     if ($peer -match '^(.+):(\d+)$') { $peerHost = $Matches[1]; $port = [int]$Matches[2] }
     if ($null -eq $Body) { $Body = New-Object byte[] 0 }
+    if ($FileName) {
+        $name = $utf8.GetBytes($FileName)
+        if ($name.Length -gt (Get-VivacLinkNameLimit)) { $name = [byte[]]$name[0..((Get-VivacLinkNameLimit) - 1)] }
+        $joined = New-Object byte[] ($name.Length + 1 + $Body.Length)
+        [Array]::Copy($name, 0, $joined, 0, $name.Length)
+        [Array]::Copy($Body, 0, $joined, $name.Length + 1, $Body.Length)
+        $Body = $joined
+    }
+    $keys = Get-VivacLinkKeys $conf.Secret
+    $sealed = Protect-VivacLinkBody $keys.Seal $Body
     $time = [string](Get-VivacUnixTime)
     $nonce = New-VivacLinkNonce
-    $headers = [ordered]@{ 'X-Vivac-Time' = $time; 'X-Vivac-Nonce' = $nonce; 'X-Vivac-Sign' = (Get-VivacLinkSignature $conf.Secret $Verb $time $nonce $Body) }
-    if ($FileName) { $headers['X-Vivac-Name'] = [Uri]::EscapeDataString($FileName) }
-    try { Invoke-VivacLinkHttp $peerHost $port $Verb $Body $headers }
+    $headers = [ordered]@{ 'X-Vivac-Time' = $time; 'X-Vivac-Nonce' = $nonce; 'X-Vivac-Sign' = (Get-VivacLinkSignature $keys.Sign $Verb $time $nonce $sealed) }
+    try { $r = Invoke-VivacLinkHttp $peerHost $port $Verb $sealed $headers }
     catch { throw (T 'link.unreachable' @($peer)) }
+    if ($r.Status -ne 200) { return $r }
+    # Only the peer holds the keys: an answer it did not sign is not its answer.
+    if (-not (Test-VivacSameText (Get-VivacLinkAnswerSignature $keys.Sign $nonce $r.Bytes) ([string]$r.Headers['x-vivac-sign']).ToLowerInvariant())) { throw (T 'link.bad_answer' @($peer)) }
+    try { $plain = Unprotect-VivacLinkBody $keys.Seal $r.Bytes } catch { throw (T 'link.bad_answer' @($peer)) }
+    [pscustomobject]@{ Status = 200; Body = $utf8.GetString($plain) }
 }
 function Assert-LinkOk($Response) {
     if ($Response.Status -ne 200) { throw (T 'link.refused' @($Response.Status)) }
@@ -376,7 +463,47 @@ switch ($Verb) {
         $task = Get-ScheduledTask -TaskPath $taskPath -TaskName $taskName -ErrorAction SilentlyContinue
         if ($task) { T 'link.status_task' @($task.State) } else { T 'link.status_no_task' }
     }
-    'ping' { (Assert-LinkOk (Send-LinkRequest 'ping' $null)).Body }
+    'ping' {
+        $answer = (Assert-LinkOk (Send-LinkRequest 'ping' $null)).Body
+        # What wake needs: the hardware address the peer is listening on.
+        try { $mac = [string]($answer | ConvertFrom-Json).mac } catch { $mac = '' }
+        if ($mac -match '^([0-9a-f]{2}:){5}[0-9a-f]{2}$') { Write-VivacFile -Path (Get-VivacLinkPeerMacPath) -Text "$mac`n" }
+        $answer
+    }
+    'mouse' {
+        # The peer lies beyond this side of the screen; it is told the
+        # opposite, where to place this machine.
+        $side = [string]($Rest -join '')
+        if ((Get-VivacMouseSides) -cnotcontains $side) { throw (T 'link.mouse_side' @($side)) }
+        $mine = Get-MouseOffer
+        if (-not $mine) { throw (T 'link.mouse_no_cert') }
+        $json = @{ fingerprint = $mine.Fingerprint; port = $mine.Port; side = (Get-VivacMouseOpposite $side) } | ConvertTo-Json -Compress
+        $r = Assert-LinkOk (Send-LinkRequest 'mouse' $utf8.GetBytes($json))
+        $conf = Read-VivacLinkConf
+        $peer = Get-VivacLinkPeer $conf
+        if ($peer -and $peer.StartsWith('{')) { $peer = [string]($peer | ConvertFrom-Json).address }
+        $peerHost = $peer -replace ':\d+$', ''
+        try { $theirs = Get-MouseFields ($r.Body | ConvertFrom-Json) } catch { throw (T 'link.bad_answer' @($peer)) }
+        Invoke-VivacMouseConfig $peerHost $side $theirs.Fingerprint $theirs.Port
+        T 'link.mouse_paired' @($peerHost, $side)
+    }
+    'wake' {
+        $macPath = Get-VivacLinkPeerMacPath
+        $mac = ''
+        if (Test-Path -LiteralPath $macPath) { $mac = ([IO.File]::ReadAllText($macPath)).Trim() }
+        if ($mac -notmatch '^([0-9a-f]{2}:){5}[0-9a-f]{2}$') { throw (T 'link.no_mac') }
+        $packet = Get-VivacMagicPacket $mac
+        # A machine asleep answers at no address but the broadcast one; the
+        # gates aim it at the loopback instead (VIVAC_WAKE_TARGET=host:port).
+        $targets = @(@('255.255.255.255', 9), @('255.255.255.255', 7))
+        if ($env:VIVAC_WAKE_TARGET -match '^(.+):(\d+)$') { $targets = @(, @($Matches[1], [int]$Matches[2])) }
+        $udp = New-Object Net.Sockets.UdpClient
+        try {
+            $udp.EnableBroadcast = $true
+            foreach ($t in $targets) { [void]$udp.Send($packet, $packet.Length, $t[0], $t[1]) }
+        } finally { $udp.Close() }
+        T 'link.woken' @($mac)
+    }
     'send-clip' {
         $text = Get-Clipboard -Raw
         if (-not $text) { throw (T 'link.empty_clip') }

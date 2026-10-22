@@ -15,13 +15,16 @@ git
 gitleaks
 gnome-keyring
 grim
+hivex
 hypridle
 hyprland
 hyprlock
 hyprpaper
 jq
+kdeconnect
 keepassxc
 kitty
+lan-mouse
 libnotify
 librsvg
 lynis
@@ -39,6 +42,7 @@ pipewire-jack
 pipewire-pulse
 polkit-gnome
 python
+python-cryptography
 ripgrep
 rkhunter
 rofi
@@ -49,6 +53,7 @@ shfmt
 slurp
 socat
 sof-firmware
+sshfs
 stow
 swaybg
 ttf-fira-code

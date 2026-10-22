@@ -7,3 +7,5 @@
 editor	packages/editor.txt		-Editor	selector.editor
 desktop	packages/desktop.txt		-Desktop	selector.desktop
 security	packages/security.txt		-Security	selector.security
+mouse	packages/mouse.txt		-Mouse	selector.mouse
+phone	packages/phone.txt		-Phone	selector.phone

@@ -23,6 +23,7 @@ file: `Alt` by default, or the Windows key (`mod=lwin`).
 | `MOD+F1` | This help |
 | `MOD+Shift+E` | Power menu |
 | `MOD+Shift+T` | Theme picker |
+| `MOD+Shift+A` | Ask a local model (Ollama) in a side panel |
 | `MOD+V` | Clipboard history |
 | `MOD+Shift+R` | Reload the window manager configuration |
 | `MOD+Left` | Focus the window to the left |
