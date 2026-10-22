@@ -140,6 +140,19 @@ will_move() {
 	done
 	return 1
 }
+# A link Stow does not own as written, yet one that leads to the same file of
+# this checkout by another road: made while the checkout's root was elsewhere
+# (the repository's root, before linux/ existed, still reachable through a
+# link). It is ours: moved to the backup like a replaced file, and remade.
+old_road() {
+	local target="$HOME/$1" package
+	[[ -L "$target" ]] || return 1
+	for package in "${selected[@]}"; do
+		[[ -e "$repo_root/dotfiles/$package/$1" ]] || continue
+		[[ "$(readlink -f -- "$target")" == "$(readlink -f -- "$repo_root/dotfiles/$package/$1")" ]] && return 0
+	done
+	return 1
+}
 stow_one() { # stow_one PREFIX stow-args... : PREFIX turns a path under a subtree target into a home path
 	local prefix="$1" out line path found=false
 	shift
@@ -154,6 +167,11 @@ stow_one() { # stow_one PREFIX stow-args... : PREFIX turns a path under a subtre
 		line="${line#  * }"
 		if [[ "$line" =~ \ over\ existing\ target\ (.+)\ since\  ]]; then path="${BASH_REMATCH[1]}"; else path="${line##*: }"; fi
 		will_move "$prefix$path" && continue
+		if old_road "$prefix$path"; then
+			plan_kind+=(move) plan_rel+=("$prefix$path")
+			moving+=("$prefix$path")
+			continue
+		fi
 		unresolved+=("$line")
 	done <<<"$out"
 	$found || unresolved+=("$out")
