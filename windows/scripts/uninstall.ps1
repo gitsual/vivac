@@ -193,6 +193,15 @@ if (Test-Path -LiteralPath $sys) {
             else { Write-Warning 'the firewall rule "vivac mouse" is left: run scripts\uninstall.ps1 from an elevated PowerShell to remove it' }
         }
     }
+    if (& $has 'localsend') {
+        Write-Host '  [restore]   firewall rule "vivac phone drop", task \vivac\localsend'
+        if (-not $DryRun) {
+            [void](& (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-localsend.ps1') -Unregister)
+            $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+            if ($admin) { Remove-NetFirewallRule -DisplayName 'vivac phone drop' -ErrorAction SilentlyContinue }
+            else { Write-Warning 'the firewall rule "vivac phone drop" is left: run scripts\uninstall.ps1 from an elevated PowerShell to remove it' }
+        }
+    }
     $machine = @('firewall', 'defender', 'security_quiet', 'lockscreen', 'lockscreen_acrylic') | Where-Object { & $has $_ }
     if ($machine) { Write-Host (T 'uninstall.machine_profiles' @(($machine -join ', '), $sys)) }
     if (-not $DryRun -and -not $machine) { Remove-Item -LiteralPath $sys -Force }

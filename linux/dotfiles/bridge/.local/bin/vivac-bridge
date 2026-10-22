@@ -5,7 +5,8 @@
 #   --print   list the menu's rows, one per line, and exit
 #
 # The drop tray in both directions, the clipboard to the paired machine, waking
-# it, the shared mouse on or off, Restart in Windows when the firmware has an
+# it, a phone through LocalSend (send to it; receive from it on or off, with its
+# PIN), the shared mouse on or off, Restart in Windows when the firmware has an
 # entry for it, Bluetooth pairings taken from Windows when a Windows partition
 # is mounted, and the phone when KDE Connect is installed. As in the power
 # menu, the action is chosen by position and never by the label it printed.
@@ -25,8 +26,8 @@ i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
 # Each command is a program beside this one and its arguments, split on spaces
 # here and run with the directory prefixed, so a $HOME with a space survives.
 bin="$(dirname -- "$self")"
-keys=(drop.title drop.send link.send_clip link.wake)
-commands=('vivac-drop --open-in' 'vivac-drop --open-out' 'vivac-link send-clip' 'vivac-link wake')
+keys=(drop.title drop.send link.send_clip link.wake localsend.menu_send localsend.menu_toggle)
+commands=('vivac-drop --open-in' 'vivac-drop --open-out' 'vivac-link send-clip' 'vivac-link wake' 'vivac-localsend pick' 'vivac-localsend toggle')
 # The shared mouse, once lan-mouse is installed; the row says what it is now.
 if "$bin/vivac-mouse" available 2>/dev/null; then
 	if grep -qx 'enabled=yes' "${XDG_STATE_HOME:-$HOME/.local/state}/vivac/mouse.conf" 2>/dev/null; then

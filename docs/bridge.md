@@ -17,6 +17,7 @@ Five features, each usable alone:
 | [Palettes from a picture](#5-palettes-from-a-picture) | dual boot (or one system alone) | a disk both systems mount, to share them |
 | [Bluetooth across the dual boot](#5-bluetooth-across-the-dual-boot) | dual boot | the Windows partition mounted on Linux |
 | [The phone](#5-the-phone-kde-connect) | a phone on the same network | KDE Connect on both |
+| [Phones: LocalSend](#5-phones-localsend) | a phone on the same network | the LocalSend app on the phone, a PIN |
 
 ## The shared root
 
@@ -521,6 +522,120 @@ a phone: the battery property names (`charge`, `isCharging` on
 `org.kde.kdeconnect.device.battery`, taken from the 26.x sources), the
 notification's app name (`KDE Connect`, from its notifyrc) that the dunst rule
 matches, and KDE Connect for Windows' install path.
+## 5. Phones: LocalSend
+
+The **phone drop**. A phone (Android or iOS) with the stock
+[LocalSend](https://localsend.org) app, from F-Droid or a store, sends files
+and texts to either half and receives files from it; nothing of vivac's is
+installed on the phone. Both halves speak LocalSend's own protocol, v2
+([github.com/localsend/protocol](https://github.com/localsend/protocol)),
+so any LocalSend device works, a vivac machine included.
+
+| | Linux | Windows |
+|---|---|---|
+| Program | `vivac-localsend` (Python standard library) | `bin\vivac-localsend.ps1`, `lib\LocalSend.psm1` |
+| Receiver | user service `vivac-localsend.service` | sign-in task `\vivac\localsend` |
+| On, off, PIN | `vivac-localsend on`, `off`, `status`, `pin [--new]` | `vivac-localsend.ps1 on`, `off`, `status`, `pin [-New]` |
+| Send | `vivac-localsend send [--to ALIAS] FILE...`, `--text TEXT` | `vivac-localsend.ps1 send [-To ALIAS] FILE...`, `-Text TEXT` |
+| Menu | bridge menu (`Super+Shift+B`): **Send to phone…**, **Phone drop: on/off + PIN** | the same two entries in the menu |
+| Firewall | `apply-system.sh --bridge` | `apply-system.ps1 -LocalSend` |
+
+### Discovery
+
+UDP multicast to `224.0.0.167`, port `53317`, as LocalSend does. A device
+announces itself with:
+
+```json
+{"alias":"<name>","version":"2.1","deviceModel":"Linux|Windows","deviceType":"desktop",
+ "fingerprint":"<32 hex>","port":53317,"protocol":"http","download":false,"announce":true}
+```
+
+A device that hears `"announce":true` (or v1's `"announcement":true`) answers
+by `POST /api/localsend/v2/register` with its own info, or, when that fails,
+with the same JSON and `"announce":false` to the group. The receiver
+announces when it starts and answers every announcement; the sender
+announces three times in two seconds and keeps what answers. While the
+receiver holds port 53317, a sender on the same machine reads what the
+receiver heard (`localsend-devices.json` in the state folder, ten minutes at
+most); otherwise it listens on 53317 itself for those two seconds. Where
+multicast does not get through (another subnet, a guest Wi-Fi), `--peer
+HOST:PORT` / `-Peer HOST:PORT` names the device directly.
+
+### Receiving
+
+Plain HTTP on TCP `53317`, `protocol` `http`: neither half can make a TLS
+certificate with what it is allowed to use (Python's standard library has no
+certificate generator; PowerShell 5.1 would have to write into the user's
+certificate store), so phones send to vivac over http. The fingerprint is
+then, as LocalSend specifies for http, a random string: 16 random bytes in
+hex, made once and kept in the state folder (`localsend-id`).
+
+| Request | Answer |
+|---|---|
+| `GET /api/localsend/v2/info` | this device's info |
+| `POST /api/localsend/v2/register` | this device's info; the caller is remembered for the sender |
+| `POST /api/localsend/v2/prepare-upload?pin=PIN` | `200 {"sessionId":…,"files":{id:token}}`; `204` when it held only texts; `400` malformed; `401` no PIN or a wrong one; `409` another sender's session is running (it lapses after five idle minutes); `413` a file over 2 GiB; `429` five wrong PINs from that address in the last minute |
+| `POST /api/localsend/v2/upload?sessionId&fileId&token` | `200`; `400` missing parameters or a body shorter than announced; `403` unknown session, another address, a wrong or used token; `413` a body longer than announced; `422` the SHA-256 differs from the announced one |
+| `POST /api/localsend/v2/cancel?sessionId` | `200`; the files already received stay |
+| anything else | `404` |
+
+- **The PIN is required.** It is `localsend_pin` in the settings file (4 to
+  32 letters and digits), or, with `localsend_pin=auto` (the default), six
+  random digits made the first time the receiver is turned on and kept in the
+  state folder (`localsend.pin`, this user only). `status` and the menu's
+  **Phone drop: on/off + PIN** say it. A phone sends without one first; the
+  `401` makes LocalSend ask for it.
+- **Files** go into the same folder as vivac link's, `Downloads/vivac-link/`
+  (`VIVAC_LINK_INBOX` in the gates), under the same safe name: no folder, no
+  control or forbidden character, no leading dot on Linux, no device name on
+  Windows; `name (2).ext` when the name is taken, never over anything. Each
+  is streamed to a hidden `.localsend-*.part` file beside them, its SHA-256
+  checked when one was announced, and only then given its name; a refused
+  or cut upload leaves nothing behind. Up to 2 GiB a file.
+- **Texts**: LocalSend sends a message as a `.txt` whose `preview` is the
+  text. It is shown in a notification, as text, and goes nowhere else: not
+  to the clipboard, not to a file. The answer is `204`, as LocalSend's own
+  receivers answer.
+- **One notification per batch**: "3 files from <alias>" (or "<alias> sent
+  <name>"), a click opens the folder. Nothing received is opened or run.
+- **Only when turned on.** Nothing listens until `on` (or the menu). The
+  firewall step opens TCP and UDP 53317 to the local subnet only (UFW rule
+  "vivac phone drop"; Windows rule "vivac phone drop", private networks).
+  `-LocalSend` is a switch of its own on Windows, apart from `-Link`: a
+  phone is not the paired machine, and either may be wanted alone. On Linux
+  `--bridge` opens both ports, as the one system step of the bridge; the
+  service is still only started by `vivac-localsend on`.
+
+### Sending
+
+`prepare-upload` with this device's info and, for each file, its id, name,
+size, MIME type, SHA-256 and modification time; the phone's owner accepts on
+the phone (up to five minutes), then each file is streamed to `upload` with
+its token; on a failure the session is cancelled. A phone that asks for a PIN
+gets the one given with `--pin` / `-Pin`, or, on Linux, typed in rofi or on
+the terminal.
+
+Phones serve **https with a self-signed certificate**. No authority vouches
+for it; LocalSend's trust is that the certificate's SHA-256 is the
+`fingerprint` the device announced. Both halves accept the self-signed
+certificate only after checking exactly that (Python:
+`getpeercert(binary_form=True)`; .NET: the `SslStream`'s
+`RemoteCertificate`), before sending a byte. A device named with `--peer`
+announced nothing: the certificate it shows on the first request is the one
+every later request must show.
+
+The device is chosen by alias (`--to` / `-To`: the whole name, case aside,
+else the only one it begins), else in rofi (Linux) or a list in vivac's style
+(Windows). **Send to phone…** in the menu picks what to send first: rofi
+lists the clipboard's text and the newest files of the usual folders
+(Shift+Enter for several); Windows opens its own file picker.
+
+### Gates
+
+`VIVAC_LOCALSEND_SINK=<file>` writes each notification as a line
+`title|body|folder` instead of showing it (on Windows the sign-in task is a
+file beside it); `VIVAC_LOCALSEND_PORT` and `VIVAC_LOCALSEND_INTERFACES` keep
+discovery on the gates' own port and on the loopback.
 
 ## Versions
 

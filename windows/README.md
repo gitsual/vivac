@@ -440,7 +440,7 @@ tests/       The gates, fixtures, golden files and the off-screen surface render
 | [Mapping](docs/mapping.md) | Every part of the source and what it became here — or why it did not carry over |
 | [Keys](docs/keys.md) | The help registry, for readers without a session |
 | [The Linux half](../linux/README.md) | The Arch Linux workstation this is pitched from |
-| [The bridge](../docs/bridge.md) | What the two halves do together: shared choices, restart into the other system, the drop tray, vivac link, one keyboard and mouse, palettes from a picture, Bluetooth across the dual boot |
+| [The bridge](../docs/bridge.md) | What the two halves do together: shared choices, restart into the other system, the drop tray, vivac link, one keyboard and mouse, the phone (LocalSend), palettes from a picture, Bluetooth across the dual boot |
 
 ## 📄 License
 

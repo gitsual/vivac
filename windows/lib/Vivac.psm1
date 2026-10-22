@@ -265,6 +265,9 @@ $script:SettingDefaults = [ordered]@{
     ask_url          = 'http://localhost:11434'
     ask_model        = 'none'
     ask_allow_lan    = 'false'
+    # The PIN a phone gives to send here (bin/vivac-localsend.ps1): auto is the
+    # one made when the phone drop is first turned on, kept in its state.
+    localsend_pin    = 'auto'
 }
 $script:SettingRules = @{
     language         = '^(es|en)$'
@@ -279,6 +282,7 @@ $script:SettingRules = @{
     ask_url          = '^http://[A-Za-z0-9.:_\[\]-]+/?$'
     ask_model        = '^[A-Za-z0-9][A-Za-z0-9._:/-]*$'
     ask_allow_lan    = '^(true|false)$'
+    localsend_pin    = '^(auto|[0-9A-Za-z]{4,32})$'
 }
 
 function Read-VivacSettings {

@@ -32,6 +32,11 @@
 #               the local network (a private address, never a public one).
 #               Ollama has no password: whoever reaches its port can use it,
 #               so only on a network you trust.
+#   localsend_pin
+#               the PIN a phone must give to send here with LocalSend
+#               (vivac-localsend, docs/bridge.md): auto keeps the six random
+#               digits made when it is first turned on, or 4 to 32 letters and
+#               digits of your own. Never shared.
 locale=es_ES.UTF-8
 keymap=es
 xkb_layout=es
@@ -43,3 +48,4 @@ shared_settings=none
 ask_url=http://localhost:11434
 ask_model=none
 ask_allow_lan=false
+localsend_pin=auto
