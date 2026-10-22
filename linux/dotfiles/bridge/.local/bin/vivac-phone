@@ -453,7 +453,9 @@ run() {
 	case "${1:-}" in
 	lock) exec loginctl lock-session ;;
 	suspend) exec systemctl suspend ;;
-	reboot-windows) exec "$bin/vivac-reboot-other" --yes ;;
+	# The two questions of any restart are asked on this screen: a tap on a
+	# phone is not a yes from whoever is working here.
+	reboot-windows) exec "$bin/vivac-reboot-other" ;;
 	clip-other)
 		output="$("$bin/vivac-link" send-clip 2>&1)" || true
 		command -v notify-send >/dev/null && notify-send --app-name=vivac -- "$(i18n_get link.title)" "$output"

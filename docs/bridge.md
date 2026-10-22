@@ -609,8 +609,9 @@ the value a quoted `@ByteArray(...)` of JSON
 The list is fixed: `lock` (`loginctl lock-session`), `suspend`, `clip-other`
 (this clipboard to the machine paired through vivac link, when there is one)
 and `reboot-windows` (when the firmware has a Windows entry; it runs
-`vivac-reboot-other --yes`: the tap on the phone is the confirmation, since
-nobody may be at the screen to answer). Each entry only names one of these,
+`vivac-reboot-other`, which asks its two questions on the computer's
+screen like any restart, section 2: a tap on a phone is not a yes from
+whoever is working there, and with nobody at the screen nothing happens). Each entry only names one of these,
 and `vivac-phone run` refuses any other name, so what the phone can do is
 decided by vivac, not by the file. Entries whose key starts `vivac-` are
 replaced on every run; any other is the user's own and is kept. A second run
