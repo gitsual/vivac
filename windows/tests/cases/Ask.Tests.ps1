@@ -73,6 +73,12 @@ try {
         Assert-Equal 'system,user' (@($req.messages | ForEach-Object { $_.role }) -join ',')
         Assert-Equal 'hi' $req.messages[1].content
         Assert-Equal "localhost:$port" ([IO.File]::ReadAllText((Join-Path $state 'host'))) 'the Host is the name the user wrote'
+        # The setting's default reaching a question (the panel once sent it
+        # as it stood): Ollama answered 404, model 'none' not found.
+        foreach ($unset in 'none', '') {
+            Assert-Equal $hello (Get-VivacAskAnswer $ep $unset $hi $null 20) "a question with the model '$unset' is answered"
+            Assert-Equal 'fake:1b' ([IO.File]::ReadAllText((Join-Path $state 'request.json')) | ConvertFrom-Json).model "the model '$unset' became the first listed one"
+        }
     }
     Case 'failures are said: the server error, a stall, an error in the stream, a closed port, no models' {
         Assert-Throws { Get-VivacAskAnswer $ep 'missing' $hi $null 20 } "Ollama answered 404: model 'missing' not found"
