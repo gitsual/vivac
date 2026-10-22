@@ -21,6 +21,7 @@ hyprland
 hyprlock
 hyprpaper
 jq
+kdeconnect
 keepassxc
 kitty
 lan-mouse
@@ -52,6 +53,7 @@ shfmt
 slurp
 socat
 sof-firmware
+sshfs
 stow
 swaybg
 ttf-fira-code

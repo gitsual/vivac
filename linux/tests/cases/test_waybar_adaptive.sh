@@ -54,7 +54,7 @@ expect() {
 	return 0
 }
 
-expect vm-virtio 'network#wired cpu memory disk pulseaudio custom/power custom/weather hyprland/window' 'battery backlight bluetooth custom/gpu temperature'
+expect vm-virtio 'network#wired cpu memory disk pulseaudio custom/phone custom/power custom/weather hyprland/window' 'battery backlight bluetooth custom/gpu temperature'
 expect laptop-intel 'network#wireless network#wired battery backlight bluetooth temperature' 'custom/gpu'
 expect laptop-amd-hybrid 'battery backlight custom/gpu temperature' 'bluetooth'
 expect desktop-nvidia 'network#wired custom/gpu temperature' 'network#wireless battery backlight bluetooth'

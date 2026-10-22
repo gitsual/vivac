@@ -72,7 +72,7 @@ powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -Editor
 ```
 
 `bootstrap.ps1` installs the base packages with winget (plus the optional
-sets you ask for: `-Editor`, `-Desktop`, `-Security`, `-Mouse`; `-ListSelectors` says
+sets you ask for: `-Editor`, `-Desktop`, `-Security`, `-Mouse`, `-Phone`; `-ListSelectors` says
 which apply here), detects the hardware, deploys every configuration, starts
 GlazeWM and opens the first-run wizard.
 
@@ -124,6 +124,7 @@ ornament it has not earned fails the build.
 - **🖥️ A bar that only shows what the machine has — and never goes blank.** The Wi-Fi gauge needs an adapter, the battery a battery, the GPU temperature an NVIDIA card — rendered per machine from detected hardware facts. It loads nothing from the network, and a watcher brings it back if it dies or comes up empty; see [The bar](#-the-bar).
 - **🔗 The Linux half, one step away.** With a dual boot: the theme, location and language follow you, **Restart in Linux** sits in the power menu, a drop tray hands files across, and a Bluetooth device paired on both systems keeps working on both (the Linux side copies the keys; `bin\vivac-bt-sync.ps1` lists what is paired here). With a second machine: `bin\vivac-link.ps1` sends the clipboard, links, files and notifications to it, encrypted, `wake` wakes it up, and `bin\vivac-mouse.ps1` lends it this keyboard and mouse (lan-mouse). See [the bridge](../docs/bridge.md).
 - **💬 A local model, one key away.** `Win+Shift+A`: a side panel that talks to your own Ollama and to nothing else — ask, explain the clipboard, or sum up what arrived in the vivac inbox. Answers are text, never run. See [vivac ask](#vivac-ask).
+- **📱 The phone in the bar.** With KDE Connect (`bootstrap.ps1 -Phone`), a paired phone shows on the bar while it is in reach, and the menu's **Phone** category rings it or sends it a file or the clipboard. Without KDE Connect none of it shows. See [the phone](../docs/bridge.md#5-the-phone-kde-connect).
 - **🛡️ UAC left whole.** Nothing elevated runs a file you can change without elevation; see [What it asks of Windows](#-what-it-asks-of-windows).
 - **✅ 20 gate files before anything ships.** Parsing, encoding, palettes, renders, keys, strings, hardware detection, the surfaces in every theme, the bar's modules and a two-pass deploy regression.
 

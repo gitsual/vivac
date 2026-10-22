@@ -12,6 +12,7 @@ export const config = {
 @?has_wifi=yes@    'wireless',
     'wired',
 @?has_bluetooth=yes@    'bluetooth',
+    'phone',
     'cpu',
     'memory',
     'disk',

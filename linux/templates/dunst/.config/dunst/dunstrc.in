@@ -30,3 +30,10 @@
     foreground = "#@COLOR_ACCENT@"
     frame_color = "#@COLOR_URGENT@"
     timeout = 0
+# The phone's notifications, as KDE Connect passes them on (vivac-phone):
+# the palette and timeouts above like any other, with a phone glyph before
+# the summary so they read as the phone's and not this machine's. A pairing
+# request comes the same way, with its Accept and Reject actions.
+[vivac-phone]
+    appname = "KDE Connect"
+    format = "󰄜 <b>%s</b>\n%b"

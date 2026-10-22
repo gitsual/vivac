@@ -12,6 +12,9 @@ $script:Apps = @{
     flow    = @{ Process = 'Flow.Launcher'; Command = $null; Paths = @('%LOCALAPPDATA%\FlowLauncher\Flow.Launcher.exe') }
     nvim    = @{ Process = 'nvim'; Command = 'nvim'; Paths = @('%ProgramFiles%\Neovim\bin\nvim.exe') }
     wt      = @{ Process = 'WindowsTerminal'; Command = 'wt'; Paths = @('%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe') }
+    # KDE Connect's command line (packages/phone.txt, optional): installed for
+    # all users or, with winget's user scope, under the profile.
+    kdeconnect = @{ Process = 'kdeconnectd'; Command = 'kdeconnect-cli'; Paths = @('%ProgramFiles%\KDE Connect\bin\kdeconnect-cli.exe', '%LOCALAPPDATA%\Programs\KDE Connect\bin\kdeconnect-cli.exe') }
 }
 
 function Find-VivacApp([string]$Name) {

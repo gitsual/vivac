@@ -4,6 +4,7 @@
 
 .DESCRIPTION
     menu        the menu of the Start menu's contents (MOD+R)
+    phone       the same menu, open on the phone's category (KDE Connect)
     help [pane] the key help pane (F1-F5 switch panes, Esc closes)
     power       the power menu: lock, sign out, sleep, restart, shut down
     theme       the theme picker
@@ -36,11 +37,12 @@ Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
 # Without the resident host a surface takes a couple of seconds more to
 # build: "Loading..." meanwhile, so the key does not look dead.
 $fromImage = $Verb -eq 'theme' -and $Rest -and $Rest[0] -eq 'from-image'
-if (@('menu', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'security') -contains $Verb -and -not $fromImage) { Start-VivacLoading }
+if (@('menu', 'phone', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'security') -contains $Verb -and -not $fromImage) { Start-VivacLoading }
 
 switch ($Verb) {
     'help'      { $pane = 'wm'; if ($Rest) { $pane = $Rest[0] }; Show-Help $pane }
     'menu'      { Show-Menu }
+    'phone'     { Show-Menu -Category phone }
     'power'     { Show-Power }
     'theme'     {
         if ($fromImage) {
@@ -82,5 +84,5 @@ switch ($Verb) {
             Show-Ask $askMode
         }
     }
-    default     { throw "vivac: unknown verb '$Verb' (menu, help, power, theme, sound, bluetooth, network, updates, security, clipboard, notify, welcome, audit, ask)" }
+    default     { throw "vivac: unknown verb '$Verb' (menu, phone, help, power, theme, sound, bluetooth, network, updates, security, clipboard, notify, welcome, audit, ask)" }
 }

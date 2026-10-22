@@ -19,6 +19,7 @@
 @?gpu_vendors~nvidia@    "custom/gpu",
 @?has_backlight=yes@    "backlight",
 @?has_battery=yes@    "battery",
+    "custom/phone",
     "pulseaudio",
     "custom/theme",
     "custom/power"
@@ -51,6 +52,7 @@
 @?setting_weather_location=auto@  "custom/weather": {"exec": "curl -sf -m 5 'wttr.in/?format=1'", "interval": 1800, "format": "{}", "tooltip": false},
 @?setting_weather_location!=auto@  "custom/weather": {"exec": "curl -sf -m 5 'wttr.in/@SETTING_WEATHER_LOCATION@?format=1'", "interval": 1800, "format": "{}", "tooltip": false},
   "custom/updates": {"exec": "checkupdates | wc -l", "format": "󰏔 {}", "interval": 3600, "on-click": "kitty -e sudo pacman -Syu"},
+  "custom/phone": {"exec": "$HOME/.local/bin/vivac-phone waybar", "return-type": "json", "format": "{}", "interval": 60, "on-click": "$HOME/.local/bin/vivac-phone menu"},
   "custom/theme": {"format": "◐", "on-click": "$HOME/.local/bin/vivac-theme", "tooltip": false},
   "custom/power": {"format": "⏻", "on-click": "$HOME/.config/rofi/power/powermenu.sh", "tooltip": false}
 }

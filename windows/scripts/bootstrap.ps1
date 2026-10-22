@@ -21,6 +21,8 @@
   Also install Malwarebytes and KeePassXC (packages/security.txt).
 .PARAMETER Mouse
   Also install lan-mouse, the shared keyboard and mouse (packages/mouse.txt).
+.PARAMETER Phone
+  Also install KDE Connect, for the phone (packages/phone.txt).
 .PARAMETER NoInstall
   Skip winget entirely; deploy only.
 .PARAMETER ListSelectors
@@ -35,6 +37,7 @@ param(
     [switch]$Desktop,
     [switch]$Security,
     [switch]$Mouse,
+    [switch]$Phone,
     [switch]$NoInstall,
     [switch]$ListSelectors,
     [switch]$NoStart
@@ -76,7 +79,7 @@ if ($ListSelectors) {
 }
 
 $manifests = @('packages/base.txt')
-$asked = @{ editor = $Editor; desktop = $Desktop; security = $Security; mouse = $Mouse }
+$asked = @{ editor = $Editor; desktop = $Desktop; security = $Security; mouse = $Mouse; phone = $Phone }
 foreach ($s in Get-Selectors) {
     if (-not $asked[$s.Id]) { continue }
     if (-not (Test-VivacPredicate $s.Predicate $facts)) {

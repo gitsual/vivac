@@ -77,6 +77,7 @@ both. [docs/bridge.md](docs/bridge.md) is the contract both halves implement.
 | **One keyboard and mouse** — push the pointer past a screen edge and keep typing on the other machine (lan-mouse, encrypted; each side trusts only the other's certificate) | | ✅ |
 | **Palettes from a picture** — a new palette from a wallpaper of yours, every colour taken from the corpus; kept in the shared folder, so both systems list it and wear the same picture | ✅ | |
 | **Bluetooth, paired once** — pair a device on Linux, then on Windows; Linux copies Windows' keys from the Windows partition and both systems keep working with it. It reads the Windows registry and never writes it | ✅ | |
+| **The phone** — KDE Connect on either system: the phone's battery on the bar, its notifications as the desktop's own (Linux), and from the menu ring it, send it a file or the clipboard; on Linux the phone can lock, suspend or restart the machine into Windows from a fixed list | ✅ | ✅ |
 
 **Safe by construction.** vivac link encrypts everything it sends and signs it both ways, never runs what it receives, never opens a link without a click,
 writes files only into `Downloads/vivac-link/` under a name stripped of any path, and refuses a request
@@ -129,6 +130,9 @@ To join the two once both are installed:
 5. **Bluetooth, paired once** — pair the device on Linux, then on Windows, and restart in Linux. Then choose
    **Bluetooth: take pairings from Windows** in `Super+Shift+B`. The Windows partition has to be mounted
    on Linux.
+6. **The phone** — install the KDE Connect app on the phone and pair it with each system (KDE Connect
+   comes with the Linux packages; on Windows, `bootstrap.ps1 -Phone`). On Linux, `vivac-phone commands`
+   then lists vivac's actions on the phone. See [the phone](docs/bridge.md#5-the-phone-kde-connect).
 
 ---
 

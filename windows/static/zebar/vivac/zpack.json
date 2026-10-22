@@ -26,7 +26,7 @@
         "shellCommands": [
           {
             "program": "cmd.exe",
-            "argsRegex": "^/c echo (theme|power|help|sound|bluetooth|security|network|updates)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul \\|\\| conhost\\.exe --headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac\\.ps1 (theme|power|help|sound|bluetooth|security|network|updates)$"
+            "argsRegex": "^/c echo (theme|power|help|sound|bluetooth|security|network|updates|phone)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul \\|\\| conhost\\.exe --headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac\\.ps1 (theme|power|help|sound|bluetooth|security|network|updates|phone)$"
           },
           {
             "program": "powershell.exe",
@@ -35,6 +35,10 @@
           {
             "program": "powershell.exe",
             "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-tray\\.ps1 (-Status|-Updates|-Bluetooth|-Eject [A-Z]:|-Open (bluetooth|updates|antivirus))$"
+          },
+          {
+            "program": "powershell.exe",
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-phone\\.ps1 -Status$"
           },
           {
             "program": "nvidia-smi",
