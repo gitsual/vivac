@@ -5,12 +5,18 @@ import * as zebar from './zebar-client.js';
 
 const GRACE = 400; // the pointer crossing from the pill down into the popup
 const FIRST = 2500; // a popup the pointer never reaches, if the stamps fail
+// The webview can miss the mouseleave (the pointer jumps off, the popup is
+// covered), and then the popup would stay for good: a pointer that has not
+// moved over it for this long no longer holds it open.
+const IDLE = 20000;
 
 export function keepOpenWhileHovered(name) {
   const opened = Date.now();
   let inside = false;
+  let moved = Date.now();
   let closing = false;
-  document.body.addEventListener('mouseenter', () => { inside = true; });
+  document.body.addEventListener('mouseenter', () => { inside = true; moved = Date.now(); });
+  for (const ev of ['mousemove', 'wheel', 'mousedown']) document.body.addEventListener(ev, () => { moved = Date.now(); });
   document.body.addEventListener('mouseleave', () => { inside = false; });
   const since = (key) => {
     try {
@@ -21,7 +27,7 @@ export function keepOpenWhileHovered(name) {
   const tick = () => {
     try { localStorage.setItem(`popup.${name}.alive`, String(Date.now())); } catch {}
     const hover = since(`popup.${name}.hover`);
-    if (inside || closing || hover < GRACE) return;
+    if ((inside && Date.now() - moved < IDLE) || closing || hover < GRACE) return;
     // A stamp older than this opening is a pill hovered some other time:
     // this popup was not opened by a hover, so give the pointer time.
     if (hover > 5000 && Date.now() - opened < FIRST) return;

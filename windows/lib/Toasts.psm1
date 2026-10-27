@@ -105,6 +105,7 @@ function Invoke-ToastApp([string]$Aumid) {
 $script:Stack = New-Object System.Collections.Generic.List[object]
 $script:MaxCards = 4
 $script:Seconds = 7
+$script:PauseCap = 30
 
 function Update-ToastStack {
     $area = [Windows.SystemParameters]::WorkArea
@@ -117,19 +118,21 @@ function Update-ToastStack {
 }
 
 # One card on the stack: newest on top, at most four, each gone after seven
-# seconds unless the pointer rests on it.
+# seconds unless the pointer rests on it. A card is never on screen for good:
+# WPF can miss the MouseLeave (the stack reflows the card out from under a
+# still pointer), so the pointer holds it at most $PauseCap seconds.
 function Show-VivacToast([string]$Title, [string]$Body, [string]$App, [string]$Image = '', [string]$IconKey = '', [scriptblock]$OnClick = $null) {
     while ($script:Stack.Count -ge $script:MaxCards) { $script:Stack[$script:Stack.Count - 1].Close() }
     $w = New-VivacNotification $Title $Body $App $Image $IconKey
     $parts = $w.Tag
-    $life = @{ Left = [double]$script:Seconds * 1000; Paused = $false; OnClick = $OnClick; Window = $w; Full = 380.0 }
+    $life = @{ Left = [double]$script:Seconds * 1000; Paused = $false; Held = 0.0; OnClick = $OnClick; Window = $w; Full = 380.0 }
     $timer = New-Object Windows.Threading.DispatcherTimer
     $timer.Interval = [TimeSpan]::FromMilliseconds(50)
     $timer.Tag = @{ Life = $life; Parts = $parts }
     $timer.Add_Tick({
             param($s)
             $l = $s.Tag.Life
-            if ($l.Paused) { return }
+            if ($l.Paused -and $l.Held -lt $script:PauseCap * 1000) { $l.Held += 50; return }
             $l.Left -= 50
             $s.Tag.Parts.Progress.Width = [Math]::Max(0, $l.Full * $l.Left / ($script:Seconds * 1000))
             if ($l.Left -le 0) { $s.Stop(); $l.Window.Close() }

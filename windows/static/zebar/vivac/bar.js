@@ -255,8 +255,10 @@ function audioPill(a) {
 }
 
 // Defender's state, read by bin/vivac-security.ps1 in place of Windows
-// Security's tray icon: a bare shield while all is well, the first thing
-// worth a look beside it otherwise. Clicking it opens the security surface
+// Security's tray icon: always the shield alone, coloured and with the
+// alert glyph when something needs a look, and the words only in the
+// tooltip (a sentence on the bar shoves every pill beside it, e.g. the
+// Malwarebytes trial countdown). Clicking it opens the security surface
 // and reads the state again a little later, when a scan or update started
 // from there may have changed it.
 let security = null;
@@ -281,7 +283,7 @@ function securityPill() {
   if (!security) return '';
   const cls = { ok: 'security', warn: 'security warning', alert: 'security critical' }[security.state] || 'security';
   const glyph = security.state === 'ok' ? G.shield : G.shieldAlert;
-  return `<button class="pill ${cls}" data-act="security" title="${esc(security.tip)}"><span class="glyph">${glyph}</span>${esc(security.text)}</button>`;
+  return `<button class="pill ${cls}" data-act="security" title="${esc(security.tip)}"><span class="glyph">${glyph}</span></button>`;
 }
 
 // The two buttons at the end open vivac's own surfaces, through the resident

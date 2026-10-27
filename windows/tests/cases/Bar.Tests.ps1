@@ -63,4 +63,20 @@ Case 'an unreadable zpack.json is refused' {
     $d = New-Pack; [IO.File]::WriteAllText((Join-Path $d 'zpack.json'), '{ nope')
     Assert-Only $d '^zpack\.json:'
 }
+
+# A sentence on the bar shoves every pill beside it (2026-10-27: the
+# Malwarebytes trial countdown). The shield shows a glyph only, and no pill,
+# whatever a module hands it, may grow past its cap.
+Case 'the shield pill carries no words and pills cannot grow without bound' {
+    $root = Get-RepoRoot
+    $js = [IO.File]::ReadAllText((Join-Path $root 'static\zebar\vivac\bar.js'))
+    $shield = [regex]::Match($js, '(?s)function securityPill\(\) \{.*?\n\}').Value
+    Assert-True ($shield.Length -gt 0) 'securityPill not found in bar.js'
+    Assert-True ($shield -notmatch 'security\.text') 'the shield pill prints security.text on the bar'
+    foreach ($css in 'templates\zebar\vivac\styles.css.in', 'dotfiles\zebar\vivac\styles.css') {
+        $rule = [regex]::Match([IO.File]::ReadAllText((Join-Path $root $css)), '(?s)\n\.pill \{.*?\}').Value
+        Assert-True ($rule -match 'max-width:' -and $rule -match 'overflow: hidden') "$css .pill has no width cap"
+    }
+}
+
 Complete-Cases
