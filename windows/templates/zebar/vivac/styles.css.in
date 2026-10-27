@@ -47,8 +47,12 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
    carries no border, so it does not read as another gauge. */
 .title { color: #@COLOR_FG_DIM@; padding: 0 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .title.empty { color: #@COLOR_MUTED@; }
+/* A pill is a glyph and a reading, never a sentence: whatever text a module
+   hands it, it cannot grow past this and shove its neighbours; the words
+   belong in the tooltip. */
 .pill {
   display: flex; align-items: center; white-space: nowrap;
+  flex: 0 0 auto; max-width: 9em; overflow: hidden;
   background: rgba(@COLOR_SURFACE:rgb@, 0.7);
   padding: 3px 9px; margin: 0 1px; border-radius: 10px;
   border-bottom: 2px solid #@COLOR_MUTED@;
