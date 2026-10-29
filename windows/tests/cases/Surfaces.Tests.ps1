@@ -75,5 +75,27 @@ try {
         Assert-True (@('ok', 'warn', 'alert') -contains $sum.state) "state $($sum.state)"
         Assert-True ($sum.tip) 'a tooltip'
     }
+    Case 'the lock asks for the PIN until the password is the way in, and back' {
+        Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+        Assert-Equal 'pin' (Get-VivacLockMode) 'the PIN first'
+        Set-VivacLockMode password
+        Assert-Equal 'password' (Get-VivacLockMode)
+        $w = Show-VivacLock -NoShow -Greeter
+        Assert-Equal 'Visible' ([string]$w.FindName('Secret').Visibility) 'the field takes the password'
+        $w.Close()
+        Set-VivacLockMode pin
+        $w = Show-VivacLock -NoShow -Greeter
+        Assert-Equal 'Collapsed' ([string]$w.FindName('Secret').Visibility) 'nothing typed in the field: the PIN goes to Windows Hello'
+        Assert-True ([string]$w.FindName('ModeSwitch').Content) 'a way to the password'
+        $w.Close()
+        Set-Content -LiteralPath (Join-Path (Get-VivacPaths).State 'lock-mode') -Value 'nonsense'
+        Assert-Equal 'pin' (Get-VivacLockMode) 'anything else is the PIN'
+    }
+    Case 'a PIN typed as the password is told apart' {
+        Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+        Assert-True (Test-VivacLooksLikePin '1234')
+        Assert-True (-not (Test-VivacLooksLikePin '12a4')) 'letters: a password'
+        Assert-True (-not (Test-VivacLooksLikePin '123')) 'too short for a PIN'
+    }
 } finally { Remove-TempProfile $dir }
 Complete-Cases
