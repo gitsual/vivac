@@ -138,7 +138,8 @@ cat >"$sandbox/bin/ip" <<'FAKE'
 printf '2: eth0    inet 198.51.100.20/24 brd 198.51.100.255 scope global dynamic eth0\n'
 FAKE
 chmod +x "$sandbox/bin/ip"
-plan="$(PATH="$sandbox/bin:$PATH" HOME="$sandbox/user" "$repo_root/scripts/apply-system.sh" --dry-run --bridge)" ||
+mkdir -p "$sandbox/net/eth0/device"
+plan="$(PATH="$sandbox/bin:$PATH" VIVAC_SYS_CLASS_NET="$sandbox/net" HOME="$sandbox/user" "$repo_root/scripts/apply-system.sh" --dry-run --bridge)" ||
 	fail 'apply-system.sh --dry-run --bridge failed'
 grep -q 'would allow udp 4242 from 198.51.100.0/24 in UFW (vivac mouse)' <<<"$plan" || fail "the mouse port is not opened to the subnet: $plan"
 grep -q 'would allow tcp 4242' <<<"$plan" && fail 'the mouse port was opened for TCP'
