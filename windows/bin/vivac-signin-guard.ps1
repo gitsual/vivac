@@ -41,7 +41,8 @@ if ($Register -or $Unregister) {
     }
     # Normal level, like every task that runs a file the user can write; the
     # lock it calls needs no more.
-    $user = "$env:USERDOMAIN\$env:USERNAME"
+    # The token's own name: USERDOMAIN is not always set (an SSH session).
+    $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
     $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
     $principal = New-ScheduledTaskPrincipal -UserId $user -RunLevel Limited -LogonType Interactive
