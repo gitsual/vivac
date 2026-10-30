@@ -188,10 +188,14 @@ fi
 
 # local_subnets — the IPv4 networks this machine is on now, as network address
 # and prefix (a.b.c.0/24), from `ip`. The link port is opened to these and
-# to nothing wider; a network joined later needs --bridge again.
+# to nothing wider; a network joined later needs --bridge again. Only network
+# cards count (a device behind them in sysfs): container bridges, VM bridges
+# and VPN tunnels such as docker0, br-*, virbr0 or tailscale0 are left out.
 local_subnets() {
-	local address prefix a b c d mask network
-	while read -r address; do
+	local sys_net="${VIVAC_SYS_CLASS_NET:-/sys/class/net}"
+	local iface address prefix a b c d mask network
+	while read -r iface address; do
+		[[ -e "$sys_net/$iface/device" ]] || continue
 		[[ "$address" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]] || continue
 		prefix="${address#*/}" address="${address%/*}"
 		((prefix > 0 && prefix <= 32)) || continue
@@ -199,7 +203,7 @@ local_subnets() {
 		mask=$(((0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF))
 		network=$((((a << 24) | (b << 16) | (c << 8) | d) & mask))
 		printf '%d.%d.%d.%d/%d\n' $((network >> 24 & 255)) $((network >> 16 & 255)) $((network >> 8 & 255)) $((network & 255)) "$prefix"
-	done < <(ip -o -4 addr show scope global 2>/dev/null | awk '{ print $4 }') | LC_ALL=C sort -u
+	done < <(ip -o -4 addr show scope global 2>/dev/null | awk '{ print $2, $4 }') | LC_ALL=C sort -u
 }
 
 if $bridge; then

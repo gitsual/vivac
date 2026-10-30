@@ -98,15 +98,22 @@ cat >"$sandbox/bin/ip" <<'FAKE'
 #!/usr/bin/env bash
 printf '2: eth0    inet 198.51.100.20/24 brd 198.51.100.255 scope global dynamic eth0\n'
 printf '3: wlan0    inet 203.0.113.9/20 brd 203.0.127.255 scope global wlan0\n'
+printf '4: docker0    inet 192.0.2.1/24 brd 192.0.2.255 scope global docker0\n'
+printf '5: br-64faa6fda2fc    inet 203.0.113.1/24 brd 203.0.113.255 scope global br-64faa6fda2fc\n'
+printf '6: tailscale0    inet 100.64.0.7/32 scope global tailscale0\n'
 FAKE
 chmod +x "$sandbox/bin/ip"
-plan="$(PATH="$sandbox/bin:$PATH" HOME="$sandbox" "$repo_root/scripts/apply-system.sh" --dry-run --bridge)" ||
+# Only a network card has a device behind it in sysfs; bridges, containers
+# and VPN tunnels are virtual and their subnets are not the local network.
+mkdir -p "$sandbox/net/eth0/device" "$sandbox/net/wlan0/device" "$sandbox/net/docker0" "$sandbox/net/br-64faa6fda2fc" "$sandbox/net/tailscale0"
+plan="$(PATH="$sandbox/bin:$PATH" HOME="$sandbox" VIVAC_SYS_CLASS_NET="$sandbox/net" "$repo_root/scripts/apply-system.sh" --dry-run --bridge)" ||
 	fail 'apply-system.sh --dry-run --bridge failed'
 grep -q 'vivac-bootnext -> /etc/sudoers.d/vivac-bootnext (mode 0440' <<<"$plan" || fail "the sudoers rule is not installed: $plan"
 for expected in 'tcp 47321 from 198.51.100.0/24' 'udp 47321 from 198.51.100.0/24' 'tcp 47321 from 203.0.112.0/20' 'udp 47321 from 203.0.112.0/20'; do
 	grep -q "would allow $expected in UFW" <<<"$plan" || fail "the plan does not open $expected: $plan"
 done
+grep -Eq 'from (192\.0\.2\.0/24|203\.0\.113\.0/24|100\.64\.0\.7/32) ' <<<"$plan" && fail "the plan opens the ports to a virtual interface: $plan"
 grep -q 'would enable the user vivac-link service' <<<"$plan" || fail 'the link service is not enabled'
 grep -Eq 'clamav|bluetooth' <<<"$plan" && fail "--bridge alone pulled in other profiles: $plan"
 
-printf 'reboot into Windows: exact label, active first, dry run inert, one sudo call, rule parsed (%s), port to two subnets\n' "$checked"
+printf 'reboot into Windows: exact label, active first, dry run inert, one sudo call, rule parsed (%s), port to the two network cards only\n' "$checked"
