@@ -37,13 +37,14 @@ Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
 # Without the resident host a surface takes a couple of seconds more to
 # build: "Loading..." meanwhile, so the key does not look dead.
 $fromImage = $Verb -eq 'theme' -and $Rest -and $Rest[0] -eq 'from-image'
-if (@('menu', 'phone', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'security') -contains $Verb -and -not $fromImage) { Start-VivacLoading }
+if (@('menu', 'phone', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'security') -contains $Verb -and -not $fromImage) { Start-VivacLoading }
 
 switch ($Verb) {
     'help'      { $pane = 'wm'; if ($Rest) { $pane = $Rest[0] }; Show-Help $pane }
     'menu'      { Show-Menu }
     'phone'     { Show-Menu -Category phone }
     'power'     { Show-Power }
+    'switch'    { Show-Power -Arm other }
     'theme'     {
         if ($fromImage) {
             $pictureArgs = @(@($Rest) | Select-Object -Skip 1)

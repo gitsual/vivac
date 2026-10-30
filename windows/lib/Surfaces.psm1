@@ -658,7 +658,7 @@ function Show-Help([string]$StartPane = 'wm', [switch]$NoShow, [hashtable]$Regis
 
 # ----------------------------------------------------------------- power menu
 
-function Show-Power([switch]$NoShow, [hashtable]$Registry) {
+function Show-Power([switch]$NoShow, [hashtable]$Registry, [string]$Arm) {
     Update-SurfaceContext
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'power' }
     $surfaceName = 'power'
@@ -688,6 +688,11 @@ function Show-Power([switch]$NoShow, [hashtable]$Registry) {
     $body = "<StackPanel><StackPanel Orientation='Horizontal' HorizontalAlignment='Center'>$buttons</StackPanel><TextBlock Margin='0,8,0,0' HorizontalAlignment='Center' Foreground='#$($p['COLOR_MUTED'])' Text='$(ConvertTo-XmlText (T 'power.hint'))'/></StackPanel>"
     $window = New-VivacWindow (Get-WindowXaml 'vivac - power' (160 * $entries.Count) 260 $body)
     $state = @{ Index = 0; Armed = -1 }
+    # Opened armed (the switch key): that entry is selected and already asks
+    # for its confirmation, so one more press carries it out.
+    for ($i = 0; $i -lt $entries.Count; $i++) {
+        if ($Arm -and $entries[$i].Id -eq $Arm -and $entries[$i].Confirm) { $state.Index = $i; $state.Armed = $i }
+    }
 
     $paint = {
         for ($i = 0; $i -lt $entries.Count; $i++) {

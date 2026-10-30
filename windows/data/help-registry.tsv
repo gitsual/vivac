@@ -22,6 +22,7 @@ MOD+l	wm	vivac	lock	help.wm.lock
 MOD+shift+s	wm	glazewm	shell-exec explorer.exe ms-screenclip:	help.wm.screenshot
 MOD+f1	wm	glazewm	shell-exec vivac help	help.wm.help
 MOD+shift+e	wm	glazewm	shell-exec vivac power	help.wm.power
+MOD+shift+w	wm	glazewm	shell-exec vivac switch	help.wm.switch
 MOD+shift+t	wm	glazewm	shell-exec vivac theme	help.wm.theme
 MOD+shift+a	wm	glazewm	shell-exec vivac ask	help.wm.ask
 MOD+v	wm	vivac	clipboard	help.wm.clipboard
