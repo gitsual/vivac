@@ -47,4 +47,30 @@ function Use-VivacSwitchArrival([string]$Path, [long]$Now = (Get-VivacUnixTime))
     Test-VivacSwitchToken $text $Now
 }
 
-Export-ModuleMember -Function Get-VivacUnixTime, Get-VivacSwitchToken, Test-VivacSwitchToken, Write-VivacSwitchToken, Use-VivacSwitchArrival
+# The sign-in guard's word to the host (bin\vivac-signin-guard.ps1): what it
+# did at this sign-in, `switch` (a switch brought it, nothing was locked) or
+# `locked` (Windows' own lock is up). Read once, and only within three
+# minutes of being written, so a marker from another sign-in says nothing.
+$script:MarkerAge = 180
+
+function Write-VivacSigninMarker([string]$Path, [string]$Kind, [long]$Now = (Get-VivacUnixTime)) {
+    if (@('switch', 'locked') -notcontains $Kind) { throw "unknown sign-in marker: $Kind" }
+    $dir = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    [IO.File]::WriteAllBytes("$Path.tmp", [Text.Encoding]::ASCII.GetBytes("vivac-signin $Kind $Now`n"))
+    Move-Item -LiteralPath "$Path.tmp" -Destination $Path -Force
+}
+
+function Use-VivacSigninMarker([string]$Path, [long]$Now = (Get-VivacUnixTime)) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $text = ''
+    try { $text = [IO.File]::ReadAllText($Path) } catch { }
+    try { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop } catch { return $null }
+    if (@($text -split "`r?`n")[0] -notmatch '^vivac-signin (switch|locked) ([0-9]{1,12})$') { return $null }
+    $kind = $Matches[1]
+    $age = $Now - [long]$Matches[2]
+    if ($age -gt $script:MarkerAge -or $age -lt -$script:MaxAhead) { return $null }
+    $kind
+}
+
+Export-ModuleMember -Function Get-VivacUnixTime, Get-VivacSwitchToken, Test-VivacSwitchToken, Write-VivacSwitchToken, Use-VivacSwitchArrival, Write-VivacSigninMarker, Use-VivacSigninMarker
