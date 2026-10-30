@@ -66,8 +66,40 @@ and the firmware's boot order are never changed.
   runs a protected copy (under `C:\Program Files\vivac`, as every elevated
   vivac task does) so the button raises no UAC prompt. Then `shutdown /r`.
 
-Both ask for confirmation twice, like any restart, and both have `--dry-run`
-/ `-DryRun`, which names the entry it would choose and changes nothing.
+Both ask for confirmation once (No first, so Enter on a menu opened by
+mistake restarts nothing), and both have `--dry-run` / `-DryRun`, which names
+the entry it would choose and changes nothing. On Linux `Super+Shift+W` asks
+for it directly.
+
+### Arriving signed in: the switch
+
+The restart is a switch: the other side opens straight onto its desktop,
+without asking for a password, **once**, and only after a restart asked for
+here. Every other boot asks as before. Each side leaves the other a token,
+one ASCII line `vivac-switch 1 <unix time>`, honoured when it was written in
+the last fifteen minutes (two minutes ahead allowed for clocks) and taken away
+whether honoured or not. It carries a time and nothing else: who signs in is
+decided by the side that reads it. Both systems keep the clock in UTC.
+
+- **Linux to Windows**: before BootNext, the token goes into
+  `<Windows>/Users/*/AppData/Local/vivac/switch-arrival` of every profile with
+  vivac, on each mounted Windows partition. Windows already signs in by itself
+  (`apply-system.ps1 -AutoLogin`); at sign-in the host takes the token and
+  skips its greeter that time. No Windows partition mounted: the restart goes
+  on and Windows greets as usual.
+- **Windows to Linux**: before BootNext, the elevated task mounts the EFI
+  partition for a moment and leaves the token at `\EFI\vivac\switch-to-linux`.
+  On Linux, `apply-system.sh --switch` installs `vivac-switch-arrive.service`,
+  which at boot, before the getty on tty1, takes the token and arms one
+  automatic sign-in in `/run/vivac` (gone at the next boot); the getty
+  (`vivac-getty`, a drop-in on `getty@tty1`) spends it on its first start, for
+  the user named in `/etc/vivac/switch.conf` (written by root, never root
+  itself). The login profile sourcing `~/.local/share/vivac/switch-login.sh`
+  then starts the desktop, once.
+
+Why a restart and not hibernation: both systems write to disks the other one
+mounts (Linux writes to C:, Windows to the shared disk through WSL). Waking a
+system whose disks were written to while it slept corrupts them.
 
 ## 3. The drop tray
 

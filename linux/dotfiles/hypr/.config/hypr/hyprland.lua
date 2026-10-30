@@ -144,6 +144,8 @@ hl.bind("SUPER + SHIFT + Q", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-power"))
 hl.bind("SUPER + SHIFT + T", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-theme"))
 -- @help: hypr help.hypr.bridge
 hl.bind("SUPER + SHIFT + B", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-bridge"))
+-- @help: hypr help.hypr.switch
+hl.bind("SUPER + SHIFT + W", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-reboot-other"))
 -- @help: hypr help.hypr.ask
 hl.bind("SUPER + SHIFT + A", hl.dsp.exec_cmd(vivac.terminal .. " --class vivac-ask -e $HOME/.local/bin/vivac-ask"))
 -- @help: hypr help.hypr.clipboard
