@@ -35,12 +35,16 @@ exec "$@"
 FAKE
 printf '#!/usr/bin/env bash\nprintf "systemctl %%s\\n" "$*" >>"$CALLS"\n' >"$sandbox/bin/systemctl"
 printf '#!/usr/bin/env bash\nexit 0\n' >"$sandbox/bin/notify-send"
+# No menu answers: a rofi that is never shown, on no display.
+printf '#!/usr/bin/env bash\nexit 1\n' >"$sandbox/bin/rofi"
 chmod +x "$sandbox/bin/"*
+# A Windows partition of its own, so the arrival token never reaches the real one.
+mkdir -p "$sandbox/win/Windows/System32" "$sandbox/win/Users/ada/AppData/Local/vivac"
 
 run() {
 	: >"$calls"
-	PATH="$sandbox/bin:$PATH" CALLS="$calls" LISTING="$sandbox/listing" VIVAC_REPO="$repo_root" VIVAC_LANG=en \
-		HOME="$sandbox" "$tool" "$@" </dev/null
+	env -u WAYLAND_DISPLAY -u DISPLAY PATH="$sandbox/bin:$PATH" CALLS="$calls" LISTING="$sandbox/listing" \
+		VIVAC_REPO="$repo_root" VIVAC_LANG=en VIVAC_WINDOWS="$sandbox/win" HOME="$sandbox" "$tool" "$@" </dev/null
 }
 
 # efibootmgr 18 puts the device path after a tab; Windows is not first, and an

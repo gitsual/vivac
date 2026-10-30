@@ -18,12 +18,13 @@ desktop_login=false
 greeter=false
 vm_profile=false
 bridge=false
+switch=false
 selection_made=false
 
 usage() {
 	cat <<'USAGE'
 Usage: scripts/apply-system.sh [--dry-run] [--security] [--bluetooth] [--desktop-login] [--vm]
-                               [--greeter] [--locale] [--keymap] [--bridge]
+                               [--greeter] [--locale] [--keymap] [--bridge] [--switch]
 
 With no module selector, the backward-compatible security and Bluetooth profiles
 are applied. Selectors compose without enabling unrelated services.
@@ -46,6 +47,13 @@ subnets only, and the user's vivac-link service, which stays idle until the
 machine is paired. lan-mouse runs only once vivac-mouse enable asks for it,
 and the phone drop only once vivac-localsend on (or the bridge menu) turns
 it on, with a PIN.
+
+--switch lets Restart in Linux, on Windows, end on this desktop already
+signed in, once: vivac-switch-arrive takes the token Windows left on the EFI
+partition at boot and arms one automatic sign-in on tty1 for the user running
+this (written to /etc/vivac/switch.conf); vivac-getty spends it. Every other
+boot asks for the password as before. The login profile has to source
+~/.local/share/vivac/switch-login.sh for the desktop to start by itself.
 USAGE
 }
 
@@ -60,6 +68,7 @@ while (($#)); do
 	--locale) locale_axis=true; selection_made=true ;;
 	--keymap) keymap_axis=true; selection_made=true ;;
 	--bridge) bridge=true; selection_made=true ;;
+	--switch) switch=true; selection_made=true ;;
 	-h | --help)
 		usage
 		exit 0
@@ -87,6 +96,19 @@ install_config() {
 		sudo cp -a -- "$destination" "$destination.vivac-backup.$(date -u +%Y%m%dT%H%M%SZ)"
 	fi
 	sudo install -Dm644 -- "$source" "$destination"
+}
+
+# install_program SOURCE DESTINATION — install_config for a program (0755).
+install_program() {
+	local source=$1 destination=$2
+	if $dry_run; then
+		printf 'would install %s -> %s (mode 0755)\n' "$source" "$destination"
+		return
+	fi
+	if sudo test -e "$destination"; then
+		sudo cp -a -- "$destination" "$destination.vivac-backup.$(date -u +%Y%m%dT%H%M%SZ)"
+	fi
+	sudo install -Dm755 -o root -g root -- "$source" "$destination"
 }
 
 # write_axis DESTINATION LINE... — replace DESTINATION with LINE(s), through
@@ -242,6 +264,25 @@ if $bridge; then
 			sudo ufw allow proto udp from "$subnet" to any port 4242 comment 'vivac mouse'
 		fi
 	done
+fi
+
+if $switch; then
+	switch_user="${USER:-$(id -un)}"
+	if [[ ! "$switch_user" =~ ^[a-z_][a-z0-9_-]{0,31}$ || "$(id -u -- "$switch_user")" == 0 ]]; then
+		printf 'refusing --switch for %s: run it as the desktop user, not root\n' "$switch_user" >&2
+		exit 1
+	fi
+	install_program "$repo_root/system/usr/local/lib/vivac/vivac-switch-arrive" /usr/local/lib/vivac/vivac-switch-arrive
+	install_program "$repo_root/system/usr/local/lib/vivac/vivac-getty" /usr/local/lib/vivac/vivac-getty
+	install_config "$repo_root/system/etc/systemd/system/vivac-switch-arrive.service" /etc/systemd/system/vivac-switch-arrive.service
+	install_config "$repo_root/system/etc/systemd/system/getty@tty1.service.d/vivac-switch.conf" /etc/systemd/system/getty@tty1.service.d/vivac-switch.conf
+	write_axis /etc/vivac/switch.conf "user=$switch_user"
+	if $dry_run; then
+		printf '%s\n' 'would enable vivac-switch-arrive.service (runs at boot, before the getty on tty1)'
+	else
+		sudo systemctl daemon-reload
+		sudo systemctl enable vivac-switch-arrive.service
+	fi
 fi
 
 if $dry_run; then

@@ -1,0 +1,15 @@
+# Arriving from Windows by a switch: take the token Restart in Linux left on
+# the EFI partition and, when it is fresh, arm one automatic sign-in on tty1
+# (docs/bridge.md, "Reboot into the other system").
+[Unit]
+Description=vivac: arm one automatic sign-in after a switch from Windows
+Before=getty@tty1.service
+RequiresMountsFor=/boot/efi
+ConditionPathExists=/boot/efi/EFI/vivac/switch-to-linux
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/vivac/vivac-switch-arrive
+
+[Install]
+WantedBy=getty.target

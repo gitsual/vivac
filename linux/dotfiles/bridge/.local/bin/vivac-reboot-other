@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Restart in Windows: point the firmware's BootNext at the Windows Boot Manager
-# entry and reboot (docs/bridge.md at the root of the product).
+# entry and reboot (docs/bridge.md at the root of the product). It is a
+# switch: a token left in vivac's state folder of each Windows profile tells
+# Windows' vivac to open the desktop without its greeter, this once.
 #
 #   --dry-run     name the entry it would choose and change nothing
-#   --yes         skip the two confirmations (the caller already asked twice)
+#   --yes         skip the confirmation (the caller already asked)
 #   --available   exit 0 when there is an entry to restart into, 1 otherwise
 #
 # BootNext is honoured for exactly one boot and then forgotten: GRUB's default
@@ -32,7 +34,7 @@ while (($#)); do
 	--yes) assume_yes=true ;;
 	--available) probe=true ;;
 	-h | --help)
-		sed -n '2,13p' "$self"
+		sed -n '2,15p' "$self"
 		exit 0
 		;;
 	*)
@@ -72,6 +74,36 @@ windows_entry() {
 	printf '%s' "$inactive"
 }
 
+# windows_roots — the mounted Windows partitions (VIVAC_WINDOWS names one).
+windows_roots() {
+	if [[ -n "${VIVAC_WINDOWS:-}" ]]; then
+		[[ -d "$VIVAC_WINDOWS/Windows/System32" ]] && printf '%s\n' "$VIVAC_WINDOWS"
+		return 0
+	fi
+	local target
+	while IFS= read -r target; do
+		target="$(printf '%b' "$target")"
+		[[ -d "$target/Windows/System32" ]] && printf '%s\n' "$target"
+	done < <(findmnt -rn -o TARGET -t ntfs,ntfs3,fuseblk 2>/dev/null || true)
+}
+
+# leave_arrival — the token Windows' vivac takes at sign-in in place of its
+# greeter (lib/Switch.psm1): one line, `vivac-switch 1 <unix time>`, in each
+# profile that has vivac. Without a Windows partition mounted the restart
+# still goes on; Windows then simply greets as always.
+leave_arrival() {
+	local root dir left=0 line
+	line="vivac-switch 1 ${VIVAC_NOW:-$(date +%s)}"
+	while IFS= read -r root; do
+		for dir in "$root"/Users/*/AppData/Local/vivac; do
+			[[ -d "$dir" ]] || continue
+			printf '%s\n' "$line" >"$dir/switch-arrival.tmp" && mv -f -- "$dir/switch-arrival.tmp" "$dir/switch-arrival" && left=$((left + 1))
+		done
+	done < <(windows_roots)
+	((left)) || tell "$(i18n_get reboot.no_arrival)"
+	sync
+}
+
 # confirm TEXT — yes or no: at a terminal on it, otherwise in rofi with No
 # first, so Enter on a menu opened by mistake restarts nothing.
 confirm() {
@@ -99,11 +131,12 @@ if $dry_run; then
 	exit 0
 fi
 if ! $assume_yes; then
-	if ! confirm "$(i18n_format reboot.confirm_first "$label")" || ! confirm "$(i18n_get reboot.confirm_second)"; then
+	if ! confirm "$(i18n_format reboot.confirm "$label")"; then
 		tell "$(i18n_get reboot.cancelled)"
 		exit 1
 	fi
 fi
+leave_arrival
 sudo -n efibootmgr --bootnext "$entry" >/dev/null || {
 	tell "$(i18n_get reboot.no_sudo)"
 	exit 1

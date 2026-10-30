@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Arriving from Windows by a switch (docs/bridge.md, "Reboot into the other
+# system"): run as root at boot, before the getty on tty1. Restart in Linux
+# leaves `vivac-switch 1 <unix time>` in \EFI\vivac\switch-to-linux on the EFI
+# partition; this takes it away, always, and when it was written in the last
+# fifteen minutes arms one automatic sign-in for vivac-getty.
+#
+# The token says only when; who signs in comes from /etc/vivac/switch.conf,
+# which root writes (scripts/apply-system.sh --switch). Anything else in the
+# token, or a token from another boot, arms nothing.
+set -Eeuo pipefail
+
+esp="${VIVAC_ESP:-/boot/efi}"
+run_dir="${VIVAC_SWITCH_RUN:-/run/vivac}"
+now="${VIVAC_NOW:-$(date +%s)}"
+arrival="$esp/EFI/vivac/switch-to-linux"
+# Windows shuts down, the firmware and GRUB pass, Linux boots: well inside
+# fifteen minutes. Two minutes the other way allow for clocks that disagree.
+max_age=900 max_ahead=120
+
+[[ -e "$arrival" ]] || exit 0
+line="$(head -c 64 -- "$arrival" 2>/dev/null | head -n 1 || true)"
+rm -f -- "$arrival"
+
+[[ "$line" =~ ^vivac-switch\ 1\ ([0-9]{1,12})$ ]] || exit 0
+written="${BASH_REMATCH[1]}"
+age=$((now - written))
+((age <= max_age && age >= -max_ahead)) || exit 0
+
+install -d -m 755 -- "$run_dir"
+install -m 600 /dev/null "$run_dir/autologin-once"
