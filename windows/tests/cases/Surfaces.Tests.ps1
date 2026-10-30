@@ -27,6 +27,22 @@ try {
         $confirm = @($entries | Where-Object { $_.Confirm } | ForEach-Object { $_.Target }) -join ','
         Assert-Equal 'logout,restart,shutdown' $confirm 'what ends the session asks first'
     }
+    Case 'the switch key opens the power menu with Restart in Linux armed, one press from the restart' {
+        Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+        $surfaces = Get-Module Surfaces | Select-Object -First 1
+        & $surfaces { $script:RebootOther = $true }
+        $confirm = & $surfaces { T 'power.confirm' }
+        $other = & $surfaces { T 'power.other' }
+        $plain = Show-Power -NoShow
+        $armed = Show-Power -NoShow -Arm other
+        $last = 5
+        Assert-Equal $other $plain.FindName("L$last").Text 'the plain power menu arms nothing'
+        Assert-Equal $confirm $armed.FindName("L$last").Text 'Restart in Linux is armed'
+        Assert-Equal (& $surfaces { T 'power.restart' }) $armed.FindName('L3').Text 'nothing else is armed'
+        $unknown = Show-Power -NoShow -Arm nothing
+        Assert-Equal $other $unknown.FindName("L$last").Text 'an entry that is not there arms nothing'
+        & $surfaces { $script:RebootOther = $null }
+    }
     Case 'menu matching ignores case and accents' {
         Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
         Assert-Equal 'configuracion de red' (ConvertTo-MenuKey ("Configuraci" + [char]0x00F3 + "n de RED"))
@@ -54,12 +70,12 @@ try {
     Case 'a live binding the registry does not know shows up as UNREGISTERED' {
         $cfg = Join-Path $env:VIVAC_PROFILE '.glzr\glazewm\config.yaml'
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $cfg) | Out-Null
-        [IO.File]::WriteAllText($cfg, "keybindings:`n  - commands: ['close']`n    bindings: ['lwin+q']`n  - commands: ['wm-redraw']`n    bindings: ['lwin+shift+w']`n")
+        [IO.File]::WriteAllText($cfg, "keybindings:`n  - commands: ['close']`n    bindings: ['lwin+q']`n  - commands: ['wm-redraw']`n    bindings: ['lwin+shift+y']`n")
         Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
         $rows = (Show-Help -NoShow).FindName('Rows')
         $texts = @($rows.Items | ForEach-Object { ($_.Inlines | ForEach-Object { $_.Text }) -join '' })
         Assert-Equal 1 @($texts | Where-Object { $_ -match 'UNREGISTERED' }).Count
-        Assert-True (@($texts | Where-Object { $_ -match 'lwin\+shift\+w\s+UNREGISTERED' }).Count -eq 1)
+        Assert-True (@($texts | Where-Object { $_ -match 'lwin\+shift\+y\s+UNREGISTERED' }).Count -eq 1)
     }
     Case 'the security surface builds in every theme and the bar gets a state it knows' {
         foreach ($name in Get-VivacCatalogue) {

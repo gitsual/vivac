@@ -138,10 +138,12 @@ function Invoke-Verb([string]$Verb) {
     # Whatever happens to the greeter, the cover put up at start comes down:
     # a sign-in must never end behind blank windows.
     if ($Verb -eq 'greet') { try { Invoke-VivacLock -Greeter } finally { Hide-VivacLockCover; Clear-VivacLockMarker; Resume-SharedSync }; return }
-    if (@('menu', 'phone', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security') -notcontains $Verb) { return }
+    if (@('menu', 'phone', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security') -notcontains $Verb) { return }
     # The phone is the menu, open on its category: one window for both.
     $key = $Verb
     if ($Verb -eq 'phone') { $key = 'menu' }
+    # The switch key is the power menu, opened on Restart in the other system.
+    if ($Verb -eq 'switch') { $key = 'power' }
     $current = $open[$key]
     if ($current -and $current.IsVisible) { $current.Close(); return }
     switch ($Verb) {
@@ -164,6 +166,7 @@ function Invoke-Verb([string]$Verb) {
         'phone' { Show-Menu -Registry $open -Category phone }
         'help'  { Show-Help -Registry $open }
         'power' { Show-Power -Registry $open }
+        'switch' { Show-Power -Registry $open -Arm other }
         'theme' { Show-ThemePicker -Registry $open }
         'sound' { Show-Sound -Registry $open }
         'bluetooth' { Show-Bluetooth -Registry $open }
@@ -184,7 +187,7 @@ foreach ($warm in (Show-Sound -NoShow), (Show-Menu -NoShow), (Show-Help -NoShow)
 # the next ones at once: asked here, the security surface opens like the rest.
 (Show-Security -NoShow).Close()
 (Show-Bluetooth -NoShow).Close()
-$loadingVerbs = @('menu', 'phone', 'help', 'power', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security')
+$loadingVerbs = @('menu', 'phone', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security')
 try { Import-VivacLoading } catch { }
 (Show-Network -NoShow).Close()
 (Show-Updates -NoShow).Close()
