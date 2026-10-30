@@ -58,15 +58,22 @@ function Write-DaemonLog([string]$Text) {
 # A failure here must not keep the cover from going up: the pid file only
 # helps deploy find this host.
 try { Write-VivacFile -Path $pidFile -Text "$PID`n" } catch { Write-DaemonLog "could not write the pid file: $_" }
-# Arriving from Linux by a switch (Restart in Windows left a fresh token, see
-# lib\Switch.psm1): this sign-in opens straight onto the desktop, once.
+# The sign-in may already be settled (lib\Switch.psm1): the sign-in guard,
+# first at sign-in, either took a switch token (this sign-in opens straight
+# onto the desktop, once) or locked with Windows' own lock, and a second lock
+# on top would only be asked twice. Without the guard, a switch token is
+# taken here. Otherwise, the greeter as always.
 if ($LockAtStart) {
     try {
-        if (Use-VivacSwitchArrival (Join-Path (Get-VivacPaths).State 'switch-arrival')) {
+        $state = (Get-VivacPaths).State
+        $settled = Use-VivacSigninMarker (Join-Path $state 'signin-guard')
+        $guarded = Test-Path -LiteralPath (Join-Path $state 'signin-guard.installed')
+        if (-not $settled -and -not $guarded -and (Use-VivacSwitchArrival (Join-Path $state 'switch-arrival'))) { $settled = 'switch' }
+        if ($settled) {
             $LockAtStart = $false
-            Write-DaemonLog 'arrived from Linux by a switch: no greeter this time'
+            Write-DaemonLog "sign-in settled by the guard ($settled): no greeter this time"
         }
-    } catch { Write-DaemonLog "switch arrival check failed: $_" }
+    } catch { Write-DaemonLog "sign-in guard check failed: $_" }
 }
 if ($LockAtStart) { [void](Set-VivacLockMarker 'start'); Show-VivacLockCover } else { Reset-VivacLockMarker }
 # The other OS's theme, location and language, when sharing is configured:

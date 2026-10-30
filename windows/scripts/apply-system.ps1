@@ -240,6 +240,7 @@ if ($AutoLogin) {
     Step (T 'system.autologin_hello')
     Step (T 'system.autologin_task')
     Step (T 'system.autologin_tool')
+    Step (T 'system.autologin_guard')
     if (-not $DryRun) {
         if (-not (Test-Path -LiteralPath $pl)) { New-Item -Path $pl -Force | Out-Null }
         Set-ItemProperty -LiteralPath $pl -Name DevicePasswordLessBuildVersion -Value 0 -Type DWord
@@ -254,6 +255,9 @@ if ($AutoLogin) {
         $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -RunLevel Limited -LogonType Interactive
         $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -Priority 4
         Register-ScheduledTask -TaskPath '\vivac\' -TaskName 'lock-at-signin' -Action $action -Trigger $trigger -Principal $principal -Settings $set -Force | Out-Null
+        # Closed by default: Windows' own lock at once, unless a switch from
+        # Linux brought this sign-in (bin\vivac-signin-guard.ps1).
+        & (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-signin-guard.ps1') -Register | Out-Null
         # The password is yours to type, into Windows' own credential prompt,
         # in a window of its own; scripts\set-autologon.ps1 explains the rest.
         Start-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', "`"$(Join-Path $PSScriptRoot 'set-autologon.ps1')`""

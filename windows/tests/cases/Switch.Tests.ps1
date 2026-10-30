@@ -50,5 +50,65 @@ Case 'Restart in Linux leaves the token on the EFI partition before BootNext' {
     Assert-True ($tool -match "'lib\\Switch.psm1'") 'the protected copy lacks lib\Switch.psm1'
 }
 
+# The sign-in guard (bin\vivac-signin-guard.ps1): first thing at sign-in, it
+# takes the switch token or locks with Windows' own lock, and leaves the host
+# a marker saying which, so the host never adds a second lock on top.
+$marker = Join-Path $dir 'signin-guard'
+Case 'the guard marker says what was done, fresh and once' {
+    Write-VivacSigninMarker $marker 'locked' ($now - 30)
+    Assert-Equal 'locked' (Use-VivacSigninMarker $marker $now)
+    Assert-Equal $null (Use-VivacSigninMarker $marker $now) 'read twice'
+    Write-VivacSigninMarker $marker 'switch' ($now - 3600)
+    Assert-Equal $null (Use-VivacSigninMarker $marker $now) 'an hour-old marker was taken'
+    Assert-True (-not (Test-Path -LiteralPath $marker)) 'the stale marker was left behind'
+    [IO.File]::WriteAllText($marker, "vivac-signin open $now")
+    Assert-Equal $null (Use-VivacSigninMarker $marker $now) 'an unknown kind was taken'
+}
+
+$guard = Join-Path (Get-RepoRoot) 'bin\vivac-signin-guard.ps1'
+$state = Join-Path $dir 'state'
+$locks = Join-Path $dir 'locks.txt'
+$fakeLock = Join-Path $dir 'fake-lock.cmd'
+Set-Content -LiteralPath $fakeLock -Value "@echo locked>>`"$locks`"" -Encoding ASCII
+function Invoke-Guard {
+    $env:VIVAC_LOCALAPPDATA = $dir; $env:VIVAC_SIGNIN_LOCK = $fakeLock
+    try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $guard | Out-Null } finally {
+        Remove-Item Env:VIVAC_LOCALAPPDATA, Env:VIVAC_SIGNIN_LOCK -ErrorAction SilentlyContinue
+    }
+}
+$vivacState = Join-Path $dir 'vivac'
+Case 'the guard locks with Windows when no switch brought this sign-in' {
+    Remove-Item -LiteralPath $locks -ErrorAction SilentlyContinue
+    Invoke-Guard
+    Assert-True (Test-Path -LiteralPath $locks) 'Windows was not locked'
+    Assert-Equal 'locked' (Use-VivacSigninMarker (Join-Path $vivacState 'signin-guard'))
+}
+Case 'the guard takes a fresh switch token and does not lock' {
+    Remove-Item -LiteralPath $locks -ErrorAction SilentlyContinue
+    Write-VivacSwitchToken (Join-Path $vivacState 'switch-arrival')
+    Invoke-Guard
+    Assert-True (-not (Test-Path -LiteralPath $locks)) 'locked although a switch brought this sign-in'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $vivacState 'switch-arrival'))) 'the token was left behind'
+    Assert-Equal 'switch' (Use-VivacSigninMarker (Join-Path $vivacState 'signin-guard'))
+}
+Case 'a stale token still locks' {
+    Remove-Item -LiteralPath $locks -ErrorAction SilentlyContinue
+    Write-VivacSwitchToken (Join-Path $vivacState 'switch-arrival') ((Get-VivacUnixTime) - 86400)
+    Invoke-Guard
+    Assert-True (Test-Path -LiteralPath $locks) 'a day-old token kept Windows open'
+}
+Case 'with the guard installed, the token is the guard''s alone' {
+    $daemon = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) 'bin\vivac-daemon.ps1')
+    Assert-True ($daemon -match "-not \`$guarded -and \(Use-VivacSwitchArrival") 'the host can take the token from under the guard'
+    $g = Get-Content -Raw -LiteralPath $guard
+    Assert-True ($g -match 'signin-guard.installed') 'registering the guard does not tell the host'
+}
+Case 'the host reads the guard before its own greeter' {
+    $daemon = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) 'bin\vivac-daemon.ps1')
+    $read = $daemon.IndexOf('Use-VivacSigninMarker')
+    $cover = $daemon.IndexOf('Show-VivacLockCover }')
+    Assert-True ($read -gt 0 -and $read -lt $cover) 'the host decides on its greeter before reading the guard'
+}
+
 Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
 Complete-Cases
