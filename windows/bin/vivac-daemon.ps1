@@ -35,6 +35,7 @@ Import-Module (Join-Path $root 'lib\Network.psm1') -Force
 Import-Module (Join-Path $root 'lib\Updates.psm1') -Force
 Import-Module (Join-Path $root 'lib\Toasts.psm1') -Force
 Import-Module (Join-Path $root 'lib\Bridge.psm1') -Force
+Import-Module (Join-Path $root 'lib\Switch.psm1') -Force
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
 $created = $false
@@ -57,6 +58,16 @@ function Write-DaemonLog([string]$Text) {
 # A failure here must not keep the cover from going up: the pid file only
 # helps deploy find this host.
 try { Write-VivacFile -Path $pidFile -Text "$PID`n" } catch { Write-DaemonLog "could not write the pid file: $_" }
+# Arriving from Linux by a switch (Restart in Windows left a fresh token, see
+# lib\Switch.psm1): this sign-in opens straight onto the desktop, once.
+if ($LockAtStart) {
+    try {
+        if (Use-VivacSwitchArrival (Join-Path (Get-VivacPaths).State 'switch-arrival')) {
+            $LockAtStart = $false
+            Write-DaemonLog 'arrived from Linux by a switch: no greeter this time'
+        }
+    } catch { Write-DaemonLog "switch arrival check failed: $_" }
+}
 if ($LockAtStart) { [void](Set-VivacLockMarker 'start'); Show-VivacLockCover } else { Reset-VivacLockMarker }
 # The other OS's theme, location and language, when sharing is configured:
 # a process of its own, so a share that is not there yet delays nothing here.

@@ -20,6 +20,10 @@
 
   The entry is the first whose description names a Linux loader (GRUB, Arch,
   Linux, vivac, systemd-boot, rEFInd), never Windows Boot Manager.
+
+  It is a switch: before BootNext is set, a token goes onto the EFI partition
+  (\EFI\vivac\switch-to-linux, lib\Switch.psm1) so that Linux, with
+  apply-system.sh --switch, signs in by itself this once.
 #>
 [CmdletBinding()]
 param([switch]$DryRun, [switch]$Run, [switch]$Register, [switch]$Unregister)
@@ -27,6 +31,7 @@ Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $root 'lib\BootNext.psm1') -Force
+Import-Module (Join-Path $root 'lib\Switch.psm1') -Force
 $taskPath = '\vivac\'
 $taskName = 'reboot-other'
 
@@ -53,7 +58,7 @@ if ($Register -or $Unregister) {
         return
     }
     $user = "$env:USERDOMAIN\$env:USERNAME"
-    $dest = Install-VivacProtectedFiles $root @('bin\vivac-reboot-other.ps1', 'lib\BootNext.psm1') 'reboot-other'
+    $dest = Install-VivacProtectedFiles $root @('bin\vivac-reboot-other.ps1', 'lib\BootNext.psm1', 'lib\Switch.psm1') 'reboot-other'
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 5) -MultipleInstances IgnoreNew
     $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$dest\bin\vivac-reboot-other.ps1`" -Run"
     $high = New-ScheduledTaskPrincipal -UserId $user -RunLevel Highest -LogonType Interactive
@@ -72,6 +77,9 @@ if ($DryRun) {
 if ($Run) {
     if (-not (Test-Elevated)) { throw 'vivac-reboot-other: -Run needs an elevated PowerShell' }
     $e = Get-LinuxEntry
+    # Without the token the restart still goes on; Linux then asks for the
+    # password as always.
+    try { Write-VivacEspSwitchToken } catch { }
     $out = & bcdedit.exe /set '{fwbootmgr}' bootsequence $e.Id 2>&1
     if ($LASTEXITCODE -ne 0) { throw "bcdedit /set bootsequence failed: $out" }
     & shutdown.exe /r /t 0
