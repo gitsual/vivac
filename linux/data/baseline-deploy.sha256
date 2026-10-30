@@ -20,7 +20,7 @@ fde045b76fc81f7321bf60101f203b0605ce854cb7191e75941b0bc772cf3a1e  dotfiles/bridg
 192e36eb4b760440711af213d4b15305e4716a2ea5ad8397b8d1c3cb121be718  dotfiles/bridge/.local/bin/vivac-localsend
 901374e5bfed46f823646709ca31f47ec31f91fbc06945a430079dfed778c978  dotfiles/bridge/.local/bin/vivac-mouse
 226fb543182a787bd2a873168b6fcaa05f23e240f953b8404dab05819fa7f32f  dotfiles/bridge/.local/bin/vivac-phone
-4192130d4841b02fb45d658a4ce9c54bc8845c7f6bd892a850d1cda3c80c219c  dotfiles/bridge/.local/bin/vivac-reboot-other
+13c3fb6a28242f0c50b95cd13b0b5bea69d53117385585f5e6f9fdbc155fc037  dotfiles/bridge/.local/bin/vivac-reboot-other
 f69058aa3305f02195637654679bd12f2d8ccaae01217764c6e5e3922d11b8b4  dotfiles/bridge/.local/share/vivac/switch-login.sh
 043978e2eb4bac9e4750697a1aa94ae2a82c8b2ccc015764ad890c0ed2415e72  dotfiles/dunst/.config/dunst/dunstrc
 675a3b616ec6bc42bf06674c4b11f3e9e6fc60562d99dc0f6f6d4d255d74be06  dotfiles/hypr/.config/hypr/hypridle.conf

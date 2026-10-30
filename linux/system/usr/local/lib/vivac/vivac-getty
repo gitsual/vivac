@@ -23,7 +23,7 @@ rm -f -- "$flag" || plain
 user="$(sed -n 's/^user=//p' "$conf" 2>/dev/null | head -n 1)"
 [[ "$user" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || plain
 uid="$(id -u -- "$user" 2>/dev/null)" || plain
-[[ "$uid" =~ ^[0-9]+$ ]] && ((uid != 0)) || plain
+[[ "$uid" =~ ^[0-9]+$ && "$uid" != 0 ]] || plain
 
 # The login profile starts the desktop when it finds this (switch-login.sh).
 handover="${VIVAC_SWITCH_HANDOVER:-$run_dir/handover-$user}"

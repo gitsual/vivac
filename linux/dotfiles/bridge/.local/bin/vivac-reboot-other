@@ -16,7 +16,10 @@
 set -Eeuo pipefail
 
 self="$(readlink -f -- "${BASH_SOURCE[0]}")"
-repo_root="${VIVAC_REPO:-$(cd -- "$(dirname -- "$self")/../../../.." && pwd -P)}"
+repo_root="$(cd -- "$(dirname -- "$self")/../../../.." && pwd -P)"
+# A session started before the checkout moved keeps an old VIVAC_REPO; one
+# without vivac's lib in it is ignored, so the restart never dies on it.
+[[ -n "${VIVAC_REPO:-}" && -r "$VIVAC_REPO/lib/kv.sh" ]] && repo_root="$VIVAC_REPO"
 # shellcheck source=lib/kv.sh
 source "$repo_root/lib/kv.sh"
 # shellcheck source=lib/i18n.sh

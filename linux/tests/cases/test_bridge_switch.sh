@@ -152,6 +152,14 @@ reboot_other --yes || fail 'Restart in Windows failed'
 [[ ! -e "$win/Users/Public/AppData/Local/vivac" ]] || fail 'a token went to a profile without vivac'
 [[ "$(cat "$calls")" == $'token before bootnext\nefibootmgr --bootnext 0000\nsystemctl reboot' ]] ||
 	fail "the token was not left before BootNext: $(cat "$calls")"
+# A session started before the checkout moved keeps a VIVAC_REPO with no lib/
+# in it: the restart must still go on, from the checkout the tool lives in.
+rm -f -- "$win/Users/ada/AppData/Local/vivac/switch-arrival"
+: >"$calls"
+env -u WAYLAND_DISPLAY -u DISPLAY PATH="$sandbox/bin:$PATH" CALLS="$calls" WINDOWS="$win" VIVAC_WINDOWS="$win" VIVAC_NOW="$now" \
+	VIVAC_REPO="$sandbox/old-checkout" VIVAC_LANG=en HOME="$sandbox" "$tool" --yes </dev/null 2>/dev/null ||
+	fail 'a stale VIVAC_REPO stopped Restart in Windows'
+grep -q 'systemctl reboot' "$calls" || fail "a stale VIVAC_REPO stopped the restart: $(cat "$calls")"
 # No Windows partition mounted: the restart still happens, the greeter just shows.
 rm -rf -- "$win/Windows"
 reboot_other --yes 2>/dev/null || fail 'Restart in Windows failed without a mounted Windows'
