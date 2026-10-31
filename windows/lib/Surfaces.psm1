@@ -2134,11 +2134,18 @@ function Test-VivacLooksLikePin([string]$Text) { $Text -match '^\d{4,12}$' }
 # host starts, before it has built anything else; vivac's lock then opens on
 # top, and the cover goes away with it on unlock.
 $script:LockCover = @()
-function Show-VivacLockCover {
+# Set once vivac's lock has rendered over the cover (Show-VivacLock).
+$script:LockGreeterUp = $false
+# How the cover hands over when the greeter never shows: Windows' own lock.
+$script:LockFallback = { Start-Process rundll32.exe -ArgumentList 'user32.dll,LockWorkStation' }
+# The greeter gets this long to show before the cover gives up on it.
+$script:LockCoverGraceSeconds = 60
+function Show-VivacLockCover([switch]$NoShow) {
     Update-SurfaceContext
     $p = Get-Palette
     Add-Type -AssemblyName PresentationFramework, System.Windows.Forms
     $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero); $scale = $g.DpiX / 96.0; $g.Dispose()
+    $script:LockGreeterUp = $false
     $script:LockCover = @(foreach ($screen in [System.Windows.Forms.Screen]::AllScreens) {
             $w = New-Object Windows.Window
             $w.WindowStyle = 'None'; $w.ResizeMode = 'NoResize'; $w.Topmost = $true; $w.ShowInTaskbar = $false
@@ -2146,15 +2153,36 @@ function Show-VivacLockCover {
             $w.WindowStartupLocation = 'Manual'
             $b = $screen.Bounds
             $w.Left = $b.Left / $scale; $w.Top = $b.Top / $scale; $w.Width = $b.Width / $scale; $w.Height = $b.Height / $scale
-            $w.Show()
+            if (-not $NoShow) { $w.Show() }
             $w
         })
+    if ($NoShow) { return $script:LockCover }
+    Write-VivacLockLog 'sign-in cover up'
+    # The cover never outlives a greeter that does not come: past the grace,
+    # Windows' own lock takes over and the desktop is not left hidden.
+    $grace = New-Object Windows.Threading.DispatcherTimer
+    $grace.Interval = [TimeSpan]::FromSeconds($script:LockCoverGraceSeconds)
+    $grace.Add_Tick({ param($s, $e) $s.Stop(); Invoke-VivacLockCoverGrace })
+    $grace.Start()
+}
+# The grace's verdict, on its own so it can be checked without waiting.
+function Invoke-VivacLockCoverGrace {
+    if (-not @($script:LockCover).Count -or $script:LockGreeterUp) { return }
+    Write-VivacLockLog "the greeter did not show in $($script:LockCoverGraceSeconds) s: cover dropped, Windows' own lock instead"
+    Hide-VivacLockCover
+    & $script:LockFallback
 }
 # Drops the cover without unlocking: when the lock itself could not be shown,
 # the desktop must not stay hidden behind blank windows.
 function Hide-VivacLockCover {
     foreach ($w in $script:LockCover) { try { $w.Close() } catch { } }
     $script:LockCover = @()
+}
+# The lock's windows and the cover under them go on top, or step back (for
+# Windows Hello's prompt), together: a cover left on top would hide both the
+# lock and the prompt, with nothing on screen to type into.
+function Set-VivacLockTopmost([bool]$On, [object[]]$Windows) {
+    foreach ($w in @($Windows) + @($script:LockCover)) { if ($w) { $w.Topmost = $On } }
 }
 # The account to check a typed password against. After an automatic
 # sign-in, Winlogon names the spelling Windows accepted for it (a Microsoft
@@ -2548,7 +2576,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
             if ($state.Busy) {
                 if ($state.Busy.IsCompleted) {
                     $task = $state.Busy; $state.Busy = $null
-                    foreach ($w in $state.Windows) { $w.Topmost = $true }
+                    Set-VivacLockTopmost $true $state.Windows
                     if (-not $task.IsFaulted -and [string]$task.Result -eq 'Verified') { if ($state.Mode -eq 'pin') { Set-VivacLockMode 'pin' }; & $finish; return }
                     if ($task.IsFaulted -or [string]$task.Result -in 'DeviceNotPresent', 'NotConfiguredForUser', 'DisabledByPolicy', 'DeviceBusy') {
                         [void]$native::LockWorkStation(); & $finish; return
@@ -2588,7 +2616,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
     $hello = {
         # Windows Hello draws its own prompt, owned by this window: vivac's
         # windows stop being topmost for as long as it is up, so it is seen.
-        foreach ($w in $state.Windows) { $w.Topmost = $false }
+        Set-VivacLockTopmost $false $state.Windows
         $status.Foreground = "#$($p['COLOR_MUTED'])"
         $status.Text = T 'lock.hello_waiting'
         # If Windows Hello cannot be asked from here, the PIN still works on
@@ -2655,6 +2683,8 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
         $w.Add_Closing({ param($s, $e) if (-not $state.Unlocked) { $e.Cancel = $true } })
     }
     $primary.Add_ContentRendered({
+            $script:LockGreeterUp = $true
+            Write-VivacLockLog "lock on screen (mode $($state.Mode))"
             Set-VivacForeground $primary
             # PIN mode asks Windows Hello straight away: nothing to press first.
             if ($state.Mode -eq 'pin') { & $hello } else { [void]$secret.Focus() }

@@ -56,6 +56,37 @@ try {
             Assert-True $w.Topmost
         }
     }
+    Case 'the sign-in cover steps back with the lock, so Windows Hello is seen' {
+        Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+        $surfaces = Get-Module Surfaces | Select-Object -First 1
+        $cover = @(Show-VivacLockCover -NoShow)
+        Assert-True ($cover.Count -gt 0) 'one cover window per screen'
+        $lock = New-Object Windows.Window; $lock.Topmost = $true
+        Set-VivacLockTopmost $false @($lock)
+        Assert-Equal $false $lock.Topmost 'the lock steps back'
+        foreach ($w in $cover) { Assert-Equal $false $w.Topmost 'the cover steps back with it' }
+        Set-VivacLockTopmost $true @($lock)
+        foreach ($w in @($lock) + $cover) { Assert-Equal $true $w.Topmost 'both come back on top' }
+        Hide-VivacLockCover
+        Assert-Equal 0 @(& $surfaces { $script:LockCover }).Count 'the cover is gone'
+    }
+    Case 'a greeter that never shows does not leave the screens covered' {
+        Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+        $surfaces = Get-Module Surfaces | Select-Object -First 1
+        $calls = New-Object System.Collections.ArrayList
+        & $surfaces { param($c) $script:LockFallback = { [void]$c.Add('locked') }.GetNewClosure() } $calls
+        [void](Show-VivacLockCover -NoShow)
+        & $surfaces { $script:LockGreeterUp = $true }
+        Invoke-VivacLockCoverGrace
+        Assert-Equal 0 $calls.Count 'a greeter on screen keeps its cover'
+        Assert-True (@(& $surfaces { $script:LockCover }).Count -gt 0) 'still covered'
+        & $surfaces { $script:LockGreeterUp = $false }
+        Invoke-VivacLockCoverGrace
+        Assert-Equal 1 $calls.Count 'Windows locks its own way instead'
+        Assert-Equal 0 @(& $surfaces { $script:LockCover }).Count 'and the cover is gone'
+        Invoke-VivacLockCoverGrace
+        Assert-Equal 1 $calls.Count 'no cover, nothing to do'
+    }
     Case 'the menu runs what is typed; Windows Run dialog is not offered' {
         Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
         $entries = @(Get-VivacMenuEntries)
