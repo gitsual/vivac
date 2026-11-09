@@ -121,15 +121,19 @@ if (-not $DryRun -and ($plan | Where-Object { $_.Target -eq $flowSettings })) {
     $flowWasRunning = Stop-VivacApp 'flow'
 }
 
+# The desktop goes first and the bar's files right after it: the bar takes a
+# new stylesheet the moment it lands (bar.js, restyle), so the wallpaper and
+# the bar change together instead of seconds apart.
+if ($Package -contains 'desktop') {
+    foreach ($line in Set-VivacDesktop -Theme $palette -DryRun:$DryRun) { Write-Host "  [desktop]      $line" }
+}
+$plan = @($plan | Sort-Object { if ($_.Package -eq 'zebar') { 0 } else { 1 } }, { $_.Target })
+$written = Get-Date
 $results = @()
 if ($plan.Count -or $filePackages.Count) { $results = @(Invoke-VivacPlan -Plan $plan -Packages $filePackages -DryRun:$DryRun) }
 foreach ($r in $results) {
     $line = '  {0,-15} {1,-9} {2}' -f "[$($r.Action)]", $r.Package, $r.Target
     if ($r.Action -eq 'unchanged') { Write-Verbose $line } else { Write-Host $line }
-}
-
-if ($Package -contains 'desktop') {
-    foreach ($line in Set-VivacDesktop -Theme $palette -DryRun:$DryRun) { Write-Host "  [desktop]      $line" }
 }
 
 $changed = @($results | Where-Object { $_.Action -notin 'unchanged', 'kept-edited' })
@@ -151,7 +155,16 @@ if ($DryRun -or $NoReload) {
 $touched = @($changed | ForEach-Object { $_.Package } | Sort-Object -Unique)
 if ($touched -contains 'glazewm') { Invoke-GlazeWM 'command', 'wm-reload-config' | Out-Null }
 if ($Package -contains 'glazewm') { [void](Restart-VivacDaemon) }
-if ($touched -contains 'zebar' -and (Test-VivacAppRunning 'zebar')) {
+# Only the stylesheet changed (a theme switch): the running bar re-reads it
+# and stamps once the new styles drew, in well under a second. No stamp in
+# five means a bar that could not take them, and it is restarted as for any
+# other change to its files.
+$barFiles = @($changed | Where-Object { $_.Package -eq 'zebar' } | ForEach-Object { Split-Path -Leaf $_.Target })
+$restyled = $false
+if ($barFiles.Count -and -not ($barFiles | Where-Object { $_ -ne 'styles.css' }) -and (Test-VivacAppRunning 'zebar')) {
+    $restyled = Wait-VivacBarAlive $written 5
+}
+if ($touched -contains 'zebar' -and -not $restyled -and (Test-VivacAppRunning 'zebar')) {
     $restartedAt = Get-Date
     [void](Restart-VivacBar)
     # A pack that passed the checks can still fail to draw; then the last one
