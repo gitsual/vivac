@@ -73,7 +73,7 @@ function Write-EarlyLog([string]$Text) {
     } catch { }
 }
 if (-not ($Register -or $Unregister)) { Write-EarlyLog "sign-in: greeter starting (pid $PID$(if ($Preview -gt 0) { ", preview $Preview s" }))" }
-trap { Write-EarlyLog "sign-in: greeter died before it was set up: $_"; break }
+trap { if (-not ($Register -or $Unregister)) { Write-EarlyLog "sign-in: greeter died before it was set up: $_" }; break }
 Import-Module (Join-Path $root 'lib\Vivac.psm1') -Force
 Import-Module (Join-Path $root 'lib\Switch.psm1') -Force
 Import-Module (Join-Path $root 'lib\Greeter.psm1') -Force
