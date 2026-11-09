@@ -18,10 +18,15 @@
   drawn on the programs' desktop, over a greeter it does not belong to. The
   PIN still works on Windows' own lock (Win+L, Ctrl+Alt+Del).
 
-  The screen goes to the greeter's desktop (black until the cover paints
-  it) as soon as the watchdog is up, before the lock's own modules load:
-  what starts meanwhile is not seen. The process runs at high priority
-  until the greeter is on screen, so the start-up crowd does not hold it.
+  The screen goes black at once: a stage of the greeter's over every
+  screen of the programs' desktop, as soon as the watchdog is up and before
+  the lock's own modules load, so what starts meanwhile is not seen. The
+  cover and the lock are built on the greeter's desktop behind it, and the
+  screen switches to that desktop the moment the lock has drawn. The order
+  matters: a window is composed only once the programs' desktop has been on
+  screen after its creation (lib\Greeter.psm1). The process runs at high
+  priority until the greeter is on screen, so the start-up crowd does not
+  hold it.
 
   The screen is never left on an empty desktop:
     - a watchdog process on the programs' desktop brings that desktop back
@@ -52,6 +57,18 @@ param([switch]$Register, [switch]$Unregister, [switch]$DryRun, [int]$Preview = 0
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+# The first word in the log, before any module: a start that fails before
+# the modules are in still says so, and when.
+$earlyLog = Join-Path (Join-Path $(if ($env:VIVAC_LOCALAPPDATA) { $env:VIVAC_LOCALAPPDATA } else { $env:LOCALAPPDATA }) 'vivac') 'lock.log'
+function Write-EarlyLog([string]$Text) {
+    try {
+        $dir = Split-Path -Parent $earlyLog
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        Add-Content -LiteralPath $earlyLog -Value ('{0}  {1}' -f (Get-Date -Format s), $Text) -Encoding UTF8
+    } catch { }
+}
+if (-not ($Register -or $Unregister)) { Write-EarlyLog "sign-in: greeter starting (pid $PID$(if ($Preview -gt 0) { ", preview $Preview s" }))" }
+trap { Write-EarlyLog "sign-in: greeter died before it was set up: $_"; break }
 Import-Module (Join-Path $root 'lib\Vivac.psm1') -Force
 Import-Module (Join-Path $root 'lib\Switch.psm1') -Force
 Import-Module (Join-Path $root 'lib\Greeter.psm1') -Force
@@ -99,7 +116,7 @@ function Invoke-WindowsLock {
 $native = Get-VivacDesktopNative
 $desktop = Get-VivacGreeterDesktopName
 function Restore-DefaultDesktop {
-    try { if ($native::InputDesktopName() -eq $desktop) { [void]$native::SwitchToDefault() } } catch { }
+    try { if ($native::InputDesktopName() -like "$desktop*") { [void]$native::SwitchToDefault() } } catch { }
 }
 
 if (Test-Path -LiteralPath (Join-Path $state 'no-greeter')) {
@@ -123,7 +140,8 @@ if ($Preview -le 0) {
 
 $outcome = 'failed'
 $own = [IntPtr]::Zero
-$ps = $null; $rs = $null
+$ps = $null; $rs = $null; $stage = $null; $stageRs = $null
+$shared = [hashtable]::Synchronized(@{ StageUp = $false; StageDown = $false; CoverUp = $false; GreeterUp = $false; Done = $false; Outcome = $null; Error = $null })
 try {
     $own = $native::Create($desktop)
     $watch = Get-VivacGreeterWatchdogScript $PID $desktop $paths.LockMarker $log
@@ -131,16 +149,26 @@ try {
     $psi.Arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($watch))
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
     [void][Diagnostics.Process]::Start($psi)
-    # The screen, now: the watchdog is there to bring it back, and nothing
-    # that starts from here on is seen. Winlogon may still hold it for a
-    # moment at sign-in, hence the retries.
-    if (-not (Wait-VivacDesktopSwitch $own $desktop 20)) { throw 'the screen could not be switched to the greeter''s desktop' }
-    Write-GreeterLog "sign-in: screen on $desktop"
+    # The stage, now: black over every screen of the programs' desktop, on
+    # a thread of its own, so nothing that starts from here on is seen. The
+    # programs' desktop stays the one on screen while the greeter is built:
+    # a window is composed only once that desktop has been on screen after
+    # its creation (lib\Greeter.psm1).
+    $stageRs = [RunspaceFactory]::CreateRunspace()
+    $stageRs.ApartmentState = 'STA'; $stageRs.ThreadOptions = 'UseNewThread'
+    $stageRs.Open()
+    $stage = [PowerShell]::Create(); $stage.Runspace = $stageRs
+    [void]$stage.AddScript({
+            param($Root, $Shared)
+            try { Import-Module (Join-Path $Root 'lib\Greeter.psm1') -Force; Invoke-VivacGreeterStage $Shared } catch { $Shared.StageUp = $true }
+        }).AddArgument($root).AddArgument($shared)
+    $stageHandle = $stage.BeginInvoke()
+    Write-GreeterLog "sign-in: stage over Default while the greeter is built on $desktop"
 
     # The greeter's thread: bound to the desktop before it owns a window,
-    # then the cover, the switch, and the lock itself. What it finds out is
-    # shared with this thread, which keeps time.
-    $shared = [hashtable]::Synchronized(@{ CoverUp = $false; GreeterUp = $false; Done = $false; Outcome = $null; Error = $null })
+    # then the cover and the lock itself, behind the stage; the switch to
+    # them when the lock has drawn. What it finds out is shared with this
+    # thread, which keeps time.
     $rs = [RunspaceFactory]::CreateRunspace()
     $rs.ApartmentState = 'STA'; $rs.ThreadOptions = 'UseNewThread'
     $rs.Open()
@@ -150,9 +178,9 @@ try {
             $native = [VivacDesktopNative]
             try {
                 $native::Bind($Own)
+                Import-Module (Join-Path $Root 'lib\Greeter.psm1') -Force
                 Import-Module (Join-Path $Root 'lib\Surfaces.psm1') -Force
                 Show-VivacLockCover
-                $native::Switch($Own)
                 $Shared.CoverUp = $true
                 # The theme's wallpaper on Windows' own lock screen, should
                 # the greeter hand over to it.
@@ -160,13 +188,22 @@ try {
                     Import-Module (Join-Path $Root 'lib\Desktop.psm1') -Force
                     if (Test-VivacLockScreenManaged) { [void](Update-VivacLockScreen (Get-VivacWallpaper -Theme (Read-VivacTheme (Read-VivacSettings)['theme']))) }
                 } catch { }
-                $shown = { $Shared.GreeterUp = $true }.GetNewClosure()
+                # Drawn. The programs' desktop stays on screen a moment
+                # longer, this thread answering, for DWM to take the lock's
+                # windows in (lib\Greeter.psm1); then the switch shows them
+                # composed. Winlogon may still hold the screen for a moment
+                # at sign-in, hence the retries.
+                $shown = {
+                    Wait-VivacDispatcher 500
+                    if (-not (Wait-VivacDesktopSwitch $Own $Desktop 20)) { Write-VivacLockLog 'the screen could not be switched to the greeter''s desktop' }
+                    $Shared.GreeterUp = $true
+                }.GetNewClosure()
                 $Shared.Outcome = Show-VivacLock -Greeter -Desktop $Desktop -PasswordOnly -PreviewSeconds $Preview -OnShown $shown
             } catch {
                 $Shared.Error = "$_"
                 try { Hide-VivacLockCover } catch { }
             } finally {
-                try { if ($native::InputDesktopName() -eq $Desktop) { [void]$native::SwitchToDefault() } } catch { }
+                try { if ($native::InputDesktopName() -like "$Desktop*") { [void]$native::SwitchToDefault() } } catch { }
                 $Shared.Done = $true
             }
         }).AddArgument($root).AddArgument($own).AddArgument($desktop).AddArgument($shared).AddArgument($Preview)
@@ -180,8 +217,14 @@ try {
     $hurried = $true
     while (-not $shared.Done) {
         Start-Sleep -Milliseconds 250
-        # On screen: back to the normal priority, the rest may load now.
-        if ($hurried -and $shared.GreeterUp) { $hurried = $false; try { [Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'Normal' } catch { } }
+        # On screen: the stage comes down, and back to the normal priority,
+        # the rest may load now.
+        if ($hurried -and $shared.GreeterUp) {
+            $hurried = $false
+            $shared.StageDown = $true
+            try { [Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'Normal' } catch { }
+            Write-GreeterLog "sign-in: greeter on screen (input desktop $($native::InputDesktopName()))"
+        }
         if (-not $shared.GreeterUp -and ((Get-Date) - $started).TotalSeconds -gt $grace) {
             Write-GreeterLog "the greeter did not show in $grace s: Windows' own lock instead"
             break
@@ -193,12 +236,14 @@ try {
 } catch {
     Write-GreeterLog "greeter could not start: $_"
 } finally {
+    $shared.StageDown = $true
     Restore-DefaultDesktop
     # The lock itself hands over to Windows' lock on every way out but the
     # unlock; only a greeter that never got that far is locked from here.
     if ($outcome -eq 'failed') { Invoke-WindowsLock }
     if ($Preview -le 0) { Clear-VivacLockMarker }
     try { if ($ps -and -not $handle.IsCompleted) { [void]$ps.BeginStop($null, $null) } } catch { }
+    try { if ($stage -and -not $stageHandle.IsCompleted) { [void]$stage.BeginStop($null, $null) } } catch { }
     Write-GreeterLog "sign-in: greeter ended ($outcome)"
 }
 # The greeter's thread may still be winding down: the process ends here

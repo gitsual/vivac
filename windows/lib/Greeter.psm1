@@ -14,6 +14,15 @@
 # a script runs (error 170, ERROR_BUSY), so the greeter's windows are built on
 # a runspace thread of their own, bound first thing (Bind), and the first
 # thread keeps watch from Default.
+#
+# A WPF window is composed only once the programs' desktop (Default) has
+# been the one on screen after the window was created: created while another
+# desktop is on screen and switched to without Default in between, it stays
+# black for good (found the hard way, 09-11: fifty milliseconds of Default
+# are enough, none is not). So the greeter keeps Default on screen while it
+# builds its windows, black under a stage of its own (Invoke-VivacGreeterStage,
+# a window over every screen, on Default), and switches to its desktop only
+# once the lock has drawn.
 
 Set-StrictMode -Version 2.0
 
@@ -103,6 +112,46 @@ function Wait-VivacDesktopSwitch([IntPtr]$Handle, [string]$Name, [int]$Seconds =
     $false
 }
 
+# The stage: black over every screen of the programs' desktop, from the
+# first moment, while the greeter is built on its desktop behind it. Runs
+# on the calling thread (an STA thread of its own, on Default) and pumps
+# its messages until Shared.StageDown, then closes its windows. -NoShow
+# only builds the windows, for the gate.
+function Invoke-VivacGreeterStage([hashtable]$Shared, [switch]$NoShow) {
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing
+    $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero); $scale = $g.DpiX / 96.0; $g.Dispose()
+    $windows = @(foreach ($screen in [System.Windows.Forms.Screen]::AllScreens) {
+            $w = New-Object Windows.Window
+            $w.WindowStyle = 'None'; $w.ResizeMode = 'NoResize'; $w.Topmost = $true; $w.ShowInTaskbar = $false
+            $w.Background = 'Black'; $w.Cursor = [Windows.Input.Cursors]::None; $w.Title = 'vivac - stage'
+            $w.WindowStartupLocation = 'Manual'
+            $b = $screen.Bounds
+            $w.Left = $b.Left / $scale; $w.Top = $b.Top / $scale; $w.Width = $b.Width / $scale; $w.Height = $b.Height / $scale
+            if (-not $NoShow) { $w.Show() }
+            $w
+        })
+    if ($NoShow) { return $windows }
+    $Shared.StageUp = $true
+    while (-not $Shared.StageDown) {
+        try { [Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action] {}, [Windows.Threading.DispatcherPriority]::Background) } catch { }
+        Start-Sleep -Milliseconds 30
+    }
+    foreach ($w in $windows) { try { $w.Close() } catch { } }
+}
+
+# A wait on a WPF thread that keeps answering: a nested dispatcher frame
+# for the time given. A thread asleep answers nothing, and DWM takes a
+# window in only from a thread that answers.
+function Wait-VivacDispatcher([int]$Milliseconds) {
+    Add-Type -AssemblyName WindowsBase
+    $frame = New-Object Windows.Threading.DispatcherFrame
+    $timer = New-Object Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds($Milliseconds)
+    $timer.Add_Tick({ $frame.Continue = $false; $timer.Stop() }.GetNewClosure())
+    $timer.Start()
+    [Windows.Threading.Dispatcher]::PushFrame($frame)
+}
+
 # One greeter at a time: the sign-in task and a host asked to hold the
 # sign-in (bin\vivac-daemon.ps1 -LockAtStart) may both start one, and the
 # second must end at once, touching neither the screen nor the markers.
@@ -146,7 +195,7 @@ public static class VivacGreeterWatch {
 }
 '@
 while (Get-Process -Id $GreeterPid -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 300 }
-`$stranded = ([VivacGreeterWatch]::InputDesktopName() -eq '$Desktop')
+`$stranded = ([VivacGreeterWatch]::InputDesktopName() -like '$Desktop*')
 `$marked = `$false
 try { `$marked = (Test-Path -LiteralPath '$Marker') -and ((Get-Content -LiteralPath '$Marker' -Raw) -match '^$GreeterPid ') } catch { }
 if (`$stranded) { [void][VivacGreeterWatch]::SwitchToDefault() }
@@ -172,4 +221,4 @@ function Start-VivacSigninGreeter([switch]$NoStart) {
     'conhost.exe ' + ($arguments -join ' ')
 }
 
-Export-ModuleMember -Function Get-VivacGreeterDesktopName, Get-VivacDesktopNative, Wait-VivacDesktopSwitch, Enter-VivacGreeterSingleton, Get-VivacGreeterWatchdogScript, Start-VivacSigninGreeter
+Export-ModuleMember -Function Get-VivacGreeterDesktopName, Get-VivacDesktopNative, Wait-VivacDesktopSwitch, Wait-VivacDispatcher, Invoke-VivacGreeterStage, Enter-VivacGreeterSingleton, Get-VivacGreeterWatchdogScript, Start-VivacSigninGreeter

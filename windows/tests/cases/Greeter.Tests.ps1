@@ -81,14 +81,33 @@ try {
         Assert-True ($native::SwitchTo('Default')) 'the lock cannot switch to a desktop by name'
         Assert-True (-not $native::SwitchTo('vivac-no-such-desktop')) 'a desktop that is not there was switched to'
         $text = Get-Content -Raw -LiteralPath (Join-Path $root 'lib\Surfaces.psm1')
-        Assert-True ($text -match '\$own -and \$native::InputDesktopName\(\) -and \$state\.Retaken -lt 20 -and \$native::SwitchTo\(\$Desktop\)') 'the tick does not take the screen back before ceding'
+        Assert-True ($text -match '\$own -and \$where -eq ''Default'' -and \$state\.Retaken -lt 20 -and \$native::SwitchTo\(\$Desktop\)') 'the tick does not take the screen back from Default only, before ceding'
+        Assert-True ($text -match '-not \$state\.Busy -and \$state\.OnOwn -and -not \$native::OnDesktop\(\$Desktop\)') 'the tick looks at the desktops before the greeter has switched to its own'
+        $onShown = $text.IndexOf('if ($OnShown) { try { & $OnShown }')
+        Assert-True ($onShown -gt 0 -and $text.IndexOf('$state.OnOwn = $true', $onShown) -gt $onShown) 'OnOwn is not set right after -OnShown has run'
     }
-    Case 'the screen is taken as soon as the watchdog is up, before the lock loads, and tried again while Winlogon holds it' {
+    Case 'the screen goes black as soon as the watchdog is up, the greeter is built behind it with Default on screen, and shown once drawn' {
+        # A window is composed only once the programs' desktop has been on
+        # screen after its creation: the stage covers Default while the greeter
+        # is built, and the switch to the greeter's desktop is the lock's own
+        # on-shown callback.
+        $stage = Invoke-VivacGreeterStage @{} -NoShow
+        Assert-Equal ([System.Windows.Forms.Screen]::AllScreens.Count) @($stage).Count 'not a stage window per screen'
+        foreach ($w in $stage) { Assert-True $w.Topmost 'a stage window that is not topmost'; Assert-Equal 'Black' ([string]$w.Background.Color.ToString() -replace '#FF000000', 'Black') 'a stage window that is not black'; $w.Close() }
         $text = Get-Content -Raw -LiteralPath $greeter
         $watchdog = $text.IndexOf('[Diagnostics.Process]::Start($psi)')
-        $switch = $text.IndexOf('Wait-VivacDesktopSwitch $own $desktop')
+        $stageStart = $text.IndexOf('Invoke-VivacGreeterStage $Shared')
         $surfaces = $text.IndexOf("Import-Module (Join-Path `$Root 'lib\Surfaces.psm1')")
-        Assert-True ($watchdog -gt 0 -and $watchdog -lt $switch -and $switch -lt $surfaces) 'the switch is not between the watchdog and the lock''s modules'
+        Assert-True ($watchdog -gt 0 -and $watchdog -lt $stageStart -and $stageStart -lt $surfaces) 'the stage is not between the watchdog and the lock''s modules'
+        $shown = $text.IndexOf('$shown = {')
+        $wait = $text.IndexOf('Wait-VivacDispatcher 500', $shown)
+        $switch = $text.IndexOf('Wait-VivacDesktopSwitch $Own $Desktop 20', $shown)
+        Assert-True ($shown -gt 0 -and $wait -gt $shown -and $switch -gt $wait) 'the lock''s on-shown does not wait, answering, before the switch to the greeter''s desktop'
+        $t = [Diagnostics.Stopwatch]::StartNew(); Wait-VivacDispatcher 200
+        Assert-True ($t.ElapsedMilliseconds -ge 180 -and $t.ElapsedMilliseconds -lt 2000) "the dispatcher wait did not wait: $($t.ElapsedMilliseconds) ms"
+        Assert-True ($text -notmatch '(?m)^\s+\$native::Switch\(\$Own\)\s*$') 'the greeter''s desktop is switched to before its windows have drawn'
+        Assert-True ($text -notmatch 'Wait-VivacDesktopSwitch \$flip') 'the screen still goes to a flip desktop first'
+        Assert-True ($text -match '\$shared\.StageDown = \$true') 'the stage never comes down'
         Assert-True ($text -match "PriorityClass = 'High'") 'the greeter does not hurry at sign-in'
         Assert-True ($text -match "PriorityClass = 'Normal'") 'the greeter never stands down from high priority'
         # No desktop can be switched to with no handle: it tries for the time given, then says so.
@@ -116,7 +135,7 @@ try {
     Case 'the watchdog''s script brings Default back and locks only when the greeter went without unlocking' {
         $script = Get-VivacGreeterWatchdogScript 4242 'vivac-greeter' 'C:\state\session-locked' 'C:\state\lock.log'
         Assert-True ($script -match 'Get-Process -Id 4242') 'it does not wait for the greeter'
-        Assert-True ($script -match "InputDesktopName\(\) -eq 'vivac-greeter'") 'it does not look at the desktop'
+        Assert-True ($script -match "InputDesktopName\(\) -like 'vivac-greeter\*'") 'it does not look for either of the greeter''s desktops'
         Assert-True ($script -match "-match '\^4242 '") 'it does not look at the greeter''s own marker'
         Assert-True ($script -match 'SwitchToDefault') 'it does not bring Default back'
         Assert-True ($script -match 'LockWorkStation') 'it does not lock'

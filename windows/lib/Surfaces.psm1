@@ -2167,19 +2167,25 @@ $script:LockGreeterUp = $false
 $script:LockFallback = { Invoke-VivacLockFallback }
 # The greeter gets this long to show before the cover gives up on it.
 $script:LockCoverGraceSeconds = 60
+# A topmost window over one screen, the screen's exact size.
+function Set-VivacScreenWindow($Window, $Screen) {
+    $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero); $scale = $g.DpiX / 96.0; $g.Dispose()
+    $b = $Screen.Bounds
+    $Window.WindowStartupLocation = 'Manual'
+    $Window.Topmost = $true
+    $Window.Left = $b.Left / $scale; $Window.Top = $b.Top / $scale
+    $Window.Width = $b.Width / $scale; $Window.Height = $b.Height / $scale
+}
 function Show-VivacLockCover([switch]$NoShow) {
     Update-SurfaceContext
     $p = Get-Palette
     Add-Type -AssemblyName PresentationFramework, System.Windows.Forms
-    $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero); $scale = $g.DpiX / 96.0; $g.Dispose()
     $script:LockGreeterUp = $false
     $script:LockCover = @(foreach ($screen in [System.Windows.Forms.Screen]::AllScreens) {
             $w = New-Object Windows.Window
-            $w.WindowStyle = 'None'; $w.ResizeMode = 'NoResize'; $w.Topmost = $true; $w.ShowInTaskbar = $false
+            $w.WindowStyle = 'None'; $w.ResizeMode = 'NoResize'; $w.ShowInTaskbar = $false
             $w.Background = "#$($p['COLOR_BG'])"; $w.Cursor = [Windows.Input.Cursors]::None; $w.Title = 'vivac - lock'
-            $w.WindowStartupLocation = 'Manual'
-            $b = $screen.Bounds
-            $w.Left = $b.Left / $scale; $w.Top = $b.Top / $scale; $w.Width = $b.Width / $scale; $w.Height = $b.Height / $scale
+            Set-VivacScreenWindow $w $screen
             if (-not $NoShow) { $w.Show() }
             $w
         })
@@ -2434,7 +2440,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
     $p = Get-Palette
     $native = Get-LockNative
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
-    $state = @{ Unlocked = $false; Busy = $null; Windows = @(); Armed = $null; ArmedAt = [DateTime]::MinValue; Mode = (Get-VivacLockMode); Outcome = $null; ShownAt = $null; Retaken = 0 }
+    $state = @{ Unlocked = $false; Busy = $null; Windows = @(); Armed = $null; ArmedAt = [DateTime]::MinValue; Mode = (Get-VivacLockMode); Outcome = $null; ShownAt = $null; Retaken = 0; OnOwn = ($Desktop -eq 'Default') }
     if ($PasswordOnly) { $state.Mode = 'password' }
     $marker = Join-Path (Get-VivacPaths).State 'locked'
     # The host's keyboard hook (lib\VivacKeys.cs) holds the Windows key while
@@ -2527,23 +2533,19 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
         }
     } catch { Write-VivacLockLog "greeter pictures left out: $_" } }
     # The card fades in when shown; a picture taken without showing it
-    # (tests, previews) has it in place already.
-    if ($NoShow) {
+    # (tests, previews) has it in place already, and so does the greeter on
+    # a desktop of its own: its windows are built while that desktop is off
+    # screen, where an animation that starts never draws, and the switch to
+    # the desktop is the one appearance.
+    if ($NoShow -or $own) {
         $card = $primary.FindName('Card')
         if ($card) { $card.Opacity = 1; $shift.Y = 0; $card.Triggers.Clear() }
-        return $primary
+        if ($NoShow) { return $primary }
     }
 
     # One window per screen: the clock and the field on the primary one, the
     # base colour on the rest, so no screen shows the desktop.
-    $place = {
-        param($w, $screen)
-        $src = [System.Windows.Forms.Screen]::PrimaryScreen
-        $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero); $scale = $g.DpiX / 96.0; $g.Dispose()
-        $b = $screen.Bounds
-        $w.WindowStartupLocation = 'Manual'
-        $w.Left = $b.Left / $scale; $w.Top = $b.Top / $scale; $w.Width = $b.Width / $scale; $w.Height = $b.Height / $scale
-    }
+    $place = { param($w, $screen) Set-VivacScreenWindow $w $screen }
     $windows = @()
     foreach ($screen in [System.Windows.Forms.Screen]::AllScreens) {
         if ($screen.Primary) { & $place $primary $screen; $windows += $primary; continue }
@@ -2632,12 +2634,16 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
             }
             # Windows' secure screen took the keyboard (Ctrl+Alt+Del, or its
             # own lock): lock the Windows way and step aside.
-            if (-not $state.Busy -and -not $native::OnDesktop($Desktop)) {
+            # On a desktop of its own, not before the greeter has switched
+            # the screen to it (OnOwn, set once -OnShown has run): until
+            # then the programs' desktop is on screen on purpose.
+            if (-not $state.Busy -and $state.OnOwn -and -not $native::OnDesktop($Desktop)) {
+                $where = $native::InputDesktopName()
                 # On a desktop of its own, the screen switched to another
                 # desktop of the session (Winlogon settling the sign-in
                 # on Default) is taken back; only the secure screen, which
                 # cannot be seen, is ceded to.
-                if ($own -and $native::InputDesktopName() -and $state.Retaken -lt 20 -and $native::SwitchTo($Desktop)) {
+                if ($own -and $where -eq 'Default' -and $state.Retaken -lt 20 -and $native::SwitchTo($Desktop)) {
                     $state.Retaken++
                     Write-VivacLockLog "the screen had left $Desktop and was taken back ($($state.Retaken))"
                     return
@@ -2761,6 +2767,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
             $state.ShownAt = Get-Date
             Write-VivacLockLog "lock on screen (mode $($state.Mode)$(if ($own) { ", desktop $Desktop" }))"
             if ($OnShown) { try { & $OnShown } catch { Write-VivacLockLog "on-shown failed: $_" } }
+            $state.OnOwn = $true
             Set-VivacForeground $primary
             # PIN mode asks Windows Hello straight away: nothing to press first.
             if ($state.Mode -eq 'pin') { & $hello } else { [void]$secret.Focus() }
