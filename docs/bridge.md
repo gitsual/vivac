@@ -5,7 +5,7 @@ stands on its own. Together they also share state across a dual boot and talk
 live across a local network. This file is the contract both halves implement;
 a change here is a change to both.
 
-Nine features, each usable alone (and vivac ask, which can reach across, in section 10):
+Ten features, each usable alone (and vivac ask, which can reach across, in section 10):
 
 | Feature | When it helps | Needs |
 |---|---|---|
@@ -18,6 +18,7 @@ Nine features, each usable alone (and vivac ask, which can reach across, in sect
 | [Bluetooth across the dual boot](#7-bluetooth-across-the-dual-boot) | dual boot | the Windows partition mounted on Linux |
 | [Phones: LocalSend](#8-phones-localsend) | a phone on the same network | the LocalSend app on the phone, a PIN |
 | [The phone](#9-the-phone-kde-connect) | a phone on the same network | KDE Connect on both |
+| [Hermes across the dual boot](#11-hermes-across-the-dual-boot) | dual boot | the Windows partition mounted on Linux, Hermes Agent on both |
 
 ## The shared root
 
@@ -641,6 +642,56 @@ can still use the other's Ollama, typically the one with the larger GPU: set
 on the network on the serving side (`OLLAMA_HOST=0.0.0.0`), with the firewall letting in the local
 subnet only. Ollama has no authentication: whoever reaches the port can use it, so only on a
 network you trust. A public address is refused even with `ask_allow_lan=true`.
+
+## 11. Hermes across the dual boot
+
+[Hermes Agent](https://hermes-agent.nousresearch.com) keeps everything it is
+in one folder, its *home*: `config.yaml`, `memories/`, `skills/`, `SOUL.md`,
+`cron/`, the sessions in `state.db`. With one home for both halves, the agent
+you talk to on Linux is the one you talk to on Windows: what it learnt, what
+it can do, what you said yesterday.
+
+The home lives on the **Windows partition**, as `.hermes` in the Windows
+profile (`C:\Users\<name>\.hermes`): Windows uses it in place, and Linux
+reaches it through its mount of that partition (`/mnt/win`, as section 7
+does), with `~/.hermes` a link to it. Not the shared root: Windows reaches
+that disk over 9P, where SQLite cannot lock a file, and `state.db` is SQLite.
+A dual boot never runs both sides at once, which is what the one home needs;
+a Hermes inside WSL must not point at it.
+
+What Hermes itself calls *this machine's* stays on each side: the code
+checkout with its venv, the tool store, the dependency environments under
+`installs/`. On Windows the checkout and the tool store live under
+`%LOCALAPPDATA%\hermes` (`HERMES_RUNTIME_DIR`), never inside the home. On
+Linux they move under `~/.local/share/hermes`, and the shared home keeps
+links to them (`hermes-agent`, `tools`, and one entry inside `installs/`
+named after the Linux checkout); Windows never follows those links.
+
+- **Windows**: `vivac-hermes.ps1 install` runs the official installer
+  unattended with the home there and the code outside it, and sets
+  `HERMES_HOME` and `HERMES_RUNTIME_DIR` for the user; `vivac-hermes.ps1
+  ollama` sets what Ollama must serve for Hermes (a context of 65536, which
+  Hermes refuses to start below, with flash attention and an 8-bit cache so
+  that much fits a 16 GB card); `status` says where the home is, whether
+  Linux has joined, what Ollama still lacks. The bridge menu offers
+  **Hermes** once it is installed.
+- **Linux**: `vivac-hermes --share` moves `~/.hermes` onto the Windows home
+  (found alone under `/mnt/win/Users/*/.hermes`, or named): Linux's files win,
+  Windows' own that collide are set aside beside the home
+  (`.hermes.windows-before-share-<stamp>`), a folder both have is joined file
+  by file, nothing is deleted until every copy is in. `--unshare` brings a
+  real home back and leaves the Windows copy to go its own way. `--dry-run`
+  names every move and makes none. The bridge menu offers **Hermes** once it
+  is installed.
+
+Both sides write `vivac-hermes.conf` in the home (`key=value`, LF): Windows
+its `windows_home` and `windows_shared` stamp, Linux its `linux_home`,
+`linux_store` and `linux_shared` stamp (`none` once it brought its home
+back). Each side's `status` reads the other's lines.
+
+Models: each side talks to its own Ollama at `127.0.0.1:11434`; the models
+themselves can sit on the shared disk (`OLLAMA_MODELS`), so both serve the
+same ones and the shared `config.yaml` names a model both have.
 
 ## Versions
 

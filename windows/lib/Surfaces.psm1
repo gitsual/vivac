@@ -11,6 +11,7 @@ Import-Module (Join-Path $PSScriptRoot 'Vivac.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Bridge.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Mouse.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Phone.psm1')
+Import-Module (Join-Path $PSScriptRoot 'Hermes.psm1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $script:VivacEntry = Join-Path $root 'bin\vivac.ps1'
@@ -981,6 +982,8 @@ function Get-VivacMenuEntries {
     # The phone, a category of its own while KDE Connect is installed
     # (lib/Phone.psm1); read from what the bar last saw, never asked here.
     foreach ($p in @(Get-VivacPhoneMenuEntries ${function:New-MenuEntry})) { $e.Add($p) }
+    # Hermes, once it is installed (docs/bridge.md, "Hermes across the dual boot").
+    if (Find-VivacHermes) { $e.Add((New-MenuEntry 'session' (T 'hermes.menu') 'bridge' 'hermes' $false 0xE99A)) }
     # A phone with LocalSend (docs/bridge.md, "Phones: LocalSend"): needs nothing set up to send.
     $e.Add((New-MenuEntry 'session' (T 'localsend.menu_send') 'bridge' 'localsend-send' $false 0xE8EA))
     $e.Add((New-MenuEntry 'session' (T 'localsend.menu_toggle') 'bridge' 'localsend-toggle' $false 0xE8EA))
@@ -1025,6 +1028,8 @@ function Invoke-BridgeAction([string]$Id) {
         'link-clip' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-link.ps1`"", 'send-clip', '-Notify') }
         'link-wake' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-link.ps1`"", 'wake', '-Notify') }
         'mouse-toggle' { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-mouse.ps1`"", 'toggle', '-Notify') }
+        # Hermes wants a console of its own: the window stays.
+        'hermes' { Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-hermes.ps1`"") }
         # The phone drop says what it did in a card of its own.
         { $_ -in 'localsend-send', 'localsend-toggle' } {
             Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-File', "`"$bin\vivac-localsend.ps1`"", ($Id.Substring(10) -replace '^send$', 'pick'), '-Notify')
