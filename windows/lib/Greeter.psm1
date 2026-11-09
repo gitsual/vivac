@@ -116,9 +116,12 @@ function Wait-VivacDesktopSwitch([IntPtr]$Handle, [string]$Name, [int]$Seconds =
 # first moment, while the greeter is built on its desktop behind it and
 # for as long as the greeter is up. Runs on the calling thread (an STA
 # thread of its own, on Default) and pumps its messages until
-# Shared.StageDown, then closes its windows. While Shared.StageBack is set
-# (Windows Hello's prompt up on Default, asked from the greeter) the stage
-# is not topmost, so the prompt is seen over it; after, it is again.
+# Shared.StageDown, then closes its windows. Shared.StageHwnd is the handle
+# of its window on the primary screen: Windows Hello's prompt, asked from
+# the greeter, is owned by it, so Windows keeps the prompt above the stage
+# while the stage stays topmost and the desktop behind stays out of reach.
+# While Shared.StageBack is set (the prompt up) the stage keeps putting
+# itself back on top, as the bar is topmost too and the keyguard raises it.
 # -NoShow only builds the windows, for the gate.
 function Invoke-VivacGreeterStage([hashtable]$Shared, [switch]$NoShow) {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing
@@ -134,14 +137,16 @@ function Invoke-VivacGreeterStage([hashtable]$Shared, [switch]$NoShow) {
             $w
         })
     if ($NoShow) { return $windows }
+    $primaryStage = $windows | Select-Object -First 1
+    for ($i = 0; $i -lt $windows.Count; $i++) { if ([System.Windows.Forms.Screen]::AllScreens[$i].Primary) { $primaryStage = $windows[$i] } }
+    $Shared.StageHwnd = [long](New-Object Windows.Interop.WindowInteropHelper $primaryStage).Handle
     $Shared.StageUp = $true
-    $back = $false
+    $raised = [DateTime]::MinValue
     while (-not $Shared.StageDown) {
         try { [Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action] {}, [Windows.Threading.DispatcherPriority]::Background) } catch { }
-        $wanted = [bool]$Shared.StageBack
-        if ($wanted -ne $back) {
-            $back = $wanted
-            foreach ($w in $windows) { try { $w.Topmost = -not $back; if (-not $back) { $w.Activate() | Out-Null } } catch { } }
+        if ($Shared.StageBack -and ((Get-Date) - $raised).TotalMilliseconds -gt 500) {
+            $raised = Get-Date
+            foreach ($w in $windows) { try { $w.Topmost = $false; $w.Topmost = $true } catch { } }
         }
         Start-Sleep -Milliseconds 30
     }

@@ -79,7 +79,11 @@ try {
         Assert-True ($greeterText -match '-FirstMode \(Get-VivacLockMode\) -PreviewSeconds \$Preview -OnShown \$shown -OnHello \$hello') 'the greeter does not ask first what the session''s lock asks'
         Assert-True ($greeterText -notmatch '(?m)^\s+\$shared\.StageDown = \$true\s*$[\s\S]*PriorityClass = ''Normal''') 'the stage comes down before the greeter ends'
         $module = Get-Content -Raw -LiteralPath (Join-Path $root 'lib\Greeter.psm1')
-        Assert-True ($module -match '\$w\.Topmost = -not \$back') 'the stage does not step back for Hello'
+        Assert-True ($module -match '\$Shared\.StageHwnd = \[long\]') 'the stage does not hand out its window for Hello''s prompt to be owned by'
+        Assert-True ($module -notmatch 'Topmost = -not') 'the stage still steps back for Hello, leaving the desktop in reach'
+        Assert-True ($text -match '\$owner = \[IntPtr\]\[long\]\$stage') 'Hello''s prompt is not owned by the stage'
+        Assert-True ($text -match 'Start-HelloVerification \$owner') 'Hello is asked for the lock''s own window instead of the owner chosen'
+        Assert-True ($greeterText -match 'if \(\$On\) \{ \$Shared\.StageHwnd \}') 'the greeter does not hand the stage''s window to the lock'
         $surfaces = Get-Module Surfaces | Select-Object -First 1
         $p = & $surfaces { Get-Palette }
         $mode = & $surfaces { T 'greeter.hint_mode' }

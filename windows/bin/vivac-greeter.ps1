@@ -16,10 +16,12 @@
 
   The greeter asks first what the session's own lock asks (its lock mode,
   Win+L): the PIN through Windows Hello at once, or the account's password;
-  Tab switches to the other. Hello's prompt is a window of Windows' own, drawn on the programs'
-  desktop: for it the screen goes there, over the stage (black, stepping
-  back so the prompt is seen), and comes back to the greeter if the PIN is
-  not verified. The PIN also works on Windows' own lock (Ctrl+Alt+Del).
+  Tab switches to the other. Hello's prompt is a window of Windows' own,
+  drawn on the programs' desktop: for it the screen goes there, where the
+  prompt is owned by the stage's window (black, topmost over every screen),
+  so it shows above the stage and nothing else is seen or reached; the
+  screen comes back to the greeter if the PIN is not verified. The PIN also
+  works on Windows' own lock (Ctrl+Alt+Del).
 
   The screen goes black at once: a stage of the greeter's over every
   screen of the programs' desktop, as soon as the watchdog is up and before
@@ -207,8 +209,9 @@ try {
                     if (-not (Wait-VivacDesktopSwitch $Own $Desktop 20)) { Write-VivacLockLog 'the screen could not be switched to the greeter''s desktop' }
                     $Shared.GreeterUp = $true
                 }.GetNewClosure()
-                # Windows Hello asked: the stage steps back while its prompt is up.
-                $hello = { param($On) $Shared.StageBack = [bool]$On }.GetNewClosure()
+                # Windows Hello asked: the prompt is owned by the stage's window
+                # (its handle is handed back), and the stage keeps itself on top.
+                $hello = { param($On) $Shared.StageBack = [bool]$On; if ($On) { $Shared.StageHwnd } }.GetNewClosure()
                 $Shared.Outcome = Show-VivacLock -Greeter -Desktop $Desktop -FirstMode (Get-VivacLockMode) -PreviewSeconds $Preview -OnShown $shown -OnHello $hello
             } catch {
                 $Shared.Error = "$_"

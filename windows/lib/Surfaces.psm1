@@ -2713,17 +2713,20 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
         $status.Foreground = "#$($p['COLOR_MUTED'])"
         $status.Text = T 'lock.hello_waiting'
         # The prompt is drawn on the programs' desktop: from a desktop of
-        # its own the screen goes there, the caller's stage over it told to
-        # step back first so the prompt is seen over it.
+        # its own the screen goes there, and the prompt is owned by the
+        # caller's stage window over that desktop (-OnHello $true gives its
+        # handle), so Windows keeps it above the stage while the stage stays
+        # topmost: nothing else on that desktop is seen or reached.
+        $owner = (New-Object Windows.Interop.WindowInteropHelper $primary).Handle
         if ($own) {
-            if ($OnHello) { try { & $OnHello $true } catch { } }
+            if ($OnHello) { try { $stage = & $OnHello $true; if ($stage) { $owner = [IntPtr][long]$stage } } catch { } }
             try { [void]$native::SwitchToDefault() } catch { }
         }
-        Write-VivacLockLog "Windows Hello asked (input desktop $($native::InputDesktopName()))"
+        Write-VivacLockLog "Windows Hello asked (input desktop $($native::InputDesktopName()), owner window $owner)"
         # If Windows Hello cannot be asked from here, the PIN still works on
         # Windows' own lock: hand over to it rather than leave the field as
         # the only way in.
-        try { $state.Busy = Start-HelloVerification (New-Object Windows.Interop.WindowInteropHelper $primary).Handle } catch {
+        try { $state.Busy = Start-HelloVerification $owner } catch {
             Write-VivacLockLog "Windows Hello not asked, Windows' own lock instead: $_"
             & $cede
         }
