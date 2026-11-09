@@ -14,9 +14,11 @@
   unlocks (checked with Windows, kept nowhere); the screen then switches back
   to the desktop, with everything already loaded.
 
-  Windows Hello's prompt is not offered here: it is a window of Windows' own,
-  drawn on the programs' desktop, over a greeter it does not belong to. The
-  PIN still works on Windows' own lock (Win+L, Ctrl+Alt+Del).
+  The account's password is the way in; Tab offers the PIN through Windows
+  Hello. Hello's prompt is a window of Windows' own, drawn on the programs'
+  desktop: for it the screen goes there, over the stage (black, stepping
+  back so the prompt is seen), and comes back to the greeter if the PIN is
+  not verified. The PIN also works on Windows' own lock (Ctrl+Alt+Del).
 
   The screen goes black at once: a stage of the greeter's over every
   screen of the programs' desktop, as soon as the watchdog is up and before
@@ -141,14 +143,20 @@ if ($Preview -le 0) {
 $outcome = 'failed'
 $own = [IntPtr]::Zero
 $ps = $null; $rs = $null; $stage = $null; $stageRs = $null
-$shared = [hashtable]::Synchronized(@{ StageUp = $false; StageDown = $false; CoverUp = $false; GreeterUp = $false; Done = $false; Outcome = $null; Error = $null })
+$shared = [hashtable]::Synchronized(@{ StageUp = $false; StageDown = $false; StageBack = $false; CoverUp = $false; GreeterUp = $false; Done = $false; Outcome = $null; Error = $null })
 try {
     $own = $native::Create($desktop)
-    $watch = Get-VivacGreeterWatchdogScript $PID $desktop $paths.LockMarker $log
+    # The watchdog's script goes to a file in the state folder, not to an
+    # encoded command line: a hidden PowerShell with an encoded command is
+    # what malware looks like, and whatever watches for that may freeze it.
+    $watch = Get-VivacGreeterWatchdogScript $PID $desktop $paths.LockMarker $log ([Diagnostics.Process]::GetCurrentProcess().StartTime.ToFileTimeUtc())
+    $watchFile = Join-Path $state 'greeter-watchdog.ps1'
+    Write-VivacFile -Path $watchFile -Text $watch
     $psi = New-Object Diagnostics.ProcessStartInfo 'powershell.exe'
-    $psi.Arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($watch))
+    $psi.Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$watchFile`""
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
-    [void][Diagnostics.Process]::Start($psi)
+    $watchdog = [Diagnostics.Process]::Start($psi)
+    Write-GreeterLog "sign-in: watchdog started (pid $($watchdog.Id))"
     # The stage, now: black over every screen of the programs' desktop, on
     # a thread of its own, so nothing that starts from here on is seen. The
     # programs' desktop stays the one on screen while the greeter is built:
@@ -198,7 +206,9 @@ try {
                     if (-not (Wait-VivacDesktopSwitch $Own $Desktop 20)) { Write-VivacLockLog 'the screen could not be switched to the greeter''s desktop' }
                     $Shared.GreeterUp = $true
                 }.GetNewClosure()
-                $Shared.Outcome = Show-VivacLock -Greeter -Desktop $Desktop -PasswordOnly -PreviewSeconds $Preview -OnShown $shown
+                # Windows Hello asked: the stage steps back while its prompt is up.
+                $hello = { param($On) $Shared.StageBack = [bool]$On }.GetNewClosure()
+                $Shared.Outcome = Show-VivacLock -Greeter -Desktop $Desktop -PasswordFirst -PreviewSeconds $Preview -OnShown $shown -OnHello $hello
             } catch {
                 $Shared.Error = "$_"
                 try { Hide-VivacLockCover } catch { }
@@ -217,11 +227,10 @@ try {
     $hurried = $true
     while (-not $shared.Done) {
         Start-Sleep -Milliseconds 250
-        # On screen: the stage comes down, and back to the normal priority,
-        # the rest may load now.
+        # On screen: back to the normal priority, the rest may load now. The
+        # stage stays up behind, on the programs' desktop, until the end.
         if ($hurried -and $shared.GreeterUp) {
             $hurried = $false
-            $shared.StageDown = $true
             try { [Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'Normal' } catch { }
             Write-GreeterLog "sign-in: greeter on screen (input desktop $($native::InputDesktopName()))"
         }

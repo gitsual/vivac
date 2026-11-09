@@ -113,10 +113,13 @@ function Wait-VivacDesktopSwitch([IntPtr]$Handle, [string]$Name, [int]$Seconds =
 }
 
 # The stage: black over every screen of the programs' desktop, from the
-# first moment, while the greeter is built on its desktop behind it. Runs
-# on the calling thread (an STA thread of its own, on Default) and pumps
-# its messages until Shared.StageDown, then closes its windows. -NoShow
-# only builds the windows, for the gate.
+# first moment, while the greeter is built on its desktop behind it and
+# for as long as the greeter is up. Runs on the calling thread (an STA
+# thread of its own, on Default) and pumps its messages until
+# Shared.StageDown, then closes its windows. While Shared.StageBack is set
+# (Windows Hello's prompt up on Default, asked from the greeter) the stage
+# is not topmost, so the prompt is seen over it; after, it is again.
+# -NoShow only builds the windows, for the gate.
 function Invoke-VivacGreeterStage([hashtable]$Shared, [switch]$NoShow) {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Drawing
     $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero); $scale = $g.DpiX / 96.0; $g.Dispose()
@@ -132,8 +135,14 @@ function Invoke-VivacGreeterStage([hashtable]$Shared, [switch]$NoShow) {
         })
     if ($NoShow) { return $windows }
     $Shared.StageUp = $true
+    $back = $false
     while (-not $Shared.StageDown) {
         try { [Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action] {}, [Windows.Threading.DispatcherPriority]::Background) } catch { }
+        $wanted = [bool]$Shared.StageBack
+        if ($wanted -ne $back) {
+            $back = $wanted
+            foreach ($w in $windows) { try { $w.Topmost = -not $back; if (-not $back) { $w.Activate() | Out-Null } } catch { } }
+        }
         Start-Sleep -Milliseconds 30
     }
     foreach ($w in $windows) { try { $w.Close() } catch { } }
@@ -172,7 +181,7 @@ function Enter-VivacGreeterSingleton {
 # not end by unlocking). Either one means the session is not to be left open:
 # Windows' own lock. A greeter that unlocked leaves neither, and the watchdog
 # just ends. Text, not a script block: it runs in another process.
-function Get-VivacGreeterWatchdogScript([int]$GreeterPid, [string]$Desktop, [string]$Marker, [string]$Log) {
+function Get-VivacGreeterWatchdogScript([int]$GreeterPid, [string]$Desktop, [string]$Marker, [string]$Log, [long]$GreeterStart = 0) {
     @"
 `$ErrorActionPreference = 'SilentlyContinue'
 Add-Type -TypeDefinition @'
@@ -194,7 +203,14 @@ public static class VivacGreeterWatch {
     }
 }
 '@
-while (Get-Process -Id $GreeterPid -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 300 }
+# The greeter's process, told from one that got its pid after it by its start time (0: any).
+`$greeterStart = [long]$GreeterStart
+while (`$true) {
+    `$p = Get-Process -Id $GreeterPid -ErrorAction SilentlyContinue
+    if (-not `$p) { break }
+    if (`$greeterStart -ne 0) { try { if (`$p.StartTime.ToFileTimeUtc() -ne `$greeterStart) { break } } catch { break } }
+    Start-Sleep -Milliseconds 300
+}
 `$stranded = ([VivacGreeterWatch]::InputDesktopName() -like '$Desktop*')
 `$marked = `$false
 try { `$marked = (Test-Path -LiteralPath '$Marker') -and ((Get-Content -LiteralPath '$Marker' -Raw) -match '^$GreeterPid ') } catch { }

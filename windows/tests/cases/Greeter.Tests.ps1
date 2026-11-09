@@ -51,15 +51,31 @@ try {
         Assert-True $native::OnUserDesktop()
         Assert-True (-not $native::OnDesktop((Get-VivacGreeterDesktopName))) 'the greeter''s desktop is not up'
     }
-    Case 'the sign-in greeter takes the password only: no Windows Hello, no Tab to it' {
+    Case 'the sign-in greeter asks the password first, offers the PIN by Tab, and leaves the session''s lock mode alone' {
         Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
         Set-VivacLockMode pin
-        $w = Show-VivacLock -NoShow -Greeter -PasswordOnly -Desktop (Get-VivacGreeterDesktopName)
+        $w = Show-VivacLock -NoShow -Greeter -PasswordFirst -Desktop (Get-VivacGreeterDesktopName)
         Assert-Equal 'Visible' ([string]$w.FindName('Secret').Visibility) 'the field takes the password'
-        Assert-Equal 'Collapsed' ([string]$w.FindName('ModeSwitch').Visibility) 'no way to the PIN'
+        Assert-Equal 'Visible' ([string]$w.FindName('ModeSwitch').Visibility) 'no way to the PIN'
         Assert-Equal (Get-VivacString 'lock.account_placeholder') ([string]$w.FindName('Placeholder').Text) 'the field does not say it wants the account''s password'
         $w.Close()
         Assert-Equal 'pin' (Get-VivacLockMode) 'the session''s own lock keeps its way in'
+        $only = Show-VivacLock -NoShow -Greeter -PasswordOnly -Desktop (Get-VivacGreeterDesktopName)
+        Assert-Equal 'Collapsed' ([string]$only.FindName('ModeSwitch').Visibility) 'password-only still offers the PIN'
+        $only.Close()
+        $text = Get-Content -Raw -LiteralPath (Join-Path $root 'lib\Surfaces.psm1')
+        Assert-True ($text -match '\$keepMode = \$PasswordOnly -or \$PasswordFirst') 'the greeter writes the session''s lock mode'
+        Assert-True ($text -notmatch '(?m)^\s+Set-VivacLockMode \$state\.Mode\s*$') 'a toggle writes the lock mode unguarded'
+        # Hello from a desktop of its own: the screen to Default for the prompt (the stage told first), back if not verified.
+        $helloAt = $text.IndexOf('$hello = {')
+        $onHello = $text.IndexOf('& $OnHello $true', $helloAt); $toDefault = $text.IndexOf('$native::SwitchToDefault()', $helloAt); $ask = $text.IndexOf('Start-HelloVerification', $helloAt)
+        Assert-True ($helloAt -gt 0 -and $onHello -gt $helloAt -and $toDefault -gt $onHello -and $ask -gt $toDefault) 'Hello is not asked on Default with the stage stepped back first'
+        Assert-True ($text -match "if \(\`$own\) \{ try \{ \[void\]\`$native::SwitchTo\(\`$Desktop\) \} catch \{ \} \}\s+if \(\`$OnHello\) \{ try \{ & \`$OnHello \`$false \}") 'a PIN not verified does not bring the greeter''s desktop back'
+        $greeterText = Get-Content -Raw -LiteralPath $greeter
+        Assert-True ($greeterText -match '-PasswordFirst -PreviewSeconds \$Preview -OnShown \$shown -OnHello \$hello') 'the greeter does not ask the password first with Hello by Tab'
+        Assert-True ($greeterText -notmatch '(?m)^\s+\$shared\.StageDown = \$true\s*$[\s\S]*PriorityClass = ''Normal''') 'the stage comes down before the greeter ends'
+        $module = Get-Content -Raw -LiteralPath (Join-Path $root 'lib\Greeter.psm1')
+        Assert-True ($module -match '\$w\.Topmost = -not \$back') 'the stage does not step back for Hello'
         $surfaces = Get-Module Surfaces | Select-Object -First 1
         $p = & $surfaces { Get-Palette }
         $mode = & $surfaces { T 'greeter.hint_mode' }
@@ -133,8 +149,15 @@ try {
         $again.ReleaseMutex(); $again.Dispose()
     }
     Case 'the watchdog''s script brings Default back and locks only when the greeter went without unlocking' {
-        $script = Get-VivacGreeterWatchdogScript 4242 'vivac-greeter' 'C:\state\session-locked' 'C:\state\lock.log'
+        $script = Get-VivacGreeterWatchdogScript 4242 'vivac-greeter' 'C:\state\session-locked' 'C:\state\lock.log' 123456789
         Assert-True ($script -match 'Get-Process -Id 4242') 'it does not wait for the greeter'
+        Assert-True ($script -match '\[long\]123456789') 'it does not tell the greeter''s process from one that got its pid after it'
+        Assert-True ($script -match 'StartTime\.ToFileTimeUtc\(\) -ne') 'it does not compare the start time'
+        $greeterText = Get-Content -Raw -LiteralPath $greeter
+        Assert-True ($greeterText -match 'Get-VivacGreeterWatchdogScript \$PID \$desktop \$paths\.LockMarker \$log \(\[Diagnostics\.Process\]::GetCurrentProcess\(\)\.StartTime\.ToFileTimeUtc\(\)\)') 'the greeter does not give the watchdog its start time'
+        Assert-True ($greeterText -notmatch 'EncodedCommand') 'the watchdog still runs from an encoded command line'
+        Assert-True ($greeterText -match '-File `"\$watchFile`"') 'the watchdog does not run from its file'
+        Assert-True ($greeterText -match "Join-Path \`$state 'greeter-watchdog\.ps1'") 'the watchdog''s file is not in the state folder'
         Assert-True ($script -match "InputDesktopName\(\) -like 'vivac-greeter\*'") 'it does not look for either of the greeter''s desktops'
         Assert-True ($script -match "-match '\^4242 '") 'it does not look at the greeter''s own marker'
         Assert-True ($script -match 'SwitchToDefault') 'it does not bring Default back'
