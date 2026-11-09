@@ -147,10 +147,12 @@ $script:RegistryValues = @(
     @{ Key = 'HKCU:\Control Panel\Desktop'; Name = 'AutoColorization' },
     @{ Key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'; Name = 'AppsUseLightTheme' },
     @{ Key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'; Name = 'SystemUsesLightTheme' },
+    @{ Key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'; Name = 'ColorPrevalence' },
     @{ Key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent'; Name = 'AccentColorMenu' },
     @{ Key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent'; Name = 'StartColorMenu' },
     @{ Key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent'; Name = 'AccentPalette' },
     @{ Key = 'HKCU:\Software\Microsoft\Windows\DWM'; Name = 'AccentColor' },
+    @{ Key = 'HKCU:\Software\Microsoft\Windows\DWM'; Name = 'ColorPrevalence' },
     @{ Key = 'HKCU:\Software\Microsoft\Windows\DWM'; Name = 'ColorizationColor' },
     @{ Key = 'HKCU:\Software\Microsoft\Windows\DWM'; Name = 'ColorizationAfterglow' }
 )
@@ -158,12 +160,21 @@ $script:RegistryValues = @(
 function Get-OriginalSnapshotPath { Join-Path (Get-VivacPaths).State 'windows-original.json' }
 
 # Saved once, before the first change, and never overwritten: the second
-# deploy must not record the first deploy's values as "original".
+# deploy must not record the first deploy's values as "original". A value
+# vivac starts to manage later is added to an existing snapshot the first
+# time, with what is found then: vivac has not touched it yet.
 function Save-VivacWindowsOriginal {
     $path = Get-OriginalSnapshotPath
-    if (Test-Path -LiteralPath $path) { return }
     $entries = @()
+    $known = @()
+    if (Test-Path -LiteralPath $path) {
+        $entries = @(Get-Content -Raw -LiteralPath $path | ConvertFrom-Json)
+        $known = @($entries | ForEach-Object { $_.Key + '|' + $_.Name })
+    }
+    $added = 0
     foreach ($v in $script:RegistryValues) {
+        if ($known -contains ($v.Key + '|' + $v.Name)) { continue }
+        $added++
         $item = Get-ItemProperty -LiteralPath $v.Key -Name $v.Name -ErrorAction SilentlyContinue
         $present = $null -ne $item
         $value = $null; $kind = ''
@@ -175,6 +186,7 @@ function Save-VivacWindowsOriginal {
         }
         $entries += [pscustomobject]@{ Key = $v.Key; Name = $v.Name; Present = $present; Kind = $kind; Value = $value }
     }
+    if (-not $added) { return }
     Write-VivacFile -Path $path -Text (($entries | ConvertTo-Json -Depth 4) + "`n")
 }
 
@@ -316,7 +328,7 @@ function Set-VivacDesktop($Theme, [switch]$DryRun) {
     $report = @()
     $png = Get-VivacWallpaper -Theme $Theme -DryRun:$DryRun
     $report += "wallpaper: $png"
-    $report += "accent: #$($Theme.Tokens['COLOR_ACCENT']) (dark mode on)"
+    $report += "accent: #$($Theme.Tokens['COLOR_ACCENT']) on title bars, Start and the taskbar (dark mode on)"
     $managed = Test-VivacLockScreenManaged
     if ($managed) { $report += "lock screen: the same wallpaper" }
     if ($DryRun) { return $report }
@@ -342,6 +354,11 @@ function Set-VivacDesktop($Theme, [switch]$DryRun) {
     if (-not (Test-Path $personalize)) { New-Item -Path $personalize -Force | Out-Null }
     Set-ItemProperty -LiteralPath $personalize -Name AppsUseLightTheme -Value 0 -Type DWord
     Set-ItemProperty -LiteralPath $personalize -Name SystemUsesLightTheme -Value 0 -Type DWord
+    # The accent shown on Start, the taskbar and the notification centre, and
+    # on the title bars and borders of the windows Windows itself frames: the
+    # two switches of the Colours page, which an unactivated Windows keeps
+    # shut and which the palette below was always computed for.
+    Set-ItemProperty -LiteralPath $personalize -Name ColorPrevalence -Value 1 -Type DWord
 
     $palette = Get-AccentPalette $Theme
     $accentKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent'
@@ -351,6 +368,7 @@ function Set-VivacDesktop($Theme, [switch]$DryRun) {
     Set-ItemProperty -LiteralPath $accentKey -Name StartColorMenu -Value (ConvertTo-Abgr $palette.Shades[5]) -Type DWord
     $dwm = 'HKCU:\Software\Microsoft\Windows\DWM'
     Set-ItemProperty -LiteralPath $dwm -Name AccentColor -Value (ConvertTo-Abgr $palette.Shades[3]) -Type DWord
+    Set-ItemProperty -LiteralPath $dwm -Name ColorPrevalence -Value 1 -Type DWord
     Set-ItemProperty -LiteralPath $dwm -Name ColorizationColor -Value (ConvertTo-Argb $palette.Shades[3]) -Type DWord
     Set-ItemProperty -LiteralPath $dwm -Name ColorizationAfterglow -Value (ConvertTo-Argb $palette.Shades[3]) -Type DWord
     Send-VivacSettingChange

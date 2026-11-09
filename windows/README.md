@@ -271,7 +271,8 @@ Templates use the source's syntax: `@COLOR_BG@`, `@COLOR_BG:lower@`, `@COLOR_BG:
 shades `:dark`, `:darker`, `:dim`. The per-machine templates under `render/` also see the settings
 (`@SET_MOD@`), the hardware facts, and guard lines such as `@?has_battery=yes@`.
 
-What Windows draws is coloured too, where Windows lets it be: the accent colour and dark mode, the lock and
+What Windows draws is coloured too, where Windows lets it be: the accent colour (on title bars, Start and
+the taskbar) and dark mode, the lock and
 sign-in screen wallpaper, and — with `apply-system.ps1 -Boot` — GRUB's menu and the boot logo, following
 every theme switch. vivac's own windows read the palette the moment they open, so a switch reaches the
 next one without a restart.
