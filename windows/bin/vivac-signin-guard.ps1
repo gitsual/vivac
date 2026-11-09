@@ -11,6 +11,11 @@
   Windows' own lock (LockWorkStation), which unlocks with the PIN, Hello or
   the password as always. The token is taken away either way.
 
+  Optional, and not what -AutoLogin installs: the greeter itself
+  (bin\vivac-greeter.ps1, on a desktop of its own) is the lock at sign-in
+  and takes the token. Register this instead for Windows' own lock screen
+  at sign-in; the greeter then stands down.
+
   It leaves the host (bin\vivac-daemon.ps1 -LockAtStart) a marker saying
   what it did, so the host does not add its greeter on top. Kept small and
   free of vivac's other modules: the shorter its start, the shorter the

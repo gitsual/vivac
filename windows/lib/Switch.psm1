@@ -5,8 +5,8 @@
 # sign-in at most. It carries a time and nothing else: what it opens is
 # decided by the side that reads it.
 #
-# Linux leaves it in %LOCALAPPDATA%\vivac\switch-arrival, where the host
-# (bin\vivac-daemon.ps1 -LockAtStart) takes it in place of its greeter;
+# Linux leaves it in %LOCALAPPDATA%\vivac\switch-arrival, where the sign-in
+# guard, or the greeter (bin\vivac-greeter.ps1), takes it in place of a lock;
 # Restart in Linux (bin\vivac-reboot-other.ps1) leaves it on the EFI
 # partition, at \EFI\vivac\switch-to-linux. Files only: no network, no
 # firmware, so the elevated task's protected copy can carry it as it is.
@@ -73,4 +73,17 @@ function Use-VivacSigninMarker([string]$Path, [long]$Now = (Get-VivacUnixTime)) 
     $kind
 }
 
-Export-ModuleMember -Function Get-VivacUnixTime, Get-VivacSwitchToken, Test-VivacSwitchToken, Write-VivacSwitchToken, Use-VivacSwitchArrival, Write-VivacSigninMarker, Use-VivacSigninMarker
+# What this sign-in already is, before the greeter adds anything: 'switch' (a
+# switch from Linux brought it: the desktop opens, once), 'locked' (the guard
+# put Windows' own lock up, a second lock would only ask twice) or $null
+# (nothing settled: the greeter is wanted). The guard's marker speaks first;
+# with the guard installed (signin-guard.installed) the token is the guard's
+# alone, without it the token is taken here, in the guard's place.
+function Get-VivacSigninSettlement([string]$State) {
+    $settled = Use-VivacSigninMarker (Join-Path $State 'signin-guard')
+    $guarded = Test-Path -LiteralPath (Join-Path $State 'signin-guard.installed')
+    if (-not $settled -and -not $guarded -and (Use-VivacSwitchArrival (Join-Path $State 'switch-arrival'))) { $settled = 'switch' }
+    $settled
+}
+
+Export-ModuleMember -Function Get-VivacUnixTime, Get-VivacSwitchToken, Test-VivacSwitchToken, Write-VivacSwitchToken, Use-VivacSwitchArrival, Write-VivacSigninMarker, Use-VivacSigninMarker, Get-VivacSigninSettlement

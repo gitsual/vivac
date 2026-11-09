@@ -1,0 +1,143 @@
+# The sign-in greeter (bin\vivac-greeter.ps1, lib\Greeter.psm1): alone on a
+# desktop of its own, the password the one way in, and never a screen left
+# on an empty desktop. The desktop switch itself is only tried for real with
+# `bin\vivac-greeter.ps1 -Preview 5`: a gate must not take the screen.
+Import-Module (Join-Path $PSScriptRoot '..\Harness.psm1') -Force
+$root = Get-RepoRoot
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
+
+$dir = New-TempProfile
+try {
+    Import-Module (Join-Path $root 'lib\Vivac.psm1') -Force
+    Import-Module (Join-Path $root 'lib\Switch.psm1') -Force
+    Import-Module (Join-Path $root 'lib\Greeter.psm1') -Force
+    $greeter = Join-Path $root 'bin\vivac-greeter.ps1'
+    $state = (Get-VivacPaths).State
+    $log = Join-Path $state 'lock.log'
+    $locks = Join-Path $dir 'locks.txt'
+    $fakeLock = Join-Path $dir 'fake-lock.cmd'
+    Set-Content -LiteralPath $fakeLock -Value "@echo locked>>`"$locks`"" -Encoding ASCII
+    function Invoke-Greeter {
+        $env:VIVAC_GREETER_LOCK = $fakeLock
+        try { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $greeter | Out-Null } finally { Remove-Item Env:VIVAC_GREETER_LOCK -ErrorAction SilentlyContinue }
+    }
+
+    Case 'the gate runs on the programs'' desktop, and the native names it' {
+        $n = Get-VivacDesktopNative
+        Assert-Equal 'Default' $n::InputDesktopName() 'the input desktop'
+        Assert-Equal 'Default' $n::ThreadDesktopName() 'this thread''s desktop'
+    }
+    Case 'a desktop of its own is made, and a fresh thread binds to it; the first thread cannot' {
+        $n = Get-VivacDesktopNative
+        $h = $n::Create('vivac-greeter-gate')
+        try {
+            Assert-True ($h -ne [IntPtr]::Zero) 'no desktop'
+            # This thread already owns windows (ERROR_BUSY): why the greeter builds on a runspace of its own.
+            Assert-Throws { $n::Bind($h) } 'SetThreadDesktop'
+            $rs = [RunspaceFactory]::CreateRunspace(); $rs.ApartmentState = 'STA'; $rs.ThreadOptions = 'UseNewThread'; $rs.Open()
+            $ps = [PowerShell]::Create(); $ps.Runspace = $rs
+            [void]$ps.AddScript({ param($H) [VivacDesktopNative]::Bind($H); [VivacDesktopNative]::ThreadDesktopName() }).AddArgument($h)
+            $name = [string]($ps.Invoke() | Select-Object -First 1)
+            $ps.Dispose(); $rs.Close()
+            Assert-Equal 'vivac-greeter-gate' $name 'the runspace thread is not on the new desktop'
+            Assert-Equal 'Default' $n::InputDesktopName() 'binding a thread switches nothing on screen'
+        } finally { $n::Close($h) }
+    }
+    Case 'the lock knows which desktop has the keyboard' {
+        Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+        $native = Get-LockNative
+        Assert-Equal 'Default' $native::InputDesktopName()
+        Assert-True $native::OnDesktop('Default')
+        Assert-True $native::OnUserDesktop()
+        Assert-True (-not $native::OnDesktop((Get-VivacGreeterDesktopName))) 'the greeter''s desktop is not up'
+    }
+    Case 'the sign-in greeter takes the password only: no Windows Hello, no Tab to it' {
+        Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+        Set-VivacLockMode pin
+        $w = Show-VivacLock -NoShow -Greeter -PasswordOnly -Desktop (Get-VivacGreeterDesktopName)
+        Assert-Equal 'Visible' ([string]$w.FindName('Secret').Visibility) 'the field takes the password'
+        Assert-Equal 'Collapsed' ([string]$w.FindName('ModeSwitch').Visibility) 'no way to the PIN'
+        $w.Close()
+        Assert-Equal 'pin' (Get-VivacLockMode) 'the session''s own lock keeps its way in'
+        $surfaces = Get-Module Surfaces | Select-Object -First 1
+        $p = & $surfaces { Get-Palette }
+        $mode = & $surfaces { T 'greeter.hint_mode' }
+        $plain = & $surfaces { param($p) Get-GreeterXaml $p } $p
+        $only = & $surfaces { param($p) Get-GreeterXaml $p $true } $p
+        Assert-True ($plain -match [regex]::Escape($mode)) 'the greeter with the PIN says Tab'
+        Assert-True ($only -notmatch [regex]::Escape($mode)) 'the password-only greeter still says Tab'
+    }
+    Case 'the fallback to Windows'' lock is the desktop-aware one' {
+        Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+        $surfaces = Get-Module Surfaces | Select-Object -First 1
+        Assert-True ((& $surfaces { $script:LockFallback }).ToString() -match 'Invoke-VivacLockFallback') 'the cover''s grace would lock without leaving the greeter''s desktop'
+        $text = Get-Content -Raw -LiteralPath (Join-Path $root 'lib\Surfaces.psm1')
+        Assert-True ($text -notmatch '\[void\]\$native::LockWorkStation\(\); & \$finish') 'a hand-over to Windows'' lock that does not leave the desktop first'
+    }
+    Case 'the watchdog''s script brings Default back and locks only when the greeter went without unlocking' {
+        $script = Get-VivacGreeterWatchdogScript 4242 'vivac-greeter' 'C:\state\session-locked' 'C:\state\lock.log'
+        Assert-True ($script -match 'Get-Process -Id 4242') 'it does not wait for the greeter'
+        Assert-True ($script -match "InputDesktopName\(\) -eq 'vivac-greeter'") 'it does not look at the desktop'
+        Assert-True ($script -match "-match '\^4242 '") 'it does not look at the greeter''s own marker'
+        Assert-True ($script -match 'SwitchToDefault') 'it does not bring Default back'
+        Assert-True ($script -match 'LockWorkStation') 'it does not lock'
+        $ok = $false
+        try { [void][ScriptBlock]::Create($script); $ok = $true } catch { }
+        Assert-True $ok 'the watchdog script does not parse'
+    }
+    Case 'no-greeter skips the greeter and locks with Windows at once' {
+        New-Item -ItemType Directory -Force -Path $state | Out-Null
+        Set-Content -LiteralPath (Join-Path $state 'no-greeter') -Value '' -Encoding ASCII
+        Remove-Item -LiteralPath $locks -ErrorAction SilentlyContinue
+        Invoke-Greeter
+        Assert-True (Test-Path -LiteralPath $locks) 'Windows was not locked'
+        Assert-True ((Get-Content -Raw -LiteralPath $log) -match 'no-greeter is set') 'the log does not say why'
+        Remove-Item -LiteralPath (Join-Path $state 'no-greeter') -Force
+    }
+    Case 'a sign-in the guard settled gets no greeter and no second lock' {
+        Remove-Item -LiteralPath $locks -ErrorAction SilentlyContinue
+        Write-VivacSigninMarker (Join-Path $state 'signin-guard') 'locked'
+        Invoke-Greeter
+        Assert-True (-not (Test-Path -LiteralPath $locks)) 'locked twice'
+        Assert-True ((Get-Content -Raw -LiteralPath $log) -match 'settled by the guard \(locked\)') 'the log does not say the guard settled it'
+        Assert-True (-not (Test-Path -LiteralPath (Join-Path $state 'signin-guard'))) 'the guard''s marker was left behind'
+        Assert-True ($null -eq (Get-VivacLockMarker)) 'a lock marker was left behind'
+    }
+    Case 'the task runs the greeter at sign-in, normal level, high priority' {
+        $out = [string](& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $greeter -Register -DryRun)
+        Assert-True ($out -match 'lock-at-signin') 'not the sign-in task'
+        Assert-True ($out -match 'vivac-greeter\.ps1') 'not this script'
+        Assert-True ($out -match 'normal level, priority 1') 'not high priority at the normal level'
+        Assert-True ($out -notmatch 'LockAtStart') 'still the host with -LockAtStart'
+        $apply = Get-Content -Raw -LiteralPath (Join-Path $root 'scripts\apply-system.ps1')
+        Assert-True ($apply -match "vivac-greeter\.ps1'\) -Register") '-AutoLogin does not register the greeter'
+        Assert-True ($apply -notmatch '-LockAtStart"') '-AutoLogin still registers the host with -LockAtStart'
+    }
+    Case 'a host asked to hold the sign-in hands it to the greeter''s own process, and holds it itself only when it cannot' {
+        $line = Start-VivacSigninGreeter -NoStart
+        Assert-True ($line -match '^conhost\.exe --headless powershell\.exe .* -File "[^"]*\\bin\\vivac-greeter\.ps1"$') "not the greeter's command line: $line"
+        $daemon = Get-Content -Raw -LiteralPath (Join-Path $root 'bin\vivac-daemon.ps1')
+        $hand = $daemon.IndexOf('Start-VivacSigninGreeter')
+        $settle = $daemon.IndexOf('= Get-VivacSigninSettlement ')
+        $cover = $daemon.IndexOf('Show-VivacLockCover')
+        Assert-True ($hand -gt 0 -and $hand -lt $settle -and $settle -lt $cover) 'the host does not hand over before holding the sign-in itself'
+        Assert-True ($daemon -match '\[void\]\(Start-VivacSigninGreeter\); \$LockAtStart = \$false') 'a started greeter does not stand the host''s own lock down'
+    }
+    Case 'a host started without the lock leaves a live marker of another process alone' {
+        $sleeper = Start-Process powershell.exe -ArgumentList '-NoProfile', '-Command', 'Start-Sleep 30' -WindowStyle Hidden -PassThru
+        try {
+            Start-Sleep -Milliseconds 500
+            $start = $sleeper.StartTime.ToFileTimeUtc()
+            Write-VivacFile -Path (Get-VivacPaths).LockMarker -Text "$($sleeper.Id) start $start`n"
+            Assert-True ($null -ne (Get-VivacLockMarker)) 'the marker of a live process reads as stale'
+            Reset-VivacLockMarker
+            Assert-True (Test-Path -LiteralPath (Get-VivacPaths).LockMarker) 'the greeter''s marker was taken from under it'
+        } finally { Stop-Process -Id $sleeper.Id -Force -ErrorAction SilentlyContinue }
+        Start-Sleep -Milliseconds 300
+        Reset-VivacLockMarker
+        Assert-True (-not (Test-Path -LiteralPath (Get-VivacPaths).LockMarker)) 'the marker of a dead process stayed'
+    }
+} finally {
+    Remove-TempProfile $dir
+}
+Complete-Cases

@@ -688,12 +688,17 @@ function Clear-VivacLockMarker {
     } catch { Write-VivacSharedLog "could not clear the lock marker: $($_.Exception.Message)" }
 }
 
-# A host started without -LockAtStart holds no lock: whatever marker is there
-# is left over (power loss in the greeter, a killed host) and goes, whoever
-# wrote it. Never throws.
+# A host started without -LockAtStart holds no lock: a marker whose process is
+# gone is left over (power loss in the greeter, a killed host) and goes,
+# whoever wrote it. One held by a live process stays: it is the sign-in
+# greeter's (bin\vivac-greeter.ps1), up on its own desktop while this host
+# starts behind it. Never throws.
 function Reset-VivacLockMarker {
-    try { Remove-Item -LiteralPath (Get-VivacPaths).LockMarker -Force -ErrorAction SilentlyContinue }
-    catch { Write-VivacSharedLog "could not reset the lock marker: $($_.Exception.Message)" }
+    try {
+        $m = Get-VivacLockMarker
+        if ($m -and $m.Pid -ne $PID) { return }
+        Remove-Item -LiteralPath (Get-VivacPaths).LockMarker -Force -ErrorAction SilentlyContinue
+    } catch { Write-VivacSharedLog "could not reset the lock marker: $($_.Exception.Message)" }
 }
 
 # Run Body (the lock) with the marker held: marked here unless a marker is

@@ -54,13 +54,16 @@
                 the EFI partition shared with Arch, carried there by a SYSTEM
                 task (scripts\boot-sync.ps1) that this user may start.
                 Secure Boot must be off
-    -AutoLogin  Windows signs in by itself and vivac's lock is the first thing
-                on screen (its host starts at sign-in with -LockAtStart). The
-                password is typed by you into Windows' credential prompt and kept
-                as an encrypted LSA secret, never in plain text
+    -AutoLogin  Windows signs in by itself and vivac's greeter is the one
+                thing on screen: bin\vivac-greeter.ps1, at sign-in, on a
+                desktop of its own (lib\Greeter.psm1), so Explorer, the bar
+                and every program load unseen behind it. The account's
+                password unlocks; the PIN stays for Windows' own lock. The
+                password is typed by you into Windows' credential prompt and
+                kept as an encrypted LSA secret, never in plain text
                 (scripts\set-autologon.ps1).
                 Weaker against someone with the machine in their hands: for
-                the seconds before the host starts, the session is open.
+                the seconds before the greeter starts, the session is open.
 
 .PARAMETER DryRun
   Say what each chosen profile would change, and change nothing.
@@ -244,20 +247,18 @@ if ($AutoLogin) {
     if (-not $DryRun) {
         if (-not (Test-Path -LiteralPath $pl)) { New-Item -Path $pl -Force | Out-Null }
         Set-ItemProperty -LiteralPath $pl -Name DevicePasswordLessBuildVersion -Value 0 -Type DWord
-        # The host, at sign-in, before anything else of vivac: the screens
-        # are covered and the lock opens. At the normal level: an elevated
-        # task must not run a file the user can write, and everything opened
-        # from vivac's menu would inherit the elevation (the key guard,
-        # bin/vivac-keyguard.ps1, covers keys meant for elevated windows).
-        $daemon = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-daemon.ps1'
-        $action = New-ScheduledTaskAction -Execute 'conhost.exe' -Argument "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$daemon`" -LockAtStart"
-        $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-        $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -RunLevel Limited -LogonType Interactive
-        $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -Priority 4
-        Register-ScheduledTask -TaskPath '\vivac\' -TaskName 'lock-at-signin' -Action $action -Trigger $trigger -Principal $principal -Settings $set -Force | Out-Null
-        # Closed by default: Windows' own lock at once, unless a switch from
-        # Linux brought this sign-in (bin\vivac-signin-guard.ps1).
-        & (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-signin-guard.ps1') -Register | Out-Null
+        # The greeter, at sign-in, on a desktop of its own, before anything
+        # else of vivac is seen (bin\vivac-greeter.ps1 -Register). At the
+        # normal level: an elevated task must not run a file the user can
+        # write (the key guard, bin/vivac-keyguard.ps1, covers keys meant
+        # for elevated windows).
+        & (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-greeter.ps1') -Register | Out-Null
+        # The greeter is the lock at sign-in, and takes a switch token itself.
+        # The sign-in guard (bin\vivac-signin-guard.ps1), which put Windows'
+        # own lock up the moment the session opened and stood the greeter
+        # down, is for whoever wants Windows' lock screen instead: registered
+        # by hand, and taken away here so the greeter is seen.
+        & (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-signin-guard.ps1') -Unregister | Out-Null
         # The password is yours to type, into Windows' own credential prompt,
         # in a window of its own; scripts\set-autologon.ps1 explains the rest.
         Start-Process powershell.exe -Verb RunAs -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', "`"$(Join-Path $PSScriptRoot 'set-autologon.ps1')`""

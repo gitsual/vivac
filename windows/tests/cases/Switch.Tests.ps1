@@ -38,9 +38,28 @@ Case 'a token written by Linux (LF, no BOM) is read the same' {
     [IO.File]::WriteAllBytes($path, [Text.Encoding]::ASCII.GetBytes("vivac-switch 1 $now`n"))
     Assert-True (Use-VivacSwitchArrival $path $now)
 }
-Case 'the host skips its greeter only on a fresh arrival' {
-    $daemon = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) 'bin\vivac-daemon.ps1')
-    Assert-True ($daemon -match 'Use-VivacSwitchArrival') 'the host never looks for an arrival'
+Case 'the host and the greeter skip their lock only on a settled sign-in or a fresh arrival' {
+    foreach ($f in 'bin\vivac-daemon.ps1', 'bin\vivac-greeter.ps1') {
+        $text = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) $f)
+        Assert-True ($text -match 'Get-VivacSigninSettlement') "$f never asks what the sign-in already is"
+    }
+    $lib = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) 'lib\Switch.psm1')
+    Assert-True ($lib -match 'Use-VivacSwitchArrival \(Join-Path \$State') 'the settlement never looks for an arrival'
+}
+$settle = Join-Path $dir 'settle'
+Case 'a sign-in is settled by the guard first, then by a token the guard did not claim' {
+    New-Item -ItemType Directory -Force -Path $settle | Out-Null
+    Assert-Equal $null (Get-VivacSigninSettlement $settle) 'nothing there: nothing settled'
+    Write-VivacSigninMarker (Join-Path $settle 'signin-guard') 'locked'
+    Assert-Equal 'locked' (Get-VivacSigninSettlement $settle) 'the guard locked'
+    Assert-Equal $null (Get-VivacSigninSettlement $settle) 'the marker is read once'
+    Write-VivacSwitchToken (Join-Path $settle 'switch-arrival')
+    Assert-Equal 'switch' (Get-VivacSigninSettlement $settle) 'a fresh token, no guard: taken here'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $settle 'switch-arrival'))) 'the token was left behind'
+    Set-Content -LiteralPath (Join-Path $settle 'signin-guard.installed') -Value 'x'
+    Write-VivacSwitchToken (Join-Path $settle 'switch-arrival')
+    Assert-Equal $null (Get-VivacSigninSettlement $settle) 'with the guard installed the token is not ours'
+    Assert-True (Test-Path -LiteralPath (Join-Path $settle 'switch-arrival')) 'and it is left for the guard'
 }
 Case 'Restart in Linux leaves the token on the EFI partition before BootNext' {
     $tool = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) 'bin\vivac-reboot-other.ps1')
@@ -98,16 +117,18 @@ Case 'a stale token still locks' {
     Assert-True (Test-Path -LiteralPath $locks) 'a day-old token kept Windows open'
 }
 Case 'with the guard installed, the token is the guard''s alone' {
-    $daemon = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) 'bin\vivac-daemon.ps1')
-    Assert-True ($daemon -match "-not \`$guarded -and \(Use-VivacSwitchArrival") 'the host can take the token from under the guard'
+    $lib = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) 'lib\Switch.psm1')
+    Assert-True ($lib -match "-not \`$guarded -and \(Use-VivacSwitchArrival") 'the settlement can take the token from under the guard'
     $g = Get-Content -Raw -LiteralPath $guard
     Assert-True ($g -match 'signin-guard.installed') 'registering the guard does not tell the host'
 }
-Case 'the host reads the guard before its own greeter' {
-    $daemon = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) 'bin\vivac-daemon.ps1')
-    $read = $daemon.IndexOf('Use-VivacSigninMarker')
-    $cover = $daemon.IndexOf('Show-VivacLockCover }')
-    Assert-True ($read -gt 0 -and $read -lt $cover) 'the host decides on its greeter before reading the guard'
+Case 'the host and the greeter read the guard before their own cover' {
+    foreach ($f in 'bin\vivac-daemon.ps1', 'bin\vivac-greeter.ps1') {
+        $text = Get-Content -Raw -LiteralPath (Join-Path (Get-RepoRoot) $f)
+        $read = $text.IndexOf('= Get-VivacSigninSettlement ')
+        $cover = $text.IndexOf('Show-VivacLockCover')
+        Assert-True ($read -gt 0 -and $read -lt $cover) "$f decides on its greeter before reading the guard"
+    }
 }
 
 Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue

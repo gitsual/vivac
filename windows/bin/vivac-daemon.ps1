@@ -21,9 +21,11 @@
 
   Pressing a surface's key while it is open closes it, as rofi does.
 #>
-# -LockAtStart: started at sign-in after an automatic Windows sign-in; the
-# screens are covered at once and vivac's greeter (the lock, in the source's
-# ReGreet frame) opens as soon as it can.
+# -LockAtStart: the host itself covers the screens at once and opens vivac's
+# greeter (the lock, in the source's ReGreet frame) as soon as it can. The
+# sign-in task (\vivac\lock-at-signin) no longer runs the host this way: it
+# runs bin\vivac-greeter.ps1, the greeter alone on a desktop of its own, and
+# the host starts with GlazeWM behind it. Kept for a host asked for it.
 param([switch]$LockAtStart)
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'Stop'
@@ -36,6 +38,7 @@ Import-Module (Join-Path $root 'lib\Updates.psm1') -Force
 Import-Module (Join-Path $root 'lib\Toasts.psm1') -Force
 Import-Module (Join-Path $root 'lib\Bridge.psm1') -Force
 Import-Module (Join-Path $root 'lib\Switch.psm1') -Force
+Import-Module (Join-Path $root 'lib\Greeter.psm1') -Force
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
 $created = $false
@@ -58,6 +61,14 @@ function Write-DaemonLog([string]$Text) {
 # A failure here must not keep the cover from going up: the pid file only
 # helps deploy find this host.
 try { Write-VivacFile -Path $pidFile -Text "$PID`n" } catch { Write-DaemonLog "could not write the pid file: $_" }
+# Asked to hold the sign-in, this host hands it to the greeter's own process
+# (bin\vivac-greeter.ps1: its own desktop, watchdog and grace) and goes on
+# as the host; the greeter decides for itself whether the sign-in is already
+# settled. Only when that process cannot be started does the host hold the
+# sign-in the old way, below.
+if ($LockAtStart) {
+    try { [void](Start-VivacSigninGreeter); $LockAtStart = $false } catch { Write-DaemonLog "the greeter could not be started, the host holds the sign-in: $_" }
+}
 # The sign-in may already be settled (lib\Switch.psm1): the sign-in guard,
 # first at sign-in, either took a switch token (this sign-in opens straight
 # onto the desktop, once) or locked with Windows' own lock, and a second lock
@@ -65,10 +76,7 @@ try { Write-VivacFile -Path $pidFile -Text "$PID`n" } catch { Write-DaemonLog "c
 # taken here. Otherwise, the greeter as always.
 if ($LockAtStart) {
     try {
-        $state = (Get-VivacPaths).State
-        $settled = Use-VivacSigninMarker (Join-Path $state 'signin-guard')
-        $guarded = Test-Path -LiteralPath (Join-Path $state 'signin-guard.installed')
-        if (-not $settled -and -not $guarded -and (Use-VivacSwitchArrival (Join-Path $state 'switch-arrival'))) { $settled = 'switch' }
+        $settled = Get-VivacSigninSettlement (Get-VivacPaths).State
         if ($settled) {
             $LockAtStart = $false
             Write-DaemonLog "sign-in settled by the guard ($settled): no greeter this time"

@@ -84,9 +84,10 @@ decided by the side that reads it. Both systems keep the clock in UTC.
 - **Linux to Windows**: before BootNext, the token goes into
   `<Windows>/Users/*/AppData/Local/vivac/switch-arrival` of every profile with
   vivac, on each mounted Windows partition. Windows already signs in by itself
-  (`apply-system.ps1 -AutoLogin`); at sign-in the host takes the token and
-  skips its greeter that time. No Windows partition mounted: the restart goes
-  on and Windows greets as usual.
+  (`apply-system.ps1 -AutoLogin`); at sign-in the guard, or the greeter
+  (`bin\vivac-greeter.ps1`) in its absence, takes the token and skips the
+  lock that time. No Windows partition mounted: the restart goes on and
+  Windows greets as usual.
 - **Windows to Linux**: before BootNext, the elevated task mounts the EFI
   partition for a moment and leaves the token at `\EFI\vivac\switch-to-linux`.
   On Linux, `apply-system.sh --switch` installs `vivac-switch-arrive.service`,
