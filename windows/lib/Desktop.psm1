@@ -168,7 +168,9 @@ function Save-VivacWindowsOriginal {
     $entries = @()
     $known = @()
     if (Test-Path -LiteralPath $path) {
-        $entries = @(Get-Content -Raw -LiteralPath $path | ConvertFrom-Json)
+        # ConvertFrom-Json hands a JSON array over as one object in Windows
+        # PowerShell; ForEach-Object spreads it into the entries themselves.
+        $entries = @(Get-Content -Raw -LiteralPath $path | ConvertFrom-Json | ForEach-Object { $_ })
         $known = @($entries | ForEach-Object { $_.Key + '|' + $_.Name })
     }
     $added = 0
@@ -181,7 +183,7 @@ function Save-VivacWindowsOriginal {
         if ($present) {
             $raw = $item.($v.Name)
             if ($raw -is [byte[]]) { $kind = 'Binary'; $value = [Convert]::ToBase64String($raw) }
-            elseif ($raw -is [int] -or $raw -is [long]) { $kind = 'DWord'; $value = [int64]$raw }
+            elseif ($raw -is [int] -or $raw -is [uint32] -or $raw -is [long]) { $kind = 'DWord'; $value = [int64]$raw }
             else { $kind = 'String'; $value = [string]$raw }
         }
         $entries += [pscustomobject]@{ Key = $v.Key; Name = $v.Name; Present = $present; Kind = $kind; Value = $value }
@@ -201,7 +203,7 @@ function Restore-VivacWindowsOriginal {
         if (-not (Test-Path -LiteralPath $e.Key)) { New-Item -Path $e.Key -Force | Out-Null }
         switch ($e.Kind) {
             'Binary' { Set-ItemProperty -LiteralPath $e.Key -Name $e.Name -Value ([Convert]::FromBase64String($e.Value)) -Type Binary }
-            'DWord'  { Set-ItemProperty -LiteralPath $e.Key -Name $e.Name -Value ([int]$e.Value) -Type DWord }
+            'DWord'  { Set-ItemProperty -LiteralPath $e.Key -Name $e.Name -Value ([BitConverter]::ToInt32([BitConverter]::GetBytes([uint32]$e.Value), 0)) -Type DWord }
             default  { Set-ItemProperty -LiteralPath $e.Key -Name $e.Name -Value ([string]$e.Value) -Type String }
         }
     }
