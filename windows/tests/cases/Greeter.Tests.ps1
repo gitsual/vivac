@@ -51,10 +51,14 @@ try {
         Assert-True $native::OnUserDesktop()
         Assert-True (-not $native::OnDesktop((Get-VivacGreeterDesktopName))) 'the greeter''s desktop is not up'
     }
-    Case 'the sign-in greeter asks the password first, offers the PIN by Tab, and leaves the session''s lock mode alone' {
+    Case 'the sign-in greeter asks first what the session''s lock asks, offers the other by Tab, and leaves the lock mode alone' {
         Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
         Set-VivacLockMode pin
-        $w = Show-VivacLock -NoShow -Greeter -PasswordFirst -Desktop (Get-VivacGreeterDesktopName)
+        $pinFirst = Show-VivacLock -NoShow -Greeter -FirstMode pin -Desktop (Get-VivacGreeterDesktopName)
+        Assert-Equal 'Collapsed' ([string]$pinFirst.FindName('Secret').Visibility) 'the PIN first still shows the password field'
+        Assert-Equal (Get-VivacString 'lock.pin_placeholder') ([string]$pinFirst.FindName('Placeholder').Text) 'the PIN first does not say so'
+        $pinFirst.Close()
+        $w = Show-VivacLock -NoShow -Greeter -FirstMode password -Desktop (Get-VivacGreeterDesktopName)
         Assert-Equal 'Visible' ([string]$w.FindName('Secret').Visibility) 'the field takes the password'
         Assert-Equal 'Visible' ([string]$w.FindName('ModeSwitch').Visibility) 'no way to the PIN'
         Assert-Equal (Get-VivacString 'lock.account_placeholder') ([string]$w.FindName('Placeholder').Text) 'the field does not say it wants the account''s password'
@@ -64,7 +68,7 @@ try {
         Assert-Equal 'Collapsed' ([string]$only.FindName('ModeSwitch').Visibility) 'password-only still offers the PIN'
         $only.Close()
         $text = Get-Content -Raw -LiteralPath (Join-Path $root 'lib\Surfaces.psm1')
-        Assert-True ($text -match '\$keepMode = \$PasswordOnly -or \$PasswordFirst') 'the greeter writes the session''s lock mode'
+        Assert-True ($text -match '\$keepMode = \$PasswordOnly -or \[bool\]\$FirstMode') 'the greeter writes the session''s lock mode'
         Assert-True ($text -notmatch '(?m)^\s+Set-VivacLockMode \$state\.Mode\s*$') 'a toggle writes the lock mode unguarded'
         # Hello from a desktop of its own: the screen to Default for the prompt (the stage told first), back if not verified.
         $helloAt = $text.IndexOf('$hello = {')
@@ -72,7 +76,7 @@ try {
         Assert-True ($helloAt -gt 0 -and $onHello -gt $helloAt -and $toDefault -gt $onHello -and $ask -gt $toDefault) 'Hello is not asked on Default with the stage stepped back first'
         Assert-True ($text -match "if \(\`$own\) \{ try \{ \[void\]\`$native::SwitchTo\(\`$Desktop\) \} catch \{ \} \}\s+if \(\`$OnHello\) \{ try \{ & \`$OnHello \`$false \}") 'a PIN not verified does not bring the greeter''s desktop back'
         $greeterText = Get-Content -Raw -LiteralPath $greeter
-        Assert-True ($greeterText -match '-PasswordFirst -PreviewSeconds \$Preview -OnShown \$shown -OnHello \$hello') 'the greeter does not ask the password first with Hello by Tab'
+        Assert-True ($greeterText -match '-FirstMode \(Get-VivacLockMode\) -PreviewSeconds \$Preview -OnShown \$shown -OnHello \$hello') 'the greeter does not ask first what the session''s lock asks'
         Assert-True ($greeterText -notmatch '(?m)^\s+\$shared\.StageDown = \$true\s*$[\s\S]*PriorityClass = ''Normal''') 'the stage comes down before the greeter ends'
         $module = Get-Content -Raw -LiteralPath (Join-Path $root 'lib\Greeter.psm1')
         Assert-True ($module -match '\$w\.Topmost = -not \$back') 'the stage does not step back for Hello'

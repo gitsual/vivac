@@ -14,8 +14,9 @@
   unlocks (checked with Windows, kept nowhere); the screen then switches back
   to the desktop, with everything already loaded.
 
-  The account's password is the way in; Tab offers the PIN through Windows
-  Hello. Hello's prompt is a window of Windows' own, drawn on the programs'
+  The greeter asks first what the session's own lock asks (its lock mode,
+  Win+L): the PIN through Windows Hello at once, or the account's password;
+  Tab switches to the other. Hello's prompt is a window of Windows' own, drawn on the programs'
   desktop: for it the screen goes there, over the stage (black, stepping
   back so the prompt is seen), and comes back to the greeter if the PIN is
   not verified. The PIN also works on Windows' own lock (Ctrl+Alt+Del).
@@ -208,7 +209,7 @@ try {
                 }.GetNewClosure()
                 # Windows Hello asked: the stage steps back while its prompt is up.
                 $hello = { param($On) $Shared.StageBack = [bool]$On }.GetNewClosure()
-                $Shared.Outcome = Show-VivacLock -Greeter -Desktop $Desktop -PasswordFirst -PreviewSeconds $Preview -OnShown $shown -OnHello $hello
+                $Shared.Outcome = Show-VivacLock -Greeter -Desktop $Desktop -FirstMode (Get-VivacLockMode) -PreviewSeconds $Preview -OnShown $shown -OnHello $hello
             } catch {
                 $Shared.Error = "$_"
                 try { Hide-VivacLockCover } catch { }

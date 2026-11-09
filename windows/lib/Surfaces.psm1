@@ -2429,9 +2429,10 @@ function Get-AccountPicturePath {
 # -Desktop: the desktop the lock is shown on, 'Default' (the session's own,
 # Win+L) or the greeter's (bin\vivac-greeter.ps1): what the secure-screen
 # check compares against, and the one left before handing over to Windows'
-# own lock. -PasswordFirst: the password first whatever the session's lock
-# asks, Windows Hello by Tab, and the session's own lock mode left alone (the
-# sign-in greeter). Hello's prompt is drawn on the programs' desktop: from a
+# own lock. -FirstMode pin|password: what is asked first (the sign-in
+# greeter passes the session's own lock mode: the PIN through Windows Hello
+# at once, or the password), Tab for the other, and the session's own lock
+# mode left alone. Hello's prompt is drawn on the programs' desktop: from a
 # desktop of its own the screen goes there for it (-OnHello $true tells the
 # caller, whose stage over that desktop steps back) and comes back after
 # (-OnHello $false). -PasswordOnly: the account's password is the one way in, no
@@ -2440,16 +2441,16 @@ function Get-AccountPicturePath {
 # unlock by itself after that long (to see the greeter). -OnShown: run once
 # the lock has drawn. Returns how it ended: unlocked, ceded (to Windows' own
 # lock) or closed.
-function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'Default', [switch]$PasswordOnly, [switch]$PasswordFirst, [int]$PreviewSeconds = 0, [scriptblock]$OnShown, [scriptblock]$OnHello) {
+function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'Default', [switch]$PasswordOnly, [string]$FirstMode = '', [int]$PreviewSeconds = 0, [scriptblock]$OnShown, [scriptblock]$OnHello) {
     Update-SurfaceContext
     $p = Get-Palette
     $native = Get-LockNative
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
     $state = @{ Unlocked = $false; Busy = $null; Windows = @(); Armed = $null; ArmedAt = [DateTime]::MinValue; Mode = (Get-VivacLockMode); Outcome = $null; ShownAt = $null; Retaken = 0; OnOwn = ($Desktop -eq 'Default') }
-    if ($PasswordOnly -or $PasswordFirst) { $state.Mode = 'password' }
+    if ($PasswordOnly) { $state.Mode = 'password' } elseif ($FirstMode) { $state.Mode = $(if ($FirstMode -eq 'pin') { 'pin' } else { 'password' }) }
     # The session's own lock mode is the session's: the sign-in greeter does
     # not decide how Win+L asks next time.
-    $keepMode = $PasswordOnly -or $PasswordFirst
+    $keepMode = $PasswordOnly -or [bool]$FirstMode
     $marker = Join-Path (Get-VivacPaths).State 'locked'
     # The host's keyboard hook (lib\VivacKeys.cs) holds the Windows key while
     # the lock is up; the greeter's own process has no hook and needs none
@@ -2504,7 +2505,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
         $pin = $state.Mode -eq 'pin'
         $secret.Clear()
         $secret.Visibility = $(if ($pin) { 'Collapsed' } else { 'Visible' })
-        $placeholder.Text = T $(if ($pin) { 'lock.pin_placeholder' } elseif ($PasswordOnly -or $PasswordFirst) { 'lock.account_placeholder' } else { 'lock.placeholder' })
+        $placeholder.Text = T $(if ($pin) { 'lock.pin_placeholder' } elseif ($PasswordOnly -or $FirstMode) { 'lock.account_placeholder' } else { 'lock.placeholder' })
         $placeholder.Visibility = 'Visible'
         if ($switch) { $switch.Content = T $(if ($pin) { 'lock.use_password' } else { 'lock.use_pin' }) }
         if ($reset) { & $reset }
