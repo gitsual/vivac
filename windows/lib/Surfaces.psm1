@@ -2089,8 +2089,11 @@ public static class VivacLockNative {
     // The programs' desktop back on screen, before Windows' own lock: an
     // unlock must not land on the greeter's empty desktop. False when the
     // secure screen has the input (it cannot be opened); nothing to do then.
-    public static bool SwitchToDefault() {
-        IntPtr d = OpenDesktop("Default", 0, false, 0x0100);
+    public static bool SwitchToDefault() { return SwitchTo("Default"); }
+    // Any desktop of the session on screen, by name; false when it cannot
+    // be opened or switched to (the secure screen is up).
+    public static bool SwitchTo(string desktop) {
+        IntPtr d = OpenDesktop(desktop, 0, false, 0x0100);
         if (d == IntPtr.Zero) return false;
         try { return SwitchDesktop(d); } finally { CloseDesktop(d); }
     }
@@ -2431,7 +2434,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
     $p = Get-Palette
     $native = Get-LockNative
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
-    $state = @{ Unlocked = $false; Busy = $null; Windows = @(); Armed = $null; ArmedAt = [DateTime]::MinValue; Mode = (Get-VivacLockMode); Outcome = $null; ShownAt = $null }
+    $state = @{ Unlocked = $false; Busy = $null; Windows = @(); Armed = $null; ArmedAt = [DateTime]::MinValue; Mode = (Get-VivacLockMode); Outcome = $null; ShownAt = $null; Retaken = 0 }
     if ($PasswordOnly) { $state.Mode = 'password' }
     $marker = Join-Path (Get-VivacPaths).State 'locked'
     # The host's keyboard hook (lib\VivacKeys.cs) holds the Windows key while
@@ -2487,7 +2490,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
         $pin = $state.Mode -eq 'pin'
         $secret.Clear()
         $secret.Visibility = $(if ($pin) { 'Collapsed' } else { 'Visible' })
-        $placeholder.Text = T $(if ($pin) { 'lock.pin_placeholder' } else { 'lock.placeholder' })
+        $placeholder.Text = T $(if ($pin) { 'lock.pin_placeholder' } elseif ($PasswordOnly) { 'lock.account_placeholder' } else { 'lock.placeholder' })
         $placeholder.Visibility = 'Visible'
         if ($switch) { $switch.Content = T $(if ($pin) { 'lock.use_password' } else { 'lock.use_pin' }) }
         if ($reset) { & $reset }
@@ -2630,6 +2633,15 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
             # Windows' secure screen took the keyboard (Ctrl+Alt+Del, or its
             # own lock): lock the Windows way and step aside.
             if (-not $state.Busy -and -not $native::OnDesktop($Desktop)) {
+                # On a desktop of its own, the screen switched to another
+                # desktop of the session (Winlogon settling the sign-in
+                # on Default) is taken back; only the secure screen, which
+                # cannot be seen, is ceded to.
+                if ($own -and $native::InputDesktopName() -and $state.Retaken -lt 20 -and $native::SwitchTo($Desktop)) {
+                    $state.Retaken++
+                    Write-VivacLockLog "the screen had left $Desktop and was taken back ($($state.Retaken))"
+                    return
+                }
                 & $cede
                 return
             }
@@ -2702,7 +2714,7 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
             if ($ok) { if (-not $PasswordOnly) { Set-VivacLockMode 'password' }; & $finish; return }
             # The PIN is not the account's password: Windows only takes it
             # through Windows Hello.
-            if (Test-VivacLooksLikePin $secret.Password) { & $fail (T 'lock.looks_like_pin') } else { & $fail (T 'lock.wrong') }
+            if (Test-VivacLooksLikePin $secret.Password) { & $fail (T $(if ($PasswordOnly) { 'lock.looks_like_pin_signin' } else { 'lock.looks_like_pin' })) } else { & $fail (T 'lock.wrong') }
         }
 
     # Restart and shut down: the first press names what the second will do.

@@ -57,6 +57,7 @@ try {
         $w = Show-VivacLock -NoShow -Greeter -PasswordOnly -Desktop (Get-VivacGreeterDesktopName)
         Assert-Equal 'Visible' ([string]$w.FindName('Secret').Visibility) 'the field takes the password'
         Assert-Equal 'Collapsed' ([string]$w.FindName('ModeSwitch').Visibility) 'no way to the PIN'
+        Assert-Equal (Get-VivacString 'lock.account_placeholder') ([string]$w.FindName('Placeholder').Text) 'the field does not say it wants the account''s password'
         $w.Close()
         Assert-Equal 'pin' (Get-VivacLockMode) 'the session''s own lock keeps its way in'
         $surfaces = Get-Module Surfaces | Select-Object -First 1
@@ -73,6 +74,44 @@ try {
         Assert-True ((& $surfaces { $script:LockFallback }).ToString() -match 'Invoke-VivacLockFallback') 'the cover''s grace would lock without leaving the greeter''s desktop'
         $text = Get-Content -Raw -LiteralPath (Join-Path $root 'lib\Surfaces.psm1')
         Assert-True ($text -notmatch '\[void\]\$native::LockWorkStation\(\); & \$finish') 'a hand-over to Windows'' lock that does not leave the desktop first'
+    }
+    Case 'the lock on its own desktop takes the screen back from another desktop of the session, and cedes only to the secure screen' {
+        Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+        $native = Get-LockNative
+        Assert-True ($native::SwitchTo('Default')) 'the lock cannot switch to a desktop by name'
+        Assert-True (-not $native::SwitchTo('vivac-no-such-desktop')) 'a desktop that is not there was switched to'
+        $text = Get-Content -Raw -LiteralPath (Join-Path $root 'lib\Surfaces.psm1')
+        Assert-True ($text -match '\$own -and \$native::InputDesktopName\(\) -and \$state\.Retaken -lt 20 -and \$native::SwitchTo\(\$Desktop\)') 'the tick does not take the screen back before ceding'
+    }
+    Case 'the screen is taken as soon as the watchdog is up, before the lock loads, and tried again while Winlogon holds it' {
+        $text = Get-Content -Raw -LiteralPath $greeter
+        $watchdog = $text.IndexOf('[Diagnostics.Process]::Start($psi)')
+        $switch = $text.IndexOf('Wait-VivacDesktopSwitch $own $desktop')
+        $surfaces = $text.IndexOf("Import-Module (Join-Path `$Root 'lib\Surfaces.psm1')")
+        Assert-True ($watchdog -gt 0 -and $watchdog -lt $switch -and $switch -lt $surfaces) 'the switch is not between the watchdog and the lock''s modules'
+        Assert-True ($text -match "PriorityClass = 'High'") 'the greeter does not hurry at sign-in'
+        Assert-True ($text -match "PriorityClass = 'Normal'") 'the greeter never stands down from high priority'
+        # No desktop can be switched to with no handle: it tries for the time given, then says so.
+        $t = [Diagnostics.Stopwatch]::StartNew()
+        Assert-True (-not (Wait-VivacDesktopSwitch ([IntPtr]::Zero) 'vivac-no-such-desktop' 1)) 'a switch that cannot happen was reported done'
+        Assert-True ($t.Elapsed.TotalSeconds -ge 0.9 -and $t.Elapsed.TotalSeconds -lt 5) "it did not try for the time given: $($t.Elapsed.TotalSeconds) s"
+        Assert-Equal 'Default' (Get-VivacDesktopNative)::InputDesktopName() 'the screen left Default'
+    }
+    Case 'one greeter at a time: a second one ends at once, touching nothing' {
+        $first = Enter-VivacGreeterSingleton
+        try {
+            Assert-True ($null -ne $first) 'the first greeter did not get the singleton'
+            Assert-True ($null -eq (Enter-VivacGreeterSingleton)) 'a second greeter in the same process got it too'
+            Remove-Item -LiteralPath $locks -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $log -ErrorAction SilentlyContinue
+            Invoke-Greeter
+            Assert-True ((Get-Content -Raw -LiteralPath $log) -match 'a greeter is already up') 'the second greeter did not say why it ended'
+            Assert-True (-not (Test-Path -LiteralPath $locks)) 'the second greeter locked'
+            Assert-True ($null -eq (Get-VivacLockMarker)) 'the second greeter left a marker'
+        } finally { $first.ReleaseMutex(); $first.Dispose() }
+        $again = Enter-VivacGreeterSingleton
+        Assert-True ($null -ne $again) 'the singleton was not free again once released'
+        $again.ReleaseMutex(); $again.Dispose()
     }
     Case 'the watchdog''s script brings Default back and locks only when the greeter went without unlocking' {
         $script = Get-VivacGreeterWatchdogScript 4242 'vivac-greeter' 'C:\state\session-locked' 'C:\state\lock.log'
@@ -122,6 +161,11 @@ try {
         $cover = $daemon.IndexOf('Show-VivacLockCover')
         Assert-True ($hand -gt 0 -and $hand -lt $settle -and $settle -lt $cover) 'the host does not hand over before holding the sign-in itself'
         Assert-True ($daemon -match '\[void\]\(Start-VivacSigninGreeter\); \$LockAtStart = \$false') 'a started greeter does not stand the host''s own lock down'
+        # Before the host's own modules (twenty seconds at a crowded sign-in) and before its singleton.
+        $surfaces = $daemon.IndexOf("Import-Module (Join-Path `$root 'lib\Surfaces.psm1')")
+        $mutex = $daemon.IndexOf("'Local\vivac-daemon'")
+        Assert-True ($hand -lt $surfaces) 'the host loads its modules before handing over'
+        Assert-True ($hand -lt $mutex) 'a host that ends for another one up would never hand over'
     }
     Case 'a host started without the lock leaves a live marker of another process alone' {
         $sleeper = Start-Process powershell.exe -ArgumentList '-NoProfile', '-Command', 'Start-Sleep 30' -WindowStyle Hidden -PassThru

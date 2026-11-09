@@ -18,6 +18,11 @@
   drawn on the programs' desktop, over a greeter it does not belong to. The
   PIN still works on Windows' own lock (Win+L, Ctrl+Alt+Del).
 
+  The screen goes to the greeter's desktop (black until the cover paints
+  it) as soon as the watchdog is up, before the lock's own modules load:
+  what starts meanwhile is not seen. The process runs at high priority
+  until the greeter is on screen, so the start-up crowd does not hold it.
+
   The screen is never left on an empty desktop:
     - a watchdog process on the programs' desktop brings that desktop back
       and locks with Windows' own lock if this process dies;
@@ -102,6 +107,11 @@ if (Test-Path -LiteralPath (Join-Path $state 'no-greeter')) {
     Invoke-WindowsLock
     return
 }
+# One greeter: the sign-in task and a host asked to hold the sign-in may
+# both start one, and the second ends here, touching nothing.
+$singleton = Enter-VivacGreeterSingleton
+if (-not $singleton) { Write-GreeterLog 'sign-in: a greeter is already up, this one ends'; return }
+try { [Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'High' } catch { }
 if ($Preview -le 0) {
     $settled = $null
     try { $settled = Get-VivacSigninSettlement $state } catch { Write-GreeterLog "sign-in guard check failed: $_" }
@@ -121,6 +131,11 @@ try {
     $psi.Arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($watch))
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
     [void][Diagnostics.Process]::Start($psi)
+    # The screen, now: the watchdog is there to bring it back, and nothing
+    # that starts from here on is seen. Winlogon may still hold it for a
+    # moment at sign-in, hence the retries.
+    if (-not (Wait-VivacDesktopSwitch $own $desktop 20)) { throw 'the screen could not be switched to the greeter''s desktop' }
+    Write-GreeterLog "sign-in: screen on $desktop"
 
     # The greeter's thread: bound to the desktop before it owns a window,
     # then the cover, the switch, and the lock itself. What it finds out is
@@ -162,8 +177,11 @@ try {
     # the screen covered.
     $grace = 60
     $started = Get-Date
+    $hurried = $true
     while (-not $shared.Done) {
         Start-Sleep -Milliseconds 250
+        # On screen: back to the normal priority, the rest may load now.
+        if ($hurried -and $shared.GreeterUp) { $hurried = $false; try { [Diagnostics.Process]::GetCurrentProcess().PriorityClass = 'Normal' } catch { } }
         if (-not $shared.GreeterUp -and ((Get-Date) - $started).TotalSeconds -gt $grace) {
             Write-GreeterLog "the greeter did not show in $grace s: Windows' own lock instead"
             break

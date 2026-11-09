@@ -87,6 +87,35 @@ public static class VivacDesktopNative {
     [VivacDesktopNative]
 }
 
+# The greeter's desktop on screen, tried again until it is: at sign-in
+# Winlogon may still hold the screen for a moment (SwitchDesktop then fails
+# and the input desktop cannot be opened), and a task started that early
+# must wait for it rather than give up. True once the input desktop is the
+# one asked for; false after Seconds of trying.
+function Wait-VivacDesktopSwitch([IntPtr]$Handle, [string]$Name, [int]$Seconds = 20) {
+    $native = Get-VivacDesktopNative
+    $until = (Get-Date).AddSeconds($Seconds)
+    do {
+        try { $native::Switch($Handle) } catch { }
+        if ($native::InputDesktopName() -eq $Name) { return $true }
+        Start-Sleep -Milliseconds 200
+    } while ((Get-Date) -lt $until)
+    $false
+}
+
+# One greeter at a time: the sign-in task and a host asked to hold the
+# sign-in (bin\vivac-daemon.ps1 -LockAtStart) may both start one, and the
+# second must end at once, touching neither the screen nor the markers.
+# Returns the mutex to hold for the process's life, or $null when another
+# greeter holds it.
+function Enter-VivacGreeterSingleton {
+    $created = $false
+    $mutex = New-Object System.Threading.Mutex($true, 'Local\vivac-greeter', [ref]$created)
+    if ($created) { return $mutex }
+    $mutex.Dispose()
+    $null
+}
+
 # The watchdog's script: a process of its own on the programs' desktop, so
 # it outlives the greeter whatever happens to it. When the greeter's process
 # is gone it looks at what it left: the screen still on the greeter's desktop
@@ -143,4 +172,4 @@ function Start-VivacSigninGreeter([switch]$NoStart) {
     'conhost.exe ' + ($arguments -join ' ')
 }
 
-Export-ModuleMember -Function Get-VivacGreeterDesktopName, Get-VivacDesktopNative, Get-VivacGreeterWatchdogScript, Start-VivacSigninGreeter
+Export-ModuleMember -Function Get-VivacGreeterDesktopName, Get-VivacDesktopNative, Wait-VivacDesktopSwitch, Enter-VivacGreeterSingleton, Get-VivacGreeterWatchdogScript, Start-VivacSigninGreeter
