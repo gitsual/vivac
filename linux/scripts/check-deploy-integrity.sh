@@ -95,11 +95,16 @@ for target in "${!render_targets[@]}"; do
 	[[ "$resolved" != "$repo_root"* ]] || problem "render resolves inside the checkout: $target"
 done
 
-# The two paths together left no file that neither owns: a stray would be a
-# write nobody can account for.
+# What deploy.sh records for the runtime scripts: the checkout's path, nothing else.
+declare -A deploy_records=([.config/vivac/repo]=1)
+[[ "$(cat -- "$home/.config/vivac/repo" 2>/dev/null)" == "$repo_root" ]] ||
+	problem 'deploy did not record the checkout in .config/vivac/repo'
+
+# The paths together left no file that none owns: a stray would be a write
+# nobody can account for.
 while IFS= read -r -d '' file; do
 	relative="${file#"$home"/}"
-	[[ -v render_targets["$relative"] ]] || problem "unowned file after deploy: $relative"
+	[[ -v render_targets["$relative"] || -v deploy_records["$relative"] ]] || problem "unowned file after deploy: $relative"
 done < <(find "$home" -type f -print0)
 
 ((status == 0)) || exit 1
