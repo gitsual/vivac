@@ -16,7 +16,7 @@ cd7f3a00fef835c822d8cc3db2fa85a447431c0f78a96349f392ceb322e41177  dotfiles/bridg
 5a358276f8df8db104346516e4925d6cebf219434379875259e937c1f82e7c77  dotfiles/bridge/.local/bin/vivac-bridge
 085c2a11464dac78cd539b858f67d9dfa7fe262722b7ac89c02cd56e5eef54c1  dotfiles/bridge/.local/bin/vivac-bt-sync
 0f52e24a87149a37819272b9669ae47db02fc9fe57d47ce1f84558ecd4e8091a  dotfiles/bridge/.local/bin/vivac-drop
-1e410e61d241b3822a55671d20a699c9cbc108a7357ad7f5b9d6c2eb9b976e08  dotfiles/bridge/.local/bin/vivac-hermes
+a6e7674979d2751e40c52a0b0f984bfe601ac21438eaeb4831fc078a48abc23f  dotfiles/bridge/.local/bin/vivac-hermes
 5284f27d93bbbf730ed9bc3b53ebbf021528505ef46f630e6068445f83af00a1  dotfiles/bridge/.local/bin/vivac-link
 192e36eb4b760440711af213d4b15305e4716a2ea5ad8397b8d1c3cb121be718  dotfiles/bridge/.local/bin/vivac-localsend
 901374e5bfed46f823646709ca31f47ec31f91fbc06945a430079dfed778c978  dotfiles/bridge/.local/bin/vivac-mouse
