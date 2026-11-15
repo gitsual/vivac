@@ -270,7 +270,9 @@ function Get-ProductList($s) {
     if ($s.Avast) { $list.Add(@('avast', 'Avast One')) }
     $list.Add(@('defender', 'Microsoft Defender'))
     if ($s.Malwarebytes) { $list.Add(@('malwarebytes', 'Malwarebytes')) }
-    $list.ToArray()
+    # The comma keeps a one-product list a list: PowerShell unrolls what a
+    # function returns, and a lone pair would come back as two strings.
+    , $list.ToArray()
 }
 
 # What the bar draws: a state, the few words next to the shield (none when
@@ -414,7 +416,7 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
     $window = New-VivacWindow (Get-WindowXaml 'vivac - security' $width 600 (Get-KitPanelXaml $p 0xEA18 (T 'security.title') $body $hints))
     Set-KitDropDown $window
     $find = { param($n) $window.FindName($n) }
-    (& $find 'Subtitle').Text = (@($list | ForEach-Object { $_[1] }) -join '  ·  ')
+    (& $find 'Subtitle').Text = (@($list | ForEach-Object { $_[1] }) -join "  $([char]0x00B7)  ")
 
     # The verdict: the state in words, and what to look at.
     $verdict = & $find 'Verdict'
