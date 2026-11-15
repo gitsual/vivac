@@ -15,14 +15,15 @@
 # The home (config.yaml, memories/, skills/, SOUL.md, state.db...) lives on the
 # Windows partition: Windows uses it natively and this side reaches it through
 # the mount (/mnt/win, or VIVAC_WINDOWS_MOUNT). What Hermes itself calls this
-# machine's (the code checkout with its venv, the tool store, the dependency
-# environments under installs/) stays per side, under ~/.local/share/hermes:
-# the shared home keeps links to hermes-agent/ and tools/, which Windows never
-# follows (its own live elsewhere, see the Windows half), and one link inside
-# installs/, named after this side's checkout, beside Windows' own. Never both
-# at once: a dual boot cannot run both, and a Hermes inside WSL must not point
-# here. The shared root is not an option: Windows reaches it over 9P, where
-# SQLite cannot lock a file.
+# machine's (the code checkout with its venv, the tool store, the language
+# servers, the caches, the dependency environment under installs/<key>) stays
+# per side, under ~/.local/share/hermes, and is bind-mounted over a real folder
+# of the same name in the shared home, on this side only (systemd mount units).
+# No link of this side's is left on the Windows partition: Windows can neither
+# follow nor copy one (measured: mkdir raises FileExistsError, copytree fails),
+# and it keeps its own cache/ at that very path. Never both at once: a dual
+# boot cannot run both, and a Hermes inside WSL must not point here. The shared
+# root is not an option: Windows reaches it over 9P, where SQLite cannot lock.
 set -Eeuo pipefail
 
 self="$(readlink -f -- "${BASH_SOURCE[0]}")"
@@ -40,18 +41,15 @@ home="${HERMES_HOME:-$HOME/.hermes}"
 mount="${VIVAC_WINDOWS_MOUNT:-/mnt/win}"
 store="${XDG_DATA_HOME:-$HOME/.local/share}/hermes"
 marker_name=vivac-hermes.conf
-# What stays on this side: the code checkout (with its venv), the tool store and
-# the language servers (an npm tree under lsp/) are built for one operating
-# system each, and so are the dependency
-# environments, which Hermes keeps under installs/<key>, the key being the
-# first 16 hex digits of the SHA-256 of the checkout's resolved path.
-per_side=(hermes-agent tools lsp)
+# What stays on this side, each mounted over the shared home's folder: the code
+# checkout (with its venv), the tool store, the language servers (an npm tree)
+# and the caches (uv's entries are symlinks here and path files on Windows;
+# neither side reads the other's, and Windows keeps its own cache/ there). The
+# dependency environments live under installs/<key>, the key being the first 16
+# hex digits of the SHA-256 of the checkout's resolved path: through the mount,
+# <shared home>/hermes-agent, so that one folder of installs/ is mounted too.
+per_side=(hermes-agent tools lsp cache)
 machine_dir=installs
-# The caches are per system too, but Windows keeps its own at the same path in
-# the shared home (uv's entries are symlinks here and path files there; neither
-# side reads the other's). A link would break Windows' cache, so this side's is
-# mounted over it, on this side only: a systemd bind mount, Windows untouched.
-mounted=(cache)
 systemd_dir="${VIVAC_SYSTEMD_DIR:-/etc/systemd/system}"
 
 action=open folder='' dry_run=false assume_yes=false
@@ -136,10 +134,10 @@ windows_homes() {
 # shared_target — where the link points, raw, when the home is a link.
 shared_target() { readlink -- "$home"; }
 
-# install_key — the name Hermes gives this side's dependency environment once
-# the checkout lives in the store (pm/environments.py: install_key).
+# install_key SHARED — the name Hermes gives this side's dependency environment
+# once the checkout is mounted at SHARED/hermes-agent (pm/environments.py).
 install_key() {
-	printf '%s' "$(readlink -f -- "$store/hermes-agent")" | sha256sum | cut -c1-16
+	printf '%s/hermes-agent' "$(readlink -f -- "$1")" | sha256sum | cut -c1-16
 }
 
 status() {
@@ -193,7 +191,7 @@ stray_journals() {
 	return 0
 }
 # skipped NAME — a top-level entry that never joins the shared home as data.
-skipped() { case " ${per_side[*]} ${mounted[*]} $machine_dir " in *" $1 "*) return 0 ;; esac; return 1; }
+skipped() { case " ${per_side[*]} $machine_dir " in *" $1 "*) return 0 ;; esac; return 1; }
 
 # mount_unit WHERE — the systemd unit name for a mount on WHERE.
 mount_unit() { systemd-escape --path --suffix=mount -- "$1"; }
@@ -276,7 +274,7 @@ merge_into() {
 }
 
 share() {
-	local shared="$folder" stamp backup='' name entry
+	local shared="$folder" stamp backup='' name entry key
 	if [[ -L "$home" ]]; then
 		tell hermes.already_shared "$home" "$(shared_target)"
 		return 0
@@ -307,17 +305,21 @@ share() {
 	fi
 	stamp="$(date +%Y%m%d-%H%M%S)"
 	backup="$(dirname -- "$shared")/.hermes.windows-before-share-$stamp"
+	key="$(install_key "$shared")"
 
-	# The plan: per-side folders to the store, everything else into the shared
-	# home, a conflicting Windows file aside first, then the link.
+	# The plan: per-side folders to the store, each mounted over the shared
+	# home's; everything else into the shared home, a conflicting Windows file
+	# aside first; then the link.
 	say hermes.plan "$home" "$shared"
-	for name in "${per_side[@]}"; do
-		[[ -e "$home/$name" ]] || continue
-		if [[ -e "$store/$name" ]]; then
+	for name in "${per_side[@]}" "$machine_dir"; do
+		if [[ -e "$home/$name" && -e "$store/$name" ]]; then
 			tell hermes.store_taken "$store/$name"
 			return 1
 		fi
-		step hermes.would_move "$home/$name" "$store/$name"
+		[[ -e "$home/$name" ]] && step hermes.would_move "$home/$name" "$store/$name"
+	done
+	for name in "${per_side[@]}" "$machine_dir/$key"; do
+		step hermes.would_mount "$store/$name" "$shared/$name"
 	done
 	local -a conflicts=() entries=()
 	for entry in "$home"/.[!.]* "$home"/*; do
@@ -326,20 +328,8 @@ share() {
 		skipped "$name" && continue
 		entries+=("$name")
 	done
-	for name in "${mounted[@]}"; do
-		if [[ -e "$store/$name" ]]; then
-			tell hermes.store_taken "$store/$name"
-			return 1
-		fi
-		[[ -e "$home/$name" ]] && step hermes.would_move "$home/$name" "$store/$name"
-		step hermes.would_mount "$store/$name" "$shared/$name"
-	done
 	mapfile -t conflicts < <(conflicts_of "$home" "$shared")
-	for name in "${per_side[@]}"; do
-		[[ -e "$shared/$name" || -L "$shared/$name" ]] && conflicts+=("$name")
-	done
 	((${#conflicts[@]})) && step hermes.would_backup "${conflicts[*]}" "$backup"
-	[[ -d "$home/$machine_dir" ]] && step hermes.would_move "$home/$machine_dir" "$store/$machine_dir"
 	step hermes.would_move "${entries[*]:-}" "$shared"
 	step hermes.would_link "$home" "$shared"
 	if $dry_run; then
@@ -348,58 +338,53 @@ share() {
 	fi
 	confirm hermes.confirm_share || return 0
 
-	# The mounts first: should sudo or systemd refuse, this side's cache goes
-	# back where it was and nothing else has changed.
+	# The mounts first: should sudo or systemd refuse one, every mount made so
+	# far is undone, this side's folders go back, and nothing else has changed.
+	local -a made=() created=()
+	local failed=''
 	mkdir -p -- "$store"
-	for name in "${mounted[@]}"; do
+	[[ -d "$home/$machine_dir" ]] && mv -- "$home/$machine_dir" "$store/$machine_dir"
+	for name in "${per_side[@]}" "$machine_dir/$key"; do
+		[[ -e "$shared/$name" ]] || created+=("$name")
 		mkdir -p -- "$shared/$name"
 		if [[ -e "$home/$name" ]]; then mv -- "$home/$name" "$store/$name"; else mkdir -p -- "$store/$name"; fi
+		made+=("$name")
 		if ! bind "$(readlink -f -- "$store/$name")" "$shared/$name"; then
-			unbind "$shared/$name"
-			mv -- "$store/$name" "$home/$name"
-			tell hermes.mount_failed "$shared/$name"
-			return 1
+			failed="$name"
+			break
 		fi
 		step hermes.mounted "$store/$name" "$shared/$name"
 	done
+	if [[ -n "$failed" ]]; then
+		for name in "${made[@]}"; do
+			unbind "${shared:?}/${name:?}"
+			[[ "$name" == "$machine_dir/"* ]] || mv -- "$store/$name" "$home/$name"
+		done
+		[[ -d "$store/$machine_dir" ]] && mv -- "$store/$machine_dir" "$home/$machine_dir"
+		for name in "${created[@]}"; do rmdir -- "${shared:?}/${name:?}" 2>/dev/null || true; done
+		rmdir -- "${shared:?}/${machine_dir:?}" 2>/dev/null || true
+		tell hermes.mount_failed "$shared/$failed"
+		return 1
+	fi
 
 	# Copies first, the originals only once every copy is in: a failure leaves
 	# this side's home whole.
 	merge_into "$home" "$shared" "$backup"
-	mkdir -p -- "$store"
-	for name in "${per_side[@]}"; do
-		if [[ -e "$shared/$name" || -L "$shared/$name" ]]; then
-			mkdir -p -- "$backup"
-			mv -- "$shared/$name" "$backup/$name"
-		fi
-		[[ -e "$home/$name" ]] || continue
-		mv -- "$home/$name" "$store/$name"
-		ln -s -- "$store/$name" "$shared/$name"
-		step hermes.moved "$home/$name" "$store/$name"
-	done
-	if [[ -d "$home/$machine_dir" ]]; then
-		mv -- "$home/$machine_dir" "$store/$machine_dir"
-		step hermes.moved "$home/$machine_dir" "$store/$machine_dir"
-	fi
-	if [[ -e "$store/hermes-agent" ]]; then
-		local key
-		key="$(install_key)"
-		mkdir -p -- "$store/$machine_dir/$key" "$shared/$machine_dir"
-		[[ -e "$shared/$machine_dir/$key" || -L "$shared/$machine_dir/$key" ]] || ln -s -- "$store/$machine_dir/$key" "$shared/$machine_dir/$key"
-	fi
 	[[ -d "$backup" ]] && step hermes.backup "$backup"
-	for name in "${entries[@]}"; do rm -rf -- "${home:?}/$name"; done
+	for name in "${entries[@]}"; do rm -rf -- "${home:?}/${name:?}"; done
 	rmdir -- "$home"
 	ln -s -- "$shared" "$home"
 	marker_set "$shared" linux_home "$home"
 	marker_set "$shared" linux_store "$store"
+	marker_set "$shared" linux_key "$key"
+	marker_set "$shared" linux_created "${created[*]}"
 	marker_set "$shared" linux_shared "$stamp"
 	[[ -n "$backup" && -d "$backup" ]] && marker_set "$shared" windows_backup "$backup"
 	tell hermes.shared_done "$home" "$shared"
 }
 
 unshare() {
-	local shared fresh name entry
+	local shared fresh name entry key created
 	[[ -L "$home" ]] || {
 		tell hermes.not_shared "$home"
 		return 1
@@ -413,11 +398,15 @@ unshare() {
 		tell hermes.running
 		return 1
 	fi
+	key="$(marker_get "$shared" linux_key)"
+	created="$(marker_get "$shared" linux_created)"
+	local -a mounts=("${per_side[@]}")
+	[[ -n "$key" ]] && mounts+=("$machine_dir/$key")
 	say hermes.plan_back "$shared" "$home"
-	for name in "${mounted[@]}"; do
+	for name in "${mounts[@]}"; do
 		[[ -e "$systemd_dir/$(mount_unit "$shared/$name")" ]] && step hermes.would_unmount "$shared/$name"
 	done
-	for name in "${per_side[@]}" "${mounted[@]}" "$machine_dir"; do
+	for name in "${per_side[@]}" "$machine_dir"; do
 		[[ -d "$store/$name" ]] && step hermes.would_move "$store/$name" "$home/$name"
 	done
 	step hermes.would_copy "$shared" "$home"
@@ -429,38 +418,33 @@ unshare() {
 	fresh="$(mktemp -d -- "$(dirname -- "$home")/.hermes.back.XXXXXX")"
 	# Unmounted first, so what is copied below is Windows' own and this side's
 	# comes back from the store.
-	for name in "${mounted[@]}"; do unbind "$shared/$name"; done
+	for name in "${mounts[@]}"; do unbind "$shared/$name"; done
 	for entry in "$shared"/.[!.]* "$shared"/*; do
 		[[ -e "$entry" || -L "$entry" ]] || continue
 		name="${entry##*/}"
-		# Windows' launchers and the marker stay Windows'; the per-side links
-		# give way to the real folders below.
-		case "$name" in bin | "$marker_name" | "$machine_dir") continue ;; esac
-		case " ${per_side[*]} ${mounted[*]} " in *" $name "*) continue ;; esac
+		# The marker stays Windows', and so do the per-side folders under the
+		# mounts: this side's own come back from the store below.
+		[[ "$name" == "$marker_name" ]] && continue
+		skipped "$name" && continue
+		if [[ "$name" == bin ]]; then
+			# Windows' launchers stay Windows'; this side's tools come back.
+			local tool
+			for tool in "$entry"/*; do
+				[[ -e "$tool" && "$tool" != *.exe ]] || continue
+				mkdir -p -- "$fresh/bin"
+				cp -r --preserve=timestamps -- "$tool" "$fresh/bin/"
+			done
+			continue
+		fi
 		cp -r --preserve=timestamps -- "$entry" "$fresh/$name"
 	done
-	# This side's environments come back whole; the links left for them inside
-	# the shared installs/ go, Windows' own folders there stay.
-	if [[ -d "$shared/$machine_dir" ]]; then
-		for entry in "$shared/$machine_dir"/*; do
-			[[ -L "$entry" && "$(readlink -- "$entry")" == "$store/"* ]] && rm -f -- "$entry"
-		done
-	fi
-	if [[ -d "$store/$machine_dir" ]]; then
-		mv -- "$store/$machine_dir" "$fresh/$machine_dir"
-		step hermes.moved "$store/$machine_dir" "$home/$machine_dir"
-	fi
-	for name in "${mounted[@]}"; do
+	for name in "${per_side[@]}" "$machine_dir"; do
 		[[ -d "$store/$name" ]] || continue
 		mv -- "$store/$name" "$fresh/$name"
 		step hermes.moved "$store/$name" "$home/$name"
 	done
-	for name in "${per_side[@]}"; do
-		[[ -d "$store/$name" ]] || continue
-		mv -- "$store/$name" "$fresh/$name"
-		[[ -L "$shared/$name" ]] && rm -f -- "$shared/$name"
-		step hermes.moved "$store/$name" "$home/$name"
-	done
+	# The empty folders made for the mounts go; Windows' own stay.
+	for name in $created; do rmdir -- "${shared:?}/${name:?}" 2>/dev/null || true; done
 	rm -f -- "$home"
 	mv -- "$fresh" "$home"
 	marker_set "$shared" linux_shared none
