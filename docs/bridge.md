@@ -693,23 +693,24 @@ A dual boot never runs both sides at once, which is what the one home needs;
 a Hermes inside WSL must not point at it.
 
 What Hermes itself calls *this machine's* stays on each side: the code
-checkout with its venv, the tool store, the dependency environments under
-`installs/`. On Windows the checkout and the tool store live under
-`%LOCALAPPDATA%\hermes` (`HERMES_RUNTIME_DIR`), never inside the home. On
-Linux they move under `~/.local/share/hermes`, and the shared home keeps
-links to them (`hermes-agent`, `tools`, `lsp` — the language servers, an
-npm tree built for one system — and one entry inside `installs/` named after
-the Linux checkout); Windows never follows those links.
-
-`cache/` is this machine's too, but Windows keeps its own at that very path:
-uv's cache entries are symlinks on Linux and files holding a `C:\` path on
-Windows, and neither side's uv reads the other's (measured: Linux's uv finds
-nothing in a cache Windows wrote). A link there would break Windows' cache, so
-Linux's `cache/` lives in `~/.local/share/hermes/cache` and a systemd bind
-mount (`/etc/systemd/system/<path>.mount`, enabled at boot) lays it over the
-shared home's `cache/` on Linux only. Windows sees its own folder, untouched.
-The mount is made before anything moves: if sudo or systemd refuse it, the
-cache goes back and nothing else changes. `--unshare` stops and removes it.
+checkout with its venv, the tool store, the language servers (`lsp/`, an npm
+tree), the caches, the dependency environment under `installs/<key>`. On
+Windows the checkout and the tool store live under `%LOCALAPPDATA%\hermes`
+(`HERMES_RUNTIME_DIR`), never inside the home. On Linux they live under
+`~/.local/share/hermes` and are **bind-mounted** over a real folder of the same
+name in the shared home (`hermes-agent`, `tools`, `lsp`, `cache`, and
+`installs/<key>`, the key Hermes derives from the checkout's path as seen
+through the mount), one systemd unit each in `/etc/systemd/system`, enabled at
+boot. Linux sees the layout Hermes installs natively; Windows sees plain
+folders, empty or its own. No link of Linux's is ever left on the Windows
+partition: Windows can neither follow nor copy one (measured: `mkdir` raises
+`FileExistsError`, `copytree` fails), and Windows keeps its own `cache/` at
+that very path. uv's cache cannot be shared anyway: its entries are symlinks
+on Linux and files holding a `C:\` path on Windows, and Linux's uv finds
+nothing in a cache Windows wrote. The mounts are made before anything moves:
+if sudo or systemd refuse one, every mount made is undone, the folders go
+back, and nothing else changes. `--unshare` stops and removes them, brings
+Linux's folders back, and removes only the empty folders it made.
 
 A SQLite database travels with its journal: when Linux's `state.db` wins,
 Windows' `state.db-wal`, `-shm` and `-journal` go aside with Windows'

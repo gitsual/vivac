@@ -36,6 +36,7 @@ printf 'skill\n' >"$home/skills/one/SKILL.md"
 printf 'linux sessions\n' >"$home/state.db"
 printf 'code\n' >"$home/hermes-agent/.venv/python"
 printf 'tool\n' >"$home/tools/uv/uv"
+mkdir -p "$home/bin" && printf 'elf\n' >"$home/bin/tirith"
 printf 'language server\n' >"$home/lsp/bin/server"
 # Caches are per system: uv's entries are symlinks here, path files there.
 printf 'linux wheel\n' >"$home/cache/uv/linux-entry"
@@ -81,7 +82,9 @@ out="$(hermes --share --dry-run)"
 [[ "$out" == *"set aside Windows' own config.yaml state.db state.db-wal under"* ]] || fail "dry run should name the conflicts, file by file: $out"
 [[ "$out" == *"nothing was moved"* ]] || fail "dry run should say so: $out"
 [[ "$out" == *"move $home/cache to $sandbox/linux/.local/share/hermes/cache"* ]] || fail "dry run should move the cache aside: $out"
-[[ "$out" == *"mount $sandbox/linux/.local/share/hermes/cache over $win/cache"* ]] || fail "dry run should name the bind mount: $out"
+for name in hermes-agent tools lsp cache; do
+	[[ "$out" == *"mount $sandbox/linux/.local/share/hermes/$name over $win/$name"* ]] || fail "dry run should mount $name: $out"
+done
 [[ -z "$(ls -A "$sandbox/systemd")" ]] || fail 'dry run wrote a unit'
 [[ -d "$home" && ! -L "$home" ]] || fail "dry run moved the home"
 [[ "$(cat "$win/config.yaml")" == 'side: windows' ]] || fail "dry run touched Windows' config"
@@ -91,6 +94,10 @@ SUDO_REFUSES=1 hermes --share --yes >"$sandbox/refused.out" 2>&1 && fail 'share 
 [[ -d "$home" && ! -L "$home" && -f "$home/cache/uv/linux-entry" ]] || fail 'a refused mount left the home changed'
 [[ ! -e "$sandbox/linux/.local/share/hermes/cache" && -z "$(ls -A "$sandbox/systemd")" ]] || fail 'a refused mount left something behind'
 [[ "$(cat "$win/config.yaml")" == 'side: windows' ]] || fail "a refused mount touched Windows' files"
+for name in hermes-agent tools lsp installs/"$(printf '%s' "$(readlink -f -- "$win")/hermes-agent" | sha256sum | cut -c1-16)"; do
+	[[ ! -e "$win/$name" ]] || fail "a refused mount left an empty $name on the Windows partition"
+done
+[[ -f "$home/installs/oldkey/facts.json" && -f "$home/hermes-agent/.venv/python" ]] || fail 'a refused mount did not bring the folders back' 
 [[ "$(cat "$sandbox/refused.out")" == *"nothing was moved"* ]] || fail "the refusal did not say so: $(cat "$sandbox/refused.out")"
 : >"$calls"
 
@@ -114,22 +121,28 @@ backup="$(find "$sandbox/win/Users/someone" -maxdepth 1 -name '.hermes.windows-b
 store="$sandbox/linux/.local/share/hermes"
 [[ -d "$store/hermes-agent" && ! -L "$store/hermes-agent" ]] || fail "the checkout did not move to the store"
 [[ -f "$store/hermes-agent/.venv/python" ]] || fail "the checkout lost its venv"
-[[ -L "$win/hermes-agent" && "$(readlink -- "$win/hermes-agent")" == "$store/hermes-agent" ]] || fail "the shared home does not link the checkout"
-[[ -L "$win/tools" && "$(readlink -- "$win/tools")" == "$store/tools" ]] || fail "the shared home does not link the tool store"
-# The language servers are an npm tree built for one system: per side too.
+# No link of this side's in the Windows partition (Windows can neither follow
+# nor copy one): each per-side folder is a real folder there, with this side's
+# own mounted over it from the store, on this side only.
 [[ -f "$store/lsp/bin/server" ]] || fail "the language servers did not move to the store"
-[[ -L "$win/lsp" && "$(readlink -- "$win/lsp")" == "$store/lsp" ]] || fail "the shared home does not link the language servers"
+[[ -f "$store/tools/uv/uv" ]] || fail "the tool store did not move to the store"
+[[ -z "$(find "$win" -type l)" ]] || fail "links of this side's landed on the Windows partition: $(find "$win" -type l)"
+mounted_at() { # mounted_at SRC WHERE — a bind unit for it, enabled
+	local unit
+	unit="$(systemd-escape --path --suffix=mount "$2")"
+	[[ -f "$sandbox/systemd/$unit" ]] || fail "no mount unit for $2: $(ls "$sandbox/systemd")"
+	grep -Fxq "What=$(readlink -f -- "$1")" "$sandbox/systemd/$unit" || fail "$unit mounts the wrong source: $(cat "$sandbox/systemd/$unit")"
+	grep -Fxq "Where=$2" "$sandbox/systemd/$unit" || fail "$unit mounts on the wrong place"
+	grep -Fxq 'Options=bind' "$sandbox/systemd/$unit" || fail "$unit is not a bind mount"
+	grep -Fxq "systemctl enable --now $unit" "$calls" || fail "$unit was not enabled: $(cat "$calls")"
+	[[ -d "$2" && ! -L "$2" ]] || fail "$2 is not a real folder"
+}
+for name in hermes-agent tools lsp cache; do mounted_at "$store/$name" "$win/$name"; done
 # The cache: this side's in the store, mounted over Windows' own, which stays
 # where it is, not set aside and not mixed with this side's.
-unit="$(systemd-escape --path --suffix=mount "$win/cache")"
 [[ -f "$store/cache/uv/linux-entry" ]] || fail "this side's cache did not move to the store"
 [[ -f "$win/cache/uv/windows-entry" && ! -e "$win/cache/uv/linux-entry" ]] || fail "Windows' cache was not left alone: $(ls -R "$win/cache")"
-[[ -d "$win/cache" && ! -L "$win/cache" ]] || fail 'the shared cache became a link'
-[[ -f "$sandbox/systemd/$unit" ]] || fail "no mount unit $unit: $(ls "$sandbox/systemd")"
-grep -Fxq "What=$(readlink -f -- "$store/cache")" "$sandbox/systemd/$unit" || fail "the unit mounts the wrong source: $(cat "$sandbox/systemd/$unit")"
-grep -Fxq "Where=$win/cache" "$sandbox/systemd/$unit" || fail 'the unit mounts on the wrong place'
-grep -Fxq 'Options=bind' "$sandbox/systemd/$unit" || fail 'the unit is not a bind mount'
-grep -Fxq "systemctl enable --now $unit" "$calls" || fail "the mount was not enabled: $(cat "$calls")"
+[[ -f "$win/bin/tirith" && -f "$win/bin/hermes.exe" ]] || fail "the launchers did not join file by file"
 # A database travels with its journal: Windows' journal never meets this side's
 # database (SQLite would replay it into the wrong file).
 [[ ! -e "$win/state.db-wal" ]] || fail "Windows' journal was left beside this side's database"
@@ -139,9 +152,9 @@ grep -Fxq "systemctl enable --now $unit" "$calls" || fail "the mount was not ena
 [[ -f "$store/installs/oldkey/facts.json" ]] || fail "this side's environments did not move to the store"
 [[ ! -e "$win/installs/oldkey" ]] || fail "this side's environments landed on the Windows partition"
 [[ -f "$win/installs/winkey/facts.json" ]] || fail "Windows' own environment was touched"
-key="$(printf '%s' "$(readlink -f -- "$store/hermes-agent")" | sha256sum | cut -c1-16)"
-[[ -L "$win/installs/$key" && "$(readlink -- "$win/installs/$key")" == "$store/installs/$key" ]] || fail "no link for this side's next environment: $(ls -la "$win/installs")"
-[[ -d "$store/installs/$key" ]] || fail "the store lacks the folder that link points at"
+key="$(printf '%s' "$(readlink -f -- "$win")/hermes-agent" | sha256sum | cut -c1-16)"
+[[ -d "$store/installs/$key" ]] || fail "the store lacks this side's next environment"
+mounted_at "$store/installs/$key" "$win/installs/$key"
 [[ -f "$home/config.yaml" ]] || fail "the home does not resolve through the link"
 grep -q '^linux_shared=' "$win/vivac-hermes.conf" || fail "the marker does not record this side"
 grep -q '^windows_home=' "$win/vivac-hermes.conf" || fail "the marker lost Windows' line"
@@ -188,17 +201,19 @@ hermes --unshare --yes >"$sandbox/unshare.out" 2>&1 || fail "unshare failed: $(c
 [[ ! -e "$store/hermes-agent" ]] || fail "the store still holds the checkout"
 [[ -f "$home/lsp/bin/server" && ! -L "$home/lsp" ]] || fail "the language servers are not back in the home"
 [[ -f "$home/cache/uv/linux-entry" && ! -e "$home/cache/uv/windows-entry" ]] || fail "this side's cache did not come back alone"
-[[ ! -e "$sandbox/systemd/$unit" ]] || fail 'the mount unit was left behind'
-grep -Fxq "systemctl disable --now $unit" "$calls" || fail "the mount was not stopped: $(cat "$calls")"
+grep -Fxq "systemctl disable --now $(systemd-escape --path --suffix=mount "$win/cache")" "$calls" || fail "the mount was not stopped: $(cat "$calls")"
 [[ -f "$win/cache/uv/windows-entry" ]] || fail "Windows' cache was damaged by the unshare"
-[[ ! -e "$home/bin" ]] || fail "Windows' launchers came along"
+[[ -f "$home/bin/tirith" && ! -e "$home/bin/hermes.exe" ]] || fail "this side's launchers did not come back, or Windows' came along"
 [[ ! -e "$home/vivac-hermes.conf" ]] || fail "the marker came along"
 [[ -f "$home/installs/oldkey/facts.json" ]] || fail "this side's environments did not come back"
 [[ ! -e "$home/installs/winkey" ]] || fail "Windows' environment came along"
 [[ -f "$win/installs/winkey/facts.json" ]] || fail "Windows' environment was damaged"
-[[ -z "$(find "$win/installs" -maxdepth 1 -type l)" ]] || fail "a link into this side's store was left in the shared installs/"
+[[ ! -e "$win/installs/$key" ]] || fail "the folder for this side's environment was left in the shared installs/"
+[[ -z "$(ls -A "$sandbox/systemd")" ]] || fail "mount units were left behind: $(ls "$sandbox/systemd")"
 [[ -f "$win/config.yaml" && -f "$win/bin/hermes.exe" ]] || fail "the Windows copy was damaged"
-[[ ! -e "$win/hermes-agent" ]] || fail "the shared home still links a checkout that left"
+for name in hermes-agent tools lsp; do
+	[[ ! -e "$win/$name" ]] || fail "the empty $name folder made for the mount was left on the Windows partition"
+done
 grep -q '^linux_shared=none$' "$win/vivac-hermes.conf" || fail "the marker still says this side shares"
 [[ "$(cat "$sandbox/unshare.out")" == *"Back on this side: $home"* ]] || fail "unshare did not say so"
 
