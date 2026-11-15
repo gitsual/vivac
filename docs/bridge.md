@@ -743,6 +743,28 @@ Models: each side talks to its own Ollama at `127.0.0.1:11434`; the models
 themselves can sit on the shared disk (`OLLAMA_MODELS`), so both serve the
 same ones and the shared `config.yaml` names a model both have.
 
+## 12. The android half: Hermes reaches the phone
+
+`android/` runs inside Termux on the phone (no root, no ADB, no fork of the
+OS); its README has the setup. What crosses between the phone and a PC:
+
+- **MCP over SSH.** Hermes on the PC starts `ssh pixel vivac-mcp` as an MCP
+  server (`mcp_servers.pixel`, `trust: untrusted`). The phone pins Hermes' key
+  to `vivac-gate` in `authorized_keys`; the gate execs `vivac-mcp` and nothing
+  else, apart from `vivac-photo-get NAME`. `vivac-mcp` speaks JSON-RPC 2.0 on
+  stdio, one message per line, protocol `2025-06-18` (also `2025-03-26`,
+  `2024-11-05`), and offers 13 fixed tools. The six read tools carry
+  `readOnlyHint: true`, so Hermes asks the user before the other seven run.
+- **Photos.** The `photo` tool answers with a phone-side path.
+  `vivac-phone-pull NAME|PATH` on Linux (in `bridge`) fetches the file through
+  the gate into `<Downloads>/vivac-link/phone/` and prints the local path, which
+  Hermes sends with `MEDIA:<path>`. Names must match
+  `photo-YYYYMMDD-HHMMSS.jpg` on both ends.
+- **Shared data.** `shared/sync.sh` also copies `shared/data` into
+  `android/data` (the themes the phone will apply).
+- **Gate.** `android/scripts/check.sh` runs on the PC against fake `termux-*`,
+  `getprop` and `ssh`.
+
 ## Versions
 
 The product has one version (`VERSION` at the root); each half has its own

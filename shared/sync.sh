@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Copy what both systems share (shared/data/) into linux/data/ and
-# windows/data/. Each side keeps its own copy so it deploys on its own; this
+# Copy what every half shares (shared/data/) into linux/data/,
+# windows/data/ and android/data/. Each side keeps its own copy so it deploys on its own; this
 # is the only way those copies change.
 #
 #   shared/sync.sh           copy, and say what changed
@@ -16,7 +16,7 @@ check=0
 drift=0
 while IFS= read -r -d '' src; do
   rel="${src#"$here"/}"
-  for side in linux windows; do
+  for side in linux windows android; do
     dest="$root/$side/$rel"
     if [[ -f "$dest" ]] && cmp -s "$src" "$dest"; then continue; fi
     if (( check )); then

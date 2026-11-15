@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-  Copy what both systems share (shared\data\) into linux\data\ and
-  windows\data\.
+  Copy what every half shares (shared\data\) into linux\data\,
+  windows\data\ and android\data\.
 
 .DESCRIPTION
   Each side keeps its own copy so it deploys on its own; this is the only way
@@ -22,7 +22,7 @@ $data = Join-Path $here 'data'
 $drift = $false
 foreach ($src in Get-ChildItem -LiteralPath $data -Recurse -File | Sort-Object FullName) {
     $rel = $src.FullName.Substring($here.Length + 1)
-    foreach ($side in 'linux', 'windows') {
+    foreach ($side in 'linux', 'windows', 'android') {
         $dest = Join-Path (Join-Path $root $side) $rel
         if ((Test-Path -LiteralPath $dest) -and
             ([Convert]::ToBase64String([IO.File]::ReadAllBytes($src.FullName)) -eq [Convert]::ToBase64String([IO.File]::ReadAllBytes($dest)))) { continue }

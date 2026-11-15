@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+"""The phone as an MCP server: JSON-RPC 2.0 over stdio, one message per line.
+
+Hermes reaches it as `ssh pixel vivac-mcp`; the key it uses is pinned to this
+command in authorized_keys, so that key can do what these tools do and
+nothing else. Every tool is a fixed termux-* command with checked arguments:
+no tool takes a command line, a path to read or a shell string.
+
+Stdlib only. Overrides (tests): VIVAC_FACTS (the vivac-facts to run),
+VIVAC_PHOTO_DIR (where photos land, default ~/.local/share/vivac/photos).
+"""
+import json
+import os
+import subprocess
+import sys
+import time
+
+VERSION = "0.1.0"
+HERE = os.path.dirname(os.path.realpath(__file__))
+FACTS = os.environ.get("VIVAC_FACTS", os.path.join(HERE, "vivac-facts"))
+PHOTO_DIR = os.environ.get("VIVAC_PHOTO_DIR", os.path.expanduser("~/.local/share/vivac/photos"))
+PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
+VIBRATE_MAX_MS = 5000
+TEXT_MAX = 4000
+
+
+class ToolError(Exception):
+    pass
+
+
+def run(argv, stdin=None, timeout=30):
+    try:
+        done = subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=timeout)
+    except FileNotFoundError:
+        raise ToolError(f"{argv[0]} is not installed (Termux:API missing?)")
+    except subprocess.TimeoutExpired:
+        raise ToolError(f"{argv[0]} timed out after {timeout} s")
+    if done.returncode != 0:
+        raise ToolError(f"{argv[0]} failed ({done.returncode}): {done.stderr.strip() or done.stdout.strip()}")
+    return done.stdout.strip()
+
+
+def text_arg(args, name, required=True):
+    value = args.get(name)
+    if value is None and not required:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ToolError(f"'{name}' must be a non-empty string")
+    if len(value) > TEXT_MAX:
+        raise ToolError(f"'{name}' is longer than {TEXT_MAX} characters")
+    return value
+
+
+# ---- tools ---------------------------------------------------------------
+
+def t_device_info(_):
+    return run([FACTS])
+
+
+def t_battery(_):
+    return run(["termux-battery-status"])
+
+
+def t_location(args):
+    provider = args.get("provider", "network")
+    if provider not in ("network", "gps", "passive"):
+        raise ToolError("'provider' must be network, gps or passive")
+    return run(["termux-location", "-p", provider, "-r", "once"], timeout=60)
+
+
+def t_notifications(_):
+    return run(["termux-notification-list"])
+
+
+def t_clipboard_get(_):
+    return run(["termux-clipboard-get"])
+
+
+def t_wifi(_):
+    raw = run(["termux-wifi-connectioninfo"])
+    try:
+        info = json.loads(raw)
+    except ValueError:
+        raise ToolError("unexpected wifi answer")
+    for key in ("bssid", "mac_address"):
+        info.pop(key, None)
+    return json.dumps(info, ensure_ascii=False)
+
+
+def t_notify(args):
+    title = text_arg(args, "title")
+    body = text_arg(args, "body")
+    run(["termux-notification", "--title", title, "--content", body])
+    return "notification shown"
+
+
+def t_clipboard_set(args):
+    run(["termux-clipboard-set"], stdin=text_arg(args, "text"))
+    return "clipboard set"
+
+
+def t_vibrate(args):
+    ms = args.get("ms", 500)
+    if not isinstance(ms, int) or ms <= 0:
+        raise ToolError("'ms' must be a positive integer")
+    ms = min(ms, VIBRATE_MAX_MS)
+    run(["termux-vibrate", "-d", str(ms)])
+    return f"vibrated {ms} ms"
+
+
+def t_torch(args):
+    state = args.get("on")
+    if not isinstance(state, bool):
+        raise ToolError("'on' must be true or false")
+    run(["termux-torch", "on" if state else "off"])
+    return "torch on" if state else "torch off"
+
+
+def t_tts_speak(args):
+    run(["termux-tts-speak", text_arg(args, "text")], timeout=120)
+    return "spoken"
+
+
+def t_photo(args):
+    camera = args.get("camera", "back")
+    if camera not in ("back", "front"):
+        raise ToolError("'camera' must be back or front")
+    os.makedirs(PHOTO_DIR, exist_ok=True)
+    path = os.path.join(PHOTO_DIR, time.strftime("photo-%Y%m%d-%H%M%S.jpg"))
+    run(["termux-camera-photo", "-c", "1" if camera == "front" else "0", path], timeout=60)
+    if not os.path.isfile(path):
+        raise ToolError("the camera wrote no file")
+    return path
+
+
+def t_open_url(args):
+    url = text_arg(args, "url")
+    if not url.startswith(("http://", "https://")):
+        raise ToolError("only http and https URLs are opened")
+    run(["termux-open-url", url])
+    return "opened"
+
+
+def schema(props=None, required=()):
+    return {"type": "object", "properties": props or {}, "required": list(required),
+            "additionalProperties": False}
+
+
+S = {"type": "string"}
+TOOLS = {
+    "device_info": (t_device_info, "Phone model, Android/GrapheneOS build, security patch, SoC, RAM, storage, battery and uptime.", schema()),
+    "battery": (t_battery, "Battery level, charging state, health and temperature.", schema()),
+    "location": (t_location, "Current location (latitude, longitude, accuracy).",
+                 schema({"provider": {"type": "string", "enum": ["network", "gps", "passive"]}})),
+    "notifications": (t_notifications, "Notifications currently shown on the phone.", schema()),
+    "clipboard_get": (t_clipboard_get, "Text currently in the phone clipboard.", schema()),
+    "wifi": (t_wifi, "Current Wi-Fi connection (SSID, IP, signal).", schema()),
+    "notify": (t_notify, "Show a notification on the phone.",
+               schema({"title": S, "body": S}, ["title", "body"])),
+    "clipboard_set": (t_clipboard_set, "Put text in the phone clipboard.", schema({"text": S}, ["text"])),
+    "vibrate": (t_vibrate, f"Vibrate the phone (milliseconds, max {VIBRATE_MAX_MS}).",
+                schema({"ms": {"type": "integer", "minimum": 1}})),
+    "torch": (t_torch, "Turn the flashlight on or off.", schema({"on": {"type": "boolean"}}, ["on"])),
+    "tts_speak": (t_tts_speak, "Speak a text aloud on the phone.", schema({"text": S}, ["text"])),
+    "photo": (t_photo, "Take a photo; returns its path on the phone (fetch it with vivac-phone-pull).",
+              schema({"camera": {"type": "string", "enum": ["back", "front"]}})),
+    "open_url": (t_open_url, "Open an http(s) URL on the phone.", schema({"url": S}, ["url"])),
+}
+
+
+# Hermes runs these without asking even on a `trust: untrusted` server; the
+# rest (they change something on the phone) need the user's yes in the chat.
+READ_ONLY = frozenset({"device_info", "battery", "location", "notifications", "clipboard_get", "wifi"})
+
+
+# ---- JSON-RPC ------------------------------------------------------------
+
+def result(msg_id, value):
+    return {"jsonrpc": "2.0", "id": msg_id, "result": value}
+
+
+def error(msg_id, code, message):
+    return {"jsonrpc": "2.0", "id": msg_id, "error": {"code": code, "message": message}}
+
+
+def call_tool(params):
+    name = params.get("name")
+    args = params.get("arguments") or {}
+    if name not in TOOLS or not isinstance(args, dict):
+        return {"content": [{"type": "text", "text": f"unknown tool: {name}"}], "isError": True}
+    try:
+        text = TOOLS[name][0](args)
+    except ToolError as exc:
+        return {"content": [{"type": "text", "text": str(exc)}], "isError": True}
+    return {"content": [{"type": "text", "text": text}], "isError": False}
+
+
+def handle(msg):
+    if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0" or "method" not in msg:
+        return error(msg.get("id") if isinstance(msg, dict) else None, -32600, "invalid request")
+    msg_id, method, params = msg.get("id"), msg["method"], msg.get("params") or {}
+    if "id" not in msg:  # a notification: never answered
+        return None
+    if method == "initialize":
+        asked = params.get("protocolVersion")
+        return result(msg_id, {
+            "protocolVersion": asked if asked in PROTOCOLS else PROTOCOLS[0],
+            "capabilities": {"tools": {"listChanged": False}},
+            "serverInfo": {"name": "vivac-phone", "version": VERSION},
+        })
+    if method == "ping":
+        return result(msg_id, {})
+    if method == "tools/list":
+        return result(msg_id, {"tools": [
+            {"name": n, "description": d, "inputSchema": s,
+             "annotations": {"readOnlyHint": n in READ_ONLY, "openWorldHint": False}}
+            for n, (_, d, s) in TOOLS.items()]})
+    if method == "tools/call":
+        return result(msg_id, call_tool(params))
+    return error(msg_id, -32601, f"method not found: {method}")
+
+
+def main():
+    for line in sys.stdin:
+        if not line.strip():
+            continue
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            answer = error(None, -32700, "parse error")
+        else:
+            answer = handle(msg)
+        if answer is not None:
+            sys.stdout.write(json.dumps(answer, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    main()

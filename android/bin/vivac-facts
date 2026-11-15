@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""What this phone is, as JSON on stdout.
+
+Built field by field from an allowlist: nothing read from getprop is passed
+through as is, so serials, IMEIs, MAC addresses and phone numbers can never
+leak, whatever the device exposes. A missing Termux:API only empties the
+battery field.
+
+Overrides (tests): VIVAC_PROC (default /proc), VIVAC_STORAGE (default $HOME).
+"""
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+PROC = os.environ.get("VIVAC_PROC", "/proc")
+STORAGE = os.environ.get("VIVAC_STORAGE", os.path.expanduser("~"))
+
+
+def prop(name):
+    try:
+        done = subprocess.run(["getprop", name], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout.strip()
+
+
+def as_int(text):
+    try:
+        return int(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def meminfo():
+    fields = {}
+    try:
+        with open(os.path.join(PROC, "meminfo"), encoding="ascii") as f:
+            for line in f:
+                key, _, rest = line.partition(":")
+                fields[key] = as_int(rest.split()[0]) if rest.split() else None
+    except OSError:
+        return None
+    total, avail = fields.get("MemTotal"), fields.get("MemAvailable")
+    if total is None:
+        return None
+    return {"total_mb": total // 1024, "available_mb": avail // 1024 if avail is not None else None}
+
+
+def storage():
+    try:
+        usage = shutil.disk_usage(STORAGE)
+    except OSError:
+        return None
+    gb = 1024 ** 3
+    return {"total_gb": round(usage.total / gb, 1), "free_gb": round(usage.free / gb, 1)}
+
+
+def battery():
+    if not shutil.which("termux-battery-status"):
+        return None
+    try:
+        done = subprocess.run(["termux-battery-status"], capture_output=True, text=True, timeout=15)
+        raw = json.loads(done.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return {
+        "percent": raw.get("percentage"),
+        "status": raw.get("status"),
+        "plugged": raw.get("plugged"),
+        "health": raw.get("health"),
+        "temperature_c": raw.get("temperature"),
+    }
+
+
+def uptime():
+    try:
+        with open(os.path.join(PROC, "uptime"), encoding="ascii") as f:
+            return int(float(f.read().split()[0]))
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def facts():
+    return {
+        "manufacturer": prop("ro.product.manufacturer"),
+        "model": prop("ro.product.model"),
+        "codename": prop("ro.product.device"),
+        "android": {
+            "version": prop("ro.build.version.release"),
+            "sdk": as_int(prop("ro.build.version.sdk")),
+        },
+        "build": {
+            "id": prop("ro.build.id"),
+            "incremental": prop("ro.build.version.incremental"),
+            "security_patch": prop("ro.build.version.security_patch"),
+        },
+        "soc": {
+            "manufacturer": prop("ro.soc.manufacturer"),
+            "model": prop("ro.soc.model"),
+            "cores": os.cpu_count(),
+        },
+        "memory": meminfo(),
+        "storage": storage(),
+        "battery": battery(),
+        "uptime_s": uptime(),
+    }
+
+
+if __name__ == "__main__":
+    json.dump(facts(), sys.stdout, ensure_ascii=False)
+    sys.stdout.write("\n")
