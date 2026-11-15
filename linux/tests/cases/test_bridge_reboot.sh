@@ -63,8 +63,12 @@ run --yes || fail 'the restart failed'
 [[ "$(cat "$calls")" == $'sudo -n efibootmgr --bootnext 001A\nefibootmgr --bootnext 001A\nsystemctl reboot' ]] ||
 	fail "the restart did not set BootNext and reboot, in that order: $(cat "$calls")"
 
-# Without --yes and with no terminal or menu to ask in, nothing happens.
+# Without --yes and no terminal, the menu asks; dismissed, nothing happens.
+# The menu is a fake: the host's own rofi would open on the desktop and wait.
+printf '#!/usr/bin/env bash\nprintf "rofi %%s\\n" "$*" >>"$CALLS"\nexit 1\n' >"$sandbox/bin/rofi"
+chmod +x "$sandbox/bin/rofi"
 if run; then fail 'restarted without being asked'; fi
+grep -q '^rofi -dmenu' "$calls" || fail "the menu was not asked: $(cat "$calls")"
 grep -q bootnext "$calls" && fail 'BootNext was set without confirmation'
 
 # An inactive entry is used only when there is no active one; older efibootmgr
