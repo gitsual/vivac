@@ -231,6 +231,16 @@ unbind() {
 	sudo systemctl daemon-reload || true
 }
 
+# refresh PYTHON — Hermes writes its checkout's path into its launchers and
+# names the dependency environment after it: once the checkout is reached
+# through another path, have Hermes rewrite both (best effort, never fatal).
+refresh() {
+	[[ -x "$1" ]] || return 0
+	step hermes.refreshing
+	"$1" -m hermes_cli.venv_sync --project-root "$home/hermes-agent" >/dev/null 2>&1 || tell hermes.refresh_failed
+	return 0
+}
+
 # conflicts_of SRC DST — those relative paths, one per line.
 conflicts_of() {
 	local src="$1" dst="$2" rel="${3:-}" entry name
@@ -380,6 +390,7 @@ share() {
 	marker_set "$shared" linux_created "${created[*]}"
 	marker_set "$shared" linux_shared "$stamp"
 	[[ -n "$backup" && -d "$backup" ]] && marker_set "$shared" windows_backup "$backup"
+	refresh "$store/hermes-agent/venv/bin/python"
 	tell hermes.shared_done "$home" "$shared"
 }
 
@@ -448,6 +459,7 @@ unshare() {
 	rm -f -- "$home"
 	mv -- "$fresh" "$home"
 	marker_set "$shared" linux_shared none
+	refresh "$home/hermes-agent/venv/bin/python"
 	tell hermes.unshared_done "$home" "$shared"
 }
 

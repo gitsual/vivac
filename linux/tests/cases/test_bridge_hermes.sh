@@ -35,6 +35,11 @@ printf 'linux memory\n' >"$home/memories/MEMORY.md"
 printf 'skill\n' >"$home/skills/one/SKILL.md"
 printf 'linux sessions\n' >"$home/state.db"
 printf 'code\n' >"$home/hermes-agent/.venv/python"
+# The checkout's venv: its launchers carry the checkout's path, so a move must
+# have Hermes write them again (a fake that writes down how it was asked).
+mkdir -p "$home/hermes-agent/venv/bin"
+printf '#!/usr/bin/env bash\nprintf "venv-python %%s\\n" "$*" >>"$CALLS"\n' >"$home/hermes-agent/venv/bin/python"
+chmod +x "$home/hermes-agent/venv/bin/python"
 printf 'tool\n' >"$home/tools/uv/uv"
 mkdir -p "$home/bin" && printf 'elf\n' >"$home/bin/tirith"
 printf 'language server\n' >"$home/lsp/bin/server"
@@ -159,6 +164,8 @@ mounted_at "$store/installs/$key" "$win/installs/$key"
 grep -q '^linux_shared=' "$win/vivac-hermes.conf" || fail "the marker does not record this side"
 grep -q '^windows_home=' "$win/vivac-hermes.conf" || fail "the marker lost Windows' line"
 grep -q "^windows_backup=$backup" "$win/vivac-hermes.conf" || fail "the marker does not name the backup"
+grep -Fxq "venv-python -m hermes_cli.venv_sync --project-root $home/hermes-agent" "$calls" ||
+	fail "Hermes was not asked to rewrite its launchers for the shared place: $(cat "$calls")"
 [[ "$(cat "$sandbox/share.out")" == *"Shared: $home points at $win"* ]] || fail "share did not say so: $(cat "$sandbox/share.out")"
 
 out="$(hermes --status)"
@@ -193,6 +200,7 @@ ln -s -- "$win" "$home"
 out="$(hermes --unshare --dry-run)"
 [[ "$out" == *"copy everything from $win into $home"* && "$out" == *"nothing was moved"* ]] || fail "unshare dry run: $out"
 [[ -L "$home" ]] || fail "unshare dry run moved the home"
+: >"$calls"
 hermes --unshare --yes >"$sandbox/unshare.out" 2>&1 || fail "unshare failed: $(cat "$sandbox/unshare.out")"
 [[ -d "$home" && ! -L "$home" ]] || fail "the home is not a real folder again"
 [[ "$(cat "$home/config.yaml")" == 'side: linux' ]] || fail "the config did not come back"
@@ -215,6 +223,8 @@ for name in hermes-agent tools lsp; do
 	[[ ! -e "$win/$name" ]] || fail "the empty $name folder made for the mount was left on the Windows partition"
 done
 grep -q '^linux_shared=none$' "$win/vivac-hermes.conf" || fail "the marker still says this side shares"
+grep -Fxq "venv-python -m hermes_cli.venv_sync --project-root $home/hermes-agent" "$calls" ||
+	fail "Hermes was not asked to rewrite its launchers back home: $(cat "$calls")"
 [[ "$(cat "$sandbox/unshare.out")" == *"Back on this side: $home"* ]] || fail "unshare did not say so"
 
 printf 'ok\n'
