@@ -40,11 +40,12 @@ home="${HERMES_HOME:-$HOME/.hermes}"
 mount="${VIVAC_WINDOWS_MOUNT:-/mnt/win}"
 store="${XDG_DATA_HOME:-$HOME/.local/share}/hermes"
 marker_name=vivac-hermes.conf
-# What stays on this side: the code checkout (with its venv) and the tool store
-# are built for one operating system each, and so are the dependency
+# What stays on this side: the code checkout (with its venv), the tool store and
+# the language servers (an npm tree under lsp/) are built for one operating
+# system each, and so are the dependency
 # environments, which Hermes keeps under installs/<key>, the key being the
 # first 16 hex digits of the SHA-256 of the checkout's resolved path.
-per_side=(hermes-agent tools)
+per_side=(hermes-agent tools lsp)
 machine_dir=installs
 
 action=open folder='' dry_run=false assume_yes=false
@@ -170,6 +171,21 @@ confirm() { # confirm KEY ARGS... — ask once, unless --yes
 # A home joins a home file by file: a folder both sides have (memories/,
 # skills/) is walked, a file only Windows has stays, a file both have is this
 # side's, Windows' copy set aside under the backup at the same relative path.
+# A SQLite database and its journal are one thing: when this side's database
+# wins, Windows' journal (-wal, -shm, -journal) goes aside with Windows'
+# database even where this side has none, or SQLite would replay it into the
+# wrong file.
+journal_suffixes=(-wal -shm -journal)
+# stray_journals SRC DST NAME — Windows' journals of NAME that SRC lacks.
+stray_journals() {
+	local suffix
+	[[ "$3" == *.db ]] || return 0
+	for suffix in "${journal_suffixes[@]}"; do
+		[[ -e "$1/$3$suffix" || -L "$1/$3$suffix" ]] && continue
+		[[ -e "$2/$3$suffix" || -L "$2/$3$suffix" ]] && printf '%s\n' "$3$suffix"
+	done
+	return 0
+}
 # conflicts_of SRC DST — those relative paths, one per line.
 conflicts_of() {
 	local src="$1" dst="$2" rel="${3:-}" entry name
@@ -181,10 +197,10 @@ conflicts_of() {
 			if [[ -d "$entry" && ! -L "$entry" && -d "$dst/$name" && ! -L "$dst/$name" ]]; then
 				conflicts_of "$entry" "$dst/$name" "$rel$name/"
 			else
-				printf '%s
-' "$rel$name"
+				printf '%s\n' "$rel$name"
 			fi
 		fi
+		while IFS= read -r name; do printf '%s\n' "$rel$name"; done < <(stray_journals "$src" "$dst" "${entry##*/}")
 	done
 }
 # merge_into SRC DST BACKUP — copy SRC's tree into DST that way, without
@@ -203,6 +219,11 @@ merge_into() {
 			mkdir -p -- "$backup/$rel"
 			mv -- "$dst/$name" "$backup/$rel$name"
 		fi
+		local journal
+		while IFS= read -r journal; do
+			mkdir -p -- "$backup/$rel"
+			mv -- "$dst/$journal" "$backup/$rel$journal"
+		done < <(stray_journals "$src" "$dst" "$name")
 		cp -r --preserve=timestamps -- "$entry" "$dst/$name"
 	done
 }

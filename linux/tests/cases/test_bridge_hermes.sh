@@ -21,12 +21,14 @@ fail() {
 sandbox="$(mktemp -d "${TMPDIR:-/tmp}/vivac-hermes.XXXXXX")"
 trap 'rm -rf -- "$sandbox"' EXIT
 mkdir -p "$sandbox/bin" "$sandbox/linux/.hermes/memories" "$sandbox/linux/.hermes/skills/one" \
-	"$sandbox/linux/.hermes/hermes-agent/.venv" "$sandbox/linux/.hermes/tools/uv" "$sandbox/linux/.hermes/installs/oldkey" \
+	"$sandbox/linux/.hermes/hermes-agent/.venv" "$sandbox/linux/.hermes/tools/uv" "$sandbox/linux/.hermes/lsp/bin" "$sandbox/linux/.hermes/installs/oldkey" \
 	"$sandbox/win/Users/someone/.hermes/memories" "$sandbox/win/Users/someone/.hermes/bin" \
 	"$sandbox/win/Users/someone/.hermes/installs/winkey" "$sandbox/win/Users/Public/.hermes"
 home="$sandbox/linux/.hermes"
 win="$sandbox/win/Users/someone/.hermes"
 calls="$sandbox/calls"
+# The host may have Hermes installed: the tool sees only the fakes and the system.
+system_path=/usr/local/bin:/usr/bin:/bin
 # This side's home: the one with months of use.
 printf 'side: linux\n' >"$home/config.yaml"
 printf 'linux memory\n' >"$home/memories/MEMORY.md"
@@ -34,11 +36,14 @@ printf 'skill\n' >"$home/skills/one/SKILL.md"
 printf 'linux sessions\n' >"$home/state.db"
 printf 'code\n' >"$home/hermes-agent/.venv/python"
 printf 'tool\n' >"$home/tools/uv/uv"
+printf 'language server\n' >"$home/lsp/bin/server"
 printf '{}\n' >"$home/installs/oldkey/facts.json"
 # Windows' own, fresh from its installer: a config, a few test sessions, a
 # memory of its own, and its launchers.
 printf 'side: windows\n' >"$win/config.yaml"
 printf 'windows sessions\n' >"$win/state.db"
+# Windows' journal of its own sessions; this side has none (checkpointed).
+printf 'windows journal\n' >"$win/state.db-wal"
 printf 'windows user\n' >"$win/memories/USER.md"
 printf 'MZ\n' >"$win/bin/hermes.exe"
 printf '{}\n' >"$win/installs/winkey/facts.json"
@@ -49,7 +54,7 @@ printf '#!/usr/bin/env bash\nexit 0\n' >"$sandbox/bin/notify-send"
 chmod +x "$sandbox/bin/"*
 
 hermes() {
-	PATH="$sandbox/bin:$PATH" CALLS="$calls" VIVAC_REPO="$repo_root" VIVAC_LANG=en HOME="$sandbox/linux" \
+	PATH="$sandbox/bin:$system_path" CALLS="$calls" VIVAC_REPO="$repo_root" VIVAC_LANG=en HOME="$sandbox/linux" \
 		XDG_DATA_HOME="$sandbox/linux/.local/share" VIVAC_WINDOWS_MOUNT="$sandbox/win" TERMINAL=kitty "$tool" "$@"
 }
 
@@ -58,13 +63,13 @@ out="$(hermes --status)"
 [[ "$out" == *"$home, this side only"* ]] || fail "status before: $out"
 [[ "$out" == *"not installed"* ]] || fail "status should say Hermes is missing: $out"
 hermes --available && fail "available without hermes on PATH"
-rows="$(PATH="$sandbox/bin:$PATH" VIVAC_REPO="$repo_root" VIVAC_LANG=en HOME="$sandbox/linux" "$bridge" --print)"
+rows="$(PATH="$sandbox/bin:$system_path" VIVAC_REPO="$repo_root" VIVAC_LANG=en HOME="$sandbox/linux" "$bridge" --print)"
 [[ "$rows" == *Hermes* ]] && fail "the menu offers Hermes before it is installed: $rows"
 
 # A dry run names the moves and changes nothing.
 out="$(hermes --share --dry-run)"
 [[ "$out" == *"move $home/hermes-agent to $sandbox/linux/.local/share/hermes/hermes-agent"* ]] || fail "dry run plan: $out"
-[[ "$out" == *"set aside Windows' own config.yaml state.db under"* ]] || fail "dry run should name the conflicts, file by file: $out"
+[[ "$out" == *"set aside Windows' own config.yaml state.db state.db-wal under"* ]] || fail "dry run should name the conflicts, file by file: $out"
 [[ "$out" == *"nothing was moved"* ]] || fail "dry run should say so: $out"
 [[ -d "$home" && ! -L "$home" ]] || fail "dry run moved the home"
 [[ "$(cat "$win/config.yaml")" == 'side: windows' ]] || fail "dry run touched Windows' config"
@@ -85,11 +90,18 @@ backup="$(find "$sandbox/win/Users/someone" -maxdepth 1 -name '.hermes.windows-b
 [[ -n "$backup" ]] || fail "no backup of Windows' own files"
 [[ "$(cat "$backup/config.yaml")" == 'side: windows' ]] || fail "Windows' config is not in the backup"
 [[ "$(cat "$backup/state.db")" == 'windows sessions' ]] || fail "Windows' sessions are not in the backup"
+[[ "$(cat "$backup/state.db-wal")" == 'windows journal' ]] || fail "Windows' journal is not in the backup beside its database"
 store="$sandbox/linux/.local/share/hermes"
 [[ -d "$store/hermes-agent" && ! -L "$store/hermes-agent" ]] || fail "the checkout did not move to the store"
 [[ -f "$store/hermes-agent/.venv/python" ]] || fail "the checkout lost its venv"
 [[ -L "$win/hermes-agent" && "$(readlink -- "$win/hermes-agent")" == "$store/hermes-agent" ]] || fail "the shared home does not link the checkout"
 [[ -L "$win/tools" && "$(readlink -- "$win/tools")" == "$store/tools" ]] || fail "the shared home does not link the tool store"
+# The language servers are an npm tree built for one system: per side too.
+[[ -f "$store/lsp/bin/server" ]] || fail "the language servers did not move to the store"
+[[ -L "$win/lsp" && "$(readlink -- "$win/lsp")" == "$store/lsp" ]] || fail "the shared home does not link the language servers"
+# A database travels with its journal: Windows' journal never meets this side's
+# database (SQLite would replay it into the wrong file).
+[[ ! -e "$win/state.db-wal" ]] || fail "Windows' journal was left beside this side's database"
 # The dependency environments: this side's old one in the store, Windows' own
 # untouched, and one link in the shared installs/ named as Hermes will name
 # this side's next one (sha-256 of the checkout's resolved path, 16 digits).
@@ -117,7 +129,7 @@ out="$(hermes --share --yes 2>&1)" || fail "second share failed"
 printf '#!/usr/bin/env bash\nexit 0\n' >"$sandbox/bin/hermes"
 chmod +x "$sandbox/bin/hermes"
 hermes --available || fail "not available with hermes on PATH"
-rows="$(PATH="$sandbox/bin:$PATH" VIVAC_REPO="$repo_root" VIVAC_LANG=en HOME="$sandbox/linux" "$bridge" --print)"
+rows="$(PATH="$sandbox/bin:$system_path" VIVAC_REPO="$repo_root" VIVAC_LANG=en HOME="$sandbox/linux" "$bridge" --print)"
 [[ "$rows" == *"Hermes (the agent)"* ]] || fail "the menu does not offer Hermes: $rows"
 hermes
 grep -Fxq 'term -e hermes' "$calls" || fail "opening did not use the terminal: $(cat "$calls" 2>/dev/null)"
@@ -143,6 +155,7 @@ hermes --unshare --yes >"$sandbox/unshare.out" 2>&1 || fail "unshare failed: $(c
 [[ -f "$home/memories/USER.md" ]] || fail "Windows' memory did not come along"
 [[ -d "$home/hermes-agent" && ! -L "$home/hermes-agent" && -f "$home/hermes-agent/.venv/python" ]] || fail "the checkout is not back in the home"
 [[ ! -e "$store/hermes-agent" ]] || fail "the store still holds the checkout"
+[[ -f "$home/lsp/bin/server" && ! -L "$home/lsp" ]] || fail "the language servers are not back in the home"
 [[ ! -e "$home/bin" ]] || fail "Windows' launchers came along"
 [[ ! -e "$home/vivac-hermes.conf" ]] || fail "the marker came along"
 [[ -f "$home/installs/oldkey/facts.json" ]] || fail "this side's environments did not come back"
