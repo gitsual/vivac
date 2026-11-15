@@ -8,8 +8,9 @@
 # it, a phone through LocalSend (send to it; receive from it on or off, with its
 # PIN), the shared mouse on or off, Restart in Windows when the firmware has an
 # entry for it, Bluetooth pairings taken from Windows when a Windows partition
-# is mounted, and the phone when KDE Connect is installed. As in the power
-# menu, the action is chosen by position and never by the label it printed.
+# is mounted, Hermes when it is installed, and the phone when KDE Connect is
+# installed. As in the power menu, the action is chosen by position and never
+# by the label it printed.
 set -Eeuo pipefail
 
 self="$(readlink -f -- "${BASH_SOURCE[0]}")"
@@ -44,6 +45,11 @@ fi
 if "$bin/vivac-bt-sync" --available 2>/dev/null; then
 	keys+=(btsync.menu)
 	commands+=('vivac-bt-sync --ask')
+fi
+# Hermes, once it is installed (docs/bridge.md, "Hermes across the dual boot").
+if "$bin/vivac-hermes" --available 2>/dev/null; then
+	keys+=(hermes.menu)
+	commands+=(vivac-hermes)
 fi
 # The phone, once KDE Connect is installed: its own menu of what it can do.
 if "$bin/vivac-phone" --available 2>/dev/null; then
