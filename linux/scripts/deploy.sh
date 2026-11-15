@@ -218,14 +218,33 @@ for i in "${!plan_kind[@]}"; do
 	fi
 done
 
+# ~/.config/vivac/repo names the checkout for every runtime script (the waybar
+# dispatcher, hypridle, the shared-settings sync). A checkout that moved left it
+# naming the old root, and those broke once the old road went away.
+repo_pointer="${XDG_CONFIG_HOME:-$HOME/.config}/vivac/repo"
+pointer_stale=false
+[[ "$(cat -- "$repo_pointer" 2>/dev/null)" == "$repo_root" ]] || pointer_stale=true
+
 if $dry_run; then
 	printf 'would stow: %s\n' "${selected[*]}"
+	$pointer_stale && printf 'would write %s (%s)\n' "$repo_pointer" "$repo_root"
 	exit 0
 fi
 
 simulating=false
 stow_all
 printf 'deployed: %s\n' "${selected[*]}"
+if $pointer_stale; then
+	if [[ -e "$repo_pointer" || -L "$repo_pointer" ]]; then
+		ensure_backup_root
+		pointer_backup="$backup_root/${repo_pointer#"$HOME"/}"
+		mkdir -p -- "$(dirname -- "$pointer_backup")"
+		mv -- "$repo_pointer" "$pointer_backup"
+	fi
+	mkdir -p -- "$(dirname -- "$repo_pointer")"
+	printf '%s\n' "$repo_root" >"$repo_pointer"
+	printf 'wrote %s (%s)\n' "$repo_pointer" "$repo_root"
+fi
 
 # Restowing points every themed file back at the committed default render, and
 # a non-default theme lives as an overlay written OVER those symlinks. Deploying
