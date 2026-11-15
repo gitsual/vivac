@@ -86,7 +86,8 @@ stage 'asset manifest'
 stage 'privacy and secret scan'
 python scripts/privacy-scan.py .
 if command -v gitleaks >/dev/null; then
-	gitleaks detect --no-banner --no-git --source .
+	# The allowlist lives at the product root; its paths are relative to linux/.
+	gitleaks detect --no-banner --no-git --source . --config "$repo_root/../.gitleaks.toml"
 else
 	printf '%s\n' 'gitleaks not installed; explicit privacy scanner completed'
 fi

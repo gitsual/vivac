@@ -9,3 +9,9 @@ paths = [
   '''^dist/''',
   '''^\.audit/'''
 ]
+
+[[allowlists]]
+description = "Bluetooth sync fixtures: made-up link keys (00112233...) for the tests, no real device"
+paths = [
+  '''^tests/data/bt-sync/'''
+]
