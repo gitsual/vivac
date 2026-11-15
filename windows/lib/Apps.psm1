@@ -8,7 +8,7 @@ $script:Apps = @{
     # with the same name, the client in a cli folder of its own on the PATH.
     glazewm = @{ Process = 'glazewm'; Command = $null; Paths = @('%ProgramFiles%\glzr.io\GlazeWM\glazewm.exe', '%LOCALAPPDATA%\Programs\glzr.io\GlazeWM\glazewm.exe') }
     glazewmcli = @{ Process = 'glazewm'; Command = 'glazewm'; Paths = @('%ProgramFiles%\glzr.io\GlazeWM\cli\glazewm.exe') }
-    zebar   = @{ Process = 'zebar'; Command = 'zebar'; Paths = @('%ProgramFiles%\glzr.io\Zebar\zebar.exe', '%LOCALAPPDATA%\Programs\glzr.io\Zebar\zebar.exe') }
+    zebar   = @{ Process = 'zebar'; Command = 'zebar'; Paths = @('%ProgramFiles%\glzr.io\Zebar\zebar.exe', '%LOCALAPPDATA%\Programs\glzr.io\Zebar\zebar.exe'); Detached = $true }
     flow    = @{ Process = 'Flow.Launcher'; Command = $null; Paths = @('%LOCALAPPDATA%\FlowLauncher\Flow.Launcher.exe') }
     nvim    = @{ Process = 'nvim'; Command = 'nvim'; Paths = @('%ProgramFiles%\Neovim\bin\nvim.exe') }
     wt      = @{ Process = 'WindowsTerminal'; Command = 'wt'; Paths = @('%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe') }
@@ -51,7 +51,17 @@ function Stop-VivacApp([string]$Name) {
 function Start-VivacApp([string]$Name) {
     $exe = Find-VivacApp $Name
     if (-not $exe) { return $false }
-    Start-Process -FilePath $exe -WindowStyle Hidden | Out-Null
+    if ($script:Apps[$Name].ContainsKey('Detached') -and (Get-Process -Name explorer -ErrorAction SilentlyContinue)) {
+        # Zebar attaches itself to its parent's console and prints every
+        # provider reading there. Started from a shell with a window (a
+        # deploy run by hand, the sign-in script after it restarts Explorer)
+        # that flood lands in a visible console. Handed to Explorer, the
+        # parent has no console, and the program runs unelevated, as Zebar
+        # must for its bar strip to be honoured.
+        Start-Process -FilePath explorer.exe -ArgumentList ('"{0}"' -f $exe) | Out-Null
+    } else {
+        Start-Process -FilePath $exe -WindowStyle Hidden | Out-Null
+    }
     $true
 }
 

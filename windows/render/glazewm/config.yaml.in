@@ -169,6 +169,10 @@ keybindings:
   # @help: wm help.wm.power
   - commands: ['shell-exec --hide-window cmd.exe /c echo power>\\.\pipe\@PIPE_NAME@ 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 power']
     bindings: ['@SET_MOD@+shift+e']
+  # Switch to Linux: the power menu, Restart in Linux armed (Enter goes, Esc stays).
+  # @help: wm help.wm.switch
+  - commands: ['shell-exec --hide-window cmd.exe /c echo switch>\\.\pipe\@PIPE_NAME@ 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 switch']
+    bindings: ['@SET_MOD@+shift+w']
   # @help: wm help.wm.theme
   - commands: ['shell-exec --hide-window cmd.exe /c echo theme>\\.\pipe\@PIPE_NAME@ 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File @PATH_REPO@\bin\vivac.ps1 theme']
     bindings: ['@SET_MOD@+shift+t']

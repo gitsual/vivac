@@ -36,7 +36,7 @@ $dualboot = Join-Path $env:USERPROFILE 'dualboot'
 $sets = @(
     @{ Into = 'winget'; Root = $root; Files = @('bin\vivac-winget.ps1') },
     @{ Into = 'keyguard'; Root = $root; Files = @('bin\vivac-keyguard.ps1', 'lib\Vivac.psm1') },
-    @{ Into = 'reboot-other'; Root = $root; Files = @('bin\vivac-reboot-other.ps1', 'lib\BootNext.psm1') },
+    @{ Into = 'reboot-other'; Root = $root; Files = @('bin\vivac-reboot-other.ps1', 'lib\BootNext.psm1', 'lib\Switch.psm1') },
     @{ Into = 'dualboot'; Root = $dualboot; Files = @('mount-m2.ps1') }
 )
 

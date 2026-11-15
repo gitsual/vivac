@@ -310,7 +310,8 @@ cat >"$sandbox/bin/ip" <<'FAKE'
 printf '2: eth0    inet 198.51.100.20/24 brd 198.51.100.255 scope global dynamic eth0\n'
 FAKE
 chmod +x "$sandbox/bin/ip"
-plan="$(PATH="$sandbox/bin:$PATH" HOME="$sandbox" "$repo_root/scripts/apply-system.sh" --dry-run --bridge)" || fail 'apply-system.sh --dry-run --bridge failed'
+mkdir -p "$sandbox/net/eth0/device"
+plan="$(PATH="$sandbox/bin:$PATH" VIVAC_SYS_CLASS_NET="$sandbox/net" HOME="$sandbox" "$repo_root/scripts/apply-system.sh" --dry-run --bridge)" || fail 'apply-system.sh --dry-run --bridge failed'
 for expected in 'tcp 53317 from 198.51.100.0/24 in UFW (vivac phone drop)' 'udp 53317 from 198.51.100.0/24 in UFW (vivac phone drop)'; do
 	grep -qF "would allow $expected" <<<"$plan" || fail "the plan does not open $expected: $plan"
 done

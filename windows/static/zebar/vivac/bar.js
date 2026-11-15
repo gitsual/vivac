@@ -605,3 +605,31 @@ function stampAlive() {
 }
 setTimeout(stampAlive, 3000);
 setInterval(stampAlive, 30000);
+
+// A theme switch rewrites styles.css; the bar takes it the moment it lands,
+// without a restart (a restarted Zebar is gone for seconds, and the wallpaper
+// has long changed). The file is re-read a few times a second, and when its
+// text differs it goes into a <style> of its own, replacing the last one, so
+// the swap is one repaint; a file caught half written (no closing brace yet)
+// waits for the next read. A stamp follows, as the proof the new styles drew
+// (lib/Bar.psm1, Test-VivacBarProven, scripts/deploy.ps1 waits for it).
+let liveCss = null;
+async function restyle() {
+  let css;
+  try { css = await (await fetch('./styles.css', { cache: 'no-store' })).text(); } catch { return; }
+  if (css === liveCss || !css.trim().endsWith('}')) return;
+  const first = liveCss === null;
+  liveCss = css;
+  if (first) return; // what the page loaded with
+  let live = document.getElementById('live-styles');
+  if (!live) {
+    live = document.createElement('style');
+    live.id = 'live-styles';
+    document.head.appendChild(live);
+  }
+  live.textContent = css;
+  for (const link of document.querySelectorAll('link[rel="stylesheet"]')) link.disabled = true;
+  stampAlive();
+}
+restyle();
+setInterval(restyle, 300);

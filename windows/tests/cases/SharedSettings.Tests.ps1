@@ -441,13 +441,19 @@ try {
             Assert-Equal $PID (Get-VivacLockMarker).Pid
         } finally { Clear-VivacLockMarker }
     }
-    Case 'a host started without -LockAtStart drops whatever marker it finds, and never throws doing so' {
+    Case 'a host started without -LockAtStart drops a dead marker, keeps a live one (the greeter''s), and never throws doing so' {
         $other = Start-Process powershell.exe -ArgumentList '-NoProfile', '-Command', 'Start-Sleep 120' -WindowStyle Hidden -PassThru
         try {
             [IO.File]::WriteAllText($marker, "$($other.Id) start $(Get-CreationTicks $other.Id)`n")
             Reset-VivacLockMarker
-            Assert-True (-not (Test-Path -LiteralPath $marker)) 'the marker survived the start-up reset'
+            Assert-True (Test-Path -LiteralPath $marker) 'the marker of a live process (the sign-in greeter, up on its own desktop) was taken from under it'
         } finally { Stop-Process -Id $other.Id -Force -ErrorAction SilentlyContinue }
+        Start-Sleep -Milliseconds 300
+        Reset-VivacLockMarker
+        Assert-True (-not (Test-Path -LiteralPath $marker)) 'the marker of a dead process survived the start-up reset'
+        [void](Set-VivacLockMarker 'start')
+        Reset-VivacLockMarker
+        Assert-True (-not (Test-Path -LiteralPath $marker)) 'our own marker survived the start-up reset'
         Use-UnwritableState { Reset-VivacLockMarker }
         $daemon = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac-daemon.ps1'))
         Assert-True ($daemon -match '(?s)if \(\$LockAtStart\) \{[^}]*Set-VivacLockMarker[^}]*\} else \{ Reset-VivacLockMarker \}') 'the daemon does not reset the marker when started without -LockAtStart'

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# The getty on tty1 (getty@tty1.service.d/vivac-switch.conf): the stock agetty
+# command line, plus --autologin once when vivac-switch-arrive armed it at this
+# boot. The flag is spent before agetty starts, so a logout, a crash or a
+# restart of the getty asks for the password as always.
+#
+# The user is the one in /etc/vivac/switch.conf (written by root), never root,
+# and must exist; anything else falls back to the stock getty. So does any
+# error here: tty1 must never be left without a login.
+
+term="${1:-linux}"
+agetty="${AGETTY:-/usr/bin/agetty}"
+run_dir="${VIVAC_SWITCH_RUN:-/run/vivac}"
+conf="${VIVAC_SWITCH_CONF:-/etc/vivac/switch.conf}"
+flag="$run_dir/autologin-once"
+
+plain() { exec "$agetty" --noreset --noclear - "$term"; }
+
+[[ -e "$flag" ]] || plain
+rm -f -- "$flag" || plain
+[[ ! -e "$flag" ]] || plain
+
+user="$(sed -n 's/^user=//p' "$conf" 2>/dev/null | head -n 1)"
+[[ "$user" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || plain
+uid="$(id -u -- "$user" 2>/dev/null)" || plain
+[[ "$uid" =~ ^[0-9]+$ && "$uid" != 0 ]] || plain
+
+# The login profile starts the desktop when it finds this (switch-login.sh).
+handover="${VIVAC_SWITCH_HANDOVER:-$run_dir/handover-$user}"
+if install -d -m 700 -o "$user" -- "$handover" 2>/dev/null; then
+	install -m 600 -o "$user" /dev/null "$handover/desktop-once" 2>/dev/null || true
+fi
+exec "$agetty" --autologin "$user" --noreset --noclear - "$term"

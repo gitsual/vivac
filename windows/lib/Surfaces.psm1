@@ -658,7 +658,7 @@ function Show-Help([string]$StartPane = 'wm', [switch]$NoShow, [hashtable]$Regis
 
 # ----------------------------------------------------------------- power menu
 
-function Show-Power([switch]$NoShow, [hashtable]$Registry) {
+function Show-Power([switch]$NoShow, [hashtable]$Registry, [string]$Arm) {
     Update-SurfaceContext
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'power' }
     $surfaceName = 'power'
@@ -688,6 +688,11 @@ function Show-Power([switch]$NoShow, [hashtable]$Registry) {
     $body = "<StackPanel><StackPanel Orientation='Horizontal' HorizontalAlignment='Center'>$buttons</StackPanel><TextBlock Margin='0,8,0,0' HorizontalAlignment='Center' Foreground='#$($p['COLOR_MUTED'])' Text='$(ConvertTo-XmlText (T 'power.hint'))'/></StackPanel>"
     $window = New-VivacWindow (Get-WindowXaml 'vivac - power' (160 * $entries.Count) 260 $body)
     $state = @{ Index = 0; Armed = -1 }
+    # Opened armed (the switch key): that entry is selected and already asks
+    # for its confirmation, so one more press carries it out.
+    for ($i = 0; $i -lt $entries.Count; $i++) {
+        if ($Arm -and $entries[$i].Id -eq $Arm -and $entries[$i].Confirm) { $state.Index = $i; $state.Armed = $i }
+    }
 
     $paint = {
         for ($i = 0; $i -lt $entries.Count; $i++) {
@@ -2012,12 +2017,20 @@ function Invoke-VivacLock([switch]$Greeter) {
         $script:LockShown = $true
         # Marked for the pull (see Invoke-VivacWithLockMarker): the start-up
         # cover's marker, when there is one, is left alone.
-        try { Invoke-VivacWithLockMarker 'lock' { Show-VivacLock -Greeter:$Greeter } } finally { $script:LockShown = $false }
+        try { [void](Invoke-VivacWithLockMarker 'lock' { Show-VivacLock -Greeter:$Greeter }) } finally { $script:LockShown = $false }
         return
     }
     # Windows' own lock takes over: the cover must not stay behind it, or the
     # desktop is hidden after the unlock.
     Hide-VivacLockCover
+    Invoke-VivacLockFallback
+}
+
+# Windows' own lock, from wherever the lock was: the greeter's own desktop
+# (lib\Greeter.psm1) steps aside first, or the unlock would land on an empty
+# one. On Default this is just the lock.
+function Invoke-VivacLockFallback {
+    try { $n = Get-LockNative; if ($n::InputDesktopName() -ne 'Default') { [void]$n::SwitchToDefault() } } catch { }
     Start-Process rundll32.exe -ArgumentList 'user32.dll,LockWorkStation'
 }
 
@@ -2043,6 +2056,8 @@ public static class VivacLockNative {
     private static extern bool LogonUser(string user, string domain, string password, int type, int provider, out IntPtr token);
     [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr h);
     [DllImport("user32.dll")] private static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr OpenDesktop(string name, uint flags, bool inherit, uint access);
+    [DllImport("user32.dll")] private static extern bool SwitchDesktop(IntPtr h);
     [DllImport("user32.dll")] private static extern bool CloseDesktop(IntPtr h);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern bool GetUserObjectInformation(IntPtr h, int index, StringBuilder info, int length, out int needed);
     [DllImport("user32.dll")] public static extern bool LockWorkStation();
@@ -2053,17 +2068,34 @@ public static class VivacLockNative {
         if (ok) CloseHandle(token);
         return ok;
     }
-    // The desktop that has the keyboard: "Default" while the user's own
-    // session shows; anything else (or no access at all) means Windows'
-    // secure screen -- Ctrl+Alt+Del, its lock, a UAC prompt -- has it.
-    public static bool OnUserDesktop() {
+    // The desktop that has the keyboard, by name: "Default" while the
+    // user's own session shows, the greeter's own at sign-in
+    // (lib\Greeter.psm1); null (no access at all) means Windows' secure
+    // screen -- Ctrl+Alt+Del, its lock, a UAC prompt -- has it.
+    public static string InputDesktopName() {
         IntPtr d = OpenInputDesktop(0, false, 0x0001);
-        if (d == IntPtr.Zero) return false;
+        if (d == IntPtr.Zero) return null;
         try {
-            StringBuilder name = new StringBuilder(64); int needed;
-            if (!GetUserObjectInformation(d, 2, name, name.Capacity * 2, out needed)) return false;
-            return string.Equals(name.ToString(), "Default", StringComparison.OrdinalIgnoreCase);
+            StringBuilder name = new StringBuilder(128); int needed;
+            if (!GetUserObjectInformation(d, 2, name, name.Capacity * 2, out needed)) return null;
+            return name.ToString();
         } finally { CloseDesktop(d); }
+    }
+    public static bool OnDesktop(string desktop) {
+        string name = InputDesktopName();
+        return name != null && string.Equals(name, desktop, StringComparison.OrdinalIgnoreCase);
+    }
+    public static bool OnUserDesktop() { return OnDesktop("Default"); }
+    // The programs' desktop back on screen, before Windows' own lock: an
+    // unlock must not land on the greeter's empty desktop. False when the
+    // secure screen has the input (it cannot be opened); nothing to do then.
+    public static bool SwitchToDefault() { return SwitchTo("Default"); }
+    // Any desktop of the session on screen, by name; false when it cannot
+    // be opened or switched to (the secure screen is up).
+    public static bool SwitchTo(string desktop) {
+        IntPtr d = OpenDesktop(desktop, 0, false, 0x0100);
+        if (d == IntPtr.Zero) return false;
+        try { return SwitchDesktop(d); } finally { CloseDesktop(d); }
     }
 }
 '@
@@ -2071,41 +2103,119 @@ public static class VivacLockNative {
     [VivacLockNative]
 }
 
-function Start-HelloVerification {
+# Windows Hello's prompt. Asked for the lock's own window (Window), the
+# prompt belongs to it: it opens in front of the lock and has the keyboard.
+# Asked without one, Windows puts it wherever it likes, which behind a
+# full-screen lock is nowhere to be seen.
+function Start-HelloVerification([IntPtr]$Window = [IntPtr]::Zero) {
     Add-Type -AssemblyName System.Runtime.WindowsRuntime
-    [void][Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType = WindowsRuntime]
+    $verifier = [Windows.Security.Credentials.UI.UserConsentVerifier, Windows.Security.Credentials.UI, ContentType = WindowsRuntime]
+    $result = [Windows.Security.Credentials.UI.UserConsentVerificationResult]
     $asTask = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
         $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' } | Select-Object -First 1
-    $op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync((T 'lock.hello_message'))
-    $asTask.MakeGenericMethod([Windows.Security.Credentials.UI.UserConsentVerificationResult]).Invoke($null, @($op))
+    $asTask = $asTask.MakeGenericMethod($result)
+    $message = T 'lock.hello_message'
+    if ($Window -ne [IntPtr]::Zero) {
+        try {
+            if (-not ('VivacHelloInterop' -as [type])) {
+                Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+[ComImport, Guid("39E050C3-4E74-441A-8DC0-B81104DF949C"), InterfaceType(ComInterfaceType.InterfaceIsIInspectable)]
+public interface IVivacUserConsentVerifierInterop {
+    [return: MarshalAs(UnmanagedType.IUnknown)]
+    object RequestVerificationForWindowAsync(IntPtr appWindow, [MarshalAs(UnmanagedType.HString)] string message, [In] ref Guid riid);
+}
+public static class VivacHelloInterop {
+    public static object Request(object factory, IntPtr window, string message, Guid iid) {
+        return ((IVivacUserConsentVerifierInterop)factory).RequestVerificationForWindowAsync(window, message, ref iid);
+    }
+}
+'@
+            }
+            # The interface asked for: IAsyncOperation<UserConsentVerificationResult>.
+            $iid = $asTask.GetParameters()[0].ParameterType.GUID
+            $factory = [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeMarshal]::GetActivationFactory($verifier)
+            return $asTask.Invoke($null, @([VivacHelloInterop]::Request($factory, $Window, $message, $iid)))
+        } catch { Write-VivacLockLog "Windows Hello for the lock's window failed, asked without it: $_" }
+    }
+    $asTask.Invoke($null, @($verifier::RequestVerificationAsync($message)))
 }
 
-# At sign-in (bin\vivac-daemon.ps1 -LockAtStart, after an automatic Windows
-# sign-in) the screens are covered in the theme's base colour the moment the
-# host starts, before it has built anything else; vivac's lock then opens on
-# top, and the cover goes away with it on unlock.
+# How the lock asks to be unlocked: pin (Windows Hello's prompt, where the
+# PIN, a finger or a face go) or password (the field, checked with
+# LogonUser). Tab switches; the way last used to get in is the next one.
+function Get-VivacLockMode {
+    $path = Join-Path (Get-VivacPaths).State 'lock-mode'
+    try { if ((Get-Content -LiteralPath $path -Raw -ErrorAction Stop).Trim() -eq 'password') { return 'password' } } catch { }
+    'pin'
+}
+function Set-VivacLockMode([ValidateSet('pin', 'password')][string]$Mode) {
+    try { Write-VivacFile -Path (Join-Path (Get-VivacPaths).State 'lock-mode') -Text "$Mode`n" } catch { Write-VivacLockLog "lock mode not kept: $_" }
+}
+# A PIN typed into the password field: only digits, as long as a PIN is.
+function Test-VivacLooksLikePin([string]$Text) { $Text -match '^\d{4,12}$' }
+
+# At sign-in (bin\vivac-greeter.ps1, on the greeter's own desktop; or a host
+# started with -LockAtStart) the screens are covered in the theme's base
+# colour the moment the process starts, before it has built anything else;
+# vivac's lock then opens on top, and the cover goes away with it on unlock.
 $script:LockCover = @()
-function Show-VivacLockCover {
+# Set once vivac's lock has rendered over the cover (Show-VivacLock).
+$script:LockGreeterUp = $false
+# How the cover hands over when the greeter never shows: Windows' own lock.
+$script:LockFallback = { Invoke-VivacLockFallback }
+# The greeter gets this long to show before the cover gives up on it.
+$script:LockCoverGraceSeconds = 60
+# A topmost window over one screen, the screen's exact size.
+function Set-VivacScreenWindow($Window, $Screen) {
+    $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero); $scale = $g.DpiX / 96.0; $g.Dispose()
+    $b = $Screen.Bounds
+    $Window.WindowStartupLocation = 'Manual'
+    $Window.Topmost = $true
+    $Window.Left = $b.Left / $scale; $Window.Top = $b.Top / $scale
+    $Window.Width = $b.Width / $scale; $Window.Height = $b.Height / $scale
+}
+function Show-VivacLockCover([switch]$NoShow) {
     Update-SurfaceContext
     $p = Get-Palette
     Add-Type -AssemblyName PresentationFramework, System.Windows.Forms
-    $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero); $scale = $g.DpiX / 96.0; $g.Dispose()
+    $script:LockGreeterUp = $false
     $script:LockCover = @(foreach ($screen in [System.Windows.Forms.Screen]::AllScreens) {
             $w = New-Object Windows.Window
-            $w.WindowStyle = 'None'; $w.ResizeMode = 'NoResize'; $w.Topmost = $true; $w.ShowInTaskbar = $false
+            $w.WindowStyle = 'None'; $w.ResizeMode = 'NoResize'; $w.ShowInTaskbar = $false
             $w.Background = "#$($p['COLOR_BG'])"; $w.Cursor = [Windows.Input.Cursors]::None; $w.Title = 'vivac - lock'
-            $w.WindowStartupLocation = 'Manual'
-            $b = $screen.Bounds
-            $w.Left = $b.Left / $scale; $w.Top = $b.Top / $scale; $w.Width = $b.Width / $scale; $w.Height = $b.Height / $scale
-            $w.Show()
+            Set-VivacScreenWindow $w $screen
+            if (-not $NoShow) { $w.Show() }
             $w
         })
+    if ($NoShow) { return $script:LockCover }
+    Write-VivacLockLog 'sign-in cover up'
+    # The cover never outlives a greeter that does not come: past the grace,
+    # Windows' own lock takes over and the desktop is not left hidden.
+    $grace = New-Object Windows.Threading.DispatcherTimer
+    $grace.Interval = [TimeSpan]::FromSeconds($script:LockCoverGraceSeconds)
+    $grace.Add_Tick({ param($s, $e) $s.Stop(); Invoke-VivacLockCoverGrace })
+    $grace.Start()
+}
+# The grace's verdict, on its own so it can be checked without waiting.
+function Invoke-VivacLockCoverGrace {
+    if (-not @($script:LockCover).Count -or $script:LockGreeterUp) { return }
+    Write-VivacLockLog "the greeter did not show in $($script:LockCoverGraceSeconds) s: cover dropped, Windows' own lock instead"
+    Hide-VivacLockCover
+    & $script:LockFallback
 }
 # Drops the cover without unlocking: when the lock itself could not be shown,
 # the desktop must not stay hidden behind blank windows.
 function Hide-VivacLockCover {
     foreach ($w in $script:LockCover) { try { $w.Close() } catch { } }
     $script:LockCover = @()
+}
+# The lock's windows and the cover under them go on top, or step back (for
+# Windows Hello's prompt), together: a cover left on top would hide both the
+# lock and the prompt, with nothing on screen to type into.
+function Set-VivacLockTopmost([bool]$On, [object[]]$Windows) {
+    foreach ($w in @($Windows) + @($script:LockCover)) { if ($w) { $w.Topmost = $On } }
 }
 # The account to check a typed password against. After an automatic
 # sign-in, Winlogon names the spelling Windows accepted for it (a Microsoft
@@ -2131,7 +2241,7 @@ function Get-LockAccounts {
 # theme's wallpaper is behind it, veiled in the base colour, and the account
 # has its Windows picture and full name. Restart and shut down ask for a
 # second press.
-function Get-GreeterXaml($p) {
+function Get-GreeterXaml($p, [bool]$PasswordOnly = $false) {
     $name = $env:USERNAME
     try { $full = [string](Get-LocalUser -Name $env:USERNAME -ErrorAction Stop).FullName; if ($full) { $name = $full } } catch { }
     $account = [string](@(Get-LockAccounts | ForEach-Object { $_[0] } | Where-Object { $_ -match '@' }) + '')[0]
@@ -2141,6 +2251,9 @@ function Get-GreeterXaml($p) {
     try { $theme = [string](Read-VivacTheme $settings['theme']).Title } catch { }
     if (-not $theme) { $theme = [string]$settings['theme'] }
     $online = [Net.NetworkInformation.NetworkInterface]::GetIsNetworkAvailable()
+    $hints = @(, @('Intro', (T 'greeter.hint_enter')))
+    if (-not $PasswordOnly) { $hints += , @('Tab', (T 'greeter.hint_mode')) }
+    $hints += , @('Esc', (T 'greeter.hint_clear'))
     $net = T $(if ($online) { 'greeter.online' } else { 'greeter.offline' })
     $netColor = $(if ($online) { $p['COLOR_INFO'] } else { $p['COLOR_MUTED'] })
     $accountVis = $(if ($account) { 'Visible' } else { 'Collapsed' })
@@ -2236,6 +2349,14 @@ $(Get-KitResourcesXaml $p)
               </Button>
             </Grid>
           </Border>
+          <Button x:Name="ModeSwitch" Focusable="False" Cursor="Hand" HorizontalAlignment="Center" Margin="0,10,0,0">
+            <Button.Template><ControlTemplate TargetType="Button">
+              <TextBlock x:Name="T" Text="{TemplateBinding Content}" FontSize="12" Foreground="#$($p['COLOR_FG_DIM'])" TextDecorations="Underline"/>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="T" Property="Foreground" Value="#$($p['COLOR_ACCENT'])"/></Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate></Button.Template>
+          </Button>
           <TextBlock x:Name="Caps" Visibility="Collapsed" HorizontalAlignment="Center" Margin="0,10,0,0" FontSize="12" Foreground="#$($p['COLOR_ACCENT'])">
             <Run FontFamily="Segoe UI Symbol" Text="&#x21EA;"/><Run Text=" $(& $x (T 'greeter.caps'))"/>
           </TextBlock>
@@ -2256,7 +2377,7 @@ $(Get-KitResourcesXaml $p)
 
     <Grid VerticalAlignment="Bottom" Margin="28,0,28,24">
       <Border HorizontalAlignment="Left" VerticalAlignment="Center" CornerRadius="10" Padding="12,8" Background="#D9$($p['COLOR_BG'])">
-        $(Get-KitHintsXaml $p @(@('Intro', (T 'greeter.hint_enter')), @('Esc', (T 'greeter.hint_clear'))))
+        $(Get-KitHintsXaml $p $hints)
       </Border>
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
         <Button x:Name="Restart" Style="{StaticResource KitGhost}" Focusable="False" Margin="0,0,10,0">
@@ -2305,13 +2426,37 @@ function Get-AccountPicturePath {
     $null
 }
 
-function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
+# -Desktop: the desktop the lock is shown on, 'Default' (the session's own,
+# Win+L) or the greeter's (bin\vivac-greeter.ps1): what the secure-screen
+# check compares against, and the one left before handing over to Windows'
+# own lock. -FirstMode pin|password: what is asked first (the sign-in
+# greeter passes the session's own lock mode: the PIN through Windows Hello
+# at once, or the password), Tab for the other, and the session's own lock
+# mode left alone. Hello's prompt is drawn on the programs' desktop: from a
+# desktop of its own the screen goes there for it (-OnHello $true tells the
+# caller, whose stage over that desktop steps back) and comes back after
+# (-OnHello $false). -PasswordOnly: the account's password is the one way in, no
+# Windows Hello (its prompt is a window of Windows' own, drawn on Default:
+# over a greeter on its own desktop it would not be seen). -PreviewSeconds:
+# unlock by itself after that long (to see the greeter). -OnShown: run once
+# the lock has drawn. Returns how it ended: unlocked, ceded (to Windows' own
+# lock) or closed.
+function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'Default', [switch]$PasswordOnly, [string]$FirstMode = '', [int]$PreviewSeconds = 0, [scriptblock]$OnShown, [scriptblock]$OnHello) {
     Update-SurfaceContext
     $p = Get-Palette
     $native = Get-LockNative
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
-    $state = @{ Unlocked = $false; Busy = $null; Windows = @(); Armed = $null; ArmedAt = [DateTime]::MinValue }
+    $state = @{ Unlocked = $false; Busy = $null; Windows = @(); Armed = $null; ArmedAt = [DateTime]::MinValue; Mode = (Get-VivacLockMode); Outcome = $null; ShownAt = $null; Retaken = 0; OnOwn = ($Desktop -eq 'Default') }
+    if ($PasswordOnly) { $state.Mode = 'password' } elseif ($FirstMode) { $state.Mode = $(if ($FirstMode -eq 'pin') { 'pin' } else { 'password' }) }
+    # The session's own lock mode is the session's: the sign-in greeter does
+    # not decide how Win+L asks next time.
+    $keepMode = $PasswordOnly -or [bool]$FirstMode
     $marker = Join-Path (Get-VivacPaths).State 'locked'
+    # The host's keyboard hook (lib\VivacKeys.cs) holds the Windows key while
+    # the lock is up; the greeter's own process has no hook and needs none
+    # (keys on its desktop reach nothing else).
+    $keys = 'VivacKeys' -as [type]
+    $own = $Desktop -ne 'Default'
 
     $primaryXaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -2332,15 +2477,14 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="16,0"/>
         </Grid>
       </Border>
-      <TextBlock x:Name="Status" HorizontalAlignment="Center" Margin="0,18,0,0" Foreground="#$($p['COLOR_MUTED'])"
-                 Text="$(ConvertTo-XmlText (T 'lock.hint'))"/>
+      <TextBlock x:Name="Status" HorizontalAlignment="Center" Margin="0,18,0,0" Foreground="#$($p['COLOR_MUTED'])"/>
     </StackPanel>
   </Grid>
 </Window>
 "@
     # The greeter is dressing: if it cannot be built, the plain lock shows.
     if ($Greeter) {
-        try { $primaryXaml = Get-GreeterXaml $p } catch { Write-VivacLockLog "greeter not built, plain lock instead: $_"; $Greeter = $false }
+        try { $primaryXaml = Get-GreeterXaml $p ([bool]$PasswordOnly) } catch { Write-VivacLockLog "greeter not built, plain lock instead: $_"; $Greeter = $false }
     }
     $primary = [Windows.Markup.XamlReader]::Parse($primaryXaml)
     $clock = $primary.FindName('Clock'); $secret = $primary.FindName('Secret')
@@ -2352,6 +2496,22 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
         if ($caps) { $caps.Visibility = $(if ([Windows.Input.Keyboard]::IsKeyToggled('CapsLock')) { 'Visible' } else { 'Collapsed' }) }
     }
     & $showTime
+    # PIN: the field only says that Enter (or the first digit) brings up
+    # Windows Hello, where the PIN is typed. Password: the field takes it.
+    $switch = $primary.FindName('ModeSwitch')
+    if ($switch -and $PasswordOnly) { $switch.Visibility = 'Collapsed' }
+    $reset = $null
+    $showMode = {
+        $pin = $state.Mode -eq 'pin'
+        $secret.Clear()
+        $secret.Visibility = $(if ($pin) { 'Collapsed' } else { 'Visible' })
+        $placeholder.Text = T $(if ($pin) { 'lock.pin_placeholder' } elseif ($PasswordOnly -or $FirstMode) { 'lock.account_placeholder' } else { 'lock.placeholder' })
+        $placeholder.Visibility = 'Visible'
+        if ($switch) { $switch.Content = T $(if ($pin) { 'lock.use_password' } else { 'lock.use_pin' }) }
+        if ($reset) { & $reset }
+        if (-not $pin) { [void]$secret.Focus() }
+    }
+    & $showMode
     # The greeter's pictures: the theme's wallpaper behind everything, the
     # account's own picture in its circle.
     $backdrop = $null
@@ -2382,23 +2542,19 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
         }
     } catch { Write-VivacLockLog "greeter pictures left out: $_" } }
     # The card fades in when shown; a picture taken without showing it
-    # (tests, previews) has it in place already.
-    if ($NoShow) {
+    # (tests, previews) has it in place already, and so does the greeter on
+    # a desktop of its own: its windows are built while that desktop is off
+    # screen, where an animation that starts never draws, and the switch to
+    # the desktop is the one appearance.
+    if ($NoShow -or $own) {
         $card = $primary.FindName('Card')
         if ($card) { $card.Opacity = 1; $shift.Y = 0; $card.Triggers.Clear() }
-        return $primary
+        if ($NoShow) { return $primary }
     }
 
     # One window per screen: the clock and the field on the primary one, the
     # base colour on the rest, so no screen shows the desktop.
-    $place = {
-        param($w, $screen)
-        $src = [System.Windows.Forms.Screen]::PrimaryScreen
-        $g = [System.Drawing.Graphics]::FromHwnd([IntPtr]::Zero); $scale = $g.DpiX / 96.0; $g.Dispose()
-        $b = $screen.Bounds
-        $w.WindowStartupLocation = 'Manual'
-        $w.Left = $b.Left / $scale; $w.Top = $b.Top / $scale; $w.Width = $b.Width / $scale; $w.Height = $b.Height / $scale
-    }
+    $place = { param($w, $screen) Set-VivacScreenWindow $w $screen }
     $windows = @()
     foreach ($screen in [System.Windows.Forms.Screen]::AllScreens) {
         if ($screen.Primary) { & $place $primary $screen; $windows += $primary; continue }
@@ -2420,18 +2576,31 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
     # The watchdog: a process of its own, so it outlives this one. It locks
     # the Windows way if the host disappears while vivac's lock is up, and
     # ends by itself once the marker is gone.
-    Write-VivacFile -Path $marker -Text "$PID`n"
-    $watch = "`$m='$marker'; while (Test-Path -LiteralPath `$m) { if (-not (Get-Process -Id $PID -ErrorAction SilentlyContinue)) { Remove-Item -LiteralPath `$m -Force; rundll32.exe user32.dll,LockWorkStation; break }; Start-Sleep -Milliseconds 500 }"
-    Start-Process powershell.exe -ArgumentList '-NoProfile', '-WindowStyle', 'Hidden', '-Command', $watch -WindowStyle Hidden | Out-Null
+    # On the greeter's desktop the process has a watchdog of its own, which
+    # also brings the desktop back (bin\vivac-greeter.ps1).
+    if (-not $own) {
+        Write-VivacFile -Path $marker -Text "$PID`n"
+        $watch = "`$m='$marker'; while (Test-Path -LiteralPath `$m) { if (-not (Get-Process -Id $PID -ErrorAction SilentlyContinue)) { Remove-Item -LiteralPath `$m -Force; rundll32.exe user32.dll,LockWorkStation; break }; Start-Sleep -Milliseconds 500 }"
+        Start-Process powershell.exe -ArgumentList '-NoProfile', '-WindowStyle', 'Hidden', '-Command', $watch -WindowStyle Hidden | Out-Null
+    }
 
     $finish = {
         $state.Unlocked = $true
-        [VivacKeys]::LockMode = $false
+        if ($own) { try { [void]$native::SwitchToDefault() } catch { } }
+        if ($keys) { $keys::LockMode = $false }
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
         $tick.Stop()
         foreach ($w in $state.Windows) { try { $w.Close() } catch { } }
         foreach ($w in $script:LockCover) { try { $w.Close() } catch { } }
         $script:LockCover = @()
+    }
+    # Windows' own lock takes over (its secure screen was asked for, Windows
+    # Hello cannot be had): the greeter's desktop steps aside first.
+    $cede = {
+        $state.Outcome = 'ceded'
+        if ($own) { try { [void]$native::SwitchToDefault() } catch { } }
+        [void]$native::LockWorkStation()
+        & $finish
     }
     $fail = {
         param([string]$Message)
@@ -2452,12 +2621,13 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
     }
     # The greeter's foot carries the keys, so its status line stays empty
     # until there is something to say.
-    $idle = $(if ($Greeter) { '' } else { T 'lock.hint' })
+    $idle = { if ($Greeter) { '' } else { T "lock.hint_$($state.Mode)" } }
     $reset = {
         $field.BorderBrush = "#$($p['COLOR_ACCENT'])"
         $status.Foreground = "#$($p['COLOR_MUTED'])"
-        $status.Text = $idle
+        $status.Text = & $idle
     }
+    & $reset
 
     $tick = New-Object Windows.Threading.DispatcherTimer
     $tick.Interval = [TimeSpan]::FromMilliseconds(250)
@@ -2465,61 +2635,117 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
             & $showTime
             # A power button pressed once and left alone asks again.
             if ($state.Armed -and ((Get-Date) - $state.ArmedAt).TotalSeconds -gt 4) { & $disarm }
+            # A preview has shown enough.
+            if ($PreviewSeconds -gt 0 -and $state.ShownAt -and ((Get-Date) - $state.ShownAt).TotalSeconds -ge $PreviewSeconds) {
+                Write-VivacLockLog 'preview over'
+                & $finish
+                return
+            }
             # Windows' secure screen took the keyboard (Ctrl+Alt+Del, or its
             # own lock): lock the Windows way and step aside.
-            if (-not $state.Busy -and -not $native::OnUserDesktop()) {
-                [void]$native::LockWorkStation()
-                & $finish
+            # On a desktop of its own, not before the greeter has switched
+            # the screen to it (OnOwn, set once -OnShown has run): until
+            # then the programs' desktop is on screen on purpose.
+            if (-not $state.Busy -and $state.OnOwn -and -not $native::OnDesktop($Desktop)) {
+                $where = $native::InputDesktopName()
+                # On a desktop of its own, the screen switched to another
+                # desktop of the session (Winlogon settling the sign-in
+                # on Default) is taken back; only the secure screen, which
+                # cannot be seen, is ceded to.
+                if ($own -and $where -eq 'Default' -and $state.Retaken -lt 20 -and $native::SwitchTo($Desktop)) {
+                    $state.Retaken++
+                    Write-VivacLockLog "the screen had left $Desktop and was taken back ($($state.Retaken))"
+                    return
+                }
+                & $cede
                 return
             }
             # A Windows Hello prompt in progress.
             if ($state.Busy) {
                 if ($state.Busy.IsCompleted) {
                     $task = $state.Busy; $state.Busy = $null
-                    foreach ($w in $state.Windows) { $w.Topmost = $true }
-                    if (-not $task.IsFaulted -and [string]$task.Result -eq 'Verified') { & $finish; return }
+                    Write-VivacLockLog "Windows Hello answered: $(if ($task.IsFaulted) { 'faulted' } else { [string]$task.Result })"
+                    Set-VivacLockTopmost $true $state.Windows
+                    if (-not $task.IsFaulted -and [string]$task.Result -eq 'Verified') { if ($state.Mode -eq 'pin' -and -not $keepMode) { Set-VivacLockMode 'pin' }; & $finish; return }
                     if ($task.IsFaulted -or [string]$task.Result -in 'DeviceNotPresent', 'NotConfiguredForUser', 'DisabledByPolicy', 'DeviceBusy') {
-                        [void]$native::LockWorkStation(); & $finish; return
+                        & $cede; return
                     }
+                    # Not verified: the prompt is gone, the greeter's own
+                    # desktop comes back on screen and its stage steps up.
+                    if ($own) { try { [void]$native::SwitchTo($Desktop) } catch { } }
+                    if ($OnHello) { try { & $OnHello $false } catch { } }
                     & $fail (T 'lock.hello_failed')
-                    [void]$primary.Activate(); [void]$secret.Focus()
+                    [void]$primary.Activate(); if ($state.Mode -eq 'password') { [void]$secret.Focus() }
                 }
                 return
             }
-            if (-not $primary.IsActive) { Set-VivacForeground $primary; [void]$secret.Focus() }
+            if (-not $primary.IsActive) { Set-VivacForeground $primary; if ($state.Mode -eq 'password') { [void]$secret.Focus() } }
         })
 
     $secret.Add_PasswordChanged({ $placeholder.Visibility = $(if ($secret.SecurePassword.Length) { 'Hidden' } else { 'Visible' }); if ($secret.SecurePassword.Length) { & $reset } })
     $primary.Add_PreviewKeyDown({
             param($s, $e)
             if ($state.Busy) { return }
-            if ([string]$e.Key -eq 'Escape') { $e.Handled = $true; $secret.Clear(); & $disarm; return }
-            if ([string]$e.Key -ne 'Return') { return }
+            $key = [string]$e.Key
+            if ($key -eq 'Escape') { $e.Handled = $true; $secret.Clear(); & $disarm; return }
+            if ($key -eq 'Tab') { $e.Handled = $true; if (-not $PasswordOnly) { & $toggle }; return }
+            # In PIN mode a digit is the start of the PIN: Windows Hello's
+            # prompt opens to take it.
+            if ($state.Mode -eq 'pin' -and $key -match '^(D|NumPad)\d$') { $e.Handled = $true; & $hello; return }
+            if ($key -ne 'Return') { return }
             $e.Handled = $true
             & $submit
         })
     $go = $primary.FindName('Go')
-    if ($go) { $go.Add_Click({ if (-not $state.Busy) { & $submit; [void]$secret.Focus() } }) }
+    if ($go) { $go.Add_Click({ if (-not $state.Busy) { & $submit; if ($state.Mode -eq 'password') { [void]$secret.Focus() } } }) }
+    $toggle = {
+        & $disarm
+        $state.Mode = $(if ($state.Mode -eq 'pin') { 'password' } else { 'pin' })
+        if (-not $keepMode) { Set-VivacLockMode $state.Mode }
+        & $showMode
+        if ($state.Mode -eq 'pin') { & $hello }
+    }
+    if ($switch) { $switch.Add_Click({ if (-not $state.Busy) { & $toggle } }) }
+    $hello = {
+        # Windows Hello draws its own prompt, owned by this window: vivac's
+        # windows stop being topmost for as long as it is up, so it is seen.
+        Set-VivacLockTopmost $false $state.Windows
+        $status.Foreground = "#$($p['COLOR_MUTED'])"
+        $status.Text = T 'lock.hello_waiting'
+        # The prompt is drawn on the programs' desktop: from a desktop of
+        # its own the screen goes there, and the prompt is owned by the
+        # caller's stage window over that desktop (-OnHello $true gives its
+        # handle), so Windows keeps it above the stage while the stage stays
+        # topmost: nothing else on that desktop is seen or reached.
+        $owner = (New-Object Windows.Interop.WindowInteropHelper $primary).Handle
+        if ($own) {
+            if ($OnHello) { try { $stage = & $OnHello $true; if ($stage) { $owner = [IntPtr][long]$stage } } catch { } }
+            try { [void]$native::SwitchToDefault() } catch { }
+        }
+        Write-VivacLockLog "Windows Hello asked (input desktop $($native::InputDesktopName()), owner window $owner)"
+        # If Windows Hello cannot be asked from here, the PIN still works on
+        # Windows' own lock: hand over to it rather than leave the field as
+        # the only way in.
+        try { $state.Busy = Start-HelloVerification $owner } catch {
+            Write-VivacLockLog "Windows Hello not asked, Windows' own lock instead: $_"
+            & $cede
+        }
+    }
     $submit = {
-            if (-not $secret.SecurePassword.Length) {
-                # Windows Hello draws its own prompt: vivac's windows stop
-                # being topmost for as long as it is up, so it can be seen.
-                foreach ($w in $state.Windows) { $w.Topmost = $false }
-                $status.Text = T 'lock.hello_waiting'
-                # If Windows Hello cannot be asked from here, the PIN still
-                # works on Windows' own lock: hand over to it rather than
-                # leave the field as the only way in.
-                try { $state.Busy = Start-HelloVerification } catch {
-                    [void]$native::LockWorkStation()
-                    & $finish
-                }
+            if ($state.Mode -eq 'pin' -or -not $secret.SecurePassword.Length) {
+                if (-not $PasswordOnly) { & $hello }
                 return
             }
             $ok = $false
             foreach ($a in (Get-LockAccounts)) {
                 if ($native::CheckPassword($a[0], $a[1], $secret.Password)) { $ok = $true; break }
             }
-            if ($ok) { & $finish } else { & $fail (T 'lock.wrong') }
+            # The sign-in greeter is always the password: it does not decide
+            # how the session's own lock (Win+L) asks next time.
+            if ($ok) { if (-not $keepMode) { Set-VivacLockMode 'password' }; & $finish; return }
+            # The PIN is not the account's password: Windows only takes it
+            # through Windows Hello.
+            if (Test-VivacLooksLikePin $secret.Password) { & $fail (T $(if ($PasswordOnly) { 'lock.looks_like_pin_signin' } else { 'lock.looks_like_pin' })) } else { & $fail (T 'lock.wrong') }
         }
 
     # Restart and shut down: the first press names what the second will do.
@@ -2561,18 +2787,31 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter) {
     foreach ($w in $windows) {
         $w.Add_Closing({ param($s, $e) if (-not $state.Unlocked) { $e.Cancel = $true } })
     }
-    $primary.Add_ContentRendered({ Set-VivacForeground $primary; [void]$secret.Focus() })
+    $primary.Add_ContentRendered({
+            $script:LockGreeterUp = $true
+            $state.ShownAt = Get-Date
+            Write-VivacLockLog "lock on screen (mode $($state.Mode)$(if ($own) { ", desktop $Desktop" }))"
+            if ($OnShown) { try { & $OnShown } catch { Write-VivacLockLog "on-shown failed: $_" } }
+            $state.OnOwn = $true
+            Set-VivacForeground $primary
+            # PIN mode asks Windows Hello straight away: nothing to press first.
+            if ($state.Mode -eq 'pin') { & $hello } else { [void]$secret.Focus() }
+        })
 
-    [VivacKeys]::LockMode = $true
+    if ($keys) { $keys::LockMode = $true }
     foreach ($w in $windows) { if ($w -ne $primary) { $w.Show() } }
     $tick.Start()
     try { [void]$primary.ShowDialog() } finally {
         # Whatever ends the dialog, the keyboard is given back and the
         # watchdog told to stand down only after a real unlock.
-        if (-not $state.Unlocked) { [void]$native::LockWorkStation() }
-        [VivacKeys]::LockMode = $false
+        if (-not $state.Unlocked) {
+            if ($own) { try { [void]$native::SwitchToDefault() } catch { } }
+            [void]$native::LockWorkStation()
+        }
+        if ($keys) { $keys::LockMode = $false }
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
     }
+    if ($state.Outcome) { $state.Outcome } elseif ($state.Unlocked) { 'unlocked' } else { 'closed' }
 }
 
 Export-ModuleMember -Function *

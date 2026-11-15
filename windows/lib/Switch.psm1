@@ -1,0 +1,89 @@
+# Switching between the two systems (docs/bridge.md at the product root,
+# "Reboot into the other system"): the token each side leaves for the other.
+# One line, `vivac-switch 1 <unix time>`; honoured when written in the last
+# fifteen minutes, and taken away whether honoured or not, so it opens one
+# sign-in at most. It carries a time and nothing else: what it opens is
+# decided by the side that reads it.
+#
+# Linux leaves it in %LOCALAPPDATA%\vivac\switch-arrival, where the sign-in
+# guard, or the greeter (bin\vivac-greeter.ps1), takes it in place of a lock;
+# Restart in Linux (bin\vivac-reboot-other.ps1) leaves it on the EFI
+# partition, at \EFI\vivac\switch-to-linux. Files only: no network, no
+# firmware, so the elevated task's protected copy can carry it as it is.
+
+Set-StrictMode -Version 2.0
+
+$script:MaxAge = 900
+$script:MaxAhead = 120
+
+function Get-VivacUnixTime { [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() }
+
+function Get-VivacSwitchToken([long]$Now = (Get-VivacUnixTime)) { "vivac-switch 1 $Now" }
+
+function Test-VivacSwitchToken([string]$Text, [long]$Now = (Get-VivacUnixTime)) {
+    if ($null -eq $Text) { return $false }
+    $line = @($Text -split "`r?`n")[0]
+    if ($line -notmatch '^vivac-switch 1 ([0-9]{1,12})$') { return $false }
+    $age = $Now - [long]$Matches[1]
+    ($age -le $script:MaxAge) -and ($age -ge -$script:MaxAhead)
+}
+
+function Write-VivacSwitchToken([string]$Path, [long]$Now = (Get-VivacUnixTime)) {
+    $dir = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    $tmp = "$Path.tmp"
+    [IO.File]::WriteAllBytes($tmp, [Text.Encoding]::ASCII.GetBytes((Get-VivacSwitchToken $Now) + "`n"))
+    Move-Item -LiteralPath $tmp -Destination $Path -Force
+}
+
+# True when a fresh token was there. The token goes either way; one that
+# cannot be removed is not honoured, or it could open a second sign-in.
+function Use-VivacSwitchArrival([string]$Path, [long]$Now = (Get-VivacUnixTime)) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+    $text = ''
+    try { $text = [IO.File]::ReadAllText($Path) } catch { }
+    try { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop } catch { return $false }
+    if (Test-Path -LiteralPath $Path) { return $false }
+    Test-VivacSwitchToken $text $Now
+}
+
+# The sign-in guard's word to the host (bin\vivac-signin-guard.ps1): what it
+# did at this sign-in, `switch` (a switch brought it, nothing was locked) or
+# `locked` (Windows' own lock is up). Read once, and only within three
+# minutes of being written, so a marker from another sign-in says nothing.
+$script:MarkerAge = 180
+
+function Write-VivacSigninMarker([string]$Path, [string]$Kind, [long]$Now = (Get-VivacUnixTime)) {
+    if (@('switch', 'locked') -notcontains $Kind) { throw "unknown sign-in marker: $Kind" }
+    $dir = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    [IO.File]::WriteAllBytes("$Path.tmp", [Text.Encoding]::ASCII.GetBytes("vivac-signin $Kind $Now`n"))
+    Move-Item -LiteralPath "$Path.tmp" -Destination $Path -Force
+}
+
+function Use-VivacSigninMarker([string]$Path, [long]$Now = (Get-VivacUnixTime)) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $text = ''
+    try { $text = [IO.File]::ReadAllText($Path) } catch { }
+    try { Remove-Item -LiteralPath $Path -Force -ErrorAction Stop } catch { return $null }
+    if (@($text -split "`r?`n")[0] -notmatch '^vivac-signin (switch|locked) ([0-9]{1,12})$') { return $null }
+    $kind = $Matches[1]
+    $age = $Now - [long]$Matches[2]
+    if ($age -gt $script:MarkerAge -or $age -lt -$script:MaxAhead) { return $null }
+    $kind
+}
+
+# What this sign-in already is, before the greeter adds anything: 'switch' (a
+# switch from Linux brought it: the desktop opens, once), 'locked' (the guard
+# put Windows' own lock up, a second lock would only ask twice) or $null
+# (nothing settled: the greeter is wanted). The guard's marker speaks first;
+# with the guard installed (signin-guard.installed) the token is the guard's
+# alone, without it the token is taken here, in the guard's place.
+function Get-VivacSigninSettlement([string]$State) {
+    $settled = Use-VivacSigninMarker (Join-Path $State 'signin-guard')
+    $guarded = Test-Path -LiteralPath (Join-Path $State 'signin-guard.installed')
+    if (-not $settled -and -not $guarded -and (Use-VivacSwitchArrival (Join-Path $State 'switch-arrival'))) { $settled = 'switch' }
+    $settled
+}
+
+Export-ModuleMember -Function Get-VivacUnixTime, Get-VivacSwitchToken, Test-VivacSwitchToken, Write-VivacSwitchToken, Use-VivacSwitchArrival, Write-VivacSigninMarker, Use-VivacSigninMarker, Get-VivacSigninSettlement

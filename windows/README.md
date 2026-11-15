@@ -271,7 +271,8 @@ Templates use the source's syntax: `@COLOR_BG@`, `@COLOR_BG:lower@`, `@COLOR_BG:
 shades `:dark`, `:darker`, `:dim`. The per-machine templates under `render/` also see the settings
 (`@SET_MOD@`), the hardware facts, and guard lines such as `@?has_battery=yes@`.
 
-What Windows draws is coloured too, where Windows lets it be: the accent colour and dark mode, the lock and
+What Windows draws is coloured too, where Windows lets it be: the accent colour (on title bars, Start and
+the taskbar) and dark mode, the lock and
 sign-in screen wallpaper, and — with `apply-system.ps1 -Boot` — GRUB's menu and the boot logo, following
 every theme switch. vivac's own windows read the palette the moment they open, so a switch reaches the
 next one without a restart.
@@ -293,9 +294,27 @@ put back by uninstall:
 | `-WinKeys` | Explorer gives up Win+R, so the Run box never opens over vivac's menu |
 | `-Toasts` | other programs' notifications as vivac's cards; Windows' banners off (Windows Security keeps its own) |
 | `-LockScreen` | the theme's wallpaper on the lock and sign-in screens |
+| `-AutoLogin` | Windows signs in by itself and vivac's greeter is the one thing on screen (see below) |
 | `-Firewall` · `-Defender` · `-SecurityQuiet` | every firewall profile on; PUA blocking and cloud protection; Windows Security without its tray icon (threat alerts stay Windows' own) |
 | `-Boot` | GRUB's menu and the boot logo in the theme |
 | `-Mouse` | the shared mouse (lan-mouse) reachable from the other machine: UDP 4242 in, private networks and the local subnet only |
+
+**The sign-in (`-AutoLogin`).** Windows signs in by itself (the password as an encrypted LSA secret,
+`scripts\set-autologon.ps1`; use a local account) and the task `\vivac\lock-at-signin` runs `bin\vivac-greeter.ps1`
+at once: it makes a desktop of its own (`lib\Greeter.psm1`, the way Windows does for UAC and Ctrl+Alt+Del), covers
+it in the theme's base colour, switches the screen to it and opens the greeter there, the lock in its ReGreet dress.
+Explorer, GlazeWM, the bar and every program in the Run keys start meanwhile on the programs' desktop, unseen and out
+of reach, so nothing of them shows through and no window fights the greeter for the top. The account's password
+unlocks (checked with Windows, kept nowhere) and the screen switches back to a desktop that has had the time to
+load. Windows Hello is not asked here: its prompt is a window of Windows' own, drawn on the programs' desktop, and
+the PIN keeps working on Windows' own lock (Win+L, Ctrl+Alt+Del). Fail-closed, never stuck: a watchdog process on
+the programs' desktop brings it back and locks with Windows' lock if the greeter's process dies; a greeter that has
+not drawn in 60 s, or that fails anywhere, gives way to Windows' lock the same way; Ctrl+Alt+Del is honoured; and
+the file `%LOCALAPPDATA%\vivac\no-greeter` skips the greeter (Windows' lock at once) for as long as it is there.
+`bin\vivac-greeter.ps1 -Preview 8` shows the greeter for eight seconds, to see it and to try the desktop switch.
+What happened at each sign-in is in `%LOCALAPPDATA%\vivac\lock.log`. Whoever would rather have Windows' own lock
+screen at sign-in registers the sign-in guard (`bin\vivac-signin-guard.ps1 -Register`): it locks the moment the
+session opens and the greeter stands down. A switch from Linux (see the bridge) opens the desktop once, either way.
 
 **UAC stays whole.** A few things run elevated without a prompt — updating installed programs through
 winget, the key guard that keeps the Windows key vivac's in front of an administrator's window — and a
@@ -377,8 +396,9 @@ after 3 pulls is reported there on every pull from then on. A theme or location 
 is locked (the cover and greeter of an automatic sign-in, or the lock screen) is recorded and applied by the
 first pull after the unlock, since applying it restarts the host that holds the lock.
 
-The lock marker that drives this (`%LOCALAPPDATA%\vivac\session-locked`) records the host's PID and start time, so a
-PID the system reused reads as stale, and a host started without `-LockAtStart` deletes any marker it finds. Writing
+The lock marker that drives this (`%LOCALAPPDATA%\vivac\session-locked`) records the PID and start time of the process
+holding the lock (the sign-in greeter, or the host for Win+L), so a PID the system reused reads as stale, and a host
+started without `-LockAtStart` deletes a marker whose process is gone and leaves one a live process holds. Writing
 it can fail without consequence: the lock and the cover run the same, the failure goes to the log.
 The host's own marker is checked without WMI; for another process WMI is asked with a 2 s limit, and no answer counts as
 live, never stale. The pid file is guarded the same way.

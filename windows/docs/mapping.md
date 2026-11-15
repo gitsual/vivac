@@ -24,7 +24,7 @@ palette, and keeps every rule of the source that still means something here.
 | Taskbar | (none) | Hidden (`apply-system.ps1 -Taskbar`) | Kept hidden by the resident host; tray icons move into the bar. |
 | Desktop icons | (none) | Hidden (`apply-system.ps1 -DesktopIcons`) | |
 | Screenshots | grim + slurp | Snipping Tool (`MOD+Shift+S`) | Its own notification names the file. |
-| Login | greetd + ReGreet | Windows sign-in | `apply-system.ps1 -LockScreen` puts the wallpaper on the lock screen. |
+| Login | greetd + ReGreet | vivac's greeter on a desktop of its own after an automatic sign-in (`apply-system.ps1 -AutoLogin`, `bin\vivac-greeter.ps1`) | The ReGreet frame as a WPF window; the account's password unlocks. `-LockScreen` puts the wallpaper on Windows' own lock screen. |
 | Packages | pacman manifests | **winget** manifests | `packages/*.txt`; optional sets selected by hardware facts. |
 | Deployment | GNU Stow symlinks | Copy + manifest + backups | Symlinks need Developer Mode or elevation on Windows. |
 | Firewall | UFW | Windows Defender Firewall | Inbound denied, outbound allowed, existing rules kept. |

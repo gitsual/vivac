@@ -137,7 +137,7 @@ if (Test-Path -LiteralPath $sys) {
     if (& $has 'autologin') {
         $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
         if ($admin) {
-            Write-Host '  [restore]   automatic sign-in off, Windows Hello setting, task \vivac\lock-at-signin'
+            Write-Host '  [restore]   automatic sign-in off, Windows Hello setting, tasks \vivac\lock-at-signin and \vivac\signin-guard'
             if (-not $DryRun) {
                 $winlogon = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
                 & (Join-Path $PSScriptRoot 'set-autologon.ps1') -Disable
@@ -145,6 +145,7 @@ if (Test-Path -LiteralPath $sys) {
                 if ($null -eq $o.autologin.DevicePasswordLessBuildVersion) { Remove-ItemProperty -LiteralPath $pl -Name DevicePasswordLessBuildVersion -ErrorAction SilentlyContinue }
                 else { Set-ItemProperty -LiteralPath $pl -Name DevicePasswordLessBuildVersion -Value ([int]$o.autologin.DevicePasswordLessBuildVersion) -Type DWord }
                 Unregister-ScheduledTask -TaskPath '\vivac\' -TaskName 'lock-at-signin' -Confirm:$false -ErrorAction SilentlyContinue
+                & (Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-signin-guard.ps1') -Unregister | Out-Null
             }
         } else {
             Write-Warning 'automatic sign-in is on: run scripts\uninstall.ps1 from an elevated PowerShell to turn it off'

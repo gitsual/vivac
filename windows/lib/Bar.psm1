@@ -117,18 +117,25 @@ function Wait-VivacBarAlive([datetime]$Since, [int]$TimeoutSec = 40) {
 }
 
 # Whether the pack on disk is the one seen drawn. A fresh stamp alone is not
-# enough: Zebar does not reload, so a bar started before the files changed
-# keeps stamping with the old code. The running Zebar must have started after
-# the newest file was written, and stamped since, within the last minute.
+# enough: Zebar does not reload its code, so a bar started before the files
+# changed keeps stamping with the old code. The running Zebar must have
+# started after the newest code file was written, and stamped since, within
+# the last minute. The stylesheet is the exception: the bar re-reads it while
+# it runs (bar.js, restyle) and stamps once the new one drew, so for it the
+# stamp only has to be newer than the file.
 function Test-VivacBarProven {
     $p = Get-VivacBarPaths
     $zebar = @(Get-Process -Name zebar -ErrorAction SilentlyContinue)
     if (-not $zebar.Count) { return $false }
     $started = ($zebar | Measure-Object -Property StartTime -Maximum).Maximum
-    $newest = Get-ChildItem -LiteralPath $p.Pack -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+    $files = @(Get-ChildItem -LiteralPath $p.Pack -File -ErrorAction SilentlyContinue)
+    $newest = $files | Where-Object { $_.Name -ne 'styles.css' } | Sort-Object LastWriteTime | Select-Object -Last 1
     if (-not $newest -or $newest.LastWriteTime -ge $started) { return $false }
+    $since = $started
+    $styles = $files | Where-Object { $_.Name -eq 'styles.css' } | Select-Object -First 1
+    if ($styles -and $styles.LastWriteTime -gt $since) { $since = $styles.LastWriteTime }
     $aliveAt = Get-VivacBarAliveTime
-    [bool]($aliveAt -and $aliveAt -gt $started -and (Get-Date) - $aliveAt -lt [TimeSpan]::FromSeconds(60))
+    [bool]($aliveAt -and $aliveAt -gt $since -and (Get-Date) - $aliveAt -lt [TimeSpan]::FromSeconds(60))
 }
 
 # Keeps a copy of the pack as it is now. Only call this when
