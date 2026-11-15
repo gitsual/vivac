@@ -21,9 +21,9 @@ fail() {
 sandbox="$(mktemp -d "${TMPDIR:-/tmp}/vivac-hermes.XXXXXX")"
 trap 'rm -rf -- "$sandbox"' EXIT
 mkdir -p "$sandbox/bin" "$sandbox/linux/.hermes/memories" "$sandbox/linux/.hermes/skills/one" \
-	"$sandbox/linux/.hermes/hermes-agent/.venv" "$sandbox/linux/.hermes/tools/uv" "$sandbox/linux/.hermes/lsp/bin" "$sandbox/linux/.hermes/installs/oldkey" \
+	"$sandbox/linux/.hermes/hermes-agent/.venv" "$sandbox/linux/.hermes/tools/uv" "$sandbox/linux/.hermes/lsp/bin" "$sandbox/linux/.hermes/cache/uv" "$sandbox/linux/.hermes/installs/oldkey" \
 	"$sandbox/win/Users/someone/.hermes/memories" "$sandbox/win/Users/someone/.hermes/bin" \
-	"$sandbox/win/Users/someone/.hermes/installs/winkey" "$sandbox/win/Users/Public/.hermes"
+	"$sandbox/win/Users/someone/.hermes/installs/winkey" "$sandbox/win/Users/someone/.hermes/cache/uv" "$sandbox/systemd" "$sandbox/win/Users/Public/.hermes"
 home="$sandbox/linux/.hermes"
 win="$sandbox/win/Users/someone/.hermes"
 calls="$sandbox/calls"
@@ -37,6 +37,8 @@ printf 'linux sessions\n' >"$home/state.db"
 printf 'code\n' >"$home/hermes-agent/.venv/python"
 printf 'tool\n' >"$home/tools/uv/uv"
 printf 'language server\n' >"$home/lsp/bin/server"
+# Caches are per system: uv's entries are symlinks here, path files there.
+printf 'linux wheel\n' >"$home/cache/uv/linux-entry"
 printf '{}\n' >"$home/installs/oldkey/facts.json"
 # Windows' own, fresh from its installer: a config, a few test sessions, a
 # memory of its own, and its launchers.
@@ -46,16 +48,23 @@ printf 'windows sessions\n' >"$win/state.db"
 printf 'windows journal\n' >"$win/state.db-wal"
 printf 'windows user\n' >"$win/memories/USER.md"
 printf 'MZ\n' >"$win/bin/hermes.exe"
+printf 'C:\\\\cache\\\\archive\n' >"$win/cache/uv/windows-entry"
 printf '{}\n' >"$win/installs/winkey/facts.json"
 printf 'windows_home=C:\\Users\\someone\\.hermes\nwindows_shared=20261109-200000\n' >"$win/vivac-hermes.conf"
 # A terminal that writes down what it was asked to run; no hermes yet.
 printf '#!/usr/bin/env bash\nprintf "term %%s\\n" "$*" >>"$CALLS"\n' >"$sandbox/bin/kitty"
 printf '#!/usr/bin/env bash\nexit 0\n' >"$sandbox/bin/notify-send"
+# No Hermes of the host counts: pgrep finds nothing here.
+printf '#!/usr/bin/env bash\nexit 1\n' >"$sandbox/bin/pgrep"
+# sudo writes down and runs; systemctl only writes down.
+printf '#!/usr/bin/env bash\nprintf "sudo %%s\\n" "$*" >>"$CALLS"\n[[ -z "${SUDO_REFUSES:-}" ]] || exit 1\nexec "$@"\n' >"$sandbox/bin/sudo"
+printf '#!/usr/bin/env bash\nprintf "systemctl %%s\\n" "$*" >>"$CALLS"\n' >"$sandbox/bin/systemctl"
 chmod +x "$sandbox/bin/"*
 
 hermes() {
 	PATH="$sandbox/bin:$system_path" CALLS="$calls" VIVAC_REPO="$repo_root" VIVAC_LANG=en HOME="$sandbox/linux" \
-		XDG_DATA_HOME="$sandbox/linux/.local/share" VIVAC_WINDOWS_MOUNT="$sandbox/win" TERMINAL=kitty "$tool" "$@"
+		XDG_DATA_HOME="$sandbox/linux/.local/share" VIVAC_WINDOWS_MOUNT="$sandbox/win" VIVAC_SYSTEMD_DIR="$sandbox/systemd" \
+		TERMINAL=kitty "$tool" "$@"
 }
 
 # Before anything: a home of this side only, and no Hermes installed.
@@ -71,8 +80,19 @@ out="$(hermes --share --dry-run)"
 [[ "$out" == *"move $home/hermes-agent to $sandbox/linux/.local/share/hermes/hermes-agent"* ]] || fail "dry run plan: $out"
 [[ "$out" == *"set aside Windows' own config.yaml state.db state.db-wal under"* ]] || fail "dry run should name the conflicts, file by file: $out"
 [[ "$out" == *"nothing was moved"* ]] || fail "dry run should say so: $out"
+[[ "$out" == *"move $home/cache to $sandbox/linux/.local/share/hermes/cache"* ]] || fail "dry run should move the cache aside: $out"
+[[ "$out" == *"mount $sandbox/linux/.local/share/hermes/cache over $win/cache"* ]] || fail "dry run should name the bind mount: $out"
+[[ -z "$(ls -A "$sandbox/systemd")" ]] || fail 'dry run wrote a unit'
 [[ -d "$home" && ! -L "$home" ]] || fail "dry run moved the home"
 [[ "$(cat "$win/config.yaml")" == 'side: windows' ]] || fail "dry run touched Windows' config"
+
+# A mount that cannot be made (sudo refuses): the cache goes back, nothing moved.
+SUDO_REFUSES=1 hermes --share --yes >"$sandbox/refused.out" 2>&1 && fail 'share succeeded without its mount'
+[[ -d "$home" && ! -L "$home" && -f "$home/cache/uv/linux-entry" ]] || fail 'a refused mount left the home changed'
+[[ ! -e "$sandbox/linux/.local/share/hermes/cache" && -z "$(ls -A "$sandbox/systemd")" ]] || fail 'a refused mount left something behind'
+[[ "$(cat "$win/config.yaml")" == 'side: windows' ]] || fail "a refused mount touched Windows' files"
+[[ "$(cat "$sandbox/refused.out")" == *"nothing was moved"* ]] || fail "the refusal did not say so: $(cat "$sandbox/refused.out")"
+: >"$calls"
 
 # The real thing: the Windows home is found alone under the mount (Public is
 # not a person), this side's files win, Windows' own are set aside, both
@@ -99,6 +119,17 @@ store="$sandbox/linux/.local/share/hermes"
 # The language servers are an npm tree built for one system: per side too.
 [[ -f "$store/lsp/bin/server" ]] || fail "the language servers did not move to the store"
 [[ -L "$win/lsp" && "$(readlink -- "$win/lsp")" == "$store/lsp" ]] || fail "the shared home does not link the language servers"
+# The cache: this side's in the store, mounted over Windows' own, which stays
+# where it is, not set aside and not mixed with this side's.
+unit="$(systemd-escape --path --suffix=mount "$win/cache")"
+[[ -f "$store/cache/uv/linux-entry" ]] || fail "this side's cache did not move to the store"
+[[ -f "$win/cache/uv/windows-entry" && ! -e "$win/cache/uv/linux-entry" ]] || fail "Windows' cache was not left alone: $(ls -R "$win/cache")"
+[[ -d "$win/cache" && ! -L "$win/cache" ]] || fail 'the shared cache became a link'
+[[ -f "$sandbox/systemd/$unit" ]] || fail "no mount unit $unit: $(ls "$sandbox/systemd")"
+grep -Fxq "What=$(readlink -f -- "$store/cache")" "$sandbox/systemd/$unit" || fail "the unit mounts the wrong source: $(cat "$sandbox/systemd/$unit")"
+grep -Fxq "Where=$win/cache" "$sandbox/systemd/$unit" || fail 'the unit mounts on the wrong place'
+grep -Fxq 'Options=bind' "$sandbox/systemd/$unit" || fail 'the unit is not a bind mount'
+grep -Fxq "systemctl enable --now $unit" "$calls" || fail "the mount was not enabled: $(cat "$calls")"
 # A database travels with its journal: Windows' journal never meets this side's
 # database (SQLite would replay it into the wrong file).
 [[ ! -e "$win/state.db-wal" ]] || fail "Windows' journal was left beside this side's database"
@@ -156,6 +187,10 @@ hermes --unshare --yes >"$sandbox/unshare.out" 2>&1 || fail "unshare failed: $(c
 [[ -d "$home/hermes-agent" && ! -L "$home/hermes-agent" && -f "$home/hermes-agent/.venv/python" ]] || fail "the checkout is not back in the home"
 [[ ! -e "$store/hermes-agent" ]] || fail "the store still holds the checkout"
 [[ -f "$home/lsp/bin/server" && ! -L "$home/lsp" ]] || fail "the language servers are not back in the home"
+[[ -f "$home/cache/uv/linux-entry" && ! -e "$home/cache/uv/windows-entry" ]] || fail "this side's cache did not come back alone"
+[[ ! -e "$sandbox/systemd/$unit" ]] || fail 'the mount unit was left behind'
+grep -Fxq "systemctl disable --now $unit" "$calls" || fail "the mount was not stopped: $(cat "$calls")"
+[[ -f "$win/cache/uv/windows-entry" ]] || fail "Windows' cache was damaged by the unshare"
 [[ ! -e "$home/bin" ]] || fail "Windows' launchers came along"
 [[ ! -e "$home/vivac-hermes.conf" ]] || fail "the marker came along"
 [[ -f "$home/installs/oldkey/facts.json" ]] || fail "this side's environments did not come back"

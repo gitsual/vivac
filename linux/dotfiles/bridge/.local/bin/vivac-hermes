@@ -47,6 +47,12 @@ marker_name=vivac-hermes.conf
 # first 16 hex digits of the SHA-256 of the checkout's resolved path.
 per_side=(hermes-agent tools lsp)
 machine_dir=installs
+# The caches are per system too, but Windows keeps its own at the same path in
+# the shared home (uv's entries are symlinks here and path files there; neither
+# side reads the other's). A link would break Windows' cache, so this side's is
+# mounted over it, on this side only: a systemd bind mount, Windows untouched.
+mounted=(cache)
+systemd_dir="${VIVAC_SYSTEMD_DIR:-/etc/systemd/system}"
 
 action=open folder='' dry_run=false assume_yes=false
 while (($#)); do
@@ -186,13 +192,54 @@ stray_journals() {
 	done
 	return 0
 }
+# skipped NAME — a top-level entry that never joins the shared home as data.
+skipped() { case " ${per_side[*]} ${mounted[*]} $machine_dir " in *" $1 "*) return 0 ;; esac; return 1; }
+
+# mount_unit WHERE — the systemd unit name for a mount on WHERE.
+mount_unit() { systemd-escape --path --suffix=mount -- "$1"; }
+# bind SRC WHERE — mount SRC over WHERE now and at every boot (root, through sudo).
+bind() {
+	local src="$1" where="$2" unit temporary
+	unit="$(mount_unit "$where")"
+	temporary="$(mktemp)"
+	cat >"$temporary" <<UNIT
+[Unit]
+Description=Hermes ${where##*/}, this side's own over the shared home's (vivac-hermes)
+RequiresMountsFor=$src
+
+[Mount]
+What=$src
+Where=$where
+Type=none
+Options=bind
+
+[Install]
+WantedBy=local-fs.target
+UNIT
+	sudo install -m 0644 -- "$temporary" "$systemd_dir/$unit" &&
+		sudo systemctl daemon-reload &&
+		sudo systemctl enable --now "$unit"
+	local status=$?
+	rm -f -- "$temporary"
+	return "$status"
+}
+# unbind WHERE — stop that mount and forget it.
+unbind() {
+	local unit
+	unit="$(mount_unit "$1")"
+	[[ -e "$systemd_dir/$unit" ]] || return 0
+	sudo systemctl disable --now "$unit" || true
+	sudo rm -f -- "$systemd_dir/$unit"
+	sudo systemctl daemon-reload || true
+}
+
 # conflicts_of SRC DST — those relative paths, one per line.
 conflicts_of() {
 	local src="$1" dst="$2" rel="${3:-}" entry name
 	for entry in "$src"/.[!.]* "$src"/*; do
 		[[ -e "$entry" || -L "$entry" ]] || continue
 		name="${entry##*/}"
-		[[ -z "$rel" ]] && case " ${per_side[*]} $machine_dir " in *" $name "*) continue ;; esac
+		[[ -z "$rel" ]] && skipped "$name" && continue
 		if [[ -e "$dst/$name" || -L "$dst/$name" ]]; then
 			if [[ -d "$entry" && ! -L "$entry" && -d "$dst/$name" && ! -L "$dst/$name" ]]; then
 				conflicts_of "$entry" "$dst/$name" "$rel$name/"
@@ -210,7 +257,7 @@ merge_into() {
 	for entry in "$src"/.[!.]* "$src"/*; do
 		[[ -e "$entry" || -L "$entry" ]] || continue
 		name="${entry##*/}"
-		[[ -z "$rel" ]] && case " ${per_side[*]} $machine_dir " in *" $name "*) continue ;; esac
+		[[ -z "$rel" ]] && skipped "$name" && continue
 		if [[ -d "$entry" && ! -L "$entry" && -d "$dst/$name" && ! -L "$dst/$name" ]]; then
 			merge_into "$entry" "$dst/$name" "$backup" "$rel$name/"
 			continue
@@ -276,8 +323,16 @@ share() {
 	for entry in "$home"/.[!.]* "$home"/*; do
 		[[ -e "$entry" || -L "$entry" ]] || continue
 		name="${entry##*/}"
-		case " ${per_side[*]} $machine_dir " in *" $name "*) continue ;; esac
+		skipped "$name" && continue
 		entries+=("$name")
+	done
+	for name in "${mounted[@]}"; do
+		if [[ -e "$store/$name" ]]; then
+			tell hermes.store_taken "$store/$name"
+			return 1
+		fi
+		[[ -e "$home/$name" ]] && step hermes.would_move "$home/$name" "$store/$name"
+		step hermes.would_mount "$store/$name" "$shared/$name"
 	done
 	mapfile -t conflicts < <(conflicts_of "$home" "$shared")
 	for name in "${per_side[@]}"; do
@@ -292,6 +347,21 @@ share() {
 		return 0
 	fi
 	confirm hermes.confirm_share || return 0
+
+	# The mounts first: should sudo or systemd refuse, this side's cache goes
+	# back where it was and nothing else has changed.
+	mkdir -p -- "$store"
+	for name in "${mounted[@]}"; do
+		mkdir -p -- "$shared/$name"
+		if [[ -e "$home/$name" ]]; then mv -- "$home/$name" "$store/$name"; else mkdir -p -- "$store/$name"; fi
+		if ! bind "$(readlink -f -- "$store/$name")" "$shared/$name"; then
+			unbind "$shared/$name"
+			mv -- "$store/$name" "$home/$name"
+			tell hermes.mount_failed "$shared/$name"
+			return 1
+		fi
+		step hermes.mounted "$store/$name" "$shared/$name"
+	done
 
 	# Copies first, the originals only once every copy is in: a failure leaves
 	# this side's home whole.
@@ -344,7 +414,10 @@ unshare() {
 		return 1
 	fi
 	say hermes.plan_back "$shared" "$home"
-	for name in "${per_side[@]}" "$machine_dir"; do
+	for name in "${mounted[@]}"; do
+		[[ -e "$systemd_dir/$(mount_unit "$shared/$name")" ]] && step hermes.would_unmount "$shared/$name"
+	done
+	for name in "${per_side[@]}" "${mounted[@]}" "$machine_dir"; do
 		[[ -d "$store/$name" ]] && step hermes.would_move "$store/$name" "$home/$name"
 	done
 	step hermes.would_copy "$shared" "$home"
@@ -354,13 +427,16 @@ unshare() {
 	fi
 	confirm hermes.confirm_unshare || return 0
 	fresh="$(mktemp -d -- "$(dirname -- "$home")/.hermes.back.XXXXXX")"
+	# Unmounted first, so what is copied below is Windows' own and this side's
+	# comes back from the store.
+	for name in "${mounted[@]}"; do unbind "$shared/$name"; done
 	for entry in "$shared"/.[!.]* "$shared"/*; do
 		[[ -e "$entry" || -L "$entry" ]] || continue
 		name="${entry##*/}"
 		# Windows' launchers and the marker stay Windows'; the per-side links
 		# give way to the real folders below.
 		case "$name" in bin | "$marker_name" | "$machine_dir") continue ;; esac
-		case " ${per_side[*]} " in *" $name "*) continue ;; esac
+		case " ${per_side[*]} ${mounted[*]} " in *" $name "*) continue ;; esac
 		cp -r --preserve=timestamps -- "$entry" "$fresh/$name"
 	done
 	# This side's environments come back whole; the links left for them inside
@@ -374,6 +450,11 @@ unshare() {
 		mv -- "$store/$machine_dir" "$fresh/$machine_dir"
 		step hermes.moved "$store/$machine_dir" "$home/$machine_dir"
 	fi
+	for name in "${mounted[@]}"; do
+		[[ -d "$store/$name" ]] || continue
+		mv -- "$store/$name" "$fresh/$name"
+		step hermes.moved "$store/$name" "$home/$name"
+	done
 	for name in "${per_side[@]}"; do
 		[[ -d "$store/$name" ]] || continue
 		mv -- "$store/$name" "$fresh/$name"

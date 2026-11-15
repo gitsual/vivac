@@ -697,8 +697,24 @@ checkout with its venv, the tool store, the dependency environments under
 `installs/`. On Windows the checkout and the tool store live under
 `%LOCALAPPDATA%\hermes` (`HERMES_RUNTIME_DIR`), never inside the home. On
 Linux they move under `~/.local/share/hermes`, and the shared home keeps
-links to them (`hermes-agent`, `tools`, and one entry inside `installs/`
-named after the Linux checkout); Windows never follows those links.
+links to them (`hermes-agent`, `tools`, `lsp` — the language servers, an
+npm tree built for one system — and one entry inside `installs/` named after
+the Linux checkout); Windows never follows those links.
+
+`cache/` is this machine's too, but Windows keeps its own at that very path:
+uv's cache entries are symlinks on Linux and files holding a `C:\` path on
+Windows, and neither side's uv reads the other's (measured: Linux's uv finds
+nothing in a cache Windows wrote). A link there would break Windows' cache, so
+Linux's `cache/` lives in `~/.local/share/hermes/cache` and a systemd bind
+mount (`/etc/systemd/system/<path>.mount`, enabled at boot) lays it over the
+shared home's `cache/` on Linux only. Windows sees its own folder, untouched.
+The mount is made before anything moves: if sudo or systemd refuse it, the
+cache goes back and nothing else changes. `--unshare` stops and removes it.
+
+A SQLite database travels with its journal: when Linux's `state.db` wins,
+Windows' `state.db-wal`, `-shm` and `-journal` go aside with Windows'
+database even where Linux has none, so SQLite never replays Windows' journal
+into Linux's file.
 
 - **Windows**: `vivac-hermes.ps1 install` runs the official installer
   unattended with the home there and the code outside it, and sets
