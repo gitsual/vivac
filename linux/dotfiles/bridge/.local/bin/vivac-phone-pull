@@ -6,6 +6,8 @@
 # Prints the local absolute path, ready for Hermes to send as MEDIA:<path>.
 # Talks to the phone's vivac-gate, which only streams vivac photos, over the
 # SSH host alias $VIVAC_PHONE_HOST (default "pixel", see android/README.md).
+# The alias may live in ~/.config/vivac/ssh_config, which is passed with -F
+# when it exists.
 set -Eeuo pipefail
 
 host="${VIVAC_PHONE_HOST:-pixel}"
@@ -26,7 +28,10 @@ mkdir -p -- "$dest_dir"
 dest="$dest_dir/$name"
 part="$dest.part"
 trap 'rm -f -- "$part"' EXIT
-ssh -o BatchMode=yes "$host" "vivac-photo-get $name" >"$part"
+ssh_args=()
+ssh_config="${XDG_CONFIG_HOME:-$HOME/.config}/vivac/ssh_config"
+[[ -f "$ssh_config" ]] && ssh_args=(-F "$ssh_config")
+ssh "${ssh_args[@]}" -o BatchMode=yes "$host" "vivac-photo-get $name" >"$part"
 [[ -s "$part" ]] || {
 	printf 'vivac-phone-pull: the phone sent nothing for %s\n' "$name" >&2
 	exit 1

@@ -51,3 +51,12 @@ done
 
 if FAIL=1 bash "$tool" photo-20261115-111111.jpg >/dev/null 2>&1; then fail "failed transfer reported success"; fi
 [[ ! -e "$HOME/Descargas/vivac-link/phone/photo-20261115-111111.jpg" ]] || fail "failed transfer left a file"
+
+# A vivac ssh_config (the "pixel" alias lives there, not in ~/.ssh/config)
+# is passed with -F when present.
+mkdir -p "$XDG_CONFIG_HOME/vivac"
+: >"$XDG_CONFIG_HOME/vivac/ssh_config"
+: >"$CALLS"
+bash "$tool" photo-20261115-222222.jpg >/dev/null || fail "pull with ssh_config failed"
+grep -qx -- "-F $XDG_CONFIG_HOME/vivac/ssh_config -o BatchMode=yes pixel vivac-photo-get photo-20261115-222222.jpg" "$CALLS" ||
+	fail "ssh_config not used: $(cat "$CALLS")"

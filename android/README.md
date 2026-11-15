@@ -54,8 +54,9 @@ On the phone, append the public key to `~/.ssh/authorized_keys`, **pinned to the
 command="vivac-gate",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA... hermes-vivac-phone
 ```
 
-In the PC's `~/.ssh/config` (the HostName is the phone's Tailscale name, so it works
-at home and away):
+On the PC, the `pixel` alias goes either in `~/.ssh/config` or in a file of its
+own, `~/.config/vivac/ssh_config` (the HostName is the phone's Tailscale name, so it
+works at home, away, and when the phone's Tailscale IP changes):
 
 ```
 Host pixel
@@ -63,7 +64,11 @@ Host pixel
     Port 8022
     IdentityFile ~/.ssh/vivac_phone
     IdentitiesOnly yes
+    BatchMode yes
+    StrictHostKeyChecking accept-new
 ```
+
+`vivac-phone-pull` passes `~/.config/vivac/ssh_config` with `-F` when it exists.
 
 In Hermes' `~/.hermes/config.yaml`:
 
@@ -74,6 +79,9 @@ mcp_servers:
     args: [-o, BatchMode=yes, pixel, vivac-mcp]
     trust: untrusted   # actions ask in the chat first; read tools (readOnlyHint) don't
 ```
+
+With the alias in `~/.config/vivac/ssh_config`, pass it explicitly (absolute path):
+`args: [-F, <absolute path of ~/.config/vivac/ssh_config>, pixel, vivac-mcp]`.
 
 Check it with `ssh pixel vivac-mcp` (type `{"jsonrpc":"2.0","id":1,"method":"ping"}`,
 expect `{"jsonrpc": "2.0", "id": 1, "result": {}}`), then restart the gateway.
