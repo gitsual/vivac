@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# The only command Hermes' SSH key may run on this phone. In
+# ~/.ssh/authorized_keys:
+#
+#   command="vivac-gate",no-pty,no-port-forwarding,no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAA... hermes
+#
+# sshd puts what the client asked for in $SSH_ORIGINAL_COMMAND. Two requests
+# pass, word for word; everything else is refused:
+#   vivac-mcp                  the MCP server on stdio
+#   vivac-photo-get NAME       one photo vivac-mcp took (NAME as it names them)
+set -Eeuo pipefail
+
+photos="${VIVAC_PHOTO_DIR:-$HOME/.local/share/vivac/photos}"
+mcp="${VIVAC_MCP:-$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/vivac-mcp}"
+request="${SSH_ORIGINAL_COMMAND:-}"
+
+refuse() {
+	printf 'vivac-gate: refused: %s\n' "$request" >&2
+	exit 1
+}
+
+if [[ "$request" == vivac-mcp ]]; then
+	exec "$mcp"
+fi
+if [[ "$request" =~ ^vivac-photo-get\ (photo-[0-9]{8}-[0-9]{6}\.jpg)$ ]]; then
+	file="$photos/${BASH_REMATCH[1]}"
+	[[ -f "$file" ]] || refuse
+	exec cat -- "$file"
+fi
+refuse
