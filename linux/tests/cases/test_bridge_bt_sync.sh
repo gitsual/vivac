@@ -130,9 +130,25 @@ out="$(run --reg "$fixtures/windows.reg" --apply)" || fail 'the second apply fai
 grep -q 'Nothing to change' <<<"$out" || fail "the second run still had changes: $out"
 [[ ! -s "$calls" ]] || fail 'the second run restarted bluetoothd for nothing'
 
+# --- a python3 first on PATH without hivex (pyenv) hands over to the system's -----------------------------------
+mkdir -p "$sandbox/nohivex"
+printf 'raise ImportError("no hivex in this interpreter")\n' >"$sandbox/nohivex/hivex.py"
+printf '#!/usr/bin/env bash\nprintf "system-python %%s\\n" "$*" >>"$CALLS"\n' >"$sandbox/bin/system-python"
+chmod +x "$sandbox/bin/system-python"
+: >"$calls"
+{ printf regf; head -c 4092 /dev/zero; } >"$sandbox/blank-hive"
+PYTHONPATH="$sandbox/nohivex" VIVAC_SYSTEM_PYTHON="$sandbox/bin/system-python" CALLS="$calls" VIVAC_LANG=en \
+	VIVAC_BT_DIR="$sandbox/bt" "$tool" --hive "$sandbox/blank-hive" --no-restart >/dev/null 2>&1 || true
+grep -q "^system-python .*vivac-bt-sync --hive $sandbox/blank-hive --no-restart$" "$calls" ||
+	fail "without hivex it did not hand over to the system python: $(cat "$calls")"
+: >"$calls"
+
 # --- the hive itself, through python-hivex ---------------------------------------------------------------------
-if python3 -c 'import hivex' 2>/dev/null; then
-	python3 "$fixtures/make-hive.py" "$tool" "$fixtures/windows.reg" "$sandbox/SYSTEM" || fail 'the test hive could not be made'
+# The interpreter that has the bindings: python3 on PATH, or the system's under pyenv.
+hivex_python=python3
+python3 -c 'import hivex' 2>/dev/null || hivex_python=/usr/bin/python3
+if "$hivex_python" -c 'import hivex' 2>/dev/null; then
+	"$hivex_python" "$fixtures/make-hive.py" "$tool" "$fixtures/windows.reg" "$sandbox/SYSTEM" || fail 'the test hive could not be made'
 	fresh
 	reg_plan="$(run --reg "$fixtures/windows.reg" | tail -n +2)"
 	out="$(run --hive "$sandbox/SYSTEM")" || fail "reading the hive failed: $out"
@@ -149,7 +165,7 @@ if python3 -c 'import hivex' 2>/dev/null; then
 	if run --apply >/dev/null 2>&1; then fail 'applied from a hibernated Windows'; fi
 	[[ "$(snapshot)" == "$before" && ! -s "$calls" ]] || fail 'a refused apply changed something'
 	printf 'wake' >"$sandbox/win/hiberfil.sys"
-	python3 "$fixtures/make-hive.py" "$tool" "$fixtures/windows.reg" "$sandbox/win/Windows/System32/config/SYSTEM" --dirty
+	"$hivex_python" "$fixtures/make-hive.py" "$tool" "$fixtures/windows.reg" "$sandbox/win/Windows/System32/config/SYSTEM" --dirty
 	out="$(run --apply 2>&1)" && fail 'applied from a hive Windows did not finish writing'
 	grep -q 'not closed cleanly' <<<"$out" || fail "the half-written hive was not named: $out"
 	[[ "$(snapshot)" == "$before" ]] || fail 'a refused apply changed something'

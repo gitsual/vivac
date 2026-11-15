@@ -14,7 +14,7 @@ d41c8a7443dca0a4871539a652020666549f453c6d6c10f10e49661e132d687b  dotfiles/audio
 3bb181ae038b38796647ff21a8ee30906615f80dcafda24fff55de799cc7ce9d  dotfiles/bridge/.config/systemd/user/vivac-localsend.service
 cd7f3a00fef835c822d8cc3db2fa85a447431c0f78a96349f392ceb322e41177  dotfiles/bridge/.config/systemd/user/vivac-mouse.service
 5a358276f8df8db104346516e4925d6cebf219434379875259e937c1f82e7c77  dotfiles/bridge/.local/bin/vivac-bridge
-fde045b76fc81f7321bf60101f203b0605ce854cb7191e75941b0bc772cf3a1e  dotfiles/bridge/.local/bin/vivac-bt-sync
+085c2a11464dac78cd539b858f67d9dfa7fe262722b7ac89c02cd56e5eef54c1  dotfiles/bridge/.local/bin/vivac-bt-sync
 0f52e24a87149a37819272b9669ae47db02fc9fe57d47ce1f84558ecd4e8091a  dotfiles/bridge/.local/bin/vivac-drop
 49bc57ac639de307ffeefd1538b95b60a1dc44949d22720fdbdb9bb9886f2b10  dotfiles/bridge/.local/bin/vivac-hermes
 5284f27d93bbbf730ed9bc3b53ebbf021528505ef46f630e6068445f83af00a1  dotfiles/bridge/.local/bin/vivac-link
