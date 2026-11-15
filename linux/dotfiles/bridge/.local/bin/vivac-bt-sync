@@ -178,8 +178,30 @@ def device_name(data: bytes) -> str:
     return printable(data.split(b"\0", 1)[0].decode("utf-8", errors="replace"))
 
 
+def load_hivex():
+    """pacman's hivex: python bindings of libhivex, for the system interpreter only.
+
+    Under pyenv (or any python3 first on PATH that is not the system's) the
+    import fails although the package is installed: hand this run over to the
+    system interpreter once, with the same arguments, before anything is read.
+    """
+    try:
+        import hivex
+
+        return hivex
+    except ImportError:
+        system = Path(os.environ.get("VIVAC_SYSTEM_PYTHON") or "/usr/bin/python3")
+        if os.environ.get("VIVAC_BT_HANDED_OVER") or not os.access(system, os.X_OK):
+            raise
+        if Path(sys.executable).resolve() == system.resolve():
+            raise
+        os.environ["VIVAC_BT_HANDED_OVER"] = "1"
+        sys.stdout.flush()
+        os.execv(str(system), [str(system), str(SELF), *sys.argv[1:]])
+
+
 def read_hive(path: Path) -> Windows:
-    import hivex  # pacman hivex: python bindings of libhivex, read-only use here
+    hivex = load_hivex()  # read-only use here
 
     hive = hivex.Hivex(str(path))
     root = hive.root()
