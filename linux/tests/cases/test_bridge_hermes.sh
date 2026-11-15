@@ -40,6 +40,9 @@ printf 'code\n' >"$home/hermes-agent/.venv/python"
 mkdir -p "$home/hermes-agent/venv/bin"
 printf '#!/usr/bin/env bash\nprintf "venv-python %%s\\n" "$*" >>"$CALLS"\n' >"$home/hermes-agent/venv/bin/python"
 chmod +x "$home/hermes-agent/venv/bin/python"
+# A gateway service Hermes wrote for the checkout's old path.
+mkdir -p "$sandbox/linux/.config/systemd/user"
+printf '[Service]\nExecStart=/old/path/hermes gateway run\n' >"$sandbox/linux/.config/systemd/user/hermes-gateway.service"
 printf 'tool\n' >"$home/tools/uv/uv"
 mkdir -p "$home/bin" && printf 'elf\n' >"$home/bin/tirith"
 printf 'language server\n' >"$home/lsp/bin/server"
@@ -166,6 +169,8 @@ grep -q '^windows_home=' "$win/vivac-hermes.conf" || fail "the marker lost Windo
 grep -q "^windows_backup=$backup" "$win/vivac-hermes.conf" || fail "the marker does not name the backup"
 grep -Fxq "venv-python -m hermes_cli.venv_sync --project-root $home/hermes-agent" "$calls" ||
 	fail "Hermes was not asked to rewrite its launchers for the shared place: $(cat "$calls")"
+grep -Fxq "venv-python -m hermes_cli.main gateway install --force --no-start-now --start-on-login" "$calls" ||
+	fail "Hermes was not asked to rewrite its gateway service for the shared place: $(cat "$calls")"
 [[ "$(cat "$sandbox/share.out")" == *"Shared: $home points at $win"* ]] || fail "share did not say so: $(cat "$sandbox/share.out")"
 
 out="$(hermes --status)"
