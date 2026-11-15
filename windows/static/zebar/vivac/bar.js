@@ -16,7 +16,7 @@ const G = {
   cpu: '\u{F0EE0}', memory: '\u{F035B}', disk: '\u{F02CA}', gpu: '\u{F08AE}',
   clock: '\u{F0954}', volume: '\u{F057E}', muted: '\u{F075F}',
   battery: ['\u{F007A}', '\u{F007C}', '\u{F007E}', '\u{F0080}', '\u{F0079}'], charging: '\u{F0084}',
-  desktop: '\u{F01C4}', theme: '\u25D0', power: '\u23FB',
+  desktop: '\u{F01C4}', theme: '\u25D0', power: '\u23FB', sesiones: '\u27F2',
   shield: '\u{F0565}', shieldAlert: '\u{F0ECC}',
   bluetooth: '\u{F00AF}', bluetoothOff: '\u{F00B2}', usb: '\u{F129E}',
   update: '\u{F06B0}', restart: '\u{F0709}', bug: '\u{F00E4}',
@@ -303,10 +303,20 @@ function launch(verb) {
 // reads them, the same way bin/vivac-security.ps1 reads Defender: Bluetooth,
 // a restart Windows Update waits for and the antivirus every minute, the
 // pending updates every half hour, since Windows Update takes seconds to say.
-// Removable drives come from Zebar's own disk provider.
+// USB volumes use the physical bus: USB hard disks can report as fixed.
 const trayScript = `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${config.repo}\\bin\\vivac-tray.ps1`;
 let tray = null;
 let updates = null;
+let usbDrives = [];
+async function pollDrives() {
+  const result = await trayJson('-Drives');
+  if (result) usbDrives = result.drives || [];
+  draw();
+}
+if (config.modules.includes('usb')) {
+  pollDrives();
+  setInterval(pollDrives, 15000);
+}
 async function trayJson(arg) {
   try {
     const r = await zebar.shellExec('powershell.exe', `${trayScript} ${arg}`);
@@ -341,15 +351,15 @@ function bluetoothPill() {
   return `<button class="pill bluetooth${on ? '' : ' off'}" data-act="bluetooth" title="${esc(tip)}"><span class="glyph">${on ? G.bluetooth : G.bluetoothOff}</span></button>`;
 }
 
-// One letter per removable drive; a click removes it safely, as the
-// taskbar's icon did, and a notification says when it can be pulled.
+// One letter per USB volume: click to browse, right click for its actions.
 function usbPill(d) {
-  const drives = (d?.disks || []).filter((x) => x.isRemovable && /^[A-Z]:/i.test(x.mountPoint));
+  const drives = usbDrives;
   if (!drives.length) return '';
   return drives
     .map((x) => {
-      const letter = x.mountPoint.slice(0, 2).toUpperCase();
-      const tip = `${config.labels.eject} ${letter}${x.name ? `  ${x.name}` : ''}`;
+      const letter = x.letter.toUpperCase();
+      const capacity = `${(x.size / 1e9).toFixed(0)} GB`;
+      const tip = `${letter} ${x.name} ${x.label || ''} (${capacity})\n${config.labels.usb_actions}`;
       return `<button class="pill usb" data-act="eject" data-drive="${letter}" title="${esc(tip)}"><span class="glyph">${G.usb}</span>${letter}</button>`;
     })
     .join('');
@@ -413,7 +423,7 @@ const GROUPS = [
   ['cpu', 'memory', 'disk', 'gpu', 'battery'],
   ['usb'],
   ['audio'],
-  ['security', 'theme', 'power'],
+  ['security', 'theme', 'sesiones', 'power'],
   ['updates'],
 ];
 
@@ -433,6 +443,8 @@ function modulePill(m, out) {
     case 'updates': return updatesPill();
     case 'phone': return phonePill();
     case 'theme': return `<button class="pill theme" data-act="theme" title="${esc(config.labels.theme)}">${G.theme}</button>`;
+    // sesiones (13-11): clic = restaurar la última foto de los escritorios; clic derecho = guardarla (bin\sesiones.ps1)
+    case 'sesiones': return `<button class="pill sesiones" data-act="sesiones" title="Sesiones · clic: restaurar · clic derecho: guardar">${G.sesiones}</button>`;
     case 'power': return `<button class="pill power" data-act="power" title="${esc(config.labels.power)}">${G.power}</button>`;
   }
   return '';
@@ -443,19 +455,19 @@ function drawRight(out) {
   // does not group still shows, at the end, rather than vanishing.
   const grouped = GROUPS.flat();
   const groups = [...GROUPS, config.modules.filter((m) => !grouped.includes(m))]
-    .map((g) => g.filter((m) => config.modules.includes(m)).map((m) => modulePill(m, out)).join(''))
+    .map((g) => g.filter((m) => m === 'sesiones' || config.modules.includes(m)).map((m) => modulePill(m, out)).join(''))
     .filter(Boolean);
   const el = document.getElementById('right');
   el.innerHTML = groups.join('<span class="sep"></span>');
   el.querySelectorAll('[data-act]').forEach((b) => {
     const act = b.dataset.act;
     if (act === 'mute') {
-      // As in the source bar: a click opens the sound panel (pavucontrol
-      // there, vivac's own here); right click mutes; the wheel moves it.
+      // Both clicks reach the themed device controls. Mute is available
+      // inside the panel; the wheel adjusts the default output directly.
       b.addEventListener('click', () => launch('sound'));
       b.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        out.audio?.setMute(!out.audio.defaultPlaybackDevice.isMuted);
+        launch('sound');
       });
       b.addEventListener('wheel', (e) => {
         const dev = out.audio?.defaultPlaybackDevice;
@@ -463,6 +475,10 @@ function drawRight(out) {
         const next = Math.max(0, Math.min(100, Math.round(dev.volume + (e.deltaY < 0 ? 5 : -5))));
         out.audio.setVolume(next);
       });
+    } else if (act === 'sesiones') {
+      const ses = (verbo) => zebar.shellSpawn('conhost.exe', `--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\alvar\\bin\\sesiones.ps1 ${verbo}`);
+      b.addEventListener('click', () => ses('restaurar'));
+      b.addEventListener('contextmenu', (e) => { e.preventDefault(); ses('guardar'); });
     } else if (act === 'security') {
       b.addEventListener('click', () => {
         launch(act);
@@ -478,7 +494,13 @@ function drawRight(out) {
         trayAct('-Bluetooth');
       });
     } else if (act === 'eject') {
-      b.addEventListener('click', () => zebar.shellSpawn('powershell.exe', `${trayScript} -Eject ${b.dataset.drive}`));
+      b.addEventListener('click', () => {
+        zebar.shellSpawn('powershell.exe', `${trayScript} -Browse ${b.dataset.drive}`);
+      });
+      b.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        zebar.shellSpawn('powershell.exe', `${trayScript} -DriveMenu ${b.dataset.drive}`);
+      });
     } else if (act === 'updates') {
       // What the panel installs shows here on the next polls.
       b.addEventListener('click', () => {

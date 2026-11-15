@@ -1,11 +1,13 @@
 <#
 .SYNOPSIS
-  Defender and Malwarebytes, for the bar and the security surface.
+  The Security Center for the bar and the security surface: Defender, Avast
+  and Malwarebytes, as Windows registers them.
 
 .DESCRIPTION
-    -Status   one line of JSON for the bar's shield, for both antivirus:
-              state (ok, warn, alert), the words beside it, its tooltip, and
-              antivirus/malwarebytes (null without Malwarebytes)
+    -Status   one line of JSON for the bar's shield, for every antivirus:
+              state (ok, warn, alert), the words beside it, its tooltip (one
+              line per program and the firewall's), products, and
+              avast/malwarebytes (null when not installed)
     -Scan     a quick scan, then a vivac notification with what it found
     -Update   a signature update, then a vivac notification
 
