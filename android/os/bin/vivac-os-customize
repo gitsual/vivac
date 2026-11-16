@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Apply the vivac patches to a synced GrapheneOS tree.
+# Usage: vivac-os-customize SRC_DIR PATCH_DIR
+# PATCH_DIR/<project path>/*.patch are applied in name order to SRC_DIR/<project path>.
+# Each touched project is first reset to its committed state (reruns give the
+# same tree); a patch that no longer applies fails the run and leaves that
+# project clean, never half-patched.
+set -Eeuo pipefail
+
+(($# == 2)) || { printf 'usage: %s SRC_DIR PATCH_DIR\n' "${0##*/}" >&2; exit 2; }
+src="$(cd -- "$1" && pwd -P)"
+[[ -d "$2" ]] || { printf 'no patch folder: %s\n' "$2" >&2; exit 1; }
+patches="$(cd -- "$2" && pwd -P)"
+
+mapfile -t projects < <(find "$patches" -type f -name '*.patch' -printf '%h\n' | sed "s|^$patches/||" | LC_ALL=C sort -u)
+((${#projects[@]})) || { printf 'no patches in %s\n' "$patches"; exit 0; }
+
+for p in "${projects[@]}"; do
+	dir="$src/$p"
+	top="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null || true)"
+	[[ -n "$top" && "$(cd -- "$top" && pwd -P)" == "$dir" ]] || { printf 'not a project in the tree: %s\n' "$p" >&2; exit 1; }
+done
+
+for p in "${projects[@]}"; do
+	dir="$src/$p"
+	git -C "$dir" reset -q --hard
+	git -C "$dir" clean -qfd
+	mapfile -t files < <(find "$patches/$p" -maxdepth 1 -type f -name '*.patch' | LC_ALL=C sort)
+	for f in "${files[@]}"; do
+		if ! git -C "$dir" apply --whitespace=nowarn "$f"; then
+			git -C "$dir" reset -q --hard
+			git -C "$dir" clean -qfd
+			printf 'patch no longer applies: %s/%s\n' "$p" "${f##*/}" >&2
+			exit 1
+		fi
+		printf 'applied %s/%s\n' "$p" "${f##*/}"
+	done
+done

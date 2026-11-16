@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# One vivac-os update run (meant for a systemd timer).
+# If upstream ships a build newer than STATE/last-build: build, sign and
+# publish it to the testing channel, record it, and notify. Notifies failures too.
+set -Eeuo pipefail
+
+here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+root="${VIVAC_OS_ROOT:-$HOME/m2/vivac-os}"
+state="${VIVAC_OS_STATE:-$root/state}"
+device="${VIVAC_OS_DEVICE:-shiba}"
+upstream_cmd="${VIVAC_OS_UPSTREAM_CMD:-$here/vivac-os-upstream}"
+build_cmd="${VIVAC_OS_BUILD_CMD:-$here/vivac-os-build}"
+sign_cmd="${VIVAC_OS_SIGN_CMD:-$here/vivac-os-sign}"
+notify_cmd="${VIVAC_OS_NOTIFY_CMD:-}"
+
+mirror_dest="${VIVAC_OS_MIRROR_DEST:-ios@nasbackup:/srv/vivac-os}"
+publish_default() {
+	"$here/vivac-os-publish" "$root/src/releases/$1/release-$device-$1" "$root/server" testing &&
+		RSYNC_RSH="ssh -o BatchMode=yes -o UserKnownHostsFile=$root/ssh/known_hosts" \
+			"$here/vivac-os-mirror" "$root/server" "$mirror_dest"
+}
+publish() { if [[ -n "${VIVAC_OS_PUBLISH_CMD:-}" ]]; then "$VIVAC_OS_PUBLISH_CMD" "$1"; else publish_default "$1"; fi; }
+notify() {
+	printf '%s\n' "$1"
+	[[ -z "$notify_cmd" ]] || "$notify_cmd" "$1" || true
+}
+
+mkdir -p "$state"
+exec 9>"$state/lock"
+flock -n 9 || { printf 'another vivac-os run is in progress\n' >&2; exit 1; }
+
+last="$(cat "$state/last-build" 2>/dev/null || printf '0')"
+new="$("$upstream_cmd" || true)"
+if [[ ! "$new" =~ ^[0-9]{10}$ ]]; then
+	notify "vivac-os: FAILED to read the upstream build (got '${new}')"
+	exit 1
+fi
+if ((10#$new <= 10#$last)); then
+	printf 'vivac-os: up to date at %s (upstream %s)\n' "$last" "$new"
+	exit 0
+fi
+
+for step in build sign publish; do
+	case "$step" in
+	build) "$build_cmd" "$new" ;;
+	sign) "$sign_cmd" "$new" ;;
+	publish) publish "$new" ;;
+	esac || { notify "vivac-os: $new FAILED at $step"; exit 1; }
+done
+printf '%s\n' "$new" >"$state/last-build"
+notify "vivac-os: $new built, signed and published to testing"

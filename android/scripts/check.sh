@@ -7,10 +7,10 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 step() { printf '== %s\n' "$*"; }
 
 step 'shell syntax'
-for f in scripts/*.sh tests/run.sh tests/cases/*.sh; do bash -n "$f"; done
+for f in scripts/*.sh os/bin/* tests/run.sh tests/cases/*.sh; do bash -n "$f"; done
 
 step 'shellcheck'
-shellcheck scripts/*.sh tests/run.sh tests/cases/*.sh
+shellcheck scripts/*.sh os/bin/* tests/run.sh tests/cases/*.sh
 
 step 'python syntax'
 for f in bin/*; do

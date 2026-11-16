@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Mirror the local update server folder to the Pi (or any rsync target).
+# Usage: vivac-os-mirror SRC_DIR DEST     (DEST: dir or host:dir; env VIVAC_OS_MIRROR_KEEP=2)
+# Pass 1 copies the zips/signatures of the builds to keep; pass 2 copies the
+# channel metadata and prunes everything else on DEST. The phone therefore
+# never sees metadata for files that are not there yet. Kept: the newest KEEP
+# builds plus any build a channel metadata file points at.
+set -Eeuo pipefail
+
+(($# == 2)) || { printf 'usage: %s SRC_DIR DEST\n' "${0##*/}" >&2; exit 2; }
+src="$1" dst="$2" keep="${VIVAC_OS_MIRROR_KEEP:-2}"
+[[ -d "$src" ]] || { printf 'no source folder: %s\n' "$src" >&2; exit 1; }
+[[ "$keep" =~ ^[1-9][0-9]*$ ]] || { printf 'bad KEEP: %s\n' "$keep" >&2; exit 1; }
+
+mapfile -t meta < <(find "$src" -maxdepth 1 -type f -regextype posix-extended -regex '.*/[a-z0-9]+-(testing|beta|stable|alpha)' -printf '%f\n' | LC_ALL=C sort)
+mapfile -t newest < <(find "$src" -maxdepth 1 -type f -name '*-ota_update-*.zip' -printf '%f\n' |
+	sed -nE 's/.*-ota_update-([0-9]{10})\.zip$/\1/p' | LC_ALL=C sort -ur | head -n "$keep")
+pinned=()
+for m in "${meta[@]}"; do read -r b _ <"$src/$m"; pinned+=("$b"); done
+mapfile -t builds < <(printf '%s\n' "${newest[@]}" "${pinned[@]}" | grep -E '^[0-9]{10}$' | LC_ALL=C sort -u)
+
+files=()
+for b in "${builds[@]}"; do
+	while IFS= read -r f; do files+=("--include=$f"); done < <(find "$src" -maxdepth 1 -type f -name "*-$b.zip*" -printf '%f\n')
+done
+metas=()
+for m in "${meta[@]}"; do metas+=("--include=$m"); done
+
+rsync -a --chmod=F644,D755 "${files[@]}" --exclude='*' "$src/" "$dst/"
+rsync -a --chmod=F644,D755 --delete-after --delete-excluded "${files[@]}" "${metas[@]}" --exclude='*' "$src/" "$dst/"
+printf 'mirrored %d build(s) and %d channel file(s) to %s\n' "${#builds[@]}" "${#meta[@]}" "$dst"

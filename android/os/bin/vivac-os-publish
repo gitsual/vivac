@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Publish a signed vivac-os release to the static update server folder.
+# Usage: vivac-os-publish RELEASE_DIR SERVER_DIR testing|beta|stable
+# Copies the OTA zip and the install/factory zip(s) with signatures, then
+# writes "<device>-<channel>" LAST (atomically), so the phone never sees a
+# build whose files are not there yet.
+set -Eeuo pipefail
+
+(($# == 3)) || { printf 'usage: %s RELEASE_DIR SERVER_DIR testing|beta|stable\n' "${0##*/}" >&2; exit 2; }
+rel="$1" srv="$2" channel="$3"
+[[ "$channel" =~ ^(testing|beta|stable)$ ]] || { printf 'bad channel: %s\n' "$channel" >&2; exit 1; }
+[[ -d "$rel" && -d "$srv" ]] || { printf 'release and server must be folders\n' >&2; exit 1; }
+
+shopt -s nullglob
+otas=("$rel"/*-ota_update-*.zip)
+((${#otas[@]} == 1)) || { printf 'need exactly one OTA zip in %s (found %d)\n' "$rel" "${#otas[@]}" >&2; exit 1; }
+name="${otas[0]##*/}"
+[[ "$name" =~ ^([a-z0-9]+)-ota_update-([0-9]{10})\.zip$ ]] || { printf 'odd OTA name: %s\n' "$name" >&2; exit 1; }
+device="${BASH_REMATCH[1]}" build="${BASH_REMATCH[2]}"
+
+meta="$rel/$device-testing"
+[[ -f "$meta" ]] || { printf 'missing %s\n' "$meta" >&2; exit 1; }
+read -r -a f <"$meta"
+[[ ${#f[@]} -eq 4 && "${f[0]}" == "$build" && "${f[1]}" =~ ^[0-9]+$ && "${f[2]}" == "$device" ]] ||
+	{ printf 'metadata %s does not match the OTA\n' "$meta" >&2; exit 1; }
+
+put() { # atomic copy: temp file in the same folder, then rename
+	local tmp
+	tmp="$(mktemp "$srv/.publish.XXXXXX")"
+	cp -- "$1" "$tmp" && chmod 644 "$tmp" && mv -f -- "$tmp" "$srv/$2"
+}
+for f2 in "${otas[0]}" "$rel/$device"-{install,factory}-"$build".zip{,.sig}; do
+	[[ -f "$f2" ]] && put "$f2" "${f2##*/}"
+done
+tmp="$(mktemp "$srv/.publish.XXXXXX")"
+printf '%s %s %s %s\n' "$build" "${f[1]}" "$device" "$channel" >"$tmp"
+chmod 644 "$tmp" && mv -f -- "$tmp" "$srv/$device-$channel"
+printf 'published %s %s to %s\n' "$device" "$build" "$channel"

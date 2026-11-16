@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Print the build number GrapheneOS ships on a channel for a device, read from
+# the same "<device>-<channel>" file the Updater app reads:
+#   BUILD(10 digits) TIMESTAMP DEVICE CHANNEL
+# Usage: vivac-os-upstream [--device shiba] [--channel stable|beta|alpha]
+# Prints nothing and exits 1 on anything unexpected.
+set -Eeuo pipefail
+
+base="${VIVAC_OS_UPSTREAM_URL:-https://releases.grapheneos.org}"
+device=shiba channel=stable
+while (($#)); do
+	case "$1" in
+	--device) device="${2-}"; shift 2 ;;
+	--channel) channel="${2-}"; shift 2 ;;
+	*) printf 'unknown argument: %s\n' "$1" >&2; exit 2 ;;
+	esac
+done
+[[ "$device" =~ ^[a-z0-9]+$ ]] || { printf 'bad device: %s\n' "$device" >&2; exit 1; }
+[[ "$channel" =~ ^(stable|beta|alpha)$ ]] || { printf 'bad channel: %s\n' "$channel" >&2; exit 1; }
+
+line="$(curl -fsS --max-time 30 "$base/$device-$channel")" || exit 1
+read -r -a f <<<"$line"
+if ((${#f[@]} == 4)) && [[ "${f[0]}" =~ ^[0-9]{10}$ && "${f[1]}" =~ ^[0-9]+$ && "${f[2]}" == "$device" && "${f[3]}" == "$channel" ]]; then
+	printf '%s\n' "${f[0]}"
+else
+	printf 'unexpected metadata for %s-%s: %q\n' "$device" "$channel" "$line" >&2
+	exit 1
+fi

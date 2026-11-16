@@ -1,0 +1,16 @@
+[Unit]
+Description=vivac-os: build, sign and publish a new GrapheneOS release if there is one
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=VIVAC_OS_NOTIFY_CMD=%h/.local/bin/vivac-os-notify
+ExecStart=%h/.local/bin/vivac-os-monthly
+# A full build takes hours: stay out of the way of interactive work.
+Nice=15
+IOSchedulingClass=idle
+CPUSchedulingPolicy=batch
+TimeoutStartSec=12h
+StandardOutput=append:%h/m2/vivac-os/logs/update.log
+StandardError=append:%h/m2/vivac-os/logs/update.log

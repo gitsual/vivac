@@ -1,0 +1,10 @@
+[Unit]
+Description=vivac-os: check for a new GrapheneOS release every night
+
+[Timer]
+OnCalendar=*-*-* 03:30
+RandomizedDelaySec=20m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

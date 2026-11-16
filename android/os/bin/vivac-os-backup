@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Back up what a wipe would lose from the phone, for the move to vivac-os.
+# Usage: vivac-os-backup OUT_DIR   (env VIVAC_OS_DEVICE, default shiba)
+# Saves build facts, the user apps with the store that installed each one,
+# and all of /sdcard; checks the copied file count against the phone; writes
+# CHECKLIST.md with the steps adb cannot do (app data, 2FA, Signal...).
+set -Eeuo pipefail
+
+(($# == 1)) || { printf 'usage: %s OUT_DIR\n' "${0##*/}" >&2; exit 2; }
+out="$1" want="${VIVAC_OS_DEVICE:-shiba}"
+
+mapfile -t devs < <(adb devices | awk 'NR>1 && $2=="device" {print $1}')
+((${#devs[@]} == 1)) || { printf 'connect exactly one phone with USB debugging (found %d)\n' "${#devs[@]}" >&2; exit 1; }
+got="$(adb shell getprop ro.product.device | tr -d '\r')"
+[[ "$got" == "$want" ]] || { printf 'phone is %s, expected %s\n' "$got" "$want" >&2; exit 1; }
+
+mkdir -p "$out"
+adb shell getprop | tr -d '\r' >"$out/getprop.txt"
+adb shell pm list packages -3 -i | tr -d '\r' |
+	sed -nE 's/^package:([^ ]+)[[:space:]]+installer=([^ ]*)$/\1\t\2/p' | LC_ALL=C sort >"$out/packages.tsv"
+
+phone_count="$(adb shell find /sdcard/ -type f 2>/dev/null | tr -d '\r' | grep -c . || true)"
+printf 'copying %s files from /sdcard...\n' "$phone_count"
+adb pull /sdcard/ "$out/sdcard" >/dev/null
+copied="$(find "$out/sdcard" -type f | wc -l)"
+if ((copied != phone_count)); then
+	printf 'MISMATCH: phone has %s files, copied %s\n' "$phone_count" "$copied" >&2
+	exit 1
+fi
+
+cat >"$out/CHECKLIST.md" <<'MD'
+# Before wiping: what adb cannot copy
+
+- [ ] Seedvault (Settings > System > Backup): run a backup to a USB stick or
+      this PC, write down the 12-word recovery code, check it finished.
+- [ ] 2FA app: export an encrypted backup and keep a copy OFF the phone.
+- [ ] Signal / messaging apps: their own encrypted backup + passphrase.
+- [ ] Termux: `tar -czf /sdcard/termux-home.tgz -C ~ .` then re-run this backup.
+- [ ] Apps from packages.tsv that need logins: confirm you know the passwords.
+- [ ] eSIM: check with the carrier how to move it before wiping.
+MD
+printf 'backup ok: %s files, %s apps -> %s\n' "$copied" "$(wc -l <"$out/packages.tsv")" "$out"

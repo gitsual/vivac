@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Sign a finalized vivac-os build into a release (factory/install zip + OTA).
+# Usage: vivac-os-sign BUILD_NUMBER
+# The key passphrase comes from the TPM-sealed credential
+# KEYS/passphrase.cred (systemd-creds), or is asked for when that is absent.
+# It reaches GrapheneOS' scripts only through the environment and SSH_ASKPASS.
+set -Eeuo pipefail
+
+(($# == 1)) && [[ "$1" =~ ^[0-9]{10}$ ]] || { printf 'usage: %s BUILD_NUMBER\n' "${0##*/}" >&2; exit 2; }
+build="$1"
+root="${VIVAC_OS_ROOT:-$HOME/m2/vivac-os}"
+device="${VIVAC_OS_DEVICE:-shiba}"
+src="$root/src"
+cred="$root/keys/passphrase.cred"
+
+[[ -d "$src/keys/$device" ]] || { printf 'no keys in %s/keys/%s (run vivac-os-keys-init)\n' "$src" "$device" >&2; exit 1; }
+if [[ -f "$cred" ]]; then
+	key_pass="$(systemd-creds decrypt --name=vivac-os-keys "$cred" -)"
+else
+	read -rsp 'vivac-os key passphrase: ' key_pass
+	echo
+fi
+# GrapheneOS' decrypt-keys reads the passphrase from $password.
+export password="${key_pass}"
+unset key_pass
+
+askpass="$(mktemp /dev/shm/vivac-os-askpass.XXXXXX)"
+trap 'rm -f -- "$askpass"' EXIT
+# shellcheck disable=SC2016 # read from the env at run time; never written to the file
+printf '#!/bin/sh\nprintf "%%s\\n" "$password"\n' >"$askpass"
+chmod 700 "$askpass"
+export SSH_ASKPASS="$askpass" SSH_ASKPASS_REQUIRE=force
+
+cd "$src"
+script/generate-release.sh "$device" "$build"
+printf 'signed release: %s/releases/%s/release-%s-%s\n' "$src" "$build" "$device" "$build"

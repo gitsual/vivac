@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Create the vivac-os signing keys ONCE, interactively. Run it yourself:
+#   vivac-os-keys-init
+# Keys go to KEYS/<device> (outside the source tree, linked into it), all
+# encrypted with one passphrase you type; the passphrase is then sealed to
+# this PC's TPM (systemd-creds) so the monthly job can sign unattended.
+# Back up KEYS/ off this PC: losing it means no updates without a wipe.
+set -Eeuo pipefail
+
+root="${VIVAC_OS_ROOT:-$HOME/m2/vivac-os}"
+device="${VIVAC_OS_DEVICE:-shiba}"
+src="$root/src" keys="$root/keys"
+dir="$keys/$device"
+
+[[ -t 0 ]] || { printf 'run this in a terminal: it asks for a passphrase\n' >&2; exit 1; }
+[[ ! -e "$dir" ]] || { printf '%s already exists; refusing to overwrite keys\n' "$dir" >&2; exit 1; }
+[[ -x "$src/development/tools/make_key" ]] || { printf 'source tree not synced yet\n' >&2; exit 1; }
+
+mkdir -p "$dir"
+chmod 700 "$keys" "$dir"
+[[ -e "$src/keys" ]] || ln -s "$keys" "$src/keys"
+
+cd "$dir"
+cn=vivac-os
+for k in releasekey platform shared media networkstack bluetooth sdk_sandbox gmscompat_lib nfc; do
+	# make_key asks for a password; leave it empty here, encrypt-keys sets the real one below.
+	printf '\n' | "$src/development/tools/make_key" "$k" "/CN=$cn/" || true
+	[[ -f "$k.pk8" && -f "$k.x509.pem" ]] || { printf 'make_key failed for %s\n' "$k" >&2; exit 1; }
+done
+openssl genrsa 4096 | openssl pkcs8 -topk8 -nocrypt -out avb.pem
+"$src/external/avb/avbtool.py" extract_public_key --key avb.pem --output avb_pkmd.bin
+
+read -rsp 'New vivac-os key passphrase: ' pass1; echo
+read -rsp 'Repeat it: ' pass2; echo
+[[ -n "$pass1" && "$pass1" == "$pass2" ]] || { printf 'passphrases empty or different; delete %s and retry\n' "$dir" >&2; exit 1; }
+
+ssh-keygen -q -t ed25519 -N "$pass1" -C vivac-os -f "$dir/id_ed25519"
+cd "$src"
+printf '\n%s\n%s\n' "$pass1" "$pass1" | script/encrypt-keys "keys/$device"
+printf '%s' "$pass1" | systemd-creds encrypt --with-key=tpm2 --name=vivac-os-keys - "$keys/passphrase.cred"
+chmod 600 "$keys/passphrase.cred"
+unset pass1 pass2
+sha256sum "$dir/avb_pkmd.bin"
+printf 'keys ready in %s. BACK UP %s OFF THIS PC NOW (and remember the passphrase).\n' "$dir" "$keys"

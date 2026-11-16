@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Send one vivac-os status line to the WhatsApp home channel through Hermes.
+# Usage: vivac-os-notify MESSAGE     (env VIVAC_OS_NOTIFY_TARGET, default whatsapp)
+set -Eeuo pipefail
+(($# == 1)) || { printf 'usage: %s MESSAGE\n' "${0##*/}" >&2; exit 2; }
+# The gateway runs with the resolved home (~/.hermes is a link); the CLI must
+# use the same path or it thinks the WhatsApp bridge belongs to another profile.
+export HERMES_HOME="${HERMES_HOME:-$(readlink -f "$HOME/.hermes")}"
+exec timeout 120 hermes send -q -t "${VIVAC_OS_NOTIFY_TARGET:-whatsapp}" "$1"
