@@ -27,7 +27,7 @@ upstream on its own; the phone is only wiped once, when we decide to switch.
 ## Monthly flow (automatic once set up)
 
 1. A systemd timer runs `vivac-os-upstream`; if it is newer than our last build:
-2. `repo init` the new tag, verify its signature, `repo sync`.
+2. `vivac-os-sync`: shallow `repo init --depth=1` of the new tag, verify its signature, `repo sync -c --no-tags` (git cannot resume a cut fetch; full history left 461 GB of tmp_pack).
 3. Apply the vivac customizations, regenerate vendor files (`adevtool`).
 4. `m vendorbootimage vendorkernelbootimage target-files-package`, then
    `script/finalize.sh` and `script/generate-release.sh shiba BUILD`, with the

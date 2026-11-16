@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Fetch one GrapheneOS release tag into $VIVAC_OS_ROOT/src.
+# Usage: vivac-os-sync TAG
+#   env VIVAC_OS_ROOT (~/m2/vivac-os), VIVAC_OS_SYNC_JOBS (2),
+#       VIVAC_OS_SYNC_TRIES (10), VIVAC_OS_SYNC_WAIT (60 s between tries)
+# Shallow on purpose: git cannot resume a cut fetch, so a full-history kernel
+# repo restarts from zero after every network drop and leaves its partial
+# tmp_pack behind (461 GB of them on 2026-11-16). The build needs no history.
+# The tag's signature is checked before anything is synced.
+set -Eeuo pipefail
+
+(($# == 1)) && [[ "$1" =~ ^[0-9]{10}$ ]] || { printf 'usage: %s TAG(10 digits)\n' "${0##*/}" >&2; exit 2; }
+tag="$1"
+root="${VIVAC_OS_ROOT:-$HOME/m2/vivac-os}"
+jobs="${VIVAC_OS_SYNC_JOBS:-2}"
+tries="${VIVAC_OS_SYNC_TRIES:-10}"
+wait_s="${VIVAC_OS_SYNC_WAIT:-60}"
+signers="$HOME/.ssh/grapheneos_allowed_signers"
+
+mkdir -p "$root/src"
+cd "$root/src"
+repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/$tag" --depth=1
+curl -fsS https://grapheneos.org/allowed_signers >"$signers.new" && mv -f "$signers.new" "$signers"
+(
+	cd .repo/manifests
+	git config gpg.ssh.allowedSignersFile "$signers"
+	git verify-tag "$(git describe)"
+) || { printf 'tag %s: bad signature, not syncing\n' "$tag" >&2; exit 1; }
+
+for ((i = 1; i <= tries; i++)); do
+	until getent hosts github.com >/dev/null; do sleep 20; done
+	if repo sync "-j$jobs" -c --no-tags --force-sync; then
+		printf 'synced %s\n' "$tag"
+		exit 0
+	fi
+	printf 'sync attempt %s of %s failed\n' "$i" "$tries" >&2
+	((i < tries)) && sleep "$wait_s"
+done
+printf 'repo sync failed %s times\n' "$tries" >&2
+exit 1

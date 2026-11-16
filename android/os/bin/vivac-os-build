@@ -2,8 +2,8 @@
 # Build vivac-os for one GrapheneOS release tag, up to the unsigned release
 # inputs (releases/BUILD/*-target_files.zip and *-otatools.zip).
 # Usage: vivac-os-build TAG      (env VIVAC_OS_ROOT, VIVAC_OS_DEVICE, VIVAC_OS_BUILD_NUMBER)
-# Steps: repo init the tag, verify its signature, sync (retrying network
-# drops), apply the vivac patches, regenerate vendor files, build, finalize.
+# Steps: vivac-os-sync (shallow, signature-checked), apply the vivac patches,
+# regenerate vendor files, build, finalize.
 set -Eeuo pipefail
 
 (($# == 1)) && [[ "$1" =~ ^[0-9]{10}$ ]] || { printf 'usage: %s TAG(10 digits)\n' "${0##*/}" >&2; exit 2; }
@@ -12,25 +12,9 @@ here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 root="${VIVAC_OS_ROOT:-$HOME/m2/vivac-os}"
 device="${VIVAC_OS_DEVICE:-shiba}"
 src="$root/src"
-signers="$HOME/.ssh/grapheneos_allowed_signers"
 
+VIVAC_OS_ROOT="$root" "$here/vivac-os-sync" "$tag"
 cd "$src"
-repo init -u https://github.com/GrapheneOS/platform_manifest.git -b "refs/tags/$tag"
-curl -fsS https://grapheneos.org/allowed_signers >"$signers.new" && mv -f "$signers.new" "$signers"
-(
-	cd .repo/manifests
-	git config gpg.ssh.allowedSignersFile "$signers"
-	git verify-tag "$(git describe)"
-)
-
-synced=0
-for i in $(seq 1 10); do
-	until getent hosts github.com >/dev/null; do sleep 20; done
-	if repo sync -j8 --force-sync; then synced=1; break; fi
-	printf 'sync attempt %s failed, retrying\n' "$i" >&2
-	sleep 60
-done
-((synced)) || { printf 'repo sync failed 10 times\n' >&2; exit 1; }
 
 "$here/vivac-os-customize" "$src" "$here/../patches"
 
