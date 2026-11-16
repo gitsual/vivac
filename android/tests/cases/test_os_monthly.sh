@@ -52,3 +52,9 @@ if FAKE_UPSTREAM='' run; then fail "an empty upstream answer reported success"; 
 ! grep -qE '^build' "$sandbox/calls" || fail "built without an upstream answer"
 FAKE_UPSTREAM=2026110100 run || fail "older upstream run failed"
 ! grep -qE '^build' "$sandbox/calls" || fail "built an older upstream build"
+
+# The Pi only accepts SSH from the LAN. On the PC the bare name "nasbackup"
+# resolves to its tailnet address first (MagicDNS), where port 22 is closed,
+# so the default mirror target must be the LAN name served by the home DNS.
+grep -qx 'pi_host=nasbackup\.home\.arpa' "$tool" ||
+	fail "default mirror target is not the Pi's LAN name"

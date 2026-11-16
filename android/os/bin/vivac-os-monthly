@@ -13,7 +13,11 @@ build_cmd="${VIVAC_OS_BUILD_CMD:-$here/vivac-os-build}"
 sign_cmd="${VIVAC_OS_SIGN_CMD:-$here/vivac-os-sign}"
 notify_cmd="${VIVAC_OS_NOTIFY_CMD:-}"
 
-mirror_dest="${VIVAC_OS_MIRROR_DEST:-ios@nasbackup:/srv/vivac-os}"
+# LAN name on purpose: bare "nasbackup" resolves to the tailnet first, and the
+# Pi only takes SSH from the LAN. The phone downloads over the tailnet (HTTPS).
+pi_user=ios
+pi_host=nasbackup.home.arpa
+mirror_dest="${VIVAC_OS_MIRROR_DEST:-$pi_user@$pi_host:/srv/vivac-os}"
 publish_default() {
 	"$here/vivac-os-publish" "$root/src/releases/$1/release-$device-$1" "$root/server" testing &&
 		RSYNC_RSH="ssh -o BatchMode=yes -o UserKnownHostsFile=$root/ssh/known_hosts" \
