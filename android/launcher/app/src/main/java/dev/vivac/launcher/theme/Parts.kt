@@ -3,6 +3,8 @@ package dev.vivac.launcher.theme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +50,7 @@ object Glyph {
     const val DOT = "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z"
     const val DOCK = "M3 17h18 M6 13h3v4H6z M10.5 13h3v4h-3z M15 13h3v4h-3z"
     const val TENT = "M3 20L12 4l9 16z M12 20v-6"
+    const val PETATE = "M6 8h12l-1 12H7z M9 8V6a3 3 0 0 1 6 0v2 M9 13h6"
 }
 
 @Composable
@@ -61,7 +64,10 @@ fun LineIcon(path: String, color: Color, size: Dp = 24.dp, modifier: Modifier = 
     }
 }
 
-/** The 56dp tile used by the dock and the Petate: a monogram or icon over a toned square, label below. */
+/**
+ * The tile used everywhere: a monogram or icon over a toned square, label below. On the Campamento's route
+ * it carries its pitch ([badge], "L1"); [border] outlines it on the night ground.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AppTile(
@@ -71,6 +77,10 @@ fun AppTile(
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     dot: Boolean = false,
+    border: Color? = null,
+    badge: String? = null,
+    labelColor: Color = Ink.text,
+    tile: Dp = 56.dp,
     content: @Composable () -> Unit,
 ) {
     Column(
@@ -81,11 +91,30 @@ fun AppTile(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Box(Modifier.size(56.dp)) {
+        // A badge hangs over the tile's top edge; the tile moves down to make room so nothing is clipped.
+        Box(Modifier.size(width = tile, height = if (badge != null) tile + BADGE_OVERHANG else tile)) {
+            val shape = RoundedCornerShape(tile / 3)
             Box(
-                Modifier.matchParentSize().clip(RoundedCornerShape(18.dp)).background(background),
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .size(tile)
+                    .clip(shape)
+                    .background(background)
+                    .then(if (border != null) Modifier.border(1.dp, border, shape) else Modifier),
                 contentAlignment = Alignment.Center,
             ) { content() }
+            if (badge != null) {
+                Text(
+                    badge,
+                    style = Type.mono.copy(fontSize = 9.sp, lineHeight = 12.sp, color = Ink.deep),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(x = 4.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Ink.accentText)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                )
+            }
             // Notification dot: coral with a ring of the page colour so it reads on any icon.
             if (dot) {
                 Box(
@@ -94,7 +123,7 @@ fun AppTile(
                         .offset(x = 3.dp, y = (-3).dp)
                         .size(14.dp)
                         .clip(CircleShape)
-                        .background(Ink.surface)
+                        .background(Ink.deep)
                         .padding(2.5.dp)
                         .clip(CircleShape)
                         .background(Ink.primary),
@@ -103,7 +132,7 @@ fun AppTile(
         }
         Text(
             label,
-            style = Type.label,
+            style = Type.label.copy(color = labelColor),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -111,6 +140,9 @@ fun AppTile(
         )
     }
 }
+
+/** How far a pitch badge rises above its tile. */
+val BADGE_OVERHANG = 6.dp
 
 @Composable
 fun Monogram(text: String, color: Color) {

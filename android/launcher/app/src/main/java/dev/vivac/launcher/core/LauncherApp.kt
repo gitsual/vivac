@@ -50,6 +50,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                 focusSearch = launcher.focusSearch,
                 onOpenApp = launcher::openFromPetate,
                 onAppMenu = launcher::openMenu,
+                recent = launcher.visibleRecent().mapNotNull { pkg -> launcher.apps.find { it.packageName == pkg } },
             )
         }
     }

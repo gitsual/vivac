@@ -46,7 +46,7 @@ private fun VivacSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Ink.raised,
+        containerColor = Ink.surface,
         contentColor = Ink.text,
         scrimColor = Ink.deep.copy(alpha = 0.6f),
         dragHandle = { Box(Modifier.padding(top = 10.dp).size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(Ink.borderControl)) },

@@ -5,7 +5,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -38,9 +37,3 @@ fun Contours(modifier: Modifier = Modifier, color: Color = Ink.contour) {
         }
     }
 }
-
-/** Motif 4, la cuerda: tense coral when tied, dashed grey when not. */
-fun ropeStroke(tied: Boolean, density: Float) = Stroke(
-    width = (if (tied) 3f else 2f) * density,
-    pathEffect = if (tied) null else PathEffect.dashPathEffect(floatArrayOf(5f * density, 5f * density)),
-)

@@ -21,7 +21,6 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -44,6 +43,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.semantics.Role
@@ -51,7 +57,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.vivac.launcher.apps.AppFace
@@ -59,13 +64,12 @@ import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.petate.Pack
 import dev.vivac.launcher.theme.AppTile
+import dev.vivac.launcher.theme.BADGE_OVERHANG
 import dev.vivac.launcher.theme.Contours
 import dev.vivac.launcher.theme.Glyph
 import dev.vivac.launcher.theme.Ink
 import dev.vivac.launcher.theme.LineIcon
-import dev.vivac.launcher.theme.Monogram
 import dev.vivac.launcher.theme.Type
-import dev.vivac.launcher.theme.ropeStroke
 
 @Composable
 fun CampamentoScreen(
@@ -97,37 +101,34 @@ fun CampamentoScreen(
     Box(
         Modifier
             .fillMaxSize()
-            .background(Ink.surface)
+            .background(Ink.deep)
             .swipes(onSwipe)
             .pointerInput(Unit) { detectTapGestures(onLongPress = { onCampMenu() }) },
     ) {
-        Contours(Modifier.fillMaxSize())
+        Contours(Modifier.fillMaxSize(), color = Ink.surface)
+        Beam(Modifier.fillMaxSize())
         Column(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(horizontal = 20.dp),
+                .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Header(stamp, onOpenSettings)
+            Header(onOpenSettings)
+            Clock(stamp)
             Column(
                 Modifier
                     .weight(1f)
                     .nestedScroll(leftovers)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                CordadaCard()
-                ViaCard(facts, onOpenAbout)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FactTile("almacenamiento", "${facts.freeGb} GB", "libres de ${facts.totalGb} GB", Modifier.weight(1f))
-                    FactTile("batería", "${facts.batteryPercent} %", if (facts.charging) "cargando" else "sin cargar", Modifier.weight(1f))
-                }
+                FactsStrip(facts, onOpenAbout)
                 widgetIds.forEach { id -> WidgetCard(id, widgetHeightDp(id), widgetView) }
-                AMano(apps, home.pinned, onOpenApp, onAppMenu)
+                Via(apps, home.pinned, onOpenApp, onAppMenu)
             }
-            DockRow(apps, home.dock, onOpenApp, onAppMenu) { onOpenPetate(false) }
             SearchPill { onOpenPetate(true) }
+            DockCard(apps, home.dock, onOpenApp, onAppMenu) { onOpenPetate(false) }
         }
     }
 }
@@ -139,8 +140,9 @@ private fun WidgetCard(id: Int, heightDp: Int, widgetView: (Context, Int, Float)
         Modifier
             .fillMaxWidth()
             .height(heightDp.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(Ink.raised),
+            .clip(RoundedCornerShape(24.dp))
+            .background(Ink.surface)
+            .border(1.dp, Ink.field, RoundedCornerShape(24.dp)),
     ) {
         val width = maxWidth.value
         // key(id): a new widget id must get a fresh host view, never a recycled one.
@@ -189,168 +191,197 @@ private fun Modifier.swipes(onSwipe: (Swipe) -> Unit): Modifier = pointerInput(U
     )
 }
 
+/** Motif 2, la frontal: the headlamp's beam falling across the camp from the settings corner. */
 @Composable
-private fun Header(stamp: String, onOpenSettings: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.Bottom) {
-        Column(Modifier.weight(1f)) {
-            Text(stamp.uppercase(), style = Type.cota)
-            Text("Campamento", style = Type.title, modifier = Modifier.semantics { heading() })
+private fun Beam(modifier: Modifier) {
+    Canvas(modifier) {
+        val origin = Offset(size.width - 46.dp.toPx(), 66.dp.toPx())
+        val beam = Path().apply {
+            moveTo(origin.x, origin.y)
+            lineTo(-60.dp.toPx(), size.height * 0.5f)
+            lineTo(70.dp.toPx(), size.height * 0.66f)
+            close()
         }
+        drawPath(
+            beam,
+            Brush.linearGradient(
+                0f to Ink.primary.copy(alpha = 0.30f),
+                0.55f to Ink.primary.copy(alpha = 0.06f),
+                1f to Color.Transparent,
+                start = origin,
+                end = Offset(0f, size.height * 0.62f),
+            ),
+        )
+    }
+}
+
+@Composable
+private fun Header(onOpenSettings: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("CAMPAMENTO", style = Type.cota, modifier = Modifier.weight(1f).semantics { heading() })
+        // The headlamp itself: the beam starts here.
         Box(
             Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .border(1.5.dp, Ink.borderControl, CircleShape)
+                .background(Ink.surface)
+                .border(1.5.dp, Ink.accentText, CircleShape)
                 .clickable(role = Role.Button, onClickLabel = "Abrir ajustes", onClick = onOpenSettings)
                 .semantics { contentDescription = "Ajustes del sistema" },
             contentAlignment = Alignment.Center,
-        ) { LineIcon(Glyph.SLIDERS, Ink.text, 22.dp) }
+        ) { LineIcon(Glyph.SLIDERS, Ink.accentText, 22.dp) }
     }
 }
 
-private data class RopeNode(val name: String, val x: Float, val y: Float, val tied: Boolean)
-
-/** Motif 4: the rope. Only this phone is tied until the link with the PC exists, so the rest hangs dashed. */
+/** The hour, as big as the night allows, and the date stacked like a summit marker. */
 @Composable
-private fun CordadaCard() {
-    val nodes = listOf(
-        RopeNode("móvil", 16f, 22f, tied = true),
-        RopeNode("pc", 112f, 48f, tied = false),
-        RopeNode("pi", 160f, 34f, tied = false),
-        RopeNode("win11", 206f, 22f, tied = false),
-        RopeNode("lab", 302f, 46f, tied = false),
-    )
-    val tied = nodes.count { it.tied }
-    Card {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("LA CORDADA", style = Type.cota, modifier = Modifier.weight(1f))
-            Text("$tied de ${nodes.size} atados", style = Type.mono, color = if (tied == nodes.size) Ink.okText else Ink.textMuted)
-        }
-        BoxWithConstraints(
-            Modifier
-                .fillMaxWidth()
-                .height(70.dp)
-                .semantics { contentDescription = "Cordada: solo este móvil atado; el enlace con el PC aún no está hecho" },
-        ) {
-            val kd = maxWidth.value / 318f
-            Canvas(Modifier.fillMaxSize()) {
-                val k = size.width / 318f
-                val rope = Path().apply {
-                    moveTo(16f * k, 22f * k)
-                    cubicTo(60f * k, 22f * k, 70f * k, 48f * k, 112f * k, 48f * k)
-                    cubicTo(154f * k, 48f * k, 170f * k, 20f * k, 206f * k, 22f * k)
-                    cubicTo(242f * k, 24f * k, 262f * k, 46f * k, 302f * k, 46f * k)
-                }
-                drawPath(rope, Ink.borderControl, style = ropeStroke(tied = false, density = density))
-                nodes.forEach { n ->
-                    val c = Offset(n.x * k, n.y * k)
-                    drawCircle(Ink.field, radius = 11.dp.toPx(), center = c)
-                    drawCircle(
-                        if (n.tied) Ink.ok else Ink.borderControl,
-                        radius = 10.dp.toPx(),
-                        center = c,
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
-                    )
-                }
-            }
-            nodes.forEach { n ->
-                Text(
-                    n.name,
-                    style = Type.mono.copy(fontSize = 10.sp, lineHeight = 14.sp, textAlign = TextAlign.Center),
-                    color = if (n.tied) Ink.text else Ink.textMuted,
-                    modifier = Modifier
-                        .offset(x = (n.x * kd - 26f).dp, y = (n.y * kd + 12f).dp)
-                        .width(52.dp),
-                )
+private fun Clock(stamp: String) {
+    val time = stamp.substringAfter(" · ", stamp)
+    val day = stamp.substringBefore(" · ", "").split(" ")
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Text(time, style = Type.hour, modifier = Modifier.weight(1f))
+        if (day.size == 3) {
+            Column(Modifier.padding(bottom = 10.dp), horizontalAlignment = Alignment.End) {
+                Text(day[0], style = Type.mono)
+                Text(day[1], style = Type.figure.copy(fontSize = 22.sp, lineHeight = 26.sp))
+                Text(day[2], style = Type.mono)
             }
         }
     }
 }
 
+/** Battery, free space and the GrapheneOS build as map annotations between two hairlines. */
 @Composable
-private fun ViaCard(facts: PhoneFacts, onOpenAbout: () -> Unit) {
-    Card(Modifier.clickable(role = Role.Button, onClickLabel = "Ver información del teléfono", onClick = onOpenAbout)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            // The pitch gauge: full means "at the summit", this phone is up to date with its own channel.
-            Box(
-                Modifier
-                    .width(10.dp)
-                    .height(76.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(Ink.surface),
-                contentAlignment = Alignment.BottomCenter,
-            ) { Box(Modifier.fillMaxWidth().fillMaxHeight().background(Ink.measure)) }
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("LA VÍA · GRAPHENEOS", style = Type.cota)
-                Text(facts.build, style = Type.figure.copy(fontSize = 28.sp, lineHeight = 36.sp), color = Ink.measure)
-                Text("parche de seguridad del ${facts.securityPatch}", style = Type.small.copy(fontSize = 14.sp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun FactTile(caption: String, figure: String, detail: String, modifier: Modifier) {
-    Column(
-        modifier.clip(RoundedCornerShape(20.dp)).background(Ink.raised).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+private fun FactsStrip(facts: PhoneFacts, onOpenAbout: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min)
+            .drawBehind {
+                val w = 1.dp.toPx()
+                drawLine(Ink.field, Offset(0f, 0f), Offset(size.width, 0f), w)
+                drawLine(Ink.field, Offset(0f, size.height), Offset(size.width, size.height), w)
+            },
     ) {
-        Text(caption.uppercase(), style = Type.cota)
-        Text(figure, style = Type.figure)
-        Text(detail, style = Type.small)
-    }
-}
-
-@Composable
-private fun DockRow(apps: List<InstalledApp>, chosen: List<String>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit, onOpenPetate: () -> Unit) {
-    val byPackage = apps.associateBy { it.packageName }
-    val slots = Dock.pick(byPackage.keys, chosen)
-    // Five equal columns: on a 412dp Pixel five fixed 76dp tiles do not fit and labels got clipped.
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        slots.forEach { slot ->
-            when (slot) {
-                is DockSlot.App -> {
-                    val app = byPackage.getValue(slot.packageName)
-                    val deep = app.packageName == "com.termux"
-                    AppTile(
-                        label = app.label,
-                        background = if (deep) Ink.deep else Ink.field,
-                        onClick = { onOpenApp(app.packageName) },
-                        onLongClick = { onAppMenu(app.packageName) },
-                        dot = app.packageName in LocalDots.current,
-                        modifier = Modifier.weight(1f),
-                    ) { AppFace(app, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
-                }
-                DockSlot.Petate -> AppTile(label = "Petate", background = Ink.field, onClick = onOpenPetate, modifier = Modifier.weight(1f)) {
-                    LineIcon(Glyph.GRID, Ink.text)
-                }
-            }
+        Fact("BATERÍA", "${facts.batteryPercent} %", Modifier.weight(1f)) {
+            if (facts.charging) Text("cargando", style = Type.mono, color = Ink.okText)
+            else Gauge(facts.batteryPercent / 100f)
         }
+        Rule()
+        Fact("LIBRE", "${facts.freeGb} GB", Modifier.weight(1f)) {
+            Gauge(if (facts.totalGb > 0) facts.freeGb.toFloat() / facts.totalGb else 0f)
+        }
+        Rule()
+        Fact(
+            "GRAPHENEOS",
+            facts.build,
+            Modifier
+                .weight(1f)
+                .clickable(role = Role.Button, onClickLabel = "Ver información del teléfono", onClick = onOpenAbout),
+            valueStyle = Type.mono.copy(fontSize = 13.sp, lineHeight = 26.sp, color = Ink.text),
+        ) { Text("parche ${facts.securityPatch}", style = Type.mono.copy(fontSize = 10.sp), maxLines = 1) }
     }
 }
 
-/** Apps you pinned to the Campamento, four per row, in the order you pinned them. */
 @Composable
-private fun AMano(apps: List<InstalledApp>, pinned: List<String>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit) {
+private fun Fact(
+    caption: String,
+    value: String,
+    modifier: Modifier,
+    valueStyle: TextStyle = Type.figure.copy(fontSize = 20.sp, lineHeight = 26.sp),
+    detail: @Composable () -> Unit,
+) {
+    Column(modifier.padding(start = 10.dp, top = 10.dp, bottom = 10.dp, end = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(caption, style = Type.cota.copy(fontSize = 10.sp))
+        Text(value, style = valueStyle, maxLines = 1)
+        detail()
+    }
+}
+
+@Composable
+private fun Rule() {
+    Box(Modifier.width(1.dp).fillMaxHeight().background(Ink.field))
+}
+
+/** A measure bar: glaciar, the colour kept for measures only. */
+@Composable
+private fun Gauge(fraction: Float) {
+    Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(Ink.field)) {
+        Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().background(Ink.measure))
+    }
+}
+
+private val TILE = 60.dp
+private val ROW_GAP = 10.dp
+
+/**
+ * Motif 3, la vía: the apps you pinned are the pitches of a route, L1 onwards, joined by a dashed line
+ * that snakes like a topo (see [Route]).
+ */
+@Composable
+private fun Via(apps: List<InstalledApp>, pinned: List<String>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit) {
     val byPackage = apps.associateBy { it.packageName }
     val shown = pinned.mapNotNull { byPackage[it] }
     if (shown.isEmpty()) return
+    val rows = Route.rows(shown.size, 4)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("A MANO", style = Type.cota)
-        shown.chunked(4).forEach { row ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { app ->
-                    AppTile(
-                        label = app.label,
-                        background = Ink.field,
-                        onClick = { onOpenApp(app.packageName) },
-                        onLongClick = { onAppMenu(app.packageName) },
-                        dot = app.packageName in LocalDots.current,
-                        modifier = Modifier.weight(1f),
-                    ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Text("Vía del campamento", style = Type.section, modifier = Modifier.weight(1f).semantics { heading() })
+            Text("${shown.size} ${if (shown.size == 1) "LARGO" else "LARGOS"} · A MANO", style = Type.cota.copy(fontSize = 10.sp))
+        }
+        val dash = with(LocalDensity.current) { floatArrayOf(2.dp.toPx(), 7.dp.toPx()) }
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .drawBehind {
+                    val cell = size.width / 4
+                    val rowH = (size.height + ROW_GAP.toPx()) / rows.size
+                    val centre = { index: Int ->
+                        val r = rows.indexOfFirst { index in it }
+                        Offset(cell * (rows[r].indexOf(index) + 0.5f), r * rowH + BADGE_OVERHANG.toPx() + TILE.toPx() / 2)
+                    }
+                    val line = Path()
+                    shown.indices.forEach { i ->
+                        val p = centre(i)
+                        if (i == 0) line.moveTo(p.x, p.y)
+                        else {
+                            val q = centre(i - 1)
+                            if (q.y == p.y) line.lineTo(p.x, p.y)
+                            else {
+                                // Turn round the edge of the wall, outwards.
+                                val out = if (q.x > size.width / 2) cell * 0.55f else -cell * 0.55f
+                                line.cubicTo(q.x + out, q.y, p.x + out, p.y, p.x, p.y)
+                            }
+                        }
+                    }
+                    drawPath(
+                        line,
+                        Ink.primary.copy(alpha = 0.75f),
+                        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(dash)),
+                    )
+                },
+            verticalArrangement = Arrangement.spacedBy(ROW_GAP),
+        ) {
+            rows.forEach { row ->
+                Row(Modifier.fillMaxWidth()) {
+                    row.forEach { index ->
+                        if (index == null) Spacer(Modifier.weight(1f))
+                        else {
+                            val app = shown[index]
+                            AppTile(
+                                label = app.label,
+                                background = Ink.surface,
+                                border = Ink.field,
+                                badge = Route.pitch(index),
+                                tile = TILE,
+                                onClick = { onOpenApp(app.packageName) },
+                                onLongClick = { onAppMenu(app.packageName) },
+                                dot = app.packageName in LocalDots.current,
+                                modifier = Modifier.weight(1f),
+                            ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                        }
+                    }
                 }
-                // Keep columns aligned when the last row is short.
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
@@ -361,29 +392,62 @@ private fun SearchPill(onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
-            .height(52.dp)
+            .height(48.dp)
             .clip(RoundedCornerShape(999.dp))
-            .background(Ink.field)
+            .background(Ink.surface)
+            .border(1.dp, Ink.borderControl, RoundedCornerShape(999.dp))
             .clickable(role = Role.Button, onClickLabel = "Buscar en el petate", onClick = onClick)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        LineIcon(Glyph.PROMPT, Ink.accentText, 20.dp)
-        Text("buscar en el petate…", style = TextStyle(fontFamily = Type.mono.fontFamily, fontSize = 14.sp), color = Ink.textMuted)
+        LineIcon(Glyph.SEARCH, Ink.text, 18.dp)
+        Text("buscar en el petate…", style = Type.body.copy(fontSize = 15.sp, color = Ink.textMuted), modifier = Modifier.weight(1f))
+        Text("DESLIZA ↑", style = Type.cota.copy(fontSize = 10.sp))
     }
 }
 
+/** Motif 4, la cordada: the apps you always carry, roped to the Petate, which closes the line in coral. */
 @Composable
-private fun Card(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun DockCard(apps: List<InstalledApp>, chosen: List<String>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit, onOpenPetate: () -> Unit) {
+    val byPackage = apps.associateBy { it.packageName }
+    val slots = Dock.pick(byPackage.keys, chosen)
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Ink.raised)
-            .then(modifier)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) { content() }
+            .padding(bottom = 12.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(Ink.surface)
+            .border(1.dp, Ink.field, RoundedCornerShape(28.dp))
+            .padding(start = 8.dp, end = 8.dp, top = 10.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("LA CORDADA", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.padding(start = 10.dp))
+        // Five equal columns: on a 412dp Pixel five fixed tiles do not fit and labels got clipped.
+        Row(Modifier.fillMaxWidth()) {
+            slots.forEach { slot ->
+                when (slot) {
+                    is DockSlot.App -> {
+                        val app = byPackage.getValue(slot.packageName)
+                        val deep = app.packageName == "com.termux"
+                        AppTile(
+                            label = app.label,
+                            background = if (deep) Ink.deep else Ink.field,
+                            onClick = { onOpenApp(app.packageName) },
+                            onLongClick = { onAppMenu(app.packageName) },
+                            dot = app.packageName in LocalDots.current,
+                            modifier = Modifier.weight(1f),
+                        ) { AppFace(app, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                    }
+                    DockSlot.Petate -> AppTile(
+                        label = "Petate",
+                        background = Ink.primary,
+                        labelColor = Ink.accentText,
+                        onClick = onOpenPetate,
+                        modifier = Modifier.weight(1f),
+                    ) { LineIcon(Glyph.PETATE, Ink.onPrimary) }
+                }
+            }
+        }
+    }
 }

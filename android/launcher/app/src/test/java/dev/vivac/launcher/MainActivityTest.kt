@@ -98,7 +98,7 @@ class MainActivityTest {
     @Test
     fun `it opens on the camp with the installed apps in the dock`() {
         start()
-        compose.onNodeWithText("Campamento").assertExists()
+        compose.onNodeWithText("CAMPAMENTO").assertExists()
         compose.onNodeWithText("Termux").assertExists()
     }
 
@@ -162,7 +162,7 @@ class MainActivityTest {
         start()
         app.sendBroadcast(Intent(Intent.ACTION_TIME_TICK))
         shadowOf(android.os.Looper.getMainLooper()).idle()
-        compose.onNodeWithText("Campamento").assertExists()
+        compose.onNodeWithText("CAMPAMENTO").assertExists()
     }
 
     @Test

@@ -34,9 +34,12 @@ class AdaptersTest {
         launcherApps.addActivity(me, Robo.activity(app, "Termux", "com.termux"))
         launcherApps.addActivity(me, Robo.activity(app, "Ajustes", "com.android.settings", system = true))
         launcherApps.addActivity(me, Robo.activity(app, "vivac", app.packageName))
+        // The shadow does not promise an order, and the Petate sorts on its own: compare as a set, sizes too.
+        val installed = AndroidAppSource(app).installed()
+        assertEquals(2, installed.size)
         assertEquals(
-            listOf(InstalledApp("Termux", "com.termux", false), InstalledApp("Ajustes", "com.android.settings", true)),
-            AndroidAppSource(app).installed(),
+            setOf(InstalledApp("Termux", "com.termux", false), InstalledApp("Ajustes", "com.android.settings", true)),
+            installed.toSet(),
         )
     }
 

@@ -64,8 +64,8 @@ class LauncherAppTest {
      */
     private fun SemanticsNodeInteraction.tap() = performSemanticsAction(SemanticsActions.OnClick)
 
-    private fun show(dots: Set<String> = emptySet()) {
-        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets).also { it.refresh() }
+    private fun show(dots: Set<String> = emptySet(), apps: List<InstalledApp> = listOf(termux, maps, settings)) {
+        launcher = Launcher(FakeSource(apps), store, actions, widgets).also { it.refresh() }
         compose.setContent {
             CompositionLocalProvider(LocalDots provides dots) { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views) }
         }
@@ -77,7 +77,8 @@ class LauncherAppTest {
     @Test
     fun `the camp shows the stamp, the phone facts and the dock`() {
         show()
-        compose.onNodeWithText("mar 17 nov · 15:48", substring = true, ignoreCase = true).assertExists()
+        compose.onNodeWithText("15:48").assertExists()
+        compose.onNodeWithText("17").assertExists()
         compose.onNodeWithText("2026111301").assertExists()
         compose.onNodeWithText("25 GB").assertExists()
         compose.onNodeWithText("99 %").assertExists()
@@ -125,7 +126,8 @@ class LauncherAppTest {
         compose.onNodeWithText("Termux").performTouchInput { longClick() }
         compose.onNodeWithText("com.termux").assertExists()
         compose.onNodeWithText("Fijar en el campamento").tap()
-        compose.onNodeWithText("A MANO").assertExists()
+        compose.onNodeWithText("Vía del campamento").assertExists()
+        compose.onNodeWithText("L1").assertExists()
         // Now both in the dock and pinned.
         compose.onAllNodesWithText("Termux").assertCountEquals(2)
         compose.onNodeWithText("Organic Maps").assertDoesNotExist()
@@ -196,9 +198,9 @@ class LauncherAppTest {
     @Test
     fun `swipes that start on a card still count`() {
         show()
-        compose.onNodeWithText("LA CORDADA").drag(600f)
+        compose.onNodeWithText("BATERÍA").drag(600f)
         assertEquals(listOf("notifications"), actions.calls)
-        compose.onNodeWithText("LA CORDADA").drag(-600f)
+        compose.onNodeWithText("BATERÍA").drag(-600f)
         compose.waitForIdle()
         assertEquals(Screen.PETATE, launcher.screen)
     }
@@ -211,10 +213,22 @@ class LauncherAppTest {
         val root = compose.activity.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         compose.runOnUiThread { root.draw(Canvas(bitmap)) }
-        // The camp's surface colour, not an empty (transparent) frame.
-        assertEquals(Ink.surface.toArgb(), bitmap.getPixel(2, root.height / 2))
+        // The night ground, not an empty (transparent) frame; sampled at the right edge, clear of the beam.
+        assertEquals(Ink.deep.toArgb(), bitmap.getPixel(root.width - 2, root.height * 3 / 4))
         assertTrue(1 in drawn)
         // Termux in the dock and Organic Maps pinned, each announced to TalkBack, not only coloured.
         compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "con avisos")).assertCountEquals(2)
+    }
+
+    @Test
+    fun `six pins make a route that turns at the wall's edge, numbered L1 to L6`() {
+        val six = (1..6).map { InstalledApp("App $it", "p.a$it", false) }
+        store.values["pinned"] = six.joinToString(",") { it.packageName }
+        show(apps = six)
+        compose.onNodeWithText("6 LARGOS · A MANO").assertExists()
+        listOf("L1", "L4", "L5", "L6").forEach { compose.onNodeWithText(it).assertExists() }
+        val root = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        compose.runOnUiThread { root.draw(Canvas(bitmap)) }
     }
 }

@@ -31,11 +31,11 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | D2 | Search ignoring case and accents; Go opens a single result | done |
 | D3 | Hide apps, with a way to see them again | done |
 | D4 | Work profile and Private space apps, badged, in their own chip | todo |
-| D5 | Recent apps row (from vivac's own launch history, no usage permission) | todo |
-| D6 | Fuzzy search: initials ("om" → Organic Maps) and typo tolerance | todo |
+| D5 | Recent apps row (from vivac's own launch history, no usage permission) | done ("Último largo") |
+| D6 | Fuzzy search: initials ("om" → Organic Maps) and typo tolerance | initials done; typo tolerance todo |
 | D7 | Search app shortcuts, not only apps | todo |
 | D8 | Search fallbacks: web search, Play/F-Droid store, system settings | todo |
-| D9 | Alphabet fast scroller | todo |
+| D9 | Alphabet fast scroller | done (the altimeter: tap or slide) |
 | D10 | Rename an app (custom label) | todo |
 
 ## App menu (long press)

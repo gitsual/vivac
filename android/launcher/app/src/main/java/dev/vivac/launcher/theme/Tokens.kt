@@ -68,6 +68,8 @@ object Faces {
 }
 
 object Type {
+    /** The Campamento's hour: Unbounded at its heaviest, tight, as big as the night allows. */
+    val hour = TextStyle(fontFamily = Faces.unbounded, fontWeight = FontWeight.ExtraBold, fontSize = 88.sp, lineHeight = 88.sp, letterSpacing = (-0.05).em, color = Brand.papel50)
     val title = TextStyle(fontFamily = Faces.unbounded, fontWeight = FontWeight.ExtraBold, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.02).em, color = Ink.text)
     val figure = TextStyle(fontFamily = Faces.unbounded, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 32.sp, letterSpacing = (-0.02).em, color = Ink.text)
     val section = TextStyle(fontFamily = Faces.unbounded, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 20.sp, color = Ink.text)

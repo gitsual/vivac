@@ -1,6 +1,11 @@
 package dev.vivac.launcher.petate
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,10 +39,6 @@ import dev.vivac.launcher.theme.Ink
 import dev.vivac.launcher.theme.LineIcon
 import dev.vivac.launcher.theme.Type
 
-/** Retirada (alert) family: the red is shape only; its text uses the light tint (red text fails contrast). */
-private val retiradaShape = Color(0xFFBD6161)
-private val retiradaText = Color(0xFFF3CACA)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppMenuSheet(
@@ -50,43 +51,74 @@ fun AppMenuSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Ink.raised,
+        containerColor = Ink.surface,
         contentColor = Ink.text,
         scrimColor = Ink.deep.copy(alpha = 0.6f),
         dragHandle = { Box(Modifier.padding(top = 10.dp).size(width = 36.dp, height = 4.dp).clip(RoundedCornerShape(2.dp)).background(Ink.borderControl)) },
     ) {
         Column(
             Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars).padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Row(Modifier.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Box(Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(Ink.field), contentAlignment = Alignment.Center) {
+            Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Box(Modifier.size(72.dp).clip(RoundedCornerShape(24.dp)).background(Ink.field), contentAlignment = Alignment.Center) {
                     AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)])
                 }
-                Column {
-                    Text(app.label, style = Type.section, modifier = Modifier.semantics { heading() })
-                    Text(app.packageName, style = Type.mono)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(app.label, style = Type.title.copy(fontSize = 28.sp, lineHeight = 30.sp, letterSpacing = (-0.03).em), modifier = Modifier.semantics { heading() })
+                    Text(app.packageName, style = Type.mono.copy(fontSize = 11.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        Pack.groupOf(app).title.uppercase(),
+                        style = Type.cota.copy(fontSize = 9.sp, color = Ink.text),
+                        modifier = Modifier.border(1.dp, Ink.borderControl, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
                 }
             }
-            entries.forEach { entry ->
-                when (entry) {
-                    is MenuEntry.Shortcut -> Entry(entry.shortcut.label, Glyph.ARROW, Ink.accentText, Ink.text) { onPick(entry) }
-                    is MenuEntry.Dock -> Entry(if (entry.inDock) "Quitar del dock" else "Poner en el dock", Glyph.DOCK, Ink.text, Ink.text) { onPick(entry) }
-                    is MenuEntry.Pin -> Entry(if (entry.pinned) "Quitar del campamento" else "Fijar en el campamento", Glyph.TENT, Ink.text, Ink.text) { onPick(entry) }
-                    is MenuEntry.Hide -> Entry(if (entry.hidden) "Mostrar en el petate" else "Ocultar del petate", if (entry.hidden) Glyph.EYE else Glyph.EYE_OFF, Ink.text, Ink.text) { onPick(entry) }
-                    MenuEntry.Info -> Entry("Información de la app", Glyph.INFO, Ink.text, Ink.text) { onPick(entry) }
-                    MenuEntry.Uninstall -> Entry("Desinstalar", Glyph.SQUARE, retiradaShape, retiradaText) { onPick(entry) }
+            val shortcuts = entries.filterIsInstance<MenuEntry.Shortcut>()
+            val place = entries.filterIsInstance<MenuEntry.Place>()
+            if (shortcuts.isNotEmpty() || !canReadShortcuts) {
+                Section("ATAJOS") {
+                    shortcuts.forEach { entry -> Entry(entry.shortcut.label, Glyph.ARROW, Ink.accentText, Ink.text) { onPick(entry) } }
+                    if (!canReadShortcuts) Text("Los atajos de cada app aparecen cuando vivac es tu app de inicio.", style = Type.small)
                 }
             }
-            if (!canReadShortcuts) {
-                Text(
-                    "Los atajos de cada app aparecen cuando vivac es tu app de inicio.",
-                    style = Type.small,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
+            if (place.isNotEmpty()) {
+                Section("SITIO EN EL CAMPAMENTO") {
+                    place.forEach { entry ->
+                        when (entry) {
+                            is MenuEntry.Dock -> Entry(if (entry.inDock) "Quitar del dock" else "Poner en el dock", Glyph.DOCK, Ink.text, Ink.text) { onPick(entry) }
+                            is MenuEntry.Pin -> Entry(if (entry.pinned) "Quitar del campamento" else "Fijar en el campamento", Glyph.TENT, Ink.text, Ink.text) { onPick(entry) }
+                            is MenuEntry.Hide -> Entry(if (entry.hidden) "Mostrar en el petate" else "Ocultar del petate", if (entry.hidden) Glyph.EYE else Glyph.EYE_OFF, Ink.text, Ink.text) { onPick(entry) }
+                        }
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (MenuEntry.Info in entries) Pill("Información de la app", Ink.borderControl, Ink.text, Modifier.weight(1f)) { onPick(MenuEntry.Info) }
+                if (MenuEntry.Uninstall in entries) Pill("Desinstalar", Ink.accentText, Ink.accentText, Modifier.weight(1f)) { onPick(MenuEntry.Uninstall) }
             }
         }
     }
+}
+
+@Composable
+private fun Section(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.semantics { heading() })
+        content()
+    }
+}
+
+@Composable
+private fun Pill(label: String, line: Color, text: Color, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .height(48.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .border(1.dp, line, RoundedCornerShape(999.dp))
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, style = Type.body.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium), color = text, maxLines = 1) }
 }
 
 @Composable
@@ -95,7 +127,8 @@ private fun Entry(label: String, glyph: String, glyphColor: Color, textColor: Co
         Modifier
             .fillMaxWidth()
             .height(52.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(Ink.raised)
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
