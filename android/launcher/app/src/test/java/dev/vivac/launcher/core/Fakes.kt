@@ -54,6 +54,8 @@ class FakeWidgets : WidgetHost {
     override fun delete(id: Int) { calls += "delete:$id"; placed.remove(id) }
     override fun exists(id: Int) = id in placed
     override fun label(id: Int) = placed[id] ?: "widget"
+    var rows = mutableMapOf<Int, Int>()
+    override fun defaultRows(id: Int) = rows[id] ?: 2
     fun bind(id: Int, option: WidgetOption) { placed[id] = option.key }
     /** What Android does when you accept the bind dialog. */
     fun accept(id: Int) { bound[id]?.let { bind(id, it) } }

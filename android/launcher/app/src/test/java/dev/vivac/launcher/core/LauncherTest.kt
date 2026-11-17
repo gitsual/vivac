@@ -1,6 +1,7 @@
 package dev.vivac.launcher.core
 
 import dev.vivac.launcher.apps.InstalledApp
+import dev.vivac.launcher.campamento.Shelved
 import dev.vivac.launcher.petate.AppShortcut
 import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
@@ -57,7 +58,7 @@ class LauncherTest {
         val menu = l.menu!!
         assertEquals(termux, menu.app)
         assertEquals(
-            listOf(MenuEntry.Shortcut(AppShortcut("s", "Sesión")), MenuEntry.Dock(true), MenuEntry.Pin(false), MenuEntry.Hide(false), MenuEntry.Info, MenuEntry.Uninstall),
+            listOf(MenuEntry.Shortcut(AppShortcut("s", "Sesión")), MenuEntry.Dock(true), MenuEntry.Pin(false), MenuEntry.Ladera(false), MenuEntry.Hide(false), MenuEntry.Info, MenuEntry.Uninstall),
             menu.entries,
         )
     }
@@ -129,7 +130,7 @@ class LauncherTest {
         l.addWidget(clock)
         assertNull(l.picker)
         assertEquals(listOf(1), l.board.ids)
-        assertEquals("1", store.values["widgets"])
+        assertEquals("1:0:0", store.values["widgets"])
     }
 
     @Test
@@ -247,5 +248,87 @@ class LauncherTest {
         l.openMenu("app.organicmaps")
         l.pick(MenuEntry.Hide(false))
         assertEquals(listOf("com.termux"), l.visibleRecent())
+    }
+
+    private fun withWidgets(vararg ids: Int): Launcher {
+        ids.forEach { widgets.placed[it] = "w$it" }
+        store.values["widgets"] = ids.joinToString(",")
+        return launcher()
+    }
+
+    @Test
+    fun `a long press on a widget opens its card, with its rows and where it sits`() {
+        val l = withWidgets(1, 2)
+        widgets.rows[2] = 3
+        l.openWidgetMenu(2)
+        assertEquals(2, l.widgetMenu)
+        assertEquals(3, l.widgetRows(2))
+        l.dismissWidgetMenu()
+        assertNull(l.widgetMenu)
+    }
+
+    @Test
+    fun `resizing goes a row at a time from the widget's own height, and is kept`() {
+        val l = withWidgets(1)
+        l.resizeWidget(1, +1)
+        assertEquals(3, l.widgetRows(1))
+        assertEquals("1:0:3", store.values["widgets"])
+        repeat(9) { l.resizeWidget(1, -1) }
+        assertEquals(1, l.widgetRows(1))
+    }
+
+    @Test
+    fun `moving a widget to a new ladera shows that ladera, and home brings you back to the camp`() {
+        val l = withWidgets(1, 2)
+        l.moveWidget(2, page = l.board.pages)
+        assertEquals(2, l.board.pages)
+        assertEquals(1, l.page)
+        assertNull(l.widgetMenu)
+        l.onHomePressed()
+        assertEquals(0, l.page)
+        l.showPage(5)
+        assertEquals(1, l.page)
+    }
+
+    @Test
+    fun `widgets move earlier and later on their page`() {
+        val l = withWidgets(1, 2)
+        l.shiftWidget(2, -1)
+        assertEquals(listOf(2, 1), l.board.ids)
+    }
+
+    @Test
+    fun `removing a widget from its card closes the card`() {
+        val l = withWidgets(1)
+        l.openWidgetMenu(1)
+        l.removeWidget(1)
+        assertNull(l.widgetMenu)
+        assertEquals(emptyList<Int>(), l.board.ids)
+    }
+
+    @Test
+    fun `an app goes on the ladera you are looking at, or the last one, or a new one`() {
+        val l = launcher()
+        l.openMenu("com.termux"); l.pick(MenuEntry.Ladera(false))
+        assertEquals(listOf(Shelved("com.termux", 1)), l.board.onPage(1))
+        l.showPage(0)
+        l.openMenu("app.organicmaps"); l.pick(MenuEntry.Ladera(false))
+        assertEquals(listOf("com.termux", "app.organicmaps"), l.board.apps)
+        l.openMenu("app.organicmaps")
+        assertEquals(true, l.menu!!.entries.contains(MenuEntry.Ladera(true)))
+        l.pick(MenuEntry.Ladera(true))
+        assertEquals(listOf("com.termux"), l.board.apps)
+    }
+
+    @Test
+    fun `hiding or uninstalling an app takes it off its ladera`() {
+        val l = launcher()
+        l.openMenu("com.termux"); l.pick(MenuEntry.Ladera(false))
+        l.openMenu("app.organicmaps"); l.pick(MenuEntry.Ladera(false))
+        l.openMenu("com.termux"); l.pick(MenuEntry.Hide(false))
+        assertEquals(listOf("app.organicmaps"), l.board.apps)
+        source.apps = listOf(termux, signal, settings)
+        l.refresh()
+        assertEquals(emptyList<String>(), l.board.apps)
     }
 }

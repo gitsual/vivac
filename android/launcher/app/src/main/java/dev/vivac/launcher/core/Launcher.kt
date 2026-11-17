@@ -9,6 +9,7 @@ import dev.vivac.launcher.campamento.Dock
 import dev.vivac.launcher.campamento.DockSlot
 import dev.vivac.launcher.campamento.Home
 import dev.vivac.launcher.campamento.HomeChange
+import dev.vivac.launcher.campamento.Placed
 import dev.vivac.launcher.campamento.WidgetBoard
 import dev.vivac.launcher.petate.AppMenu
 import dev.vivac.launcher.petate.MenuEntry
@@ -37,7 +38,11 @@ class Launcher(
 ) {
     var apps by mutableStateOf(emptyList<InstalledApp>()); private set
     var home by mutableStateOf(Home.decode(store.get(KEY_DOCK), store.get(KEY_PINNED), store.get(KEY_HIDDEN))); private set
-    var board by mutableStateOf(WidgetBoard.decode(store.get(KEY_WIDGETS)).let { b -> WidgetBoard(b.ids.filter(widgets::exists)) }); private set
+    var board by mutableStateOf(WidgetBoard.decode(store.get(KEY_WIDGETS)).let { b -> WidgetBoard(b.items.filter { it !is Placed || widgets.exists(it.id) }) }); private set
+    /** The home page in view: 0 is the Campamento, 1 onwards the laderas. */
+    var page by mutableStateOf(0); private set
+    /** The widget whose card is open (after a long press on it). */
+    var widgetMenu by mutableStateOf<Int?>(null); private set
     var screen by mutableStateOf(Screen.CAMPAMENTO); private set
     var focusSearch by mutableStateOf(false); private set
     var menu by mutableStateOf<OpenMenu?>(null); private set
@@ -56,6 +61,7 @@ class Launcher(
             val kept = home.keepOnly(installed)
             if (kept != home) apply(HomeChange(kept))
             if (recent.any { it !in installed }) saveRecent(recent.filter { it in installed })
+            board.keepApps(installed).takeIf { it != board }?.let(::saveBoard)
         }
     }
 
@@ -99,6 +105,8 @@ class Launcher(
         menu = null
         campMenu = false
         picker = null
+        widgetMenu = null
+        page = 0
         screen = Screen.CAMPAMENTO
     }
 
@@ -110,6 +118,7 @@ class Launcher(
             inDock = packageName in shownDock(),
             pinned = packageName in home.pinned,
             hidden = packageName in home.hidden,
+            onLadera = packageName in board.apps,
         )
         menu = OpenMenu(app, entries, actions.canReadShortcuts())
     }
@@ -124,7 +133,11 @@ class Launcher(
             is MenuEntry.Shortcut -> actions.openShortcut(pkg, entry.shortcut.id)
             is MenuEntry.Dock -> apply(home.copy(dock = shownDock()).toggleDock(pkg))
             is MenuEntry.Pin -> apply(home.togglePin(pkg))
-            is MenuEntry.Hide -> apply(HomeChange(home.toggleHidden(pkg)))
+            is MenuEntry.Ladera -> saveBoard(if (entry.onLadera) board.removeApp(pkg) else board.addApp(pkg, ladera()))
+            is MenuEntry.Hide -> {
+                apply(HomeChange(home.toggleHidden(pkg)))
+                if (pkg in home.hidden) saveBoard(board.removeApp(pkg))
+            }
             MenuEntry.Info -> actions.info(pkg)
             MenuEntry.Uninstall -> actions.uninstall(pkg)
         }
@@ -165,7 +178,30 @@ class Launcher(
         }
     }
 
+    /** The ladera an app goes to: the one in view, else the last one, else a new one. */
+    private fun ladera(): Int = page.takeIf { it > 0 } ?: (board.pages - 1).takeIf { it > 0 } ?: 1
+
+    fun showPage(page: Int) { this.page = page.coerceIn(0, board.pages - 1) }
+
+    fun openWidgetMenu(id: Int) { widgetMenu = id }
+    fun dismissWidgetMenu() { widgetMenu = null }
+
+    /** The rows a widget is drawn at: the ones you chose, else its own. */
+    fun widgetRows(id: Int): Int = board.placed(id)?.rows?.takeIf { it > 0 } ?: widgets.defaultRows(id)
+
+    fun resizeWidget(id: Int, delta: Int) = saveBoard(board.resize(id, widgetRows(id) + delta))
+
+    fun shiftWidget(id: Int, delta: Int) = saveBoard(board.shift(id, delta))
+
+    /** Sends a widget to [page] (one past the last opens a new ladera) and shows you where it went. */
+    fun moveWidget(id: Int, page: Int) {
+        widgetMenu = null
+        saveBoard(board.moveTo(id, page))
+        showPage(board.placed(id)?.page ?: 0)
+    }
+
     fun removeWidget(id: Int) {
+        widgetMenu = null
         campMenu = false
         widgets.delete(id)
         saveBoard(board.remove(id))

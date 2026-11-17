@@ -55,8 +55,9 @@ class MainActivity : ComponentActivity() {
         watcher = source.watch { refresh() }
         refresh()
         val views = object : WidgetViews {
-            override fun heightDp(id: Int) = widgets.heightDp(id)
-            override fun view(context: Context, id: Int, widthDp: Float) = widgets.view(context, id, widthDp)
+            override fun heightDp(id: Int, rows: Int) = widgets.heightDp(id, rows)
+            override fun view(context: Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit) =
+                widgets.view(context, id, widthDp, rows, onLongPress)
         }
 
         setContent {

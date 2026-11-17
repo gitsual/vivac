@@ -13,15 +13,16 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | H1 | Dock with chosen apps | done |
 | H2 | Apps pinned to the home screen | done |
 | H3 | Widgets: add, configure, remove | done |
-| H4 | Reorder dock, pins and widgets (move earlier / later) | todo |
+| H4 | Reorder dock, pins and widgets (move earlier / later) | widgets done; dock and pins todo |
 | H5 | Folders: group pinned apps, rename, open, take apps out | todo |
 | H6 | Pin app shortcuts (deep shortcuts) to the home screen | todo |
 | H7 | Accept "add to home screen" requests from apps (PinItemRequest: shortcuts and widgets) | todo |
-| H8 | Resize widgets (height in rows) | todo |
+| H8 | Resize widgets (height in rows) | done (widget card: 1–5 rows) |
 | H9 | Configurable grid: columns for pins and drawer, labels on/off | todo |
 | H10 | Lock the layout so nothing moves by accident | todo |
 | H11 | Wallpaper: show the system wallpaper behind vivac, or keep the solid camp | todo |
 | H12 | Set wallpaper from the camp menu | todo |
+| H13 | Laderas: home pages right of the camp, with widgets and apps; new one on demand, empty ones close | done |
 
 ## Drawer (Petate)
 

@@ -18,6 +18,11 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.util.ReflectionHelpers
+import org.robolectric.shadows.ShadowLooper
+import android.os.SystemClock
+import android.view.MotionEvent
+import android.view.ViewConfiguration
+import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class WidgetsTest {
@@ -76,7 +81,9 @@ class WidgetsTest {
         assertTrue(widgets.needsConfiguring(7))
         assertEquals("Reloj", widgets.label(7))
         assertEquals(180, widgets.heightDp(7))
-        assertNotNull(widgets.view(activity, 7, 360f))
+        assertEquals(2, widgets.defaultRows(7))
+        assertEquals(270, widgets.heightDp(7, rows = 3))
+        assertNotNull(widgets.view(activity, 7, 360f, rows = 3) {})
         widgets.requestConfigure(7)
         widgets.delete(7)
         widgets.stopListening()
@@ -89,6 +96,38 @@ class WidgetsTest {
         assertFalse(widgets.needsConfiguring(99))
         assertEquals("widget", widgets.label(99))
         assertEquals(72, widgets.heightDp(99))
-        assertNull(widgets.view(activity, 99, 360f))
+        assertNull(widgets.view(activity, 99, 360f, rows = 0) {})
+    }
+
+    private fun touch(view: android.view.View, action: Int, x: Float = 20f, y: Float = 20f) =
+        view.dispatchTouchEvent(MotionEvent.obtain(0, SystemClock.uptimeMillis(), action, x, y, 0))
+
+    private fun placedView(onLongPress: () -> Unit): android.view.View {
+        manager.addBoundWidget(7, provider("a.clock", "Reloj"))
+        return Widgets(activity).view(activity, 7, 360f, rows = 0, onLongPress)!!.apply { layout(0, 0, 400, 200) }
+    }
+
+    @Test
+    fun `holding a finger on a widget opens vivac's card for it`() {
+        var pressed = 0
+        val view = placedView { pressed++ }
+        touch(view, MotionEvent.ACTION_DOWN)
+        ShadowLooper.idleMainLooper(ViewConfiguration.getLongPressTimeout() + 50L, TimeUnit.MILLISECONDS)
+        assertEquals(1, pressed)
+        // The rest of that gesture is vivac's, not the widget's.
+        assertTrue(touch(view, MotionEvent.ACTION_UP))
+    }
+
+    @Test
+    fun `a tap or a scroll still belongs to the widget`() {
+        var pressed = 0
+        val view = placedView { pressed++ }
+        touch(view, MotionEvent.ACTION_DOWN)
+        touch(view, MotionEvent.ACTION_UP)
+        touch(view, MotionEvent.ACTION_DOWN)
+        touch(view, MotionEvent.ACTION_MOVE, y = 200f)
+        touch(view, MotionEvent.ACTION_CANCEL)
+        ShadowLooper.idleMainLooper(ViewConfiguration.getLongPressTimeout() + 50L, TimeUnit.MILLISECONDS)
+        assertEquals(0, pressed)
     }
 }

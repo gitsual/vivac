@@ -53,8 +53,11 @@ class LauncherAppTest {
     private val widgets = FakeWidgets()
     private val drawn = mutableListOf<Int>()
     private val views = object : WidgetViews {
-        override fun heightDp(id: Int) = 120
-        override fun view(context: Context, id: Int, widthDp: Float): View { drawn += id; return TextView(context).apply { text = "w$id" } }
+        override fun heightDp(id: Int, rows: Int) = if (rows > 0) rows * 90 else 120
+        override fun view(context: Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit): View {
+            drawn += id
+            return TextView(context).apply { text = "w$id"; setOnLongClickListener { onLongPress(); true } }
+        }
     }
     private lateinit var launcher: Launcher
 
@@ -230,5 +233,61 @@ class LauncherAppTest {
         val root = compose.activity.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         compose.runOnUiThread { root.draw(Canvas(bitmap)) }
+    }
+
+    @Test
+    fun `a widget's card resizes it, sends it to a new ladera and takes it away`() {
+        widgets.placed = mutableMapOf(1 to "Reloj", 2 to "Música")
+        store.values["widgets"] = "1,2"
+        show()
+        compose.runOnUiThread { launcher.openWidgetMenu(2) }
+        compose.onNodeWithText("Música").assertExists()
+        compose.onNodeWithText("2 filas").assertExists()
+        compose.onNodeWithContentDescription("Más alto").tap()
+        compose.onNodeWithText("3 filas").assertExists()
+        compose.onNodeWithText("Antes").tap()
+        assertEquals(listOf(2, 1), launcher.board.ids)
+        compose.onNodeWithText("Ladera nueva").tap()
+        compose.waitForIdle()
+        assertEquals(1, launcher.page)
+        compose.onNodeWithText("LADERA 1").assertExists()
+        compose.onNodeWithContentDescription("Ladera 1, página 2 de 2").assertExists()
+        compose.runOnUiThread { launcher.openWidgetMenu(2) }
+        compose.onNodeWithText("Quitar del campamento").tap()
+        assertEquals(listOf(1), launcher.board.ids)
+        assertEquals(1, launcher.board.pages)
+    }
+
+    @Test
+    fun `holding a widget opens its card`() {
+        widgets.placed = mutableMapOf(1 to "Reloj")
+        store.values["widgets"] = "1"
+        show()
+        compose.runOnUiThread { compose.activity.window.decorView.findViewWithTag<View>(null) }
+        compose.runOnUiThread {
+            val v = compose.activity.window.decorView.rootView.let { root -> find(root) { it is TextView && it.text == "w1" } }
+            v!!.performLongClick()
+        }
+        assertEquals(1, launcher.widgetMenu)
+    }
+
+    private fun find(v: View, match: (View) -> Boolean): View? {
+        if (match(v)) return v
+        if (v is android.view.ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i), match)?.let { return it }
+        return null
+    }
+
+    @Test
+    fun `an app put on a ladera shows there, and the dots say where you are`() {
+        show()
+        compose.onNodeWithText("Termux").performTouchInput { longClick() }
+        compose.onNodeWithText("Poner en una ladera").tap()
+        compose.waitForIdle()
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.waitForIdle()
+        compose.onNodeWithText("LADERA 1").assertExists()
+        compose.onNodeWithText("Mantén pulsado un widget o una app para traerlos a esta ladera.").assertExists()
+        compose.onAllNodesWithText("Termux").assertCountEquals(2)
+        compose.onNodeWithContentDescription("Ladera 1, página 2 de 2").assertExists()
     }
 }

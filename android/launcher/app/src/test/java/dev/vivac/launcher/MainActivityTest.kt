@@ -126,7 +126,7 @@ class MainActivityTest {
         // The id survives the activity being recreated while the dialog is open.
         scenario.recreate()
         result(Widgets.REQ_BIND, Activity.RESULT_OK)
-        assertEquals(asked.intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -2).toString(), prefs.getString("widgets", null))
+        assertEquals("${asked.intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -2)}:0:0", prefs.getString("widgets", null))
     }
 
     @Test

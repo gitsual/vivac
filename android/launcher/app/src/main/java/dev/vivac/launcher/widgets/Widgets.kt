@@ -30,7 +30,9 @@ data class WidgetOption(
 /** Adapter over Android's app-widget host: what can be added, binding, configuring and drawing. */
 class Widgets(private val activity: Activity) : WidgetHost {
     private val manager = AppWidgetManager.getInstance(activity)
-    private val host = AppWidgetHost(activity, HOST_ID)
+    private val host = object : AppWidgetHost(activity, HOST_ID) {
+        override fun onCreateView(context: Context, appWidgetId: Int, appWidget: AppWidgetProviderInfo?): AppWidgetHostView = WidgetFrame(context)
+    }
     private val density = activity.resources.displayMetrics.density
 
     fun startListening() = host.startListening()
@@ -77,16 +79,20 @@ class Widgets(private val activity: Activity) : WidgetHost {
 
     override fun label(id: Int): String = manager.getAppWidgetInfo(id)?.loadLabel(activity.packageManager)?.toString() ?: "widget"
 
-    fun heightDp(id: Int): Int {
+    override fun defaultRows(id: Int): Int = WidgetSize.rowsOf(heightDp(id))
+
+    /** Drawn height: the rows you chose ([rows] > 0), else the widget's own. */
+    fun heightDp(id: Int, rows: Int = 0): Int {
         val info = manager.getAppWidgetInfo(id) ?: return WidgetSize.MIN_DP
-        return WidgetSize.heightDp((info.minHeight / density).toInt(), targetRows(info))
+        return WidgetSize.heightDp((info.minHeight / density).toInt(), targetRows(info), rows)
     }
 
-    /** The live view of a placed widget, told the size it is drawn at so responsive widgets lay out right. */
-    fun view(context: Context, id: Int, widthDp: Float): AppWidgetHostView? {
+    /** The live view of a placed widget at the size it is drawn, so responsive widgets lay out right; a held finger calls [onLongPress]. */
+    fun view(context: Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit): AppWidgetHostView? {
         val info = manager.getAppWidgetInfo(id) ?: return null
         val view = host.createView(context, id, info)
-        val heightDp = heightDp(id).toFloat()
+        (view as? WidgetFrame)?.onLongPress = onLongPress
+        val heightDp = heightDp(id, rows).toFloat()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             view.updateAppWidgetSize(Bundle(), listOf(SizeF(widthDp, heightDp)))
         }

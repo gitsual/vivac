@@ -14,6 +14,8 @@ sealed interface MenuEntry {
     /** "Fijar en el campamento" or "Quitar del campamento", depending on [pinned]. */
     data class Pin(val pinned: Boolean) : Place
     /** "Ocultar del petate" or "Mostrar en el petate", depending on [hidden]. */
+    /** On a ladera (a home page right of the Campamento), or not yet. */
+    data class Ladera(val onLadera: Boolean) : Place
     data class Hide(val hidden: Boolean) : Place
     data object Info : MenuEntry
     data object Uninstall : MenuEntry
@@ -30,9 +32,10 @@ object AppMenu {
         inDock: Boolean? = null,
         pinned: Boolean? = null,
         hidden: Boolean? = null,
+        onLadera: Boolean? = null,
     ): List<MenuEntry> =
         shortcuts.filter { it.label.isNotBlank() }.take(MAX_SHORTCUTS).map { MenuEntry.Shortcut(it) } +
-            listOfNotNull(inDock?.let { MenuEntry.Dock(it) }, pinned?.let { MenuEntry.Pin(it) }, hidden?.let { MenuEntry.Hide(it) }) +
+            listOfNotNull(inDock?.let { MenuEntry.Dock(it) }, pinned?.let { MenuEntry.Pin(it) }, onLadera?.let { MenuEntry.Ladera(it) }, hidden?.let { MenuEntry.Hide(it) }) +
             MenuEntry.Info +
             (if (isSystem) emptyList() else listOf(MenuEntry.Uninstall))
 }

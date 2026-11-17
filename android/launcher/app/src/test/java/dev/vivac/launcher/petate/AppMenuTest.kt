@@ -48,4 +48,10 @@ class AppMenuTest {
         val menu = AppMenu.build(emptyList(), isSystem = true, inDock = false, pinned = false, hidden = true)
         assertEquals(listOf(MenuEntry.Dock(false), MenuEntry.Pin(false), MenuEntry.Hide(hidden = true), MenuEntry.Info), menu)
     }
+
+    @Test
+    fun `the ladera toggle sits after the pin, worded for where the app is`() {
+        val menu = AppMenu.build(emptyList(), isSystem = true, inDock = false, pinned = false, onLadera = true, hidden = false)
+        assertEquals(listOf(MenuEntry.Dock(false), MenuEntry.Pin(false), MenuEntry.Ladera(true), MenuEntry.Hide(false), MenuEntry.Info), menu)
+    }
 }

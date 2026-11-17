@@ -41,4 +41,6 @@ interface WidgetHost {
     fun delete(id: Int)
     fun exists(id: Int): Boolean
     fun label(id: Int): String
+    /** The rows a widget fills at its own size, before you choose one. */
+    fun defaultRows(id: Int): Int
 }

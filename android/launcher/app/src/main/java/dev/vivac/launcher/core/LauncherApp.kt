@@ -15,11 +15,14 @@ import dev.vivac.launcher.petate.PetateScreen
 import dev.vivac.launcher.widgets.CampMenuSheet
 import dev.vivac.launcher.widgets.PlacedWidget
 import dev.vivac.launcher.widgets.WidgetPickerSheet
+import dev.vivac.launcher.widgets.WidgetMenuSheet
 
 /** How placed widgets are drawn: their height and their live view (Android's AppWidgetHostView in production). */
 interface WidgetViews {
-    fun heightDp(id: Int): Int
-    fun view(context: Context, id: Int, widthDp: Float): View?
+    /** Drawn height for [rows] (0: the widget's own size). */
+    fun heightDp(id: Int, rows: Int): Int
+    /** The live view; holding a finger on it calls [onLongPress]. */
+    fun view(context: Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit): View?
 }
 
 /** The whole launcher on screen, driven by [launcher]. */
@@ -39,9 +42,12 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                 onOpenSettings = actions::systemSettings,
                 onOpenAbout = actions::securityUpdates,
                 onShowNotifications = actions::showNotifications,
-                widgetIds = launcher.board.ids,
+                board = launcher.board,
+                page = launcher.page,
+                onPage = launcher::showPage,
                 widgetHeightDp = widgetViews::heightDp,
                 widgetView = widgetViews::view,
+                onWidgetMenu = launcher::openWidgetMenu,
                 onCampMenu = launcher::openCampMenu,
             )
             Screen.PETATE -> PetateScreen(
@@ -66,6 +72,23 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
     }
     launcher.picker?.let { options ->
         WidgetPickerSheet(options, onPick = launcher::addWidget, onDismiss = launcher::dismissPicker)
+    }
+    launcher.widgetMenu?.let { id ->
+        val placed = launcher.board.placed(id) ?: return@let
+        val onPage = launcher.board.onPage(placed.page)
+        WidgetMenuSheet(
+            label = launcher.placedWidgets().firstOrNull { it.id == id }?.label ?: "widget",
+            rows = launcher.widgetRows(id),
+            page = placed.page,
+            pages = launcher.board.pages,
+            first = onPage.firstOrNull() == placed,
+            last = onPage.lastOrNull() == placed,
+            onResize = { launcher.resizeWidget(id, it) },
+            onShift = { launcher.shiftWidget(id, it) },
+            onMove = { launcher.moveWidget(id, it) },
+            onRemove = { launcher.removeWidget(id) },
+            onDismiss = launcher::dismissWidgetMenu,
+        )
     }
     launcher.menu?.let { m ->
         AppMenuSheet(

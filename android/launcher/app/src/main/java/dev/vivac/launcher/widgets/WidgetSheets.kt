@@ -1,6 +1,16 @@
 package dev.vivac.launcher.widgets
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import dev.vivac.launcher.campamento.WidgetSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -129,5 +139,96 @@ private fun Row52(label: String, glyph: String, glyphColor: Color, onClick: () -
     ) {
         LineIcon(glyph, glyphColor, 20.dp)
         Text(label, style = Type.body)
+    }
+}
+
+/** Where a page sits, in words: the Campamento, or the ladera's number. */
+fun pageName(page: Int) = if (page == 0) "Campamento" else "Ladera $page"
+
+/**
+ * Long press on a widget: its card. Height in rows, its place among the things on its page, which page it
+ * is on (or a new ladera), and taking it away.
+ */
+@Composable
+fun WidgetMenuSheet(
+    label: String,
+    rows: Int,
+    page: Int,
+    pages: Int,
+    first: Boolean,
+    last: Boolean,
+    onResize: (Int) -> Unit,
+    onShift: (Int) -> Unit,
+    onMove: (Int) -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    VivacSheet(onDismiss) {
+        Text("WIDGET · ${pageName(page).uppercase()}", style = Type.cota.copy(fontSize = 10.sp))
+        Text(label, style = Type.title.copy(fontSize = 26.sp, lineHeight = 30.sp), modifier = Modifier.padding(bottom = 10.dp).semantics { heading() })
+
+        Caption("ALTURA")
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Step(Glyph.MINUS, "Más bajo", enabled = rows > 1) { onResize(-1) }
+            Text(if (rows == 1) "1 fila" else "$rows filas", style = Type.figure.copy(fontSize = 20.sp), modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+            Step(Glyph.PLUS, "Más alto", enabled = rows < WidgetSize.MAX_ROWS) { onResize(+1) }
+        }
+
+        Caption("ORDEN EN LA PÁGINA")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Choice("Antes", on = false, enabled = !first, modifier = Modifier.weight(1f)) { onShift(-1) }
+            Choice("Después", on = false, enabled = !last, modifier = Modifier.weight(1f)) { onShift(+1) }
+        }
+
+        Caption("LLEVAR A")
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(pages) { p -> Choice(pageName(p), on = p == page, enabled = p != page) { onMove(p) } }
+            Choice("Ladera nueva", on = false, enabled = true) { onMove(pages) }
+        }
+
+        Box(Modifier.padding(top = 14.dp)) {
+            Row52("Quitar del campamento", Glyph.SQUARE, Ink.accentText, onRemove)
+        }
+    }
+}
+
+@Composable
+private fun Caption(text: String) {
+    Text(text, style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.padding(top = 12.dp, bottom = 6.dp).semantics { heading() })
+}
+
+/** A round 48dp step button, its glyph named for TalkBack. */
+@Composable
+private fun Step(glyph: String, name: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .border(1.dp, if (enabled) Ink.borderControl else Ink.field, CircleShape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = name },
+        contentAlignment = Alignment.Center,
+    ) { LineIcon(glyph, if (enabled) Ink.text else Ink.borderControl, 22.dp) }
+}
+
+/** A pill choice: coral when it is where things are, outlined otherwise; dimmed when it would do nothing. */
+@Composable
+private fun Choice(text: String, on: Boolean, enabled: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (on) Ink.primary else Ink.surface)
+            .border(1.dp, if (on) Ink.primary else if (enabled) Ink.borderControl else Ink.field, RoundedCornerShape(999.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { selected = on }
+            .padding(horizontal = 16.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = Type.body.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium),
+            color = when { on -> Ink.onPrimary; enabled -> Ink.text; else -> Ink.borderControl },
+        )
     }
 }

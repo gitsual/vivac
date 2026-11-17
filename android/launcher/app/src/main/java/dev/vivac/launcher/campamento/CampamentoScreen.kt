@@ -44,6 +44,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -91,9 +95,12 @@ fun CampamentoScreen(
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
     onShowNotifications: () -> Unit,
-    widgetIds: List<Int>,
-    widgetHeightDp: (Int) -> Int,
-    widgetView: (Context, Int, Float) -> View?,
+    board: WidgetBoard,
+    page: Int,
+    onPage: (Int) -> Unit,
+    widgetHeightDp: (id: Int, rows: Int) -> Int,
+    widgetView: (Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit) -> View?,
+    onWidgetMenu: (Int) -> Unit,
     onCampMenu: () -> Unit,
 ) {
     val onSwipe: (Swipe) -> Unit = { s ->
@@ -122,28 +129,114 @@ fun CampamentoScreen(
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Header(onOpenSettings)
-            Clock(stamp)
-            Column(
-                Modifier
-                    .weight(1f)
-                    .nestedScroll(leftovers)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                FactsStrip(facts, onOpenAbout)
-                widgetIds.forEach { id -> WidgetCard(id, widgetHeightDp(id), widgetView) }
-                Via(apps, home.pinned, onOpenApp, onAppMenu)
+            Header(if (page == 0) "CAMPAMENTO" else "LADERA $page", onOpenSettings)
+            val pager = rememberPagerState(initialPage = page) { board.pages }
+            // The launcher decides the page (home, a widget sent elsewhere); a swipe tells it where you went.
+            LaunchedEffect(page) { if (pager.currentPage != page) pager.animateScrollToPage(page) }
+            LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect(onPage) }
+            val card: @Composable (Placed) -> Unit = { w ->
+                WidgetCard(w.id, w.rows, widgetHeightDp(w.id, w.rows), widgetView) { onWidgetMenu(w.id) }
             }
+            HorizontalPager(pager, Modifier.weight(1f), pageSpacing = 24.dp, verticalAlignment = Alignment.Top) { p ->
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (p == 0) Clock(stamp)
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .nestedScroll(leftovers)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        if (p == 0) {
+                            FactsStrip(facts, onOpenAbout)
+                            board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
+                            Via(apps, home.pinned, onOpenApp, onAppMenu)
+                        } else {
+                            Ladera(board.onPage(p), apps, card, onOpenApp, onAppMenu)
+                        }
+                    }
+                }
+            }
+            if (board.pages > 1) PageDots(board.pages, page)
             SearchPill { onOpenPetate(true) }
             DockCard(apps, home.dock, onOpenApp, onAppMenu) { onOpenPetate(false) }
         }
     }
 }
 
-/** A placed widget, drawn by its app inside a vivac card shape. */
+/**
+ * A ladera: what you put there, in order. Widgets as cards, apps in rows of four between them.
+ */
 @Composable
-private fun WidgetCard(id: Int, heightDp: Int, widgetView: (Context, Int, Float) -> View?) {
+private fun Ladera(items: List<Item>, apps: List<InstalledApp>, card: @Composable (Placed) -> Unit, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit) {
+    val byPackage = apps.associateBy { it.packageName }
+    // Consecutive apps form one block, so they share rows; each widget is a block of its own.
+    val blocks = mutableListOf<Any>()
+    items.forEach { item ->
+        when (item) {
+            is Placed -> blocks += item
+            is Shelved -> {
+                val app = byPackage[item.packageName] ?: return@forEach
+                @Suppress("UNCHECKED_CAST")
+                (blocks.lastOrNull() as? MutableList<InstalledApp>)?.add(app) ?: blocks.add(mutableListOf(app))
+            }
+        }
+    }
+    blocks.forEach { block ->
+        if (block is Placed) card(block)
+        else {
+            @Suppress("UNCHECKED_CAST")
+            (block as List<InstalledApp>).chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth()) {
+                    row.forEach { app ->
+                        AppTile(
+                            label = app.label,
+                            background = Ink.surface,
+                            border = Ink.field,
+                            onClick = { onOpenApp(app.packageName) },
+                            onLongClick = { onAppMenu(app.packageName) },
+                            dot = app.packageName in LocalDots.current,
+                            modifier = Modifier.weight(1f),
+                        ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                    }
+                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+    Text("Mantén pulsado un widget o una app para traerlos a esta ladera.", style = Type.small)
+}
+
+/** Where you are: the Campamento's mark and one per ladera; the current one is a coral bar. */
+@Composable
+private fun PageDots(pages: Int, current: Int) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .semantics { contentDescription = if (current == 0) "Campamento, página 1 de $pages" else "Ladera $current, página ${current + 1} de $pages" },
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+    ) {
+        repeat(pages) { p ->
+            Box(
+                Modifier
+                    .height(6.dp)
+                    .width(if (p == current) 18.dp else 6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(if (p == current) Ink.primary else Ink.borderControl),
+            )
+        }
+    }
+}
+
+/** A placed widget, drawn by its app inside a vivac card shape; holding it opens its card. */
+@Composable
+private fun WidgetCard(
+    id: Int,
+    rows: Int,
+    heightDp: Int,
+    widgetView: (Context, Int, Float, Int, () -> Unit) -> View?,
+    onLongPress: () -> Unit,
+) {
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
@@ -153,10 +246,10 @@ private fun WidgetCard(id: Int, heightDp: Int, widgetView: (Context, Int, Float)
             .border(1.dp, Ink.field, RoundedCornerShape(24.dp)),
     ) {
         val width = maxWidth.value
-        // key(id): a new widget id must get a fresh host view, never a recycled one.
-        key(id) {
+        // key(id, rows): a new widget, or a new size, gets a fresh host view laid out for it.
+        key(id, rows) {
             AndroidView(
-                factory = { ctx -> widgetView(ctx, id, width) ?: android.widget.Space(ctx) },
+                factory = { ctx -> widgetView(ctx, id, width, rows, onLongPress) ?: android.widget.Space(ctx) },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -237,9 +330,9 @@ private fun Beam(modifier: Modifier) {
 }
 
 @Composable
-private fun Header(onOpenSettings: () -> Unit) {
+private fun Header(title: String, onOpenSettings: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("CAMPAMENTO", style = Type.cota, modifier = Modifier.weight(1f).semantics { heading() })
+        Text(title, style = Type.cota, modifier = Modifier.weight(1f).semantics { heading() })
         // The headlamp itself: the beam starts here.
         Box(
             Modifier

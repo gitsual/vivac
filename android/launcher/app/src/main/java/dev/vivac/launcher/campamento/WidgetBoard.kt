@@ -1,30 +1,124 @@
 package dev.vivac.launcher.campamento
 
-/** The widgets on the Campamento, as the app-widget ids Android gave them, top to bottom. */
-data class WidgetBoard(val ids: List<Int> = emptyList()) {
-    fun add(id: Int) = if (id in ids) this else WidgetBoard(ids + id)
+/** Something placed on a page of the home screen: page 0 is the Campamento, 1 onwards the laderas to its right. */
+sealed interface Item {
+    val page: Int
+}
 
-    fun remove(id: Int) = WidgetBoard(ids - id)
+/** A widget, by the app-widget id Android gave it; [rows] is the height you chose, 0 for the widget's own. */
+data class Placed(val id: Int, override val page: Int = 0, val rows: Int = 0) : Item
 
-    fun encode(): String = ids.joinToString(",")
+/** An app put on a ladera. The Campamento keeps its apps on its own route (see [Home.pinned]). */
+data class Shelved(val packageName: String, override val page: Int) : Item
+
+/**
+ * What sits on each page, in order. Pages never have gaps: a ladera left empty closes and the ones after
+ * it move down; the Campamento never closes.
+ */
+data class WidgetBoard(val items: List<Item> = emptyList()) {
+    val ids: List<Int> get() = items.filterIsInstance<Placed>().map { it.id }
+    val apps: List<String> get() = items.filterIsInstance<Shelved>().map { it.packageName }
+
+    /** The Campamento plus every ladera that holds something. */
+    val pages: Int get() = (items.maxOfOrNull { it.page } ?: 0) + 1
+
+    fun onPage(page: Int): List<Item> = items.filter { it.page == page }
+
+    fun placed(id: Int): Placed? = items.firstOrNull { it is Placed && it.id == id } as Placed?
+
+    fun add(id: Int) = if (placed(id) != null) this else WidgetBoard(items + Placed(id))
+
+    fun remove(id: Int) = WidgetBoard(items.filterNot { it is Placed && it.id == id }).compact()
+
+    /** Puts an app at the end of a ladera (never the Campamento), moving it there if it was on another. */
+    fun addApp(packageName: String, page: Int): WidgetBoard =
+        if (Shelved(packageName, page.coerceAtLeast(1)) in items) this else WidgetBoard(items.filterNot { it is Shelved && it.packageName == packageName } + Shelved(packageName, page.coerceAtLeast(1))).compact()
+
+    fun removeApp(packageName: String) = WidgetBoard(items.filterNot { it is Shelved && it.packageName == packageName }).compact()
+
+    /** Forget apps that are no longer installed. */
+    fun keepApps(installed: Set<String>) = WidgetBoard(items.filter { it !is Shelved || it.packageName in installed }).compact()
+
+    /** Sends a widget to the end of [page]; one past the last opens a new ladera. */
+    fun moveTo(id: Int, page: Int): WidgetBoard {
+        val widget = placed(id) ?: return this
+        return WidgetBoard(items - widget + widget.copy(page = page.coerceIn(0, pages))).compact()
+    }
+
+    /** Moves a widget earlier (-1) or later (+1) among the things on its page, stopping at the ends. */
+    fun shift(id: Int, delta: Int): WidgetBoard {
+        val widget = placed(id) ?: return this
+        val page = onPage(widget.page)
+        val at = page.indexOf(widget)
+        val to = (at + delta).coerceIn(0, page.lastIndex)
+        if (to == at) return this
+        val reordered = page.toMutableList().apply { removeAt(at); add(to, widget) }
+        // Rebuild in page order, the reordered page in place of the old one.
+        return WidgetBoard((0 until pages).flatMap { p -> if (p == widget.page) reordered else onPage(p) })
+    }
+
+    fun resize(id: Int, rows: Int): WidgetBoard {
+        val widget = placed(id) ?: return this
+        return WidgetBoard(items.map { if (it == widget) widget.copy(rows = rows.coerceIn(1, WidgetSize.MAX_ROWS)) else it })
+    }
+
+    fun encode(): String = items.joinToString(",") {
+        when (it) {
+            is Placed -> "${it.id}:${it.page}:${it.rows}"
+            is Shelved -> "@${it.packageName}:${it.page}"
+        }
+    }
+
+    /** Renumbers pages so there are no empty laderas between the ones in use. */
+    private fun compact(): WidgetBoard {
+        val used = items.map { it.page }.filter { it > 0 }.distinct().sorted()
+        val renumber = used.withIndex().associate { (i, p) -> p to i + 1 }
+        return WidgetBoard(items.map { item ->
+            val page = renumber[item.page] ?: 0
+            when (item) {
+                is Placed -> item.copy(page = page)
+                is Shelved -> item.copy(page = page)
+            }
+        })
+    }
 
     companion object {
-        fun decode(raw: String?) = WidgetBoard(raw.orEmpty().split(",").mapNotNull { it.trim().toIntOrNull() }.distinct())
+        /** Reads `id:page:rows` for widgets and `@package:page` for apps; a bare `id` is the old camp-only format. */
+        fun decode(raw: String?) = WidgetBoard(
+            raw.orEmpty().split(",").mapNotNull { part ->
+                val fields = part.trim().split(":")
+                if (fields[0].startsWith("@")) {
+                    val pkg = fields[0].drop(1).takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    Shelved(pkg, fields.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(1) ?: 1)
+                } else {
+                    val id = fields[0].toIntOrNull() ?: return@mapNotNull null
+                    Placed(id, fields.getOrNull(1)?.toIntOrNull() ?: 0, fields.getOrNull(2)?.toIntOrNull() ?: 0)
+                }
+            }.distinctBy { if (it is Placed) "w${it.id}" else "a${(it as Shelved).packageName}" },
+        )
     }
 }
 
-/** How tall a widget is drawn on the Campamento, and how its size reads in the picker. */
+/** How tall a widget is drawn, and how its size reads in the picker. */
 object WidgetSize {
     const val MIN_DP = 72
     const val MAX_DP = 420
+    const val MAX_ROWS = 5
 
     /** Roughly the row height of a stock launcher grid on a Pixel. */
     private const val ROW_DP = 90
 
-    fun heightDp(minHeightDp: Int, targetRows: Int): Int {
-        val wanted = if (targetRows > 0) targetRows * ROW_DP else minHeightDp
+    fun heightDp(minHeightDp: Int, targetRows: Int, chosenRows: Int = 0): Int {
+        val wanted = when {
+            chosenRows > 0 -> chosenRows * ROW_DP
+            targetRows > 0 -> targetRows * ROW_DP
+            else -> minHeightDp
+        }
         return wanted.coerceIn(MIN_DP, MAX_DP)
     }
+
+    /** The rows a height fills, for a widget whose size you have not chosen yet. */
+    fun rowsOf(heightDp: Int): Int = Math.round(heightDp / ROW_DP.toFloat()).coerceIn(1, MAX_ROWS)
 
     fun cells(targetColumns: Int, targetRows: Int): String =
         if (targetColumns > 0 && targetRows > 0) "$targetColumns × $targetRows" else ""
