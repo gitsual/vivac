@@ -25,16 +25,18 @@ printf '#!/usr/bin/env bash\necho "yarn $*" >>%q\n' "$calls" >"$sandbox/path/yar
 printf '#!/usr/bin/env bash\necho "adevtool $*" >>%q\n' "$calls" >"$src/vendor/adevtool/bin/run"
 printf '#!/usr/bin/env bash\necho "finalize" >>%q\n' "$calls" >"$src/script/finalize.sh"
 cat >"$src/build/envsetup.sh" <<EOF
+src=/bogus/aidegen_completion.sh # the real envsetup reuses $src in a loop
 alias adevtool='vendor/adevtool/bin/run'
 lunch() { echo "lunch \$*" >>"$calls"; }
 m() { echo "m \$*" >>"$calls"; }
 EOF
 chmod +x "$bin"/* "$sandbox/path/yarn" "$src/vendor/adevtool/bin/run" "$src/script/finalize.sh"
 
-PATH="$sandbox/path:$PATH" VIVAC_OS_ROOT="$root" bash "$bin/vivac-os-build" 2026111300 >/dev/null 2>"$sandbox/err" ||
+PATH="$sandbox/path:$PATH" VIVAC_OS_ROOT="$root" bash "$bin/vivac-os-build" 2026111300 >"$sandbox/out" 2>"$sandbox/err" ||
 	fail "build failed: $(tail -3 "$sandbox/err")"
 grep -qx 'adevtool generate-all -d shiba' "$calls" || fail "adevtool generate-all was not run"
 grep -qx 'lunch shiba-cur-user' "$calls" || fail "lunch not run after vendor generation"
 grep -qx 'finalize' "$calls" || fail "finalize.sh not run"
 
 if bash "$bin/vivac-os-build" notatag >/dev/null 2>&1; then fail "accepted a bad tag"; fi
+grep -qF "ready in $src/releases/2026111300" "$sandbox/out" || fail "wrong release path: $(cat "$sandbox/out")"

@@ -11,12 +11,12 @@ tag="$1"
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 root="${VIVAC_OS_ROOT:-$HOME/m2/vivac-os}"
 device="${VIVAC_OS_DEVICE:-shiba}"
-src="$root/src"
+tree="$root/src" # not "src": envsetup.sh reuses that name in a loop
 
 VIVAC_OS_ROOT="$root" "$here/vivac-os-sync" "$tag"
-cd "$src"
+cd "$tree"
 
-"$here/vivac-os-customize" "$src" "$here/../patches"
+"$here/vivac-os-customize" "$tree" "$here/../patches"
 
 yarn --cwd vendor/adevtool/ install
 set +u # envsetup.sh and lunch are not written for nounset
@@ -34,4 +34,4 @@ rm -rf out
 m vendorbootimage vendorkernelbootimage target-files-package
 m otatools-package
 script/finalize.sh
-printf 'vivac-os build %s ready in %s/releases/%s\n' "$BUILD_NUMBER" "$src" "$BUILD_NUMBER"
+printf 'vivac-os build %s ready in %s/releases/%s\n' "$BUILD_NUMBER" "$tree" "$BUILD_NUMBER"
