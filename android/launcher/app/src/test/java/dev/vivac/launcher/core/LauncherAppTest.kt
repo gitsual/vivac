@@ -467,6 +467,20 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `while vivac is not the home app the camp menu offers to make it so`() {
+        actions.home = false
+        show()
+        compose.runOnUiThread { launcher.openCampMenu() }
+        compose.onNodeWithText("Hacer de vivac tu app de inicio").tap()
+        compose.waitForIdle()
+        assertEquals("askHome", actions.calls.last())
+        assertEquals(false, launcher.campMenu)
+        actions.home = true
+        compose.runOnUiThread { launcher.openCampMenu() }
+        compose.onNodeWithText("Hacer de vivac tu app de inicio").assertDoesNotExist()
+    }
+
+    @Test
     fun `the camp menu locks and unlocks the layout`() {
         show()
         compose.runOnUiThread { launcher.openCampMenu() }

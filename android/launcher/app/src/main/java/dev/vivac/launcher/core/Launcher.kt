@@ -207,6 +207,11 @@ class Launcher(
 
     fun dismissPicker() { picker = null }
 
+    fun becomeHome() {
+        campMenu = false
+        actions.askToBeHome()
+    }
+
     fun allowDots() {
         campMenu = false
         actions.notificationAccess()

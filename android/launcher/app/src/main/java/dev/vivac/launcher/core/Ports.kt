@@ -34,6 +34,10 @@ interface Actions {
     /** Android's accessibility page, where vivac's lock service is switched on. */
     fun accessibilitySettings()
     fun lockScreenReady(): Boolean
+    /** Whether vivac is the phone's home app (Android's home role). */
+    fun isHome(): Boolean
+    /** Android's own dialog to make vivac the home app. */
+    fun askToBeHome()
     /** The web search app you use (or the browser), for [query]. */
     fun webSearch(query: String)
     /** The app store you use (any that answers market:// links), for [query]. */

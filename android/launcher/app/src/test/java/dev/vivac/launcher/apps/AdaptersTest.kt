@@ -194,4 +194,16 @@ class AdaptersTest {
         service.onUnbind(null)
         assertFalse(actions.lockScreenReady())
     }
+
+    @Test
+    fun `asking to be home uses the role dialog from an activity, else the default apps page`() {
+        val actions = AppActions(app)
+        assertFalse(actions.isHome())
+        actions.askToBeHome()
+        assertEquals(Settings.ACTION_HOME_SETTINGS, nextIntent()?.action)
+        val activity = org.robolectric.Robolectric.buildActivity(android.app.Activity::class.java).setup().get()
+        shadowOf(app.getSystemService(android.app.role.RoleManager::class.java)).addAvailableRole(android.app.role.RoleManager.ROLE_HOME)
+        AppActions(activity).askToBeHome()
+        assertEquals(AppActions.REQ_HOME, shadowOf(activity).nextStartedActivityForResult.requestCode)
+    }
 }

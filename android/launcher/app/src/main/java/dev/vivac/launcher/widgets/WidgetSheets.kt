@@ -81,9 +81,12 @@ fun CampMenuSheet(
     onToggleLock: () -> Unit = {},
     doubleTapLock: Boolean = false,
     onToggleDoubleTap: () -> Unit = {},
+    isHome: Boolean = true,
+    onBecomeHome: () -> Unit = {},
 ) {
     VivacSheet(onDismiss) {
         Text("Campamento", style = Type.section, modifier = Modifier.padding(bottom = 8.dp).semantics { heading() })
+        if (!isHome) Row52("Hacer de vivac tu app de inicio", Glyph.TENT, Ink.accentText, onBecomeHome)
         Row52("Añadir widget", Glyph.PLUS, Ink.accentText, onAdd)
         Row52(if (locked) "Desbloquear el campamento" else "Bloquear el campamento", Glyph.LOCK, Ink.text, onToggleLock)
         Row52(if (doubleTapLock) "Doble toque: no apagar la pantalla" else "Doble toque: apagar la pantalla", Glyph.DOT, Ink.text, onToggleDoubleTap)

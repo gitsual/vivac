@@ -64,6 +64,7 @@ class AppActions(private val context: Context) : Actions {
     }
 
     companion object {
+        const val REQ_HOME = 7003
         /**
          * Ranks are counted separately for manifest and dynamic shortcuts; like the Pixel launcher,
          * the app's declared ones come first.
@@ -133,6 +134,21 @@ class AppActions(private val context: Context) : Actions {
     }
 
     override fun lockScreen(): Boolean = LockService.lock()
+
+    override fun isHome(): Boolean =
+        context.getSystemService(android.app.role.RoleManager::class.java).isRoleHeld(android.app.role.RoleManager.ROLE_HOME)
+
+    /** The role dialog needs an activity to answer to; from elsewhere, Android's default-apps page does the same. */
+    override fun askToBeHome() {
+        val roles = context.getSystemService(android.app.role.RoleManager::class.java)
+        val activity = context as? android.app.Activity
+        if (activity != null && roles.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
+            @Suppress("DEPRECATION")
+            activity.startActivityForResult(roles.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME), REQ_HOME)
+        } else {
+            start(Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
 
     override fun lockScreenReady(): Boolean = LockService.running
 
