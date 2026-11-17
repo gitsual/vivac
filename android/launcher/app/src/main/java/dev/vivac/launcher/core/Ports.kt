@@ -27,6 +27,8 @@ interface Actions {
     fun securityUpdates()
     /** A short message on screen (a toast in production). */
     fun say(text: String)
+    /** Puts [text] on the clipboard (Android shows its own confirmation). */
+    fun copy(text: String)
 }
 
 /** Port: the app-widget host. Ids are Android's; [WidgetOption.key] names the provider. */

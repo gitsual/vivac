@@ -38,7 +38,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | D8 | Search fallbacks: web search, Play/F-Droid store, system settings | todo |
 | D9 | Alphabet fast scroller | done (the altimeter: tap or slide) |
 | D10 | Rename an app (custom label) | todo |
-| D11 | Calculator and unit conversion in the search field | todo |
+| D11 | Calculator and unit conversion in the search field | done: sums, "10% de 150", length/mass/volume/time/speed/data/temperature; tap copies |
 | D12 | Search contacts (READ_CONTACTS, opt-in) and open/call/message them | todo |
 | D13 | Search calendar events (READ_CALENDAR, opt-in) | todo |
 
@@ -70,7 +70,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | G1 | Swipe up: Petate; swipe down: notifications | done |
 | G2 | Double tap to lock the screen (accessibility service, opt-in) | todo |
 | G3 | Configurable gestures (swipe up/down, double tap → any action or app) | todo |
-| G4 | Home pressed on the camp: back to the top / close sheets | todo |
+| G4 | Home pressed on the camp: back to the top / close sheets | done: closes the petate, menus and sheets, back to page 0 |
 | G5 | Swipe-home animation into the icon (GestureNavContract, Android 11+, undocumented) | todo |
 
 ## Settings and data

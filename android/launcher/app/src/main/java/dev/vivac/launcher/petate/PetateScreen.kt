@@ -91,6 +91,7 @@ fun PetateScreen(
     onDrop: (Held, Spot) -> Unit = { _, _ -> },
     onLand: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onCopy: (String) -> Unit = {},
 ) {
     // Holding an app and moving lifts it out of the petate, to be carried onto the camp.
     val carry: @Composable (InstalledApp, Color) -> Modifier? = { app, tone ->
@@ -131,7 +132,9 @@ fun PetateScreen(
                     if (hidden.isNotEmpty()) Chip("Ocultas · ${hidden.size}", showHidden) { showHidden = !showHidden; filter = null }
                 }
                 if (recent.isNotEmpty() && query.isBlank() && !showHidden) LastPitch(recent, onOpenApp, onAppMenu, carry)
-                if (shelves.isEmpty()) {
+                val answer = remember(query) { Calc.answer(query) }
+                if (answer != null) Answer(answer) { onCopy(answer) }
+                if (shelves.isEmpty() && answer == null) {
                     Text("Nada en el petate con «$query».", style = Type.body.copy(color = Ink.textMuted))
                 }
             }
@@ -168,6 +171,27 @@ fun PetateScreen(
                 }
             }
         }
+    }
+}
+
+/** The search field's sum or conversion, in large type; tapping copies it. */
+@Composable
+private fun Answer(text: String, onCopy: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Ink.surface)
+            .border(1.dp, Ink.field, RoundedCornerShape(20.dp))
+            .clickable(role = Role.Button, onClickLabel = "Copiar", onClick = onCopy)
+            .semantics(mergeDescendants = true) { contentDescription = "Copiar $text" }
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("=", style = Type.title.copy(fontSize = 28.sp, color = Ink.primary))
+        Text(text, style = Type.title.copy(fontSize = 28.sp, lineHeight = 32.sp, color = Brand.papel50), modifier = Modifier.weight(1f))
+        Text("COPIAR", style = Type.cota.copy(fontSize = 10.sp))
     }
 }
 

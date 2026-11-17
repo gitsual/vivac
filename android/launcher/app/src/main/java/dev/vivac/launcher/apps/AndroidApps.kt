@@ -119,6 +119,11 @@ class AppActions(private val context: Context) : Actions {
 
     override fun say(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
 
+    override fun copy(text: String) {
+        context.getSystemService(android.content.ClipboardManager::class.java)
+            .setPrimaryClip(android.content.ClipData.newPlainText("vivac", text))
+    }
+
     override fun systemSettings() {
         start(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

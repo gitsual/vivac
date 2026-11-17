@@ -81,6 +81,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     drag = drag,
                     onDrop = { h, spot -> launcher.drop(h.app.packageName, h.from, spot.zone, spot.index) },
                     onLand = { launcher.back() },
+                    onCopy = actions::copy,
                     modifier = Modifier.graphicsLayer { alpha = if (lifted) 0f else 1f },
                 )
             }

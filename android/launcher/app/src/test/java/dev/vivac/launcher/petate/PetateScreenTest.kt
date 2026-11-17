@@ -121,4 +121,17 @@ class PetateScreenTest {
         compose.onNodeWithContentDescription("Altímetro: desliza para saltar de letra").performTouchInput { swipeDown() }
         compose.onNodeWithText("Z-app 1").assertIsDisplayed()
     }
+
+    @Test
+    fun `a sum or a conversion in the search shows its answer, and tapping it copies it`() {
+        val copied = mutableListOf<String>()
+        compose.setContent {
+            PetateScreen(listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {}, onCopy = { copied += it })
+        }
+        compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("5 km en mi")
+        compose.onNodeWithText("3,10686 mi").assertExists()
+        compose.onNodeWithContentDescription("Copiar 3,10686 mi").performClick()
+        assertEquals(listOf("3,10686 mi"), copied)
+        compose.onNodeWithText("Nada en el petate con «5 km en mi».").assertDoesNotExist()
+    }
 }

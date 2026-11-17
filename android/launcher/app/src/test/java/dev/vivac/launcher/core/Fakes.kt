@@ -32,6 +32,7 @@ class FakeActions : Actions {
     override fun systemSettings() { calls += "settings" }
     override fun securityUpdates() { calls += "about" }
     override fun say(text: String) { calls += "say:$text" }
+    override fun copy(text: String) { calls += "copy:$text" }
     override fun pinShortcuts(packageName: String, ids: List<String>) { calls += "pinShortcuts:$packageName:$ids" }
 }
 
