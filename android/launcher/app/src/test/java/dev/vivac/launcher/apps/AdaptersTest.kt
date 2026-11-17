@@ -16,6 +16,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.robolectric.util.ReflectionHelpers
 import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.shadows.ShadowToast
@@ -174,5 +175,23 @@ class AdaptersTest {
         assertEquals("mapas", search?.getStringExtra(android.app.SearchManager.QUERY))
         actions.storeSearch("mapas")
         assertEquals("market://search?q=mapas", nextIntent()?.data.toString())
+    }
+
+    @Test
+    fun `the lock service turns the screen off only while it is switched on`() {
+        val actions = AppActions(app)
+        assertFalse(actions.lockScreenReady())
+        assertFalse(actions.lockScreen())
+        actions.accessibilitySettings()
+        assertEquals(Settings.ACTION_ACCESSIBILITY_SETTINGS, nextIntent()?.action)
+        val service = org.robolectric.Robolectric.setupService(LockService::class.java)
+        ReflectionHelpers.callInstanceMethod<Unit>(service, "onServiceConnected")
+        assertTrue(actions.lockScreenReady())
+        actions.lockScreen()
+        assertEquals(listOf(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN), shadowOf(service).globalActionsPerformed)
+        service.onAccessibilityEvent(null)
+        service.onInterrupt()
+        service.onUnbind(null)
+        assertFalse(actions.lockScreenReady())
     }
 }

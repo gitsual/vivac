@@ -132,6 +132,14 @@ class AppActions(private val context: Context) : Actions {
         }
     }
 
+    override fun lockScreen(): Boolean = LockService.lock()
+
+    override fun lockScreenReady(): Boolean = LockService.running
+
+    override fun accessibilitySettings() {
+        start(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     override fun copy(text: String) {
         context.getSystemService(android.content.ClipboardManager::class.java)
             .setPrimaryClip(android.content.ClipData.newPlainText("vivac", text))

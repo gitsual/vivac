@@ -21,6 +21,7 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
@@ -476,6 +477,14 @@ class LauncherAppTest {
         compose.onNodeWithText("Desbloquear el campamento").tap()
         compose.waitForIdle()
         assertEquals(false, launcher.locked)
+        compose.runOnUiThread { launcher.openCampMenu() }
+        compose.onNodeWithText("Doble toque: apagar la pantalla").tap()
+        compose.waitForIdle()
+        assertTrue(launcher.doubleTapLock)
+        actions.lockService = true
+        compose.onNodeWithText("CAMPAMENTO").performTouchInput { doubleClick() }
+        compose.waitForIdle()
+        assertEquals("lock", actions.calls.last())
     }
 
     @Test

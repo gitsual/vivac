@@ -492,6 +492,28 @@ class LauncherTest {
     }
 
     @Test
+    fun `double tap locks the screen only once you turn it on, and asks for the service when it is off`() {
+        val l = many()
+        l.onDoubleTap()
+        assertEquals(emptyList<String>(), actions.calls)
+        l.openCampMenu()
+        actions.lockService = false
+        l.toggleDoubleTapLock()
+        assertTrue(l.doubleTapLock)
+        assertFalse(l.campMenu)
+        assertTrue(many().doubleTapLock)
+        assertEquals(listOf("accessibility"), actions.calls.filterNot { it.startsWith("say:") })
+        actions.calls.clear()
+        l.onDoubleTap()
+        assertEquals("accessibility", actions.calls.last())
+        actions.lockService = true
+        l.onDoubleTap()
+        assertEquals("lock", actions.calls.last())
+        l.toggleDoubleTapLock()
+        assertFalse(many().doubleTapLock)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

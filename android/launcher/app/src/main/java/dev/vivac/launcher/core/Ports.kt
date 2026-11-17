@@ -29,6 +29,11 @@ interface Actions {
     fun say(text: String)
     /** Puts [text] on the clipboard (Android shows its own confirmation). */
     fun copy(text: String)
+    /** Turns the screen off through vivac's accessibility service; false when that service is not on. */
+    fun lockScreen(): Boolean
+    /** Android's accessibility page, where vivac's lock service is switched on. */
+    fun accessibilitySettings()
+    fun lockScreenReady(): Boolean
     /** The web search app you use (or the browser), for [query]. */
     fun webSearch(query: String)
     /** The app store you use (any that answers market:// links), for [query]. */

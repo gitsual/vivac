@@ -71,6 +71,25 @@ class Launcher(
     /** Locked: nothing on the home screen can be dragged until you unlock it from the camp menu. */
     var locked by mutableStateOf(store.get(KEY_LOCKED) == "1"); private set
 
+    /** Double tap on the camp's ground turns the screen off; off until you choose it. */
+    var doubleTapLock by mutableStateOf(store.get(KEY_DOUBLE_TAP) == "1"); private set
+
+    fun toggleDoubleTapLock() {
+        campMenu = false
+        doubleTapLock = !doubleTapLock
+        store.put(mapOf(KEY_DOUBLE_TAP to if (doubleTapLock) "1" else "0"))
+        if (doubleTapLock && !actions.lockScreenReady()) askForLockService()
+    }
+
+    fun onDoubleTap() {
+        if (doubleTapLock && !actions.lockScreen()) askForLockService()
+    }
+
+    private fun askForLockService() {
+        actions.say("Para apagar la pantalla con doble toque, activa «vivac» en Accesibilidad. Solo apaga la pantalla; no lee nada.")
+        actions.accessibilitySettings()
+    }
+
     fun toggleLock() {
         campMenu = false
         locked = !locked
@@ -357,6 +376,7 @@ class Launcher(
         const val KEY_RECENT = "recent"
         const val KEY_NAMES = "names"
         const val KEY_LOCKED = "locked"
+        const val KEY_DOUBLE_TAP = "doubleTapLock"
 
         private fun encodeNames(names: Map<String, String>) =
             names.entries.joinToString(",") { (pkg, name) -> pkg + "=" + java.net.URLEncoder.encode(name, "UTF-8") }

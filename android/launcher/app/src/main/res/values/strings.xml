@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">vivac</string>
+    <string name="lock_service_description">Lets vivac turn the screen off when you double-tap the camp. It reads nothing on screen and listens to nothing else.</string>
+    <string name="lock_service_label">vivac: double tap to lock</string>
 </resources>

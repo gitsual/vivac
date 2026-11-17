@@ -123,6 +123,7 @@ fun CampamentoScreen(
     onShortcut: (Pinned) -> Unit = {},
     onShortcutMenu: (Pinned) -> Unit = {},
     locked: Boolean = false,
+    onDoubleTap: () -> Unit = {},
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
@@ -160,7 +161,7 @@ fun CampamentoScreen(
             .background(Ink.deep)
             .onGloballyPositioned { drag.screen = it.boundsInRoot(); rootOrigin = it.positionInRoot() }
             .swipes(onSwipe)
-            .pointerInput(Unit) { detectTapGestures(onLongPress = { onCampMenu() }) },
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onDoubleTap() }, onLongPress = { onCampMenu() }) },
     ) {
         Contours(Modifier.fillMaxSize(), color = Ink.surface)
         Beam(Modifier.fillMaxSize())

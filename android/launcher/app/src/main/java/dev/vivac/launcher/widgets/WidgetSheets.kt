@@ -79,11 +79,14 @@ fun CampMenuSheet(
     onDismiss: () -> Unit,
     locked: Boolean = false,
     onToggleLock: () -> Unit = {},
+    doubleTapLock: Boolean = false,
+    onToggleDoubleTap: () -> Unit = {},
 ) {
     VivacSheet(onDismiss) {
         Text("Campamento", style = Type.section, modifier = Modifier.padding(bottom = 8.dp).semantics { heading() })
         Row52("Añadir widget", Glyph.PLUS, Ink.accentText, onAdd)
         Row52(if (locked) "Desbloquear el campamento" else "Bloquear el campamento", Glyph.LOCK, Ink.text, onToggleLock)
+        Row52(if (doubleTapLock) "Doble toque: no apagar la pantalla" else "Doble toque: apagar la pantalla", Glyph.DOT, Ink.text, onToggleDoubleTap)
         placed.forEach { w -> Row52("Quitar «${w.label}»", Glyph.SQUARE, Color(0xFFBD6161)) { onRemove(w.id) } }
         if (!dotsAllowed) {
             Row52("Activar puntos de aviso", Glyph.DOT, Ink.accentText, onAllowDots)

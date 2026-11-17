@@ -63,6 +63,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onShortcut = { launcher.openPinned(it.packageName, it.id) },
             onShortcutMenu = { launcher.openShortcutMenu(it.packageName, it.id, it.label) },
             locked = launcher.locked,
+            onDoubleTap = launcher::onDoubleTap,
         )
     }
     AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
@@ -100,6 +101,8 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onAllowDots = launcher::allowDots,
             locked = launcher.locked,
             onToggleLock = launcher::toggleLock,
+            doubleTapLock = launcher.doubleTapLock,
+            onToggleDoubleTap = launcher::toggleDoubleTapLock,
             onDismiss = launcher::dismissCampMenu,
         )
     }

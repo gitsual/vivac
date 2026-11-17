@@ -68,7 +68,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | # | Feature | Status |
 |---|---------|--------|
 | G1 | Swipe up: Petate; swipe down: notifications | done |
-| G2 | Double tap to lock the screen (accessibility service, opt-in) | todo |
+| G2 | Double tap to lock the screen (accessibility service, opt-in) | done: camp menu toggle; LockService reads nothing |
 | G3 | Configurable gestures (swipe up/down, double tap → any action or app) | todo |
 | G4 | Home pressed on the camp: back to the top / close sheets | done: closes the petate, menus and sheets, back to page 0 |
 | G5 | Swipe-home animation into the icon (GestureNavContract, Android 11+, undocumented) | todo |

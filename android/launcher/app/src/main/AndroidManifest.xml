@@ -51,6 +51,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Double tap to lock (opt-in from the camp menu): the only way Android lets an app turn the screen off. -->
+        <service
+            android:name=".apps.LockService"
+            android:exported="true"
+            android:label="@string/lock_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/lock_service" />
+        </service>
+
         <!-- Notification dots: reads only which app each notification belongs to. Off until you allow it. -->
         <service
             android:name=".apps.DotsListener"
