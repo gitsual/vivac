@@ -11,6 +11,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.platform.LocalContext
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -42,6 +43,20 @@ object Motion {
     /** No motion when Android's animations are off (Developer options or the accessibility "remove animations"). */
     fun allowed(context: Context): Boolean =
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
+
+    /** The headlamp: a slow sway, like someone breathing in the bivouac, every fourteen seconds. */
+    const val LAMP_PERIOD_MS = 14_000
+    const val SWAY_DEGREES = 3f
+    /** The beam's strongest alpha breathes between these: dimmer, brighter, never off. */
+    const val GLOW_MIN = 0.24f
+    const val GLOW_MAX = 0.34f
+
+    /** The beam's rotation in degrees at [phase] (0..1): centred, right, centred, left. */
+    fun sway(phase: Float): Float = SWAY_DEGREES * sin(2f * PI.toFloat() * phase)
+
+    /** The beam's strongest alpha at [phase]: twice per sway, so it brightens at each end of the swing. */
+    fun glow(phase: Float): Float =
+        GLOW_MIN + (GLOW_MAX - GLOW_MIN) * (0.5f - 0.5f * cos(4f * PI.toFloat() * phase))
 
     /** The scale of [ring] (0 = innermost) at [phase] (0..1 of the period). */
     fun swell(phase: Float, ring: Int, rings: Int): Float =

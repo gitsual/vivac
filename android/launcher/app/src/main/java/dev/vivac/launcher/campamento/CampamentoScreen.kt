@@ -50,6 +50,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import dev.vivac.launcher.theme.Motion
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.semantics.Role
@@ -191,10 +199,21 @@ private fun Modifier.swipes(onSwipe: (Swipe) -> Unit): Modifier = pointerInput(U
     )
 }
 
-/** Motif 2, la frontal: the headlamp's beam falling across the camp from the settings corner. */
+/** Motif 2, la frontal: the headlamp's beam falling across the camp from the settings corner, swaying gently. */
 @Composable
 private fun Beam(modifier: Modifier) {
+    val moving = Motion.allowed(LocalContext.current)
+    // Read only while drawing: the sway redraws the canvas, it never recomposes the screen.
+    val phase = if (moving) {
+        rememberInfiniteTransition(label = "lamp").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(Motion.LAMP_PERIOD_MS, easing = LinearEasing)),
+            label = "sway",
+        )
+    } else null
     Canvas(modifier) {
+        val t = phase?.value ?: 0f
         val origin = Offset(size.width - 46.dp.toPx(), 66.dp.toPx())
         val beam = Path().apply {
             moveTo(origin.x, origin.y)
@@ -202,16 +221,18 @@ private fun Beam(modifier: Modifier) {
             lineTo(70.dp.toPx(), size.height * 0.66f)
             close()
         }
-        drawPath(
-            beam,
-            Brush.linearGradient(
-                0f to Ink.primary.copy(alpha = 0.30f),
-                0.55f to Ink.primary.copy(alpha = 0.06f),
-                1f to Color.Transparent,
-                start = origin,
-                end = Offset(0f, size.height * 0.62f),
-            ),
-        )
+        rotate(Motion.sway(t), pivot = origin) {
+            drawPath(
+                beam,
+                Brush.linearGradient(
+                    0f to Ink.primary.copy(alpha = Motion.glow(t)),
+                    0.55f to Ink.primary.copy(alpha = 0.06f),
+                    1f to Color.Transparent,
+                    start = origin,
+                    end = Offset(0f, size.height * 0.62f),
+                ),
+            )
+        }
     }
 }
 

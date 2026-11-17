@@ -33,4 +33,19 @@ class MotionTest {
         assertTrue(outer < inner)
         assertTrue((0..4).all { r -> Motion.swell(0.6f, r, 5) in (1f - Motion.AMPLITUDE)..(1f + Motion.AMPLITUDE) })
     }
+
+    @Test
+    fun `the headlamp sways a few degrees each way and starts centred`() {
+        assertEquals(0f, Motion.sway(0f), 1e-4f)
+        assertEquals(Motion.SWAY_DEGREES, Motion.sway(0.25f), 1e-4f)
+        assertEquals(-Motion.SWAY_DEGREES, Motion.sway(0.75f), 1e-4f)
+    }
+
+    @Test
+    fun `its glow breathes between a dim and a bright edge, never off`() {
+        val glows = (0..20).map { Motion.glow(it / 20f) }
+        assertTrue(glows.all { it in Motion.GLOW_MIN..Motion.GLOW_MAX })
+        assertTrue(glows.minOrNull()!! < glows.maxOrNull()!!)
+        assertTrue(Motion.GLOW_MIN > 0f)
+    }
 }
