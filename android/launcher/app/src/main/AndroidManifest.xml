@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Swipe down on the Campamento pulls the notification shade. -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+
     <!-- A launcher must see every launchable app; Android 11+ hides them otherwise. -->
     <queries>
         <intent>

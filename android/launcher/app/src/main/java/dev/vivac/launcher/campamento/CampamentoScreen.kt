@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -60,8 +63,14 @@ fun CampamentoScreen(
     onOpenPetate: (search: Boolean) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
+    onShowNotifications: () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize().background(Ink.surface)) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Ink.surface)
+            .swipes(onDown = onShowNotifications, onUp = { onOpenPetate(false) }),
+    ) {
         Contours(Modifier.fillMaxSize())
         Column(
             Modifier
@@ -82,6 +91,29 @@ fun CampamentoScreen(
             SearchPill { onOpenPetate(true) }
         }
     }
+}
+
+/** Vertical swipes anywhere on the Campamento; taps on cards and tiles still go through. */
+private fun Modifier.swipes(onDown: () -> Unit, onUp: () -> Unit): Modifier = pointerInput(Unit) {
+    val tracker = VelocityTracker()
+    var dy = 0f
+    detectVerticalDragGestures(
+        onDragStart = {
+            dy = 0f
+            tracker.resetTracking()
+        },
+        onVerticalDrag = { change, amount ->
+            dy += amount
+            tracker.addPosition(change.uptimeMillis, change.position)
+        },
+        onDragEnd = {
+            when (Swipe.classify(dyDp = dy / density, velocityDp = tracker.calculateVelocity().y / density)) {
+                Swipe.DOWN -> onDown()
+                Swipe.UP -> onUp()
+                Swipe.NONE -> Unit
+            }
+        },
+    )
 }
 
 @Composable

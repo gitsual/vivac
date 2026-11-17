@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
                             onOpenPetate = { search -> focusSearch = search; screen = Screen.PETATE },
                             onOpenSettings = { actions.systemSettings() },
                             onOpenAbout = { actions.securityUpdates() },
+                            onShowNotifications = { actions.showNotifications() },
                         )
                     }
                     Screen.PETATE -> PetateScreen(

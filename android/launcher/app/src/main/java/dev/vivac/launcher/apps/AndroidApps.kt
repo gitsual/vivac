@@ -52,6 +52,17 @@ class AppActions(private val context: Context) {
     fun info(packageName: String): Boolean =
         start(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
+    /**
+     * Pulls down the notification shade. There is no public API for it: every launcher
+     * calls StatusBarManager.expandNotificationsPanel (needs EXPAND_STATUS_BAR).
+     */
+    @android.annotation.SuppressLint("WrongConstant")
+    fun showNotifications(): Boolean = runCatching {
+        val bar = context.getSystemService("statusbar") ?: return false
+        bar.javaClass.getMethod("expandNotificationsPanel").invoke(bar)
+        true
+    }.getOrDefault(false)
+
     fun systemSettings(): Boolean = start(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
     fun securityUpdates(): Boolean = start(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
