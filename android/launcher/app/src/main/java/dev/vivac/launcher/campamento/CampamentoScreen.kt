@@ -1,5 +1,18 @@
 package dev.vivac.launcher.campamento
 
+import android.content.Context
+import android.view.View
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,12 +78,27 @@ fun CampamentoScreen(
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
     onShowNotifications: () -> Unit,
+    widgetIds: List<Int>,
+    widgetHeightDp: (Int) -> Int,
+    widgetView: (Context, Int, Float) -> View?,
+    onCampMenu: () -> Unit,
 ) {
+    val onSwipe: (Swipe) -> Unit = { s ->
+        when (s) {
+            Swipe.DOWN -> onShowNotifications()
+            Swipe.UP -> onOpenPetate(false)
+            Swipe.NONE -> Unit
+        }
+    }
+    val density = LocalDensity.current.density
+    // Drags the middle area could not scroll (already at its top or bottom) still count as swipes.
+    val leftovers = remember { SwipeLeftovers(density, onSwipe) }
     Box(
         Modifier
             .fillMaxSize()
             .background(Ink.surface)
-            .swipes(onDown = onShowNotifications, onUp = { onOpenPetate(false) }),
+            .swipes(onSwipe)
+            .pointerInput(Unit) { detectTapGestures(onLongPress = { onCampMenu() }) },
     ) {
         Contours(Modifier.fillMaxSize())
         Column(
@@ -81,22 +109,68 @@ fun CampamentoScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Header(stamp, onOpenSettings)
-            CordadaCard()
-            ViaCard(facts, onOpenAbout)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FactTile("almacenamiento", "${facts.freeGb} GB", "libres de ${facts.totalGb} GB", Modifier.weight(1f))
-                FactTile("batería", "${facts.batteryPercent} %", if (facts.charging) "cargando" else "sin cargar", Modifier.weight(1f))
+            Column(
+                Modifier
+                    .weight(1f)
+                    .nestedScroll(leftovers)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                CordadaCard()
+                ViaCard(facts, onOpenAbout)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FactTile("almacenamiento", "${facts.freeGb} GB", "libres de ${facts.totalGb} GB", Modifier.weight(1f))
+                    FactTile("batería", "${facts.batteryPercent} %", if (facts.charging) "cargando" else "sin cargar", Modifier.weight(1f))
+                }
+                widgetIds.forEach { id -> WidgetCard(id, widgetHeightDp(id), widgetView) }
+                AMano(apps, home.pinned, onOpenApp, onAppMenu)
             }
-            AMano(apps, home.pinned, onOpenApp, onAppMenu)
-            Spacer(Modifier.weight(1f))
             DockRow(apps, home.dock, onOpenApp, onAppMenu) { onOpenPetate(false) }
             SearchPill { onOpenPetate(true) }
         }
     }
 }
 
+/** A placed widget, drawn by its app inside a vivac card shape. */
+@Composable
+private fun WidgetCard(id: Int, heightDp: Int, widgetView: (Context, Int, Float) -> View?) {
+    BoxWithConstraints(
+        Modifier
+            .fillMaxWidth()
+            .height(heightDp.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(Ink.raised),
+    ) {
+        val width = maxWidth.value
+        // key(id): a new widget id must get a fresh host view, never a recycled one.
+        key(id) {
+            AndroidView(
+                factory = { ctx -> widgetView(ctx, id, width) ?: android.widget.Space(ctx) },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/** Feeds the scroll area's unconsumed drag into the same swipe rules as the rest of the screen. */
+private class SwipeLeftovers(private val density: Float, private val onSwipe: (Swipe) -> Unit) : NestedScrollConnection {
+    private var pull = 0f
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (source == NestedScrollSource.UserInput) pull += available.y
+        return Offset.Zero
+    }
+
+    override suspend fun onPreFling(available: Velocity): Velocity {
+        val swipe = Swipe.classify(dyDp = pull / density, velocityDp = available.y / density)
+        pull = 0f
+        onSwipe(swipe)
+        return Velocity.Zero
+    }
+}
+
 /** Vertical swipes anywhere on the Campamento; taps on cards and tiles still go through. */
-private fun Modifier.swipes(onDown: () -> Unit, onUp: () -> Unit): Modifier = pointerInput(Unit) {
+private fun Modifier.swipes(onSwipe: (Swipe) -> Unit): Modifier = pointerInput(Unit) {
     val tracker = VelocityTracker()
     var dy = 0f
     detectVerticalDragGestures(
@@ -109,11 +183,7 @@ private fun Modifier.swipes(onDown: () -> Unit, onUp: () -> Unit): Modifier = po
             tracker.addPosition(change.uptimeMillis, change.position)
         },
         onDragEnd = {
-            when (Swipe.classify(dyDp = dy / density, velocityDp = tracker.calculateVelocity().y / density)) {
-                Swipe.DOWN -> onDown()
-                Swipe.UP -> onUp()
-                Swipe.NONE -> Unit
-            }
+            onSwipe(Swipe.classify(dyDp = dy / density, velocityDp = tracker.calculateVelocity().y / density))
         },
     )
 }

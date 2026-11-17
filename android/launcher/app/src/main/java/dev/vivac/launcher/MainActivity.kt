@@ -29,6 +29,12 @@ import dev.vivac.launcher.campamento.Dock
 import dev.vivac.launcher.campamento.DockSlot
 import dev.vivac.launcher.campamento.Home
 import dev.vivac.launcher.campamento.HomeChange
+import dev.vivac.launcher.campamento.WidgetBoard
+import dev.vivac.launcher.widgets.CampMenuSheet
+import dev.vivac.launcher.widgets.PlacedWidget
+import dev.vivac.launcher.widgets.WidgetOption
+import dev.vivac.launcher.widgets.WidgetPickerSheet
+import dev.vivac.launcher.widgets.Widgets
 import dev.vivac.launcher.campamento.PhoneFacts
 import dev.vivac.launcher.campamento.Stamp
 import dev.vivac.launcher.petate.AppMenu
@@ -43,6 +49,10 @@ private enum class Screen { CAMPAMENTO, PETATE }
 
 private const val KEY_DOCK = "dock"
 private const val KEY_PINNED = "pinned"
+private const val KEY_WIDGETS = "widgets"
+private const val REQ_BIND = 7001
+private const val REQ_CONFIGURE = 7002
+private const val KEY_PENDING = "pendingWidget"
 
 private data class OpenMenu(val app: InstalledApp, val entries: List<MenuEntry>, val canReadShortcuts: Boolean)
 
@@ -50,6 +60,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var source: AndroidAppSource
     private lateinit var actions: AppActions
     private lateinit var icons: AppIcons
+    private lateinit var widgets: Widgets
     private var watcher: LauncherApps.Callback? = null
 
     private var apps by mutableStateOf(emptyList<InstalledApp>())
@@ -59,6 +70,11 @@ class MainActivity : ComponentActivity() {
     private var focusSearch by mutableStateOf(false)
     private var menu by mutableStateOf<OpenMenu?>(null)
     private var home by mutableStateOf(Home())
+    private var board by mutableStateOf(WidgetBoard())
+    private var campMenu by mutableStateOf(false)
+    private var picker by mutableStateOf<List<WidgetOption>?>(null)
+    /** The widget id waiting for the bind permission or its configuration screen. */
+    private var pendingWidget = -1
     private val prefs by lazy { getSharedPreferences("home", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,8 +84,12 @@ class MainActivity : ComponentActivity() {
         source = AndroidAppSource(this)
         actions = AppActions(this)
         icons = AppIcons(this)
+        widgets = Widgets(this)
         watcher = source.watch { changed -> icons.forget(changed); refresh() }
         home = Home.decode(prefs.getString(KEY_DOCK, null), prefs.getString(KEY_PINNED, null))
+        // Drop widgets whose app was uninstalled while vivac was not running.
+        board = WidgetBoard.decode(prefs.getString(KEY_WIDGETS, null)).let { b -> WidgetBoard(b.ids.filter(widgets::exists)) }
+        pendingWidget = savedInstanceState?.getInt(KEY_PENDING, -1) ?: -1
         refresh()
 
         setContent {
@@ -96,6 +116,10 @@ class MainActivity : ComponentActivity() {
                             onOpenSettings = { actions.systemSettings() },
                             onOpenAbout = { actions.securityUpdates() },
                             onShowNotifications = { actions.showNotifications() },
+                            widgetIds = board.ids,
+                            widgetHeightDp = widgets::heightDp,
+                            widgetView = widgets::view,
+                            onCampMenu = { campMenu = true },
                         )
                     }
                     Screen.PETATE -> PetateScreen(
@@ -105,6 +129,17 @@ class MainActivity : ComponentActivity() {
                         onAppMenu = ::openMenu,
                     )
                 }
+            }
+            if (campMenu) {
+                CampMenuSheet(
+                    placed = board.ids.map { PlacedWidget(it, widgets.label(it)) },
+                    onAdd = { campMenu = false; picker = widgets.options() },
+                    onRemove = { id -> campMenu = false; removeWidget(id) },
+                    onDismiss = { campMenu = false },
+                )
+            }
+            picker?.let { options ->
+                WidgetPickerSheet(options, onPick = { picker = null; addWidget(it) }, onDismiss = { picker = null })
             }
             menu?.let { m ->
                 AppMenuSheet(
@@ -143,6 +178,60 @@ class MainActivity : ComponentActivity() {
         val next = change.home ?: return Toast.makeText(this, change.refusal, Toast.LENGTH_LONG).show()
         home = next
         prefs.edit().putString(KEY_DOCK, next.encodeDock()).putString(KEY_PINNED, next.encodePinned()).apply()
+    }
+
+    /** Placing a widget: allocate an id, get the bind permission if needed, then its configuration if it has one. */
+    private fun addWidget(option: WidgetOption) {
+        val id = widgets.allocate()
+        pendingWidget = id
+        if (widgets.bindIfAllowed(id, option.info)) afterBind(id)
+        else @Suppress("DEPRECATION") startActivityForResult(widgets.bindRequest(id, option.info), REQ_BIND)
+    }
+
+    private fun afterBind(id: Int) {
+        if (widgets.needsConfiguring(id)) widgets.startConfiguring(id, REQ_CONFIGURE) else placeWidget(id)
+    }
+
+    private fun placeWidget(id: Int) {
+        pendingWidget = -1
+        saveBoard(board.add(id))
+    }
+
+    private fun removeWidget(id: Int) {
+        widgets.delete(id)
+        saveBoard(board.remove(id))
+    }
+
+    private fun saveBoard(next: WidgetBoard) {
+        board = next
+        prefs.edit().putString(KEY_WIDGETS, next.encode()).apply()
+    }
+
+    @Deprecated("The widget host API still answers through onActivityResult")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+        val id = pendingWidget
+        if (id == -1 || (requestCode != REQ_BIND && requestCode != REQ_CONFIGURE)) return
+        when {
+            resultCode != RESULT_OK -> { widgets.delete(id); pendingWidget = -1 }
+            requestCode == REQ_BIND -> afterBind(id)
+            else -> placeWidget(id)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(KEY_PENDING, pendingWidget)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        widgets.startListening()
+    }
+
+    override fun onStop() {
+        widgets.stopListening()
+        super.onStop()
     }
 
     override fun onResume() {

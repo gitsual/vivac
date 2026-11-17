@@ -37,6 +37,7 @@ object Glyph {
     const val ARROW = "M5 12h14M13 6l6 6-6 6"
     const val INFO = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 11v6 M12 7.5v.5"
     const val SQUARE = "M5 5h14v14H5z"
+    const val PLUS = "M12 5v14M5 12h14"
     const val DOCK = "M3 17h18 M6 13h3v4H6z M10.5 13h3v4h-3z M15 13h3v4h-3z"
     const val TENT = "M3 20L12 4l9 16z M12 20v-6"
 }
