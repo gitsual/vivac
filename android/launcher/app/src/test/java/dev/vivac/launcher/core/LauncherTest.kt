@@ -470,6 +470,28 @@ class LauncherTest {
     }
 
     @Test
+    fun `a locked camp keeps everything where it is until it is unlocked, also after a restart`() {
+        widgets.placed = mutableMapOf(1 to "a", 2 to "b")
+        store.values["widgets"] = "1,2"
+        store.values["pinned"] = "app.organicmaps"
+        val l = many()
+        l.openCampMenu()
+        l.toggleLock()
+        assertTrue(l.locked)
+        assertFalse(l.campMenu)
+        assertTrue(many().locked)
+        l.drop("com.termux", from = Zone.Dock, to = Zone.Via, index = 0)
+        l.dropWidget(2, Zone.Ladera(0), 0)
+        assertEquals(listOf("app.organicmaps"), l.home.pinned)
+        assertEquals(listOf(1, 2), l.board.ids)
+        l.toggleLock()
+        assertFalse(many().locked)
+        l.drop("com.termux", from = Zone.Dock, to = Zone.Via, index = 0)
+        assertEquals(listOf("com.termux", "app.organicmaps"), l.home.pinned)
+        assertEquals(2, actions.calls.count { it.startsWith("say:") })
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

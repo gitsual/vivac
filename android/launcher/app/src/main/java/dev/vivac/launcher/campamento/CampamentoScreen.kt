@@ -122,7 +122,9 @@ fun CampamentoScreen(
     widgetLabel: (Int) -> String = { "widget" },
     onShortcut: (Pinned) -> Unit = {},
     onShortcutMenu: (Pinned) -> Unit = {},
+    locked: Boolean = false,
 ) {
+    drag.locked = locked
     val dp = LocalDensity.current.density
     val drop: (Held, Spot) -> Unit = { h, spot -> onDrop(h.app.packageName, h.from, spot.zone, spot.index) }
     var rootOrigin by remember { mutableStateOf(Offset.Zero) }
@@ -253,6 +255,7 @@ private class CardGrip(
     override fun cancel() = drag.cancel()
     override fun land(moved: Boolean) {
         if (!moved) { drag.cancel(); onMenu(); return }
+        if (drag.held == null) return
         drag.release()?.let { (_, spot) -> onDrop(cargo.id, spot.zone, spot.index) }
     }
 }

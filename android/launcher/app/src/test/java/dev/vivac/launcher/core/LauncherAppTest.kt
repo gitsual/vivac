@@ -292,6 +292,19 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `in a locked camp a held widget only opens its card`() {
+        widgets.placed = mutableMapOf(1 to "Reloj", 2 to "Tiempo")
+        store.values["widgets"] = "1,2"
+        store.values["locked"] = "1"
+        show()
+        compose.runOnUiThread { grips.getValue(2).lift(1f, 1f); grips.getValue(2).move(0f, -300f); grips.getValue(2).land(moved = true) }
+        compose.waitForIdle()
+        assertEquals(listOf(1, 2), launcher.board.ids)
+        compose.runOnUiThread { grips.getValue(2).lift(1f, 1f); grips.getValue(2).land(moved = false) }
+        assertEquals(2, launcher.widgetMenu)
+    }
+
+    @Test
     fun `a widget carried over the route or let go after a cancel stays where it was`() {
         widgets.placed = mutableMapOf(1 to "Reloj", 2 to "Tiempo")
         store.values["widgets"] = "1,2"
@@ -440,6 +453,29 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertEquals(Screen.CAMPAMENTO, launcher.screen)
         assertEquals(emptyList<String>(), launcher.home.pinned)
+    }
+
+    @Test
+    fun `in a locked camp holding and moving an app carries nothing`() {
+        store.values["pinned"] = "app.organicmaps,com.android.settings"
+        store.values["locked"] = "1"
+        show()
+        carry("Ajustes", centre("Organic Maps"))
+        assertEquals(listOf("app.organicmaps", "com.android.settings"), launcher.home.pinned)
+        compose.onNodeWithText("Suelta aquí para empezar la vía").assertDoesNotExist()
+    }
+
+    @Test
+    fun `the camp menu locks and unlocks the layout`() {
+        show()
+        compose.runOnUiThread { launcher.openCampMenu() }
+        compose.onNodeWithText("Bloquear el campamento").tap()
+        compose.waitForIdle()
+        assertTrue(launcher.locked)
+        compose.runOnUiThread { launcher.openCampMenu() }
+        compose.onNodeWithText("Desbloquear el campamento").tap()
+        compose.waitForIdle()
+        assertEquals(false, launcher.locked)
     }
 
     @Test

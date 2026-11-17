@@ -68,6 +68,15 @@ class Launcher(
     private var installed = emptyList<InstalledApp>()
     /** The app whose name you are changing (from its menu). */
     var renaming by mutableStateOf<InstalledApp?>(null); private set
+    /** Locked: nothing on the home screen can be dragged until you unlock it from the camp menu. */
+    var locked by mutableStateOf(store.get(KEY_LOCKED) == "1"); private set
+
+    fun toggleLock() {
+        campMenu = false
+        locked = !locked
+        store.put(mapOf(KEY_LOCKED to if (locked) "1" else "0"))
+        actions.say(if (locked) "Campamento bloqueado: nada se mueve hasta que lo desbloquees." else "Campamento desbloqueado.")
+    }
 
     fun refresh() {
         installed = source.installed()
@@ -207,6 +216,7 @@ class Launcher(
      * route refuses it and says why; dropping it where it already was changes nothing.
      */
     fun drop(packageName: String, from: Zone, to: Zone, index: Int) {
+        if (locked) return
         if (from == to && position(packageName, from) == index) return
         val dock = shownDock().toMutableList()
         val pinned = home.pinned.toMutableList()
@@ -266,7 +276,7 @@ class Launcher(
 
     /** A widget dragged onto a page lands at [index] there; only pages (the camp and the laderas) take widgets. */
     fun dropWidget(id: Int, to: Zone, index: Int) {
-        if (to is Zone.Ladera) saveBoard(board.insertWidget(id, to.page, index))
+        if (to is Zone.Ladera && !locked) saveBoard(board.insertWidget(id, to.page, index))
     }
 
     /** The name Android gives the app, to go back to. */
@@ -346,6 +356,7 @@ class Launcher(
         const val KEY_WIDGETS = "widgets"
         const val KEY_RECENT = "recent"
         const val KEY_NAMES = "names"
+        const val KEY_LOCKED = "locked"
 
         private fun encodeNames(names: Map<String, String>) =
             names.entries.joinToString(",") { (pkg, name) -> pkg + "=" + java.net.URLEncoder.encode(name, "UTF-8") }

@@ -46,6 +46,7 @@ object Glyph {
     const val SQUARE = "M5 5h14v14H5z"
     const val PLUS = "M12 5v14M5 12h14"
     const val MINUS = "M5 12h14"
+    const val LOCK = "M6 11h12v9H6z M9 11V8a3 3 0 0 1 6 0v3"
     const val EYE_OFF = "M3 3l18 18 M10.6 6.1A9.6 9.6 0 0 1 12 6c5 0 9 6 9 6a15 15 0 0 1-3 3.4 M6.6 7.6C4.3 9.2 3 12 3 12s4 6 9 6a8.6 8.6 0 0 0 4-1"
     const val EYE = "M3 12s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6z M12 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5z"
     const val DOT = "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z"

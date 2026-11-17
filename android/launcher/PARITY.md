@@ -19,7 +19,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | H7 | Accept "add to home screen" requests from apps (PinItemRequest: shortcuts and widgets) | done: PinActivity, to the last ladera |
 | H8 | Resize widgets (height in rows) | done (widget card: 1–5 rows) |
 | H9 | Configurable grid: columns for pins and drawer, labels on/off | todo |
-| H10 | Lock the layout so nothing moves by accident | todo |
+| H10 | Lock the layout so nothing moves by accident | done: camp menu; apps and widgets cannot be carried while locked |
 | H11 | Wallpaper: show the system wallpaper behind vivac, or keep the solid camp | todo |
 | H12 | Set wallpaper from the camp menu | todo |
 | H13 | Laderas: home pages right of the camp, with widgets and apps; new one on demand, empty ones close | done |

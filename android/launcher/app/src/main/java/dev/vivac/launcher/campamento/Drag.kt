@@ -60,11 +60,16 @@ class DragBoard {
     private val spots = mutableMapOf<Spot, Rect>()
     /** The visible area: spots outside it (a ladera off screen) take nothing. */
     var screen = Rect.Zero
+    /** A locked camp: nothing can be picked up. */
+    var locked = false
 
     fun place(spot: Spot, bounds: Rect) { spots[spot] = bounds }
     fun forget(spot: Spot) { spots.remove(spot) }
 
-    fun pick(held: Cargo, at: Offset) { this.held = held; finger = at }
+    fun pick(held: Cargo, at: Offset) {
+        if (locked) return
+        this.held = held; finger = at
+    }
     fun move(by: Offset) { finger += by }
     fun cancel() { held = null }
 
@@ -142,7 +147,7 @@ fun Modifier.carriable(
                 if (moved < viewConfiguration.touchSlop) {
                     board.cancel()
                     onMenu()
-                } else {
+                } else if (board.held != null) {
                     board.release()?.let { (h, s) -> onDrop(h as Held, s) }
                     onLand()
                 }
