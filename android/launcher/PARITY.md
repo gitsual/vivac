@@ -90,7 +90,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | # | Area | Status |
 |---|------|--------|
 | T1 | Domain rules (pure Kotlin) | done |
-| T2 | Coverage measured with Kover, gate in the build | todo |
-| T3 | Compose UI tests for every screen and sheet (Robolectric) | todo |
-| T4 | Android adapters tested against Robolectric shadows (apps, icons, widgets, dots, actions) | todo |
-| T5 | Activity flows end to end: menus, widget bind/configure results, home intent, process death | todo |
+| T2 | Coverage measured with Kover, gate in the build | done (Kover, `koverVerifyDebug` fails under 99 % of lines) |
+| T3 | Compose UI tests for every screen and sheet (Robolectric) | done |
+| T4 | Android adapters tested against Robolectric shadows (apps, icons, widgets, dots, actions) | done |
+| T5 | Activity flows end to end: menus, widget bind/configure results, home intent, process death | done |
