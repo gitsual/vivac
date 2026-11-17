@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Process
 import android.os.UserHandle
 import android.provider.Settings
+import dev.vivac.launcher.core.Actions
 import dev.vivac.launcher.petate.AppShortcut
 
 /** Adapter: installed apps of the current profile, read from LauncherApps. */
@@ -43,17 +44,17 @@ class AndroidAppSource(private val context: Context) : AppSource {
     fun unwatch(callback: LauncherApps.Callback) = launcherApps.unregisterCallback(callback)
 }
 
-/** Starting apps, their shortcuts and their system pages. */
-class AppActions(private val context: Context) {
+/** Adapter: starting apps, their shortcuts and their system pages. */
+class AppActions(private val context: Context) : Actions {
     private val launcherApps = context.getSystemService(LauncherApps::class.java)
 
     /**
      * The app's own shortcuts, by rank. Android only shares them with the default launcher,
      * so this is empty until vivac is chosen as the home app.
      */
-    fun canReadShortcuts(): Boolean = launcherApps.hasShortcutHostPermission()
+    override fun canReadShortcuts(): Boolean = launcherApps.hasShortcutHostPermission()
 
-    fun shortcuts(packageName: String): List<AppShortcut> {
+    override fun shortcuts(packageName: String): List<AppShortcut> {
         if (!canReadShortcuts()) return emptyList()
         val query = LauncherApps.ShortcutQuery()
             .setPackage(packageName)
@@ -64,46 +65,57 @@ class AppActions(private val context: Context) {
             .map { AppShortcut(it.id, it.shortLabel?.toString().orEmpty()) }
     }
 
-    fun openShortcut(packageName: String, id: String): Boolean = runCatching {
-        launcherApps.startShortcut(packageName, id, null, null, Process.myUserHandle())
-        true
-    }.getOrDefault(false)
-
-    /** Hands over to the system's uninstall confirmation; vivac never removes anything by itself. */
-    fun uninstall(packageName: String): Boolean =
-        start(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    fun open(packageName: String): Boolean {
-        val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
-        return start(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    override fun openShortcut(packageName: String, id: String) {
+        runCatching { launcherApps.startShortcut(packageName, id, null, null, Process.myUserHandle()) }
     }
 
-    fun info(packageName: String): Boolean =
+    /** Hands over to the system's uninstall confirmation; vivac never removes anything by itself. */
+    override fun uninstall(packageName: String) {
+        start(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    override fun open(packageName: String) {
+        val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return
+        start(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    override fun info(packageName: String) {
         start(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     /**
      * Pulls down the notification shade. There is no public API for it: every launcher
      * calls StatusBarManager.expandNotificationsPanel (needs EXPAND_STATUS_BAR).
      */
     @android.annotation.SuppressLint("WrongConstant")
-    fun showNotifications(): Boolean = runCatching {
-        val bar = context.getSystemService("statusbar") ?: return false
-        bar.javaClass.getMethod("expandNotificationsPanel").invoke(bar)
-        true
-    }.getOrDefault(false)
+    override fun showNotifications() {
+        runCatching {
+            val bar = context.getSystemService("statusbar") ?: return
+            bar.javaClass.getMethod("expandNotificationsPanel").invoke(bar)
+        }
+    }
 
     /** The system page where you allow (or revoke) vivac's notification access for the dots. */
-    fun notificationAccess(): Boolean {
+    override fun notificationAccess() {
         val me = android.content.ComponentName(context, DotsListener::class.java)
         val detail = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
             .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, me.flattenToString())
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return start(detail) || start(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        if (!start(detail)) start(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    fun systemSettings(): Boolean = start(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    override fun dotsAllowed(): Boolean = DotsListener.isAllowed(context)
 
-    fun securityUpdates(): Boolean = start(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    override fun say(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
 
+    override fun systemSettings() {
+        start(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    override fun securityUpdates() {
+        start(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** True when some app took the intent. */
     private fun start(intent: Intent): Boolean = try {
         context.startActivity(intent)
         true

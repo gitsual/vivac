@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -12,12 +13,14 @@ import android.os.Bundle
 import android.os.Process
 import android.util.SizeF
 import dev.vivac.launcher.campamento.WidgetSize
+import dev.vivac.launcher.core.WidgetHost
 import java.text.Collator
 import java.util.Locale
 
 /** A widget an installed app offers, as the picker lists it. */
 data class WidgetOption(
-    val info: AppWidgetProviderInfo,
+    /** The provider's flattened component name. */
+    val key: String,
     val label: String,
     val appLabel: String,
     val appPackage: String,
@@ -25,7 +28,7 @@ data class WidgetOption(
 )
 
 /** Adapter over Android's app-widget host: what can be added, binding, configuring and drawing. */
-class Widgets(private val activity: Activity) {
+class Widgets(private val activity: Activity) : WidgetHost {
     private val manager = AppWidgetManager.getInstance(activity)
     private val host = AppWidgetHost(activity, HOST_ID)
     private val density = activity.resources.displayMetrics.density
@@ -33,13 +36,13 @@ class Widgets(private val activity: Activity) {
     fun startListening() = host.startListening()
     fun stopListening() = host.stopListening()
 
-    fun options(): List<WidgetOption> {
+    override fun options(): List<WidgetOption> {
         val pm = activity.packageManager
         val collator = Collator.getInstance(Locale.forLanguageTag("es-ES"))
         return manager.getInstalledProvidersForProfile(Process.myUserHandle()).map { info ->
             val pkg = info.provider.packageName
             WidgetOption(
-                info = info,
+                key = info.provider.flattenToString(),
                 label = info.loadLabel(pm).toString(),
                 appLabel = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg),
                 appPackage = pkg,
@@ -48,29 +51,31 @@ class Widgets(private val activity: Activity) {
         }.sortedWith(compareBy(collator) { it.appLabel + " " + it.label })
     }
 
-    fun allocate(): Int = host.allocateAppWidgetId()
+    override fun allocate(): Int = host.allocateAppWidgetId()
 
-    /** True when Android lets vivac place it without asking (it remembers a past "always allow"). */
-    fun bindIfAllowed(id: Int, info: AppWidgetProviderInfo): Boolean =
-        manager.bindAppWidgetIdIfAllowed(id, Process.myUserHandle(), info.provider, null)
+    override fun bindIfAllowed(id: Int, option: WidgetOption): Boolean =
+        manager.bindAppWidgetIdIfAllowed(id, Process.myUserHandle(), ComponentName.unflattenFromString(option.key), null)
 
     /** The system dialog that asks you to allow vivac to place this widget. */
-    fun bindRequest(id: Int, info: AppWidgetProviderInfo): Intent =
+    fun bindRequest(id: Int, option: WidgetOption): Intent =
         Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
             .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
-            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, info.profile)
+            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, ComponentName.unflattenFromString(option.key))
+            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, Process.myUserHandle())
 
-    fun needsConfiguring(id: Int): Boolean = manager.getAppWidgetInfo(id)?.configure != null
+    @Suppress("DEPRECATION")
+    override fun requestBind(id: Int, option: WidgetOption) = activity.startActivityForResult(bindRequest(id, option), REQ_BIND)
 
-    fun startConfiguring(id: Int, requestCode: Int) =
-        host.startAppWidgetConfigureActivityForResult(activity, id, 0, requestCode, null)
+    override fun needsConfiguring(id: Int): Boolean = manager.getAppWidgetInfo(id)?.configure != null
 
-    fun delete(id: Int) = host.deleteAppWidgetId(id)
+    override fun requestConfigure(id: Int) =
+        host.startAppWidgetConfigureActivityForResult(activity, id, 0, REQ_CONFIGURE, null)
 
-    fun exists(id: Int): Boolean = manager.getAppWidgetInfo(id) != null
+    override fun delete(id: Int) = host.deleteAppWidgetId(id)
 
-    fun label(id: Int): String = manager.getAppWidgetInfo(id)?.loadLabel(activity.packageManager)?.toString() ?: "widget"
+    override fun exists(id: Int): Boolean = manager.getAppWidgetInfo(id) != null
+
+    override fun label(id: Int): String = manager.getAppWidgetInfo(id)?.loadLabel(activity.packageManager)?.toString() ?: "widget"
 
     fun heightDp(id: Int): Int {
         val info = manager.getAppWidgetInfo(id) ?: return WidgetSize.MIN_DP
@@ -94,5 +99,7 @@ class Widgets(private val activity: Activity) {
     companion object {
         /** Any fixed number; it names vivac's widget host to the system. */
         private const val HOST_ID = 0x7661
+        const val REQ_BIND = 7001
+        const val REQ_CONFIGURE = 7002
     }
 }

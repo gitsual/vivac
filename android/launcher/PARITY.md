@@ -1,0 +1,96 @@
+# vivac launcher: parity checklist
+
+The bar: everything a full Android launcher (Pixel Launcher, Lawnchair) lets you do,
+plus test coverage for every line we write. Each row is closed with a failing test first,
+then the code, then a check on the phone.
+
+Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party launcher; the reason is given).
+
+## Home (Campamento)
+
+| # | Feature | Status |
+|---|---------|--------|
+| H1 | Dock with chosen apps | done |
+| H2 | Apps pinned to the home screen | done |
+| H3 | Widgets: add, configure, remove | done |
+| H4 | Reorder dock, pins and widgets (move earlier / later) | todo |
+| H5 | Folders: group pinned apps, rename, open, take apps out | todo |
+| H6 | Pin app shortcuts (deep shortcuts) to the home screen | todo |
+| H7 | Accept "add to home screen" requests from apps (PinItemRequest: shortcuts and widgets) | todo |
+| H8 | Resize widgets (height in rows) | todo |
+| H9 | Configurable grid: columns for pins and drawer, labels on/off | todo |
+| H10 | Lock the layout so nothing moves by accident | todo |
+| H11 | Wallpaper: show the system wallpaper behind vivac, or keep the solid camp | todo |
+| H12 | Set wallpaper from the camp menu | todo |
+
+## Drawer (Petate)
+
+| # | Feature | Status |
+|---|---------|--------|
+| D1 | All apps, grouped, alphabetical | done |
+| D2 | Search ignoring case and accents; Go opens a single result | done |
+| D3 | Hide apps, with a way to see them again | done |
+| D4 | Work profile and Private space apps, badged, in their own chip | todo |
+| D5 | Recent apps row (from vivac's own launch history, no usage permission) | todo |
+| D6 | Fuzzy search: initials ("om" → Organic Maps) and typo tolerance | todo |
+| D7 | Search app shortcuts, not only apps | todo |
+| D8 | Search fallbacks: web search, Play/F-Droid store, system settings | todo |
+| D9 | Alphabet fast scroller | todo |
+| D10 | Rename an app (custom label) | todo |
+
+## App menu (long press)
+
+| # | Feature | Status |
+|---|---------|--------|
+| M1 | App shortcuts | done |
+| M2 | Add to / remove from dock, pin, hide | done |
+| M3 | App info, uninstall | done |
+| M4 | Drag a shortcut to the home screen (via "pin shortcut" entry) | todo (H6) |
+| M5 | The app's widgets, straight from its menu | todo |
+
+## Icons and dots
+
+| # | Feature | Status |
+|---|---------|--------|
+| I1 | Themed (monochrome) icons with colour fallback | done |
+| I2 | Choose themed / original colour icons | todo |
+| I3 | Icon packs (ADW / Nova standard appfilter.xml) | todo |
+| I4 | Custom icon per app (from a pack) | todo |
+| I5 | Notification dots | done |
+| I6 | Notification count instead of a dot (optional) | todo |
+
+## Gestures
+
+| # | Feature | Status |
+|---|---------|--------|
+| G1 | Swipe up: Petate; swipe down: notifications | done |
+| G2 | Double tap to lock the screen (accessibility service, opt-in) | todo |
+| G3 | Configurable gestures (swipe up/down, double tap → any action or app) | todo |
+| G4 | Home pressed on the camp: back to the top / close sheets | todo |
+
+## Settings and data
+
+| # | Feature | Status |
+|---|---------|--------|
+| S1 | vivac settings screen (everything configurable above, in one place) | todo |
+| S2 | Back up and restore the layout to a file (Storage Access Framework) | todo |
+| S3 | Survive uninstalled apps, reboot, process death | done |
+| S4 | Set vivac as the default home from inside the app | todo |
+
+## Not possible for a third-party launcher
+
+| Feature | Why |
+|---------|-----|
+| Recents / overview screen | Only the system launcher (Quickstep) can host it; with vivac as home, Android uses its own fallback recents. |
+| Home-gesture animation into the launcher | Same reason: the animation lives in Quickstep. |
+| Google Discover feed | Needs a Google-signed companion app; also against vivac's privacy stance. |
+
+## Tests
+
+| # | Area | Status |
+|---|------|--------|
+| T1 | Domain rules (pure Kotlin) | done |
+| T2 | Coverage measured with Kover, gate in the build | todo |
+| T3 | Compose UI tests for every screen and sheet (Robolectric) | todo |
+| T4 | Android adapters tested against Robolectric shadows (apps, icons, widgets, dots, actions) | todo |
+| T5 | Activity flows end to end: menus, widget bind/configure results, home intent, process death | todo |
