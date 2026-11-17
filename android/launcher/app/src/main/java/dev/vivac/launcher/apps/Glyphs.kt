@@ -54,7 +54,7 @@ object Glyphs {
         "com.rcf.renaul1and" to "M3 8h18v11H3z M5.2 13.5a2.8 2.8 0 1 0 5.6 0a2.8 2.8 0 1 0 -5.6 0 M14 12h4 M14 15h4 M7 8l9-4", // Radio Code
         "com.samsung.android.oneconnect" to "M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0 M3.2 5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0 M17.2 5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0 M3.2 19a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0 M17.2 19a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0 M6.3 6.3l3.9 3.9 M17.7 6.3l-3.9 3.9 M6.3 17.7l3.9-3.9 M17.7 17.7l-3.9-3.9", // SmartThings
         "com.shazam.android" to "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M8 11v2 M11 8.5v7 M14 7v10 M17 10.5v3", // Shazam
-        "com.sportmaniac_live_app_android.evedeport" to "M8 4h8v6a4 4 0 0 1-8 0z M8 6H5a3 3 0 0 0 3 4 M16 6h3a3 3 0 0 1-3 4 M12 14v3 M8.5 20h7 M10 17h4", // Evedeport
+        "com.sportmaniac_live_app_android.evedeport" to "M4.5 13.5a7.5 7.5 0 1 0 15.0 0a7.5 7.5 0 1 0 -15.0 0 M12 13.5V9.5 M10 3h4 M12 3v3 M18.5 6.5l1.5-1.5", // Evedeport (Sportmaniacs race timing)
         "com.spotify.music" to "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M7 9.5c3.5-1 7-.6 10 1 M7.8 12.8c2.8-.7 5.6-.4 8 .9 M8.6 15.8c2.1-.5 4.2-.3 6 .7", // Spotify
         "com.stremio.one" to "M12 3l9 9-9 9-9-9z M10.5 9.5l4 2.5-4 2.5z", // Stremio
         "com.tailscale.ipn" to "M4.4 6a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M10.4 6a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M16.4 6a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M4.4 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M10.4 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M16.4 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M4.4 18a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M10.4 18a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M16.4 18a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0", // Tailscale
@@ -84,7 +84,7 @@ object Glyphs {
         "org.oxycblt.auxio" to "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0 M12 6a6 6 0 0 1 6 6", // Auxio
         "org.stypox.dicio" to "M4 10v4 M8 7v10 M12 4v16 M16 7v10 M20 10v4", // Dicio
         "org.telegram.messenger" to "M21 4L3 11l6 2.5L11 20l3-4.5 5 3.5z M9 13.5L21 4", // Telegram
-        "pdb.app" to "M12 3l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 8.3l5-.7z", // Pdb
+        "pdb.app" to "M9 21v-3H6a2 2 0 0 1-2-2v-3l-2-1 2-3.5A7.5 7.5 0 0 1 19 9.5c0 3-1.5 5-3 6.5V21 M11 7.5v5 M8.5 10h5", // Pdb (Personality Database)
         "spam.blocker" to "M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z M8.5 8.5l7 7", // Bloqueador de spam
     )
 
