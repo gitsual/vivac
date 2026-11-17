@@ -35,7 +35,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | D5 | Recent apps row (from vivac's own launch history, no usage permission) | done ("Último largo") |
 | D6 | Fuzzy search: initials ("om" → Organic Maps) and typo tolerance | initials done; typo tolerance todo |
 | D7 | Search app shortcuts, not only apps | todo |
-| D8 | Search fallbacks: web search, Play/F-Droid store, system settings | todo |
+| D8 | Search fallbacks: web search, Play/F-Droid store, system settings | done: web (search app or DuckDuckGo) and store (market://); settings search has no public intent |
 | D9 | Alphabet fast scroller | done (the altimeter: tap or slide) |
 | D10 | Rename an app (custom label) | todo |
 | D11 | Calculator and unit conversion in the search field | done: sums, "10% de 150", length/mass/volume/time/speed/data/temperature; tap copies |

@@ -92,6 +92,8 @@ fun PetateScreen(
     onLand: () -> Unit = {},
     modifier: Modifier = Modifier,
     onCopy: (String) -> Unit = {},
+    onWebSearch: (String) -> Unit = {},
+    onStoreSearch: (String) -> Unit = {},
 ) {
     // Holding an app and moving lifts it out of the petate, to be carried onto the camp.
     val carry: @Composable (InstalledApp, Color) -> Modifier? = { app, tone ->
@@ -134,6 +136,12 @@ fun PetateScreen(
                 if (recent.isNotEmpty() && query.isBlank() && !showHidden) LastPitch(recent, onOpenApp, onAppMenu, carry)
                 val answer = remember(query) { Calc.answer(query) }
                 if (answer != null) Answer(answer) { onCopy(answer) }
+                if (query.isNotBlank()) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Chip("Buscar en la web", false) { onWebSearch(query.trim()) }
+                        Chip("Buscar en la tienda", false) { onStoreSearch(query.trim()) }
+                    }
+                }
                 if (shelves.isEmpty() && answer == null) {
                     Text("Nada en el petate con «$query».", style = Type.body.copy(color = Ink.textMuted))
                 }

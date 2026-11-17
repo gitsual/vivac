@@ -82,6 +82,8 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     onDrop = { h, spot -> launcher.drop(h.app.packageName, h.from, spot.zone, spot.index) },
                     onLand = { launcher.back() },
                     onCopy = actions::copy,
+                    onWebSearch = actions::webSearch,
+                    onStoreSearch = actions::storeSearch,
                     modifier = Modifier.graphicsLayer { alpha = if (lifted) 0f else 1f },
                 )
             }

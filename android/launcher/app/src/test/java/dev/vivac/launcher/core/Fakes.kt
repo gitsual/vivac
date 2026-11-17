@@ -33,6 +33,8 @@ class FakeActions : Actions {
     override fun securityUpdates() { calls += "about" }
     override fun say(text: String) { calls += "say:$text" }
     override fun copy(text: String) { calls += "copy:$text" }
+    override fun webSearch(query: String) { calls += "web:$query" }
+    override fun storeSearch(query: String) { calls += "store:$query" }
     override fun pinShortcuts(packageName: String, ids: List<String>) { calls += "pinShortcuts:$packageName:$ids" }
 }
 

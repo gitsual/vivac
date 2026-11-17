@@ -29,6 +29,10 @@ interface Actions {
     fun say(text: String)
     /** Puts [text] on the clipboard (Android shows its own confirmation). */
     fun copy(text: String)
+    /** The web search app you use (or the browser), for [query]. */
+    fun webSearch(query: String)
+    /** The app store you use (any that answers market:// links), for [query]. */
+    fun storeSearch(query: String)
 }
 
 /** Port: the app-widget host. Ids are Android's; [WidgetOption.key] names the provider. */

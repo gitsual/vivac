@@ -158,4 +158,21 @@ class AdaptersTest {
         assertEquals("a,b", store.get("dock"))
         assertEquals("", store.get("pinned"))
     }
+
+    @Test
+    fun `searching beyond the petate goes to a search app, else the browser, and to the app store`() {
+        val actions = AppActions(app)
+        actions.webSearch("mapas offline")
+        assertEquals("https://duckduckgo.com/?q=mapas%20offline", nextIntent()?.data.toString())
+        shadowOf(app.packageManager).addResolveInfoForIntent(
+            Intent(Intent.ACTION_WEB_SEARCH),
+            android.content.pm.ResolveInfo().apply { activityInfo = android.content.pm.ActivityInfo().apply { packageName = "a.search"; name = "a.search.S" } },
+        )
+        actions.webSearch("mapas")
+        val search = nextIntent()
+        assertEquals(Intent.ACTION_WEB_SEARCH, search?.action)
+        assertEquals("mapas", search?.getStringExtra(android.app.SearchManager.QUERY))
+        actions.storeSearch("mapas")
+        assertEquals("market://search?q=mapas", nextIntent()?.data.toString())
+    }
 }

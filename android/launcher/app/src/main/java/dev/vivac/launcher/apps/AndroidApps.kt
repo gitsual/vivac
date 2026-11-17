@@ -119,6 +119,19 @@ class AppActions(private val context: Context) : Actions {
 
     override fun say(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
 
+    /** A search app if there is one; else the browser on DuckDuckGo (GrapheneOS ships no Google search). */
+    override fun webSearch(query: String) {
+        val search = Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, query).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (search.resolveActivity(context.packageManager) != null && start(search)) return
+        start(Intent(Intent.ACTION_VIEW, Uri.parse("https://duckduckgo.com/?q=" + Uri.encode(query))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    override fun storeSearch(query: String) {
+        if (!start(Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=" + Uri.encode(query))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) {
+            say("No hay ninguna tienda de apps instalada.")
+        }
+    }
+
     override fun copy(text: String) {
         context.getSystemService(android.content.ClipboardManager::class.java)
             .setPrimaryClip(android.content.ClipData.newPlainText("vivac", text))

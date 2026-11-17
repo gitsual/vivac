@@ -134,4 +134,20 @@ class PetateScreenTest {
         assertEquals(listOf("3,10686 mi"), copied)
         compose.onNodeWithText("Nada en el petate con «5 km en mi».").assertDoesNotExist()
     }
+
+    @Test
+    fun `a search can go on to the web or the app store`() {
+        val asked = mutableListOf<String>()
+        compose.setContent {
+            PetateScreen(
+                listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {},
+                onWebSearch = { asked += "web:$it" }, onStoreSearch = { asked += "store:$it" },
+            )
+        }
+        compose.onNodeWithText("Buscar en la web").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("mapas")
+        compose.onNodeWithText("Buscar en la web").performClick()
+        compose.onNodeWithText("Buscar en la tienda").performClick()
+        assertEquals(listOf("web:mapas", "store:mapas"), asked)
+    }
 }
