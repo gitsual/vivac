@@ -29,6 +29,15 @@ class AppMenuTest {
     }
 
     @Test
+    fun `home toggles sit between shortcuts and info, worded for the current state`() {
+        val menu = AppMenu.build(listOf(s("n", "Nuevo")), isSystem = true, inDock = true, pinned = false)
+        assertEquals(
+            listOf(MenuEntry.Shortcut(s("n", "Nuevo")), MenuEntry.Dock(inDock = true), MenuEntry.Pin(pinned = false), MenuEntry.Info),
+            menu,
+        )
+    }
+
+    @Test
     fun `shortcuts with blank labels are skipped`() {
         val menu = AppMenu.build(listOf(s("a", " "), s("b", "Buscar")), isSystem = true)
         assertEquals(listOf(MenuEntry.Shortcut(s("b", "Buscar")), MenuEntry.Info), menu)

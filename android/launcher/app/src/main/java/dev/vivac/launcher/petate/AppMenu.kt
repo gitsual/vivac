@@ -5,6 +5,11 @@ data class AppShortcut(val id: String, val label: String)
 
 sealed interface MenuEntry {
     data class Shortcut(val shortcut: AppShortcut) : MenuEntry
+    /** "Poner en el dock" or "Quitar del dock", depending on [inDock]. */
+    data class Dock(val inDock: Boolean) : MenuEntry
+
+    /** "Fijar en el campamento" or "Quitar del campamento", depending on [pinned]. */
+    data class Pin(val pinned: Boolean) : MenuEntry
     data object Info : MenuEntry
     data object Uninstall : MenuEntry
 }
@@ -13,8 +18,10 @@ sealed interface MenuEntry {
 object AppMenu {
     private const val MAX_SHORTCUTS = 4
 
-    fun build(shortcuts: List<AppShortcut>, isSystem: Boolean): List<MenuEntry> =
+    /** [inDock] and [pinned] are null where the toggle does not apply. */
+    fun build(shortcuts: List<AppShortcut>, isSystem: Boolean, inDock: Boolean? = null, pinned: Boolean? = null): List<MenuEntry> =
         shortcuts.filter { it.label.isNotBlank() }.take(MAX_SHORTCUTS).map { MenuEntry.Shortcut(it) } +
+            listOfNotNull(inDock?.let { MenuEntry.Dock(it) }, pinned?.let { MenuEntry.Pin(it) }) +
             MenuEntry.Info +
             (if (isSystem) emptyList() else listOf(MenuEntry.Uninstall))
 }

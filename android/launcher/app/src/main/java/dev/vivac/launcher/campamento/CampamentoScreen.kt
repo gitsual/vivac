@@ -58,6 +58,7 @@ fun CampamentoScreen(
     stamp: String,
     facts: PhoneFacts,
     apps: List<InstalledApp>,
+    home: Home,
     onOpenApp: (String) -> Unit,
     onAppMenu: (String) -> Unit,
     onOpenPetate: (search: Boolean) -> Unit,
@@ -86,8 +87,9 @@ fun CampamentoScreen(
                 FactTile("almacenamiento", "${facts.freeGb} GB", "libres de ${facts.totalGb} GB", Modifier.weight(1f))
                 FactTile("batería", "${facts.batteryPercent} %", if (facts.charging) "cargando" else "sin cargar", Modifier.weight(1f))
             }
+            AMano(apps, home.pinned, onOpenApp, onAppMenu)
             Spacer(Modifier.weight(1f))
-            DockRow(apps, onOpenApp, onAppMenu) { onOpenPetate(false) }
+            DockRow(apps, home.dock, onOpenApp, onAppMenu) { onOpenPetate(false) }
             SearchPill { onOpenPetate(true) }
         }
     }
@@ -229,9 +231,9 @@ private fun FactTile(caption: String, figure: String, detail: String, modifier: 
 }
 
 @Composable
-private fun DockRow(apps: List<InstalledApp>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit, onOpenPetate: () -> Unit) {
+private fun DockRow(apps: List<InstalledApp>, chosen: List<String>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit, onOpenPetate: () -> Unit) {
     val byPackage = apps.associateBy { it.packageName }
-    val slots = Dock.pick(byPackage.keys)
+    val slots = Dock.pick(byPackage.keys, chosen)
     // Five equal columns: on a 412dp Pixel five fixed 76dp tiles do not fit and labels got clipped.
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         slots.forEach { slot ->
@@ -250,6 +252,32 @@ private fun DockRow(apps: List<InstalledApp>, onOpenApp: (String) -> Unit, onApp
                 DockSlot.Petate -> AppTile(label = "Petate", background = Ink.field, onClick = onOpenPetate, modifier = Modifier.weight(1f)) {
                     LineIcon(Glyph.GRID, Ink.text)
                 }
+            }
+        }
+    }
+}
+
+/** Apps you pinned to the Campamento, four per row, in the order you pinned them. */
+@Composable
+private fun AMano(apps: List<InstalledApp>, pinned: List<String>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit) {
+    val byPackage = apps.associateBy { it.packageName }
+    val shown = pinned.mapNotNull { byPackage[it] }
+    if (shown.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("A MANO", style = Type.cota)
+        shown.chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { app ->
+                    AppTile(
+                        label = app.label,
+                        background = Ink.field,
+                        onClick = { onOpenApp(app.packageName) },
+                        onLongClick = { onAppMenu(app.packageName) },
+                        modifier = Modifier.weight(1f),
+                    ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                }
+                // Keep columns aligned when the last row is short.
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

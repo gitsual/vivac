@@ -71,6 +71,8 @@ fun AppMenuSheet(
             entries.forEach { entry ->
                 when (entry) {
                     is MenuEntry.Shortcut -> Entry(entry.shortcut.label, Glyph.ARROW, Ink.accentText, Ink.text) { onPick(entry) }
+                    is MenuEntry.Dock -> Entry(if (entry.inDock) "Quitar del dock" else "Poner en el dock", Glyph.DOCK, Ink.text, Ink.text) { onPick(entry) }
+                    is MenuEntry.Pin -> Entry(if (entry.pinned) "Quitar del campamento" else "Fijar en el campamento", Glyph.TENT, Ink.text, Ink.text) { onPick(entry) }
                     MenuEntry.Info -> Entry("Información de la app", Glyph.INFO, Ink.text, Ink.text) { onPick(entry) }
                     MenuEntry.Uninstall -> Entry("Desinstalar", Glyph.SQUARE, retiradaShape, retiradaText) { onPick(entry) }
                 }

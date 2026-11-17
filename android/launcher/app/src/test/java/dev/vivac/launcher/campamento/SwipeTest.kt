@@ -23,6 +23,13 @@ class SwipeTest {
     }
 
     @Test
+    fun `a finger tremor during a long press is not a flick, however fast it measures`() {
+        // Seen on the Pixel: 1px of travel during a long press measured as a fast flick.
+        assertEquals(Swipe.NONE, Swipe.classify(dyDp = 0.4f, velocityDp = 2000f))
+        assertEquals(Swipe.NONE, Swipe.classify(dyDp = -8f, velocityDp = -2000f))
+    }
+
+    @Test
     fun `a flick against the drag direction is ignored`() {
         assertEquals(Swipe.NONE, Swipe.classify(dyDp = 20f, velocityDp = -900f))
     }
