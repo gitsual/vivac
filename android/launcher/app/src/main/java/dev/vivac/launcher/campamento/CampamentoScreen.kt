@@ -38,6 +38,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.vivac.launcher.apps.AppFace
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.petate.Pack
 import dev.vivac.launcher.theme.AppTile
@@ -212,7 +213,7 @@ private fun DockRow(apps: List<InstalledApp>, onOpenApp: (String) -> Unit, onApp
                         onClick = { onOpenApp(app.packageName) },
                         onLongClick = { onAppInfo(app.packageName) },
                         modifier = Modifier.weight(1f),
-                    ) { Monogram(Pack.monogram(app), if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                    ) { AppFace(app, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
                 }
                 DockSlot.Petate -> AppTile(label = "Petate", background = Ink.field, onClick = onOpenPetate, modifier = Modifier.weight(1f)) {
                     LineIcon(Glyph.GRID, Ink.text)

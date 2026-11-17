@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.vivac.launcher.apps.AppFace
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.theme.AppTile
 import dev.vivac.launcher.theme.Glyph
@@ -113,7 +114,7 @@ fun PetateScreen(
                         onClick = { onOpenApp(app.packageName) },
                         onLongClick = { onAppInfo(app.packageName) },
                     ) {
-                        Monogram(Pack.monogram(app), if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)])
+                        AppFace(app, if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)])
                     }
                 }
             }

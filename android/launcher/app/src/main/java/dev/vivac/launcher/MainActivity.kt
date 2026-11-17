@@ -12,6 +12,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,6 +20,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
 import dev.vivac.launcher.apps.AndroidAppSource
 import dev.vivac.launcher.apps.AppActions
+import dev.vivac.launcher.apps.AppIcons
+import dev.vivac.launcher.apps.LocalAppIcons
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.campamento.CampamentoScreen
 import dev.vivac.launcher.campamento.PhoneFacts
@@ -33,6 +36,7 @@ private enum class Screen { CAMPAMENTO, PETATE }
 class MainActivity : ComponentActivity() {
     private lateinit var source: AndroidAppSource
     private lateinit var actions: AppActions
+    private lateinit var icons: AppIcons
     private var watcher: LauncherApps.Callback? = null
 
     private var apps by mutableStateOf(emptyList<InstalledApp>())
@@ -47,7 +51,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
         source = AndroidAppSource(this)
         actions = AppActions(this)
-        watcher = source.watch { apps = source.installed() }
+        icons = AppIcons(this)
+        watcher = source.watch { changed -> icons.forget(changed); apps = source.installed() }
         refresh()
 
         setContent {
@@ -58,6 +63,7 @@ class MainActivity : ComponentActivity() {
                     delay(60_000L - System.currentTimeMillis() % 60_000L)
                 }
             }
+            CompositionLocalProvider(LocalAppIcons provides icons) {
             BackHandler(enabled = screen == Screen.PETATE) { screen = Screen.CAMPAMENTO }
             AnimatedContent(screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
                 when (current) {
@@ -80,6 +86,7 @@ class MainActivity : ComponentActivity() {
                         onAppInfo = { actions.info(it) },
                     )
                 }
+            }
             }
         }
     }

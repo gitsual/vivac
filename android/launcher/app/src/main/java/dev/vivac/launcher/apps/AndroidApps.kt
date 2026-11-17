@@ -26,14 +26,14 @@ class AndroidAppSource(private val context: Context) : AppSource {
             }
             .distinctBy { it.packageName }
 
-    /** Calls [onChange] whenever an app is installed, removed or updated. */
-    fun watch(onChange: () -> Unit): LauncherApps.Callback {
+    /** Calls [onChange] with the package whenever an app is installed, removed or updated. */
+    fun watch(onChange: (packageName: String) -> Unit): LauncherApps.Callback {
         val callback = object : LauncherApps.Callback() {
-            override fun onPackageRemoved(packageName: String, user: UserHandle) = onChange()
-            override fun onPackageAdded(packageName: String, user: UserHandle) = onChange()
-            override fun onPackageChanged(packageName: String, user: UserHandle) = onChange()
-            override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = onChange()
-            override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = onChange()
+            override fun onPackageRemoved(packageName: String, user: UserHandle) = onChange(packageName)
+            override fun onPackageAdded(packageName: String, user: UserHandle) = onChange(packageName)
+            override fun onPackageChanged(packageName: String, user: UserHandle) = onChange(packageName)
+            override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = packageNames.forEach(onChange)
+            override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) = packageNames.forEach(onChange)
         }
         launcherApps.registerCallback(callback)
         return callback
