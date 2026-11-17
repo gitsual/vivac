@@ -37,7 +37,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | D7 | Search app shortcuts, not only apps | todo |
 | D8 | Search fallbacks: web search, Play/F-Droid store, system settings | done: web (search app or DuckDuckGo) and store (market://); settings search has no public intent |
 | D9 | Alphabet fast scroller | done (the altimeter: tap or slide) |
-| D10 | Rename an app (custom label) | todo |
+| D10 | Rename an app (custom label) | done: "Cambiar el nombre" in the menu; search finds the new name; blank restores |
 | D11 | Calculator and unit conversion in the search field | done: sums, "10% de 150", length/mass/volume/time/speed/data/temperature; tap copies |
 | D12 | Search contacts (READ_CONTACTS, opt-in) and open/call/message them | todo |
 | D13 | Search calendar events (READ_CALENDAR, opt-in) | todo |

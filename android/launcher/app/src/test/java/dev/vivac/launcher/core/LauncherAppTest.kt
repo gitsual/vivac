@@ -23,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeDown
@@ -330,6 +331,24 @@ class LauncherAppTest {
         compose.onNodeWithText("Quitar «Ir a casa» de la ladera").tap()
         compose.waitForIdle()
         assertEquals(emptyList<String>(), launcher.board.shortcutsOf("app.organicmaps"))
+    }
+
+    @Test
+    fun `an app is renamed from its menu`() {
+        store.values["pinned"] = "app.organicmaps"
+        show()
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithText("Cambiar el nombre").tap()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Nombre de Organic Maps").performTextReplacement("Mapas")
+        compose.onNodeWithText("Guardar").tap()
+        compose.waitForIdle()
+        compose.onNodeWithText("Mapas").assertExists()
+        compose.onNodeWithText("Mapas").performTouchInput { longClick() }
+        compose.onNodeWithText("Cambiar el nombre").tap()
+        compose.onNodeWithText("Volver a «Organic Maps»").tap()
+        compose.waitForIdle()
+        compose.onNodeWithText("Organic Maps").assertExists()
     }
 
     private fun find(v: View, match: (View) -> Boolean): View? {

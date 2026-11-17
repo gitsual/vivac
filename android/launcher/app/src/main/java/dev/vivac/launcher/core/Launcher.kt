@@ -63,8 +63,15 @@ class Launcher(
     /** "Último largo": what you opened through vivac, newest first. vivac's own history, no usage permission. */
     var recent by mutableStateOf(store.get(KEY_RECENT).orEmpty().split(",").filter { it.isNotBlank() }); private set
 
+    /** Names you gave apps, by package. */
+    private var names = decodeNames(store.get(KEY_NAMES))
+    private var installed = emptyList<InstalledApp>()
+    /** The app whose name you are changing (from its menu). */
+    var renaming by mutableStateOf<InstalledApp?>(null); private set
+
     fun refresh() {
-        apps = source.installed()
+        installed = source.installed()
+        apps = named()
         // An empty list means Android is not ready (e.g. right after boot), not that every app is gone:
         // never let that wipe the dock and pins.
         if (apps.isNotEmpty()) {
@@ -154,6 +161,7 @@ class Launcher(
                 apply(HomeChange(home.toggleHidden(pkg)))
                 if (pkg in home.hidden) saveBoard(board.removeApp(pkg))
             }
+            MenuEntry.Rename -> renaming = app
             MenuEntry.Info -> actions.info(pkg)
             MenuEntry.Uninstall -> actions.uninstall(pkg)
         }
@@ -261,6 +269,24 @@ class Launcher(
         if (to is Zone.Ladera) saveBoard(board.insertWidget(id, to.page, index))
     }
 
+    /** The name Android gives the app, to go back to. */
+    fun originalLabel(packageName: String): String? = installed.find { it.packageName == packageName }?.label
+
+    /** Gives the app [label]; blank, or its own name, goes back to that. */
+    fun rename(packageName: String, label: String) {
+        renaming = null
+        val name = label.trim()
+        names = if (name.isEmpty() || name == originalLabel(packageName)) names - packageName else names + (packageName to name)
+        store.put(mapOf(KEY_NAMES to encodeNames(names)))
+        apps = named()
+    }
+
+    fun cancelRename() {
+        renaming = null
+    }
+
+    private fun named() = installed.map { app -> names[app.packageName]?.let { app.copy(label = it) } ?: app }
+
     fun openPinned(packageName: String, id: String) = actions.openShortcut(packageName, id)
 
     /** A held shortcut on a ladera: take it off, or see its app's info. */
@@ -319,6 +345,15 @@ class Launcher(
         const val KEY_HIDDEN = "hidden"
         const val KEY_WIDGETS = "widgets"
         const val KEY_RECENT = "recent"
+        const val KEY_NAMES = "names"
+
+        private fun encodeNames(names: Map<String, String>) =
+            names.entries.joinToString(",") { (pkg, name) -> pkg + "=" + java.net.URLEncoder.encode(name, "UTF-8") }
+
+        private fun decodeNames(raw: String?): Map<String, String> = raw.orEmpty().split(",").mapNotNull { part ->
+            val (pkg, name) = part.split("=", limit = 2).takeIf { it.size == 2 } ?: return@mapNotNull null
+            pkg to java.net.URLDecoder.decode(name, "UTF-8")
+        }.toMap()
         const val RECENT_MAX = 5
     }
 }

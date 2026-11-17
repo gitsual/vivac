@@ -21,6 +21,8 @@ sealed interface MenuEntry {
     data class Hide(val hidden: Boolean) : Place
     /** On a shortcut's own menu: take it off its ladera. */
     data class UnpinShortcut(val shortcut: AppShortcut) : Place
+    /** "Cambiar el nombre": offered by the sheet for any app, not built into the list. */
+    data object Rename : MenuEntry
     data object Info : MenuEntry
     data object Uninstall : MenuEntry
 }

@@ -17,6 +17,7 @@ import dev.vivac.launcher.campamento.CampamentoScreen
 import dev.vivac.launcher.campamento.PhoneFacts
 import dev.vivac.launcher.petate.AppMenuSheet
 import dev.vivac.launcher.petate.PetateScreen
+import dev.vivac.launcher.petate.RenameSheet
 import dev.vivac.launcher.widgets.CampMenuSheet
 import dev.vivac.launcher.widgets.Grip
 import dev.vivac.launcher.widgets.PlacedWidget
@@ -117,6 +118,14 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onMove = { launcher.moveWidget(id, it) },
             onRemove = { launcher.removeWidget(id) },
             onDismiss = launcher::dismissWidgetMenu,
+        )
+    }
+    launcher.renaming?.let { app ->
+        RenameSheet(
+            current = app.label,
+            original = launcher.originalLabel(app.packageName) ?: app.label,
+            onSave = { launcher.rename(app.packageName, it) },
+            onDismiss = launcher::cancelRename,
         )
     }
     launcher.menu?.let { m ->

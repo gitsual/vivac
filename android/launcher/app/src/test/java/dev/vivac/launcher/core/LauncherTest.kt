@@ -450,6 +450,26 @@ class LauncherTest {
     }
 
     @Test
+    fun `an app renamed from its menu keeps the name everywhere and after a restart, and blank brings the original back`() {
+        val l = many()
+        l.openMenu("app.organicmaps")
+        l.pick(MenuEntry.Rename)
+        assertEquals("Organic Maps", l.renaming?.label)
+        assertEquals(null, l.menu)
+        l.rename("app.organicmaps", "  Mapas  ")
+        assertEquals(null, l.renaming)
+        assertEquals("Mapas", l.apps.first { it.packageName == "app.organicmaps" }.label)
+        assertEquals("Mapas", many().apps.first { it.packageName == "app.organicmaps" }.label)
+        l.rename("com.termux", "Consola: 1, 2")
+        assertEquals("Consola: 1, 2", many().apps.first { it.packageName == "com.termux" }.label)
+        l.rename("app.organicmaps", " ")
+        assertEquals("Organic Maps", l.apps.first { it.packageName == "app.organicmaps" }.label)
+        l.openMenu("app.organicmaps"); l.pick(MenuEntry.Rename)
+        l.cancelRename()
+        assertEquals(null, l.renaming)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()
