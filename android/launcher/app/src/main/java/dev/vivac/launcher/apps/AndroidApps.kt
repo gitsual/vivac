@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Process
 import android.os.UserHandle
 import android.provider.Settings
+import dev.vivac.launcher.petate.AppShortcut
 
 /** Adapter: installed apps of the current profile, read from LauncherApps. */
 class AndroidAppSource(private val context: Context) : AppSource {
@@ -42,8 +43,35 @@ class AndroidAppSource(private val context: Context) : AppSource {
     fun unwatch(callback: LauncherApps.Callback) = launcherApps.unregisterCallback(callback)
 }
 
-/** Starting apps and their system info page. */
+/** Starting apps, their shortcuts and their system pages. */
 class AppActions(private val context: Context) {
+    private val launcherApps = context.getSystemService(LauncherApps::class.java)
+
+    /**
+     * The app's own shortcuts, by rank. Android only shares them with the default launcher,
+     * so this is empty until vivac is chosen as the home app.
+     */
+    fun canReadShortcuts(): Boolean = launcherApps.hasShortcutHostPermission()
+
+    fun shortcuts(packageName: String): List<AppShortcut> {
+        if (!canReadShortcuts()) return emptyList()
+        val query = LauncherApps.ShortcutQuery()
+            .setPackage(packageName)
+            .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST)
+        return runCatching { launcherApps.getShortcuts(query, Process.myUserHandle()).orEmpty() }
+            .getOrDefault(emptyList())
+            .sortedBy { it.rank }
+            .map { AppShortcut(it.id, it.shortLabel?.toString().orEmpty()) }
+    }
+
+    fun openShortcut(packageName: String, id: String): Boolean = runCatching {
+        launcherApps.startShortcut(packageName, id, null, null, Process.myUserHandle())
+        true
+    }.getOrDefault(false)
+
+    /** Hands over to the system's uninstall confirmation; vivac never removes anything by itself. */
+    fun uninstall(packageName: String): Boolean =
+        start(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     fun open(packageName: String): Boolean {
         val intent = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
         return start(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

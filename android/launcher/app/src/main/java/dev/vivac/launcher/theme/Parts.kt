@@ -34,6 +34,9 @@ object Glyph {
     const val GRID = "M5 5h4v4H5z M15 5h4v4h-4z M5 15h4v4H5z M15 15h4v4h-4z"
     const val PROMPT = "M4 17l6-6-6-6M12 19h8"
     const val SEARCH = "M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14z M20 20l-4-4"
+    const val ARROW = "M5 12h14M13 6l6 6-6 6"
+    const val INFO = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 11v6 M12 7.5v.5"
+    const val SQUARE = "M5 5h14v14H5z"
 }
 
 @Composable
@@ -61,7 +64,7 @@ fun AppTile(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(role = Role.Button, onClickLabel = "Abrir $label", onLongClickLabel = onLongClick?.let { "Información de $label" }, onLongClick = onLongClick, onClick = onClick),
+            .combinedClickable(role = Role.Button, onClickLabel = "Abrir $label", onLongClickLabel = onLongClick?.let { "Opciones de $label" }, onLongClick = onLongClick, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {

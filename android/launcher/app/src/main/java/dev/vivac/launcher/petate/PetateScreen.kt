@@ -63,7 +63,7 @@ fun PetateScreen(
     apps: List<InstalledApp>,
     focusSearch: Boolean,
     onOpenApp: (String) -> Unit,
-    onAppInfo: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf<Group?>(null) }
@@ -112,7 +112,7 @@ fun PetateScreen(
                         label = app.label,
                         background = if (deep) Ink.deep else Ink.field,
                         onClick = { onOpenApp(app.packageName) },
-                        onLongClick = { onAppInfo(app.packageName) },
+                        onLongClick = { onAppMenu(app.packageName) },
                     ) {
                         AppFace(app, if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)])
                     }

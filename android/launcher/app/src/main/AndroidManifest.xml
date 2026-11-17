@@ -3,6 +3,8 @@
 
     <!-- Swipe down on the Campamento pulls the notification shade. -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+    <!-- "Desinstalar" opens the system confirmation; Android requires this to send ACTION_DELETE. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
     <!-- A launcher must see every launchable app; Android 11+ hides them otherwise. -->
     <queries>

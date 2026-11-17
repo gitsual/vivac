@@ -26,12 +26,17 @@ import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.campamento.CampamentoScreen
 import dev.vivac.launcher.campamento.PhoneFacts
 import dev.vivac.launcher.campamento.Stamp
+import dev.vivac.launcher.petate.AppMenu
+import dev.vivac.launcher.petate.AppMenuSheet
+import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.petate.PetateScreen
 import dev.vivac.launcher.theme.Ink
 import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 
 private enum class Screen { CAMPAMENTO, PETATE }
+
+private data class OpenMenu(val app: InstalledApp, val entries: List<MenuEntry>, val canReadShortcuts: Boolean)
 
 class MainActivity : ComponentActivity() {
     private lateinit var source: AndroidAppSource
@@ -44,6 +49,7 @@ class MainActivity : ComponentActivity() {
     private var stamp by mutableStateOf("")
     private var screen by mutableStateOf(Screen.CAMPAMENTO)
     private var focusSearch by mutableStateOf(false)
+    private var menu by mutableStateOf<OpenMenu?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,7 +79,7 @@ class MainActivity : ComponentActivity() {
                             facts = f,
                             apps = apps,
                             onOpenApp = { actions.open(it) },
-                            onAppInfo = { actions.info(it) },
+                            onAppMenu = ::openMenu,
                             onOpenPetate = { search -> focusSearch = search; screen = Screen.PETATE },
                             onOpenSettings = { actions.systemSettings() },
                             onOpenAbout = { actions.securityUpdates() },
@@ -84,12 +90,34 @@ class MainActivity : ComponentActivity() {
                         apps = apps,
                         focusSearch = focusSearch,
                         onOpenApp = { actions.open(it); screen = Screen.CAMPAMENTO },
-                        onAppInfo = { actions.info(it) },
+                        onAppMenu = ::openMenu,
                     )
                 }
             }
+            menu?.let { m ->
+                AppMenuSheet(
+                    app = m.app,
+                    entries = m.entries,
+                    canReadShortcuts = m.canReadShortcuts,
+                    onDismiss = { menu = null },
+                    onPick = { entry ->
+                        menu = null
+                        when (entry) {
+                            is MenuEntry.Shortcut -> actions.openShortcut(m.app.packageName, entry.shortcut.id)
+                            MenuEntry.Info -> actions.info(m.app.packageName)
+                            MenuEntry.Uninstall -> actions.uninstall(m.app.packageName)
+                        }
+                    },
+                )
+            }
             }
         }
+    }
+
+    private fun openMenu(packageName: String) {
+        val app = apps.find { it.packageName == packageName } ?: return
+        val shortcuts = actions.shortcuts(packageName)
+        menu = OpenMenu(app, AppMenu.build(shortcuts, app.isSystem), actions.canReadShortcuts())
     }
 
     override fun onResume() {

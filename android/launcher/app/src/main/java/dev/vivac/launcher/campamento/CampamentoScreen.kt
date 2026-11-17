@@ -59,7 +59,7 @@ fun CampamentoScreen(
     facts: PhoneFacts,
     apps: List<InstalledApp>,
     onOpenApp: (String) -> Unit,
-    onAppInfo: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
     onOpenPetate: (search: Boolean) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenAbout: () -> Unit,
@@ -87,7 +87,7 @@ fun CampamentoScreen(
                 FactTile("batería", "${facts.batteryPercent} %", if (facts.charging) "cargando" else "sin cargar", Modifier.weight(1f))
             }
             Spacer(Modifier.weight(1f))
-            DockRow(apps, onOpenApp, onAppInfo) { onOpenPetate(false) }
+            DockRow(apps, onOpenApp, onAppMenu) { onOpenPetate(false) }
             SearchPill { onOpenPetate(true) }
         }
     }
@@ -229,7 +229,7 @@ private fun FactTile(caption: String, figure: String, detail: String, modifier: 
 }
 
 @Composable
-private fun DockRow(apps: List<InstalledApp>, onOpenApp: (String) -> Unit, onAppInfo: (String) -> Unit, onOpenPetate: () -> Unit) {
+private fun DockRow(apps: List<InstalledApp>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit, onOpenPetate: () -> Unit) {
     val byPackage = apps.associateBy { it.packageName }
     val slots = Dock.pick(byPackage.keys)
     // Five equal columns: on a 412dp Pixel five fixed 76dp tiles do not fit and labels got clipped.
@@ -243,7 +243,7 @@ private fun DockRow(apps: List<InstalledApp>, onOpenApp: (String) -> Unit, onApp
                         label = app.label,
                         background = if (deep) Ink.deep else Ink.field,
                         onClick = { onOpenApp(app.packageName) },
-                        onLongClick = { onAppInfo(app.packageName) },
+                        onLongClick = { onAppMenu(app.packageName) },
                         modifier = Modifier.weight(1f),
                     ) { AppFace(app, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
                 }
