@@ -22,7 +22,8 @@ yarn --cwd vendor/adevtool/ install
 set +u # envsetup.sh and lunch are not written for nounset
 # shellcheck disable=SC1091
 source build/envsetup.sh
-adevtool generate-all -d "$device"
+# envsetup.sh defines adevtool as an alias, which a script never expands.
+vendor/adevtool/bin/run generate-all -d "$device"
 lunch "$device-cur-user"
 set -u
 export BUILD_NUMBER="${VIVAC_OS_BUILD_NUMBER:-$tag}"
