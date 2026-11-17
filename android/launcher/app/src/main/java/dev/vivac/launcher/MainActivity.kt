@@ -1,6 +1,8 @@
 package dev.vivac.launcher
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.IntentFilter
 import android.content.Intent
 import android.content.pm.LauncherApps
 import android.os.Bundle
@@ -9,7 +11,6 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,7 +31,6 @@ import dev.vivac.launcher.core.WidgetStep
 import dev.vivac.launcher.core.WidgetViews
 import dev.vivac.launcher.theme.Ink
 import dev.vivac.launcher.widgets.Widgets
-import kotlinx.coroutines.delay
 import java.time.LocalDateTime
 
 private const val KEY_PENDING = "pendingWidget"
@@ -64,12 +64,6 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            LaunchedEffect(Unit) {
-                while (true) {
-                    tick()
-                    delay(60_000L - System.currentTimeMillis() % 60_000L)
-                }
-            }
             val dots by Dots.live.collectAsState()
             CompositionLocalProvider(LocalAppIcons provides icons, LocalDots provides dots) {
                 facts?.let { LauncherApp(launcher, stamp, it, actions, views) }
@@ -93,12 +87,25 @@ class MainActivity : ComponentActivity() {
         outState.putInt(KEY_PENDING, launcher.pendingWidget)
     }
 
+    /** Android's once-a-minute tick (and clock or time zone changes) refresh the stamp and the facts. */
+    private val clock = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = tick()
+    }
+
     override fun onStart() {
         super.onStart()
         widgets.startListening()
+        val times = IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_TICK)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        registerReceiver(clock, times)
+        tick()
     }
 
     override fun onStop() {
+        unregisterReceiver(clock)
         widgets.stopListening()
         super.onStop()
     }
