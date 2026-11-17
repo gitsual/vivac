@@ -314,6 +314,24 @@ class LauncherAppTest {
         return at
     }
 
+    @Test
+    fun `a shortcut is pinned from the menu, opens from its ladera, and is taken off from its own menu`() {
+        actions.shortcuts = mapOf("app.organicmaps" to listOf(AppShortcut("home", "Ir a casa")))
+        store.values["pinned"] = "app.organicmaps"
+        show()
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithContentDescription("Poner «Ir a casa» en una ladera").tap()
+        compose.waitForIdle()
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Ir a casa").performClick()
+        assertTrue("shortcut:app.organicmaps/home" in actions.calls)
+        compose.onNodeWithText("Ir a casa").performTouchInput { longClick() }
+        compose.onNodeWithText("Quitar «Ir a casa» de la ladera").tap()
+        compose.waitForIdle()
+        assertEquals(emptyList<String>(), launcher.board.shortcutsOf("app.organicmaps"))
+    }
+
     private fun find(v: View, match: (View) -> Boolean): View? {
         if (match(v)) return v
         if (v is android.view.ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i), match)?.let { return it }

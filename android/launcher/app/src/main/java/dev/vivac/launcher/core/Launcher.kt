@@ -13,6 +13,7 @@ import dev.vivac.launcher.campamento.Placed
 import dev.vivac.launcher.campamento.Shelved
 import dev.vivac.launcher.campamento.WidgetBoard
 import dev.vivac.launcher.petate.AppMenu
+import dev.vivac.launcher.petate.AppShortcut
 import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
 
@@ -48,7 +49,7 @@ class Launcher(
 ) {
     var apps by mutableStateOf(emptyList<InstalledApp>()); private set
     var home by mutableStateOf(Home.decode(store.get(KEY_DOCK), store.get(KEY_PINNED), store.get(KEY_HIDDEN))); private set
-    var board by mutableStateOf(WidgetBoard.decode(store.get(KEY_WIDGETS)).let { b -> WidgetBoard(b.items.filter { it !is Placed || widgets.exists(it.id) }) }); private set
+    var board by mutableStateOf(loadBoard()); private set
     /** The home page in view: 0 is the Campamento, 1 onwards the laderas. */
     var page by mutableStateOf(0); private set
     /** The widget whose card is open (after a long press on it). */
@@ -141,6 +142,11 @@ class Launcher(
         val pkg = app.packageName
         when (entry) {
             is MenuEntry.Shortcut -> actions.openShortcut(pkg, entry.shortcut.id)
+            is MenuEntry.UnpinShortcut -> unpinShortcut(pkg, entry.shortcut.id)
+            is MenuEntry.PinShortcut -> {
+                saveBoard(board.addShortcut(pkg, entry.shortcut.id, entry.shortcut.label, ladera()))
+                actions.pinShortcuts(pkg, board.shortcutsOf(pkg))
+            }
             is MenuEntry.Dock -> apply(home.copy(dock = shownDock()).toggleDock(pkg))
             is MenuEntry.Pin -> apply(home.togglePin(pkg))
             is MenuEntry.Ladera -> saveBoard(if (entry.onLadera) board.removeApp(pkg) else board.addApp(pkg, ladera()))
@@ -255,6 +261,24 @@ class Launcher(
         if (to is Zone.Ladera) saveBoard(board.insertWidget(id, to.page, index))
     }
 
+    fun openPinned(packageName: String, id: String) = actions.openShortcut(packageName, id)
+
+    /** A held shortcut on a ladera: take it off, or see its app's info. */
+    fun openShortcutMenu(packageName: String, id: String, label: String) {
+        val app = apps.find { it.packageName == packageName } ?: return
+        menu = OpenMenu(app, listOf(MenuEntry.UnpinShortcut(AppShortcut(id, label)), MenuEntry.Info), canReadShortcuts = true)
+    }
+
+    fun unpinShortcut(packageName: String, id: String) {
+        saveBoard(board.removeShortcut(packageName, id))
+        actions.pinShortcuts(packageName, board.shortcutsOf(packageName))
+    }
+
+    /** Reads the layout again: another screen (an app's "add to home screen") may have changed it meanwhile. */
+    fun reload() {
+        board = loadBoard()
+    }
+
     fun removeWidget(id: Int) {
         widgetMenu = null
         campMenu = false
@@ -270,6 +294,8 @@ class Launcher(
         pendingWidget = -1
         saveBoard(board.add(id))
     }
+
+    private fun loadBoard() = WidgetBoard.decode(store.get(KEY_WIDGETS)).let { b -> WidgetBoard(b.items.filter { it !is Placed || widgets.exists(it.id) }) }
 
     private fun saveBoard(next: WidgetBoard) {
         board = next

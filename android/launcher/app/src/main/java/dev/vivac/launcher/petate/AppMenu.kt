@@ -5,6 +5,8 @@ data class AppShortcut(val id: String, val label: String)
 
 sealed interface MenuEntry {
     data class Shortcut(val shortcut: AppShortcut) : MenuEntry
+    /** Puts the shortcut itself on a ladera, from the pin beside it in the menu. */
+    data class PinShortcut(val shortcut: AppShortcut) : MenuEntry
     /** "Poner en el dock" or "Quitar del dock", depending on [inDock]. */
     /** Where the app sits on the Campamento: dock, pins, or hidden. */
     sealed interface Place : MenuEntry
@@ -17,6 +19,8 @@ sealed interface MenuEntry {
     /** On a ladera (a home page right of the Campamento), or not yet. */
     data class Ladera(val onLadera: Boolean) : Place
     data class Hide(val hidden: Boolean) : Place
+    /** On a shortcut's own menu: take it off its ladera. */
+    data class UnpinShortcut(val shortcut: AppShortcut) : Place
     data object Info : MenuEntry
     data object Uninstall : MenuEntry
 }

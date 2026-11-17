@@ -26,6 +26,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -78,7 +79,12 @@ fun AppMenuSheet(
             val place = entries.filterIsInstance<MenuEntry.Place>()
             if (shortcuts.isNotEmpty() || !canReadShortcuts) {
                 Section("ATAJOS") {
-                    shortcuts.forEach { entry -> Entry(entry.shortcut.label, Glyph.ARROW, Ink.accentText, Ink.text) { onPick(entry) } }
+                    shortcuts.forEach { entry ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f)) { Entry(entry.shortcut.label, Glyph.ARROW, Ink.accentText, Ink.text) { onPick(entry) } }
+                            PinButton(entry.shortcut.label) { onPick(MenuEntry.PinShortcut(entry.shortcut)) }
+                        }
+                    }
                     if (!canReadShortcuts) Text("Los atajos de cada app aparecen cuando vivac es tu app de inicio.", style = Type.small)
                 }
             }
@@ -89,6 +95,7 @@ fun AppMenuSheet(
                             is MenuEntry.Dock -> Entry(if (entry.inDock) "Quitar del dock" else "Poner en el dock", Glyph.DOCK, Ink.text, Ink.text) { onPick(entry) }
                             is MenuEntry.Pin -> Entry(if (entry.pinned) "Quitar del campamento" else "Fijar en el campamento", Glyph.TENT, Ink.text, Ink.text) { onPick(entry) }
                             is MenuEntry.Ladera -> Entry(if (entry.onLadera) "Quitar de la ladera" else "Poner en una ladera", Glyph.LADERA, Ink.text, Ink.text) { onPick(entry) }
+                            is MenuEntry.UnpinShortcut -> Entry("Quitar «${entry.shortcut.label}» de la ladera", Glyph.MINUS, Ink.text, Ink.text) { onPick(entry) }
                             is MenuEntry.Hide -> Entry(if (entry.hidden) "Mostrar en el petate" else "Ocultar del petate", if (entry.hidden) Glyph.EYE else Glyph.EYE_OFF, Ink.text, Ink.text) { onPick(entry) }
                         }
                     }
@@ -120,6 +127,20 @@ private fun Pill(label: String, line: Color, text: Color, modifier: Modifier, on
             .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Text(label, style = Type.body.copy(fontSize = 14.sp, fontWeight = FontWeight.Medium), color = text, maxLines = 1) }
+}
+
+/** Puts a shortcut on a ladera: a square button beside its row. */
+@Composable
+private fun PinButton(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(52.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Ink.raised)
+            .clickable(role = Role.Button, onClickLabel = "Poner «$label» en una ladera", onClick = onClick)
+            .semantics { contentDescription = "Poner «$label» en una ladera" },
+        contentAlignment = Alignment.Center,
+    ) { LineIcon(Glyph.LADERA, Ink.text, 20.dp) }
 }
 
 @Composable

@@ -77,6 +77,10 @@ class AppActions(private val context: Context) : Actions {
         runCatching { launcherApps.startShortcut(packageName, id, null, null, Process.myUserHandle()) }
     }
 
+    override fun pinShortcuts(packageName: String, ids: List<String>) {
+        runCatching { launcherApps.pinShortcuts(packageName, ids, Process.myUserHandle()) }
+    }
+
     /** Hands over to the system's uninstall confirmation; vivac never removes anything by itself. */
     override fun uninstall(packageName: String) {
         start(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

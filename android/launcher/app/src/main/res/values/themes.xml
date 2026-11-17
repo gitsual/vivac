@@ -7,4 +7,10 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowShowWallpaper">false</item>
     </style>
+    <!-- The "add to home screen" sheet floats over the app that asked. -->
+    <style name="Theme.Vivac.Pin" parent="Theme.Vivac">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

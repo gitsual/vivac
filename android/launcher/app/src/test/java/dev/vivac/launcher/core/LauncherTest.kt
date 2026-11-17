@@ -3,6 +3,8 @@ package dev.vivac.launcher.core
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.campamento.Placed
 import dev.vivac.launcher.campamento.Shelved
+import dev.vivac.launcher.campamento.WidgetBoard
+import dev.vivac.launcher.campamento.Pinned
 import dev.vivac.launcher.petate.AppShortcut
 import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
@@ -417,6 +419,34 @@ class LauncherTest {
         l.dropWidget(1, Zone.Via, 0)
         l.dropWidget(1, Zone.Dock, 0)
         assertEquals(listOf(Placed(1, page = 1), Shelved("com.termux", 1)), l.board.onPage(1))
+    }
+
+    @Test
+    fun `a shortcut pinned from the menu goes on a ladera, stays pinned in android, opens, and can be taken off`() {
+        actions.shortcuts = mapOf("org.thoughtcrime.securesms" to listOf(AppShortcut("chat", "Nuevo chat")))
+        val l = many()
+        l.openMenu("org.thoughtcrime.securesms")
+        l.pick(MenuEntry.PinShortcut(AppShortcut("chat", "Nuevo chat")))
+        assertEquals(null, l.menu)
+        assertEquals(listOf(Pinned("org.thoughtcrime.securesms", "chat", "Nuevo chat", 1)), l.board.onPage(1))
+        assertTrue("pinShortcuts:org.thoughtcrime.securesms:[chat]" in actions.calls)
+        l.openPinned("org.thoughtcrime.securesms", "chat")
+        assertTrue("shortcut:org.thoughtcrime.securesms/chat" in actions.calls)
+        l.openShortcutMenu("org.thoughtcrime.securesms", "chat", "Nuevo chat")
+        assertEquals(listOf(MenuEntry.UnpinShortcut(AppShortcut("chat", "Nuevo chat")), MenuEntry.Info), l.menu?.entries)
+        l.pick(MenuEntry.UnpinShortcut(AppShortcut("chat", "Nuevo chat")))
+        assertEquals(1, l.board.pages)
+        l.openShortcutMenu("gone.app", "x", "X")
+        assertEquals(null, l.menu)
+        assertTrue("pinShortcuts:org.thoughtcrime.securesms:[]" in actions.calls)
+    }
+
+    @Test
+    fun `what another screen saved meanwhile is read back on return`() {
+        val l = many()
+        store.values["widgets"] = WidgetBoard().addShortcut("app.organicmaps", "home", "Casa", 1).encode()
+        l.reload()
+        assertEquals(listOf("home"), l.board.shortcutsOf("app.organicmaps"))
     }
 
     @Test

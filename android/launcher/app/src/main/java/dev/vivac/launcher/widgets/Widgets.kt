@@ -39,18 +39,22 @@ class Widgets(private val activity: Activity) : WidgetHost {
     fun stopListening() = host.stopListening()
 
     override fun options(): List<WidgetOption> {
-        val pm = activity.packageManager
         val collator = Collator.getInstance(Locale.forLanguageTag("es-ES"))
-        return manager.getInstalledProvidersForProfile(Process.myUserHandle()).map { info ->
-            val pkg = info.provider.packageName
-            WidgetOption(
-                key = info.provider.flattenToString(),
-                label = info.loadLabel(pm).toString(),
-                appLabel = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg),
-                appPackage = pkg,
-                cells = WidgetSize.cells(targetColumns(info), targetRows(info)),
-            )
-        }.sortedWith(compareBy(collator) { it.appLabel + " " + it.label })
+        return manager.getInstalledProvidersForProfile(Process.myUserHandle()).map(::optionOf)
+            .sortedWith(compareBy(collator) { it.appLabel + " " + it.label })
+    }
+
+    /** How a provider reads in the picker, or in an app's "add to home screen" request. */
+    fun optionOf(info: AppWidgetProviderInfo): WidgetOption {
+        val pm = activity.packageManager
+        val pkg = info.provider.packageName
+        return WidgetOption(
+            key = info.provider.flattenToString(),
+            label = info.loadLabel(pm).toString(),
+            appLabel = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg),
+            appPackage = pkg,
+            cells = WidgetSize.cells(targetColumns(info), targetRows(info)),
+        )
     }
 
     override fun allocate(): Int = host.allocateAppWidgetId()

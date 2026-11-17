@@ -38,6 +38,19 @@
             </intent-filter>
         </activity>
 
+        <!-- Another app's "Add to home screen" (shortcuts and widgets); Android sends it only to the default home app. -->
+        <activity
+            android:name=".PinActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Vivac.Pin">
+            <intent-filter>
+                <action android:name="android.content.pm.action.CONFIRM_PIN_SHORTCUT" />
+                <action android:name="android.content.pm.action.CONFIRM_PIN_APPWIDGET" />
+            </intent-filter>
+        </activity>
+
         <!-- Notification dots: reads only which app each notification belongs to. Off until you allow it. -->
         <service
             android:name=".apps.DotsListener"

@@ -18,6 +18,8 @@ interface Actions {
     /** Android only shares app shortcuts with the default launcher. */
     fun canReadShortcuts(): Boolean
     fun openShortcut(packageName: String, id: String)
+    /** Tells Android which of [packageName]'s shortcuts vivac keeps on the home screen (all of them, each time). */
+    fun pinShortcuts(packageName: String, ids: List<String>)
     fun showNotifications()
     fun notificationAccess()
     fun dotsAllowed(): Boolean

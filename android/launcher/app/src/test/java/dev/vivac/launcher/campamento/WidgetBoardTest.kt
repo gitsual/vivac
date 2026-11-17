@@ -138,4 +138,24 @@ class WidgetBoardTest {
     fun `a widget keeps its chosen rows when it moves`() {
         assertEquals(Placed(1, page = 1, rows = 3), board(Placed(1, rows = 3), Placed(2, page = 1)).insertWidget(1, 1, 0).placed(1))
     }
+
+    @Test
+    fun `shortcuts go on a ladera once each, leave with their app, and survive storage with any label`() {
+        val b = WidgetBoard().addShortcut("org.signal", "chat-ana", "Ana: hola, ¿qué tal? 50%", page = 1)
+            .addShortcut("org.signal", "chat-ana", "Ana: hola, ¿qué tal? 50%", page = 1)
+            .addShortcut("app.maps", "home", "Casa", page = 0)
+        assertEquals(listOf(Pinned("org.signal", "chat-ana", "Ana: hola, ¿qué tal? 50%", 1), Pinned("app.maps", "home", "Casa", 1)), b.onPage(1))
+        assertEquals(b, WidgetBoard.decode(b.encode()))
+        assertEquals(listOf(Pinned("app.maps", "home", "Casa", 1)), b.keepApps(setOf("app.maps")).items)
+        assertEquals(listOf("home"), b.shortcutsOf("app.maps"))
+        assertEquals(1, b.removeShortcut("org.signal", "chat-ana").removeShortcut("app.maps", "home").pages)
+    }
+
+    @Test
+    fun `things added from outside go on the last ladera, or open the first`() {
+        assertEquals(1, WidgetBoard().lastLadera)
+        assertEquals(2, board(Placed(1), Placed(2, page = 2), Placed(3, page = 1)).lastLadera)
+        assertEquals(listOf(Placed(5, page = 1)), WidgetBoard().addOnLadera(5).onPage(1))
+        assertEquals(listOf(Placed(5, page = 1)), WidgetBoard().addOnLadera(5).addOnLadera(5).onPage(1))
+    }
 }

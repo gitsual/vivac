@@ -15,8 +15,8 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | H3 | Widgets: add, configure, remove | done |
 | H4 | Reorder dock, pins and widgets (move earlier / later) | done: drag apps within and between dock, route and laderas, and out of the petate; widgets by dragging too (card, or hold and move) |
 | H5 | Folders: group pinned apps, rename, open, take apps out | todo |
-| H6 | Pin app shortcuts (deep shortcuts) to the home screen | todo |
-| H7 | Accept "add to home screen" requests from apps (PinItemRequest: shortcuts and widgets) | todo |
+| H6 | Pin app shortcuts (deep shortcuts) to the home screen | done: pin beside each shortcut in the app menu; on a ladera, tap opens, hold to take off |
+| H7 | Accept "add to home screen" requests from apps (PinItemRequest: shortcuts and widgets) | done: PinActivity, to the last ladera |
 | H8 | Resize widgets (height in rows) | done (widget card: 1–5 rows) |
 | H9 | Configurable grid: columns for pins and drawer, labels on/off | todo |
 | H10 | Lock the layout so nothing moves by accident | todo |
@@ -38,6 +38,9 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | D8 | Search fallbacks: web search, Play/F-Droid store, system settings | todo |
 | D9 | Alphabet fast scroller | done (the altimeter: tap or slide) |
 | D10 | Rename an app (custom label) | todo |
+| D11 | Calculator and unit conversion in the search field | todo |
+| D12 | Search contacts (READ_CONTACTS, opt-in) and open/call/message them | todo |
+| D13 | Search calendar events (READ_CALENDAR, opt-in) | todo |
 
 ## App menu (long press)
 
@@ -46,7 +49,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | M1 | App shortcuts | done |
 | M2 | Add to / remove from dock, pin, hide | done |
 | M3 | App info, uninstall | done |
-| M4 | Drag a shortcut to the home screen (via "pin shortcut" entry) | todo (H6) |
+| M4 | Drag a shortcut to the home screen (via "pin shortcut" entry) | done (pin entry; dragging pinned shortcuts between pages: todo) |
 | M5 | The app's widgets, straight from its menu | todo |
 
 ## Icons and dots
@@ -68,6 +71,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | G2 | Double tap to lock the screen (accessibility service, opt-in) | todo |
 | G3 | Configurable gestures (swipe up/down, double tap → any action or app) | todo |
 | G4 | Home pressed on the camp: back to the top / close sheets | todo |
+| G5 | Swipe-home animation into the icon (GestureNavContract, Android 11+, undocumented) | todo |
 
 ## Settings and data
 
@@ -82,7 +86,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 
 | Feature | Why |
 |---------|-----|
-| Recents / overview screen | Only the system launcher (Quickstep) can host it; with vivac as home, Android uses its own fallback recents. |
+| Recents / overview screen | Only the system launcher (Quickstep) can host it: `config_recentsComponentName` is fixed in the system image. Possible in the vivac-os fork through a system overlay, not in the app. |
 | Home-gesture animation into the launcher | Same reason: the animation lives in Quickstep. |
 | Google Discover feed | Needs a Google-signed companion app; also against vivac's privacy stance. |
 

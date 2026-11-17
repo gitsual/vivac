@@ -120,6 +120,8 @@ fun CampamentoScreen(
     drag: DragBoard = remember { DragBoard() },
     onWidgetDrop: (id: Int, to: Zone, index: Int) -> Unit = { _, _, _ -> },
     widgetLabel: (Int) -> String = { "widget" },
+    onShortcut: (Pinned) -> Unit = {},
+    onShortcutMenu: (Pinned) -> Unit = {},
 ) {
     val dp = LocalDensity.current.density
     val drop: (Held, Spot) -> Unit = { h, spot -> onDrop(h.app.packageName, h.from, spot.zone, spot.index) }
@@ -194,7 +196,7 @@ fun CampamentoScreen(
                             board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
                             Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop)
                         } else {
-                            Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop)
+                            Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu)
                         }
                     }
                 }
@@ -301,17 +303,20 @@ private fun Ladera(
     onAppMenu: (String) -> Unit,
     drag: DragBoard,
     onDrop: (Held, Spot) -> Unit,
+    onShortcut: (Pinned) -> Unit,
+    onShortcutMenu: (Pinned) -> Unit,
 ) {
     val byPackage = apps.associateBy { it.packageName }
-    // Consecutive apps form one block, so they share rows; each widget is a block of its own.
+    // Consecutive apps and shortcuts form one block, so they share rows; each widget is a block of its own.
     val blocks = mutableListOf<Any>()
     items.forEach { item ->
         when (item) {
             is Placed -> blocks += item
-            is Shelved -> {
-                val app = byPackage[item.packageName] ?: return@forEach
+            is Shelved, is Pinned -> {
+                val pkg = if (item is Shelved) item.packageName else (item as Pinned).packageName
+                if (pkg !in byPackage) return@forEach
                 @Suppress("UNCHECKED_CAST")
-                (blocks.lastOrNull() as? MutableList<InstalledApp>)?.add(app) ?: blocks.add(mutableListOf(app))
+                (blocks.lastOrNull() as? MutableList<Item>)?.add(item) ?: blocks.add(mutableListOf(item))
             }
         }
     }
@@ -319,14 +324,32 @@ private fun Ladera(
         if (block is Placed) card(block)
         else {
             @Suppress("UNCHECKED_CAST")
-            (block as List<InstalledApp>).chunked(4).forEach { row ->
+            (block as List<Item>).chunked(4).forEach { row ->
                 Row(Modifier.fillMaxWidth()) {
-                    row.forEach { app ->
-                        CarriedTile(
-                            app, Zone.Ladera(page), items.indexOfFirst { it is Shelved && it.packageName == app.packageName }, drag,
-                            Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)], Ink.surface, onOpenApp, onAppMenu, onDrop,
-                            modifier = Modifier.weight(1f),
-                        )
+                    row.forEach { item ->
+                        when (item) {
+                            is Shelved -> {
+                                val app = byPackage.getValue(item.packageName)
+                                CarriedTile(
+                                    app, Zone.Ladera(page), items.indexOf(item), drag,
+                                    Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)], Ink.surface, onOpenApp, onAppMenu, onDrop,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
+                            is Pinned -> {
+                                val app = byPackage.getValue(item.packageName)
+                                AppTile(
+                                    label = item.label,
+                                    background = Ink.surface,
+                                    border = Ink.field,
+                                    badge = "↗",
+                                    onClick = { onShortcut(item) },
+                                    onLongClick = { onShortcutMenu(item) },
+                                    modifier = Modifier.weight(1f).spot(drag, Spot(Zone.Ladera(page), items.indexOf(item))),
+                                ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                            }
+                            is Placed -> Unit
+                        }
                     }
                     repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                 }

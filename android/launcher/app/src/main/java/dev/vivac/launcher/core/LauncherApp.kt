@@ -59,6 +59,8 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             drag = drag,
             onWidgetDrop = launcher::dropWidget,
             widgetLabel = { id -> launcher.placedWidgets().firstOrNull { it.id == id }?.label ?: "widget" },
+            onShortcut = { launcher.openPinned(it.packageName, it.id) },
+            onShortcutMenu = { launcher.openShortcutMenu(it.packageName, it.id, it.label) },
         )
     }
     AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->

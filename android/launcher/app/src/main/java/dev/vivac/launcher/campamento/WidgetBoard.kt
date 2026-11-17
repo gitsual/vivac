@@ -1,5 +1,8 @@
 package dev.vivac.launcher.campamento
 
+import java.net.URLDecoder
+import java.net.URLEncoder
+
 /** Something placed on a page of the home screen: page 0 is the Campamento, 1 onwards the laderas to its right. */
 sealed interface Item {
     val page: Int
@@ -10,6 +13,9 @@ data class Placed(val id: Int, override val page: Int = 0, val rows: Int = 0) : 
 
 /** An app put on a ladera. The Campamento keeps its apps on its own route (see [Home.pinned]). */
 data class Shelved(val packageName: String, override val page: Int) : Item
+
+/** An app's shortcut (e.g. a chat) put on a ladera; [label] is what the app called it when it was pinned. */
+data class Pinned(val packageName: String, val id: String, val label: String, override val page: Int) : Item
 
 /**
  * What sits on each page, in order. Pages never have gaps: a ladera left empty closes and the ones after
@@ -52,10 +58,29 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
         return WidgetBoard((0..last).flatMap { p -> if (p == item.page) onTarget else rest.filter { it.page == p } }).compact()
     }
 
+    /** The ladera things from outside (another app's "add to home screen") go to: the last one, or the first. */
+    val lastLadera: Int get() = (pages - 1).coerceAtLeast(1)
+
+    /** A new widget on the last ladera, as when an app asks to add one. */
+    fun addOnLadera(id: Int) = if (placed(id) != null) this else WidgetBoard(items + Placed(id, lastLadera))
+
+    /** A shortcut at the end of a ladera (never the camp), once. */
+    fun addShortcut(packageName: String, id: String, label: String, page: Int): WidgetBoard =
+        if (items.any { it is Pinned && it.packageName == packageName && it.id == id }) this
+        else WidgetBoard(items + Pinned(packageName, id, label, page.coerceAtLeast(1))).compact()
+
+    fun removeShortcut(packageName: String, id: String) =
+        WidgetBoard(items.filterNot { it is Pinned && it.packageName == packageName && it.id == id }).compact()
+
+    /** The ids of [packageName]'s shortcuts on the home screen, which Android must keep pinned. */
+    fun shortcutsOf(packageName: String): List<String> = items.filterIsInstance<Pinned>().filter { it.packageName == packageName }.map { it.id }
+
     fun removeApp(packageName: String) = WidgetBoard(items.filterNot { it is Shelved && it.packageName == packageName }).compact()
 
     /** Forget apps that are no longer installed. */
-    fun keepApps(installed: Set<String>) = WidgetBoard(items.filter { it !is Shelved || it.packageName in installed }).compact()
+    fun keepApps(installed: Set<String>) = WidgetBoard(
+        items.filter { (it !is Shelved || it.packageName in installed) && (it !is Pinned || it.packageName in installed) },
+    ).compact()
 
     /** Sends a widget to the end of [page]; one past the last opens a new ladera. */
     fun moveTo(id: Int, page: Int): WidgetBoard {
@@ -84,6 +109,7 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
         when (it) {
             is Placed -> "${it.id}:${it.page}:${it.rows}"
             is Shelved -> "@${it.packageName}:${it.page}"
+            is Pinned -> "#" + listOf(it.packageName, it.id, it.label).joinToString("|") { f -> URLEncoder.encode(f, "UTF-8") } + ":${it.page}"
         }
     }
 
@@ -96,23 +122,34 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
             when (item) {
                 is Placed -> item.copy(page = page)
                 is Shelved -> item.copy(page = page)
+                is Pinned -> item.copy(page = page)
             }
         })
     }
 
     companion object {
-        /** Reads `id:page:rows` for widgets and `@package:page` for apps; a bare `id` is the old camp-only format. */
+        /** Reads `id:page:rows` for widgets, `@package:page` for apps and `#package|id|label:page` (URL-encoded) for shortcuts; a bare `id` is the old camp-only format. */
         fun decode(raw: String?) = WidgetBoard(
             raw.orEmpty().split(",").mapNotNull { part ->
                 val fields = part.trim().split(":")
-                if (fields[0].startsWith("@")) {
+                if (fields[0].startsWith("#")) {
+                    val parts = fields[0].drop(1).split("|").map { URLDecoder.decode(it, "UTF-8") }
+                    if (parts.size != 3 || parts[0].isBlank()) return@mapNotNull null
+                    Pinned(parts[0], parts[1], parts[2], fields.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(1) ?: 1)
+                } else if (fields[0].startsWith("@")) {
                     val pkg = fields[0].drop(1).takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     Shelved(pkg, fields.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(1) ?: 1)
                 } else {
                     val id = fields[0].toIntOrNull() ?: return@mapNotNull null
                     Placed(id, fields.getOrNull(1)?.toIntOrNull() ?: 0, fields.getOrNull(2)?.toIntOrNull() ?: 0)
                 }
-            }.distinctBy { if (it is Placed) "w${it.id}" else "a${(it as Shelved).packageName}" },
+            }.distinctBy {
+                when (it) {
+                    is Placed -> "w${it.id}"
+                    is Shelved -> "a${it.packageName}"
+                    is Pinned -> "s${it.packageName}/${it.id}"
+                }
+            },
         )
     }
 }
