@@ -93,6 +93,7 @@ import dev.vivac.launcher.theme.BADGE_OVERHANG
 import dev.vivac.launcher.theme.Contours
 import dev.vivac.launcher.theme.Glyph
 import dev.vivac.launcher.theme.Ink
+import dev.vivac.launcher.widgets.Grip
 import dev.vivac.launcher.theme.LineIcon
 import dev.vivac.launcher.theme.Type
 
@@ -112,11 +113,13 @@ fun CampamentoScreen(
     page: Int,
     onPage: (Int) -> Unit,
     widgetHeightDp: (id: Int, rows: Int) -> Int,
-    widgetView: (Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit) -> View?,
+    widgetView: (Context, id: Int, widthDp: Float, rows: Int, grip: Grip) -> View?,
     onWidgetMenu: (Int) -> Unit,
     onCampMenu: () -> Unit,
     onDrop: (packageName: String, from: Zone, to: Zone, index: Int) -> Unit = { _, _, _, _ -> },
     drag: DragBoard = remember { DragBoard() },
+    onWidgetDrop: (id: Int, to: Zone, index: Int) -> Unit = { _, _, _ -> },
+    widgetLabel: (Int) -> String = { "widget" },
 ) {
     val dp = LocalDensity.current.density
     val drop: (Held, Spot) -> Unit = { h, spot -> onDrop(h.app.packageName, h.from, spot.zone, spot.index) }
@@ -170,7 +173,9 @@ fun CampamentoScreen(
             LaunchedEffect(page) { if (pager.currentPage != page) pager.animateScrollToPage(page) }
             LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect(onPage) }
             val card: @Composable (Placed) -> Unit = { w ->
-                WidgetCard(w.id, w.rows, widgetHeightDp(w.id, w.rows), widgetView) { onWidgetMenu(w.id) }
+                val spot = Spot(Zone.Ladera(w.page), board.onPage(w.page).indexOf(w))
+                val grip = remember(w.id, w.page) { CardGrip(drag, HeldWidget(w.id, Zone.Ladera(w.page), widgetLabel(w.id)), { onWidgetMenu(w.id) }, onWidgetDrop) }
+                WidgetCard(w.id, w.rows, widgetHeightDp(w.id, w.rows), widgetView, grip, drag, spot)
             }
             HorizontalPager(pager, Modifier.weight(1f), pageSpacing = 24.dp, verticalAlignment = Alignment.Top) { p ->
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -178,6 +183,8 @@ fun CampamentoScreen(
                     Column(
                         Modifier
                             .weight(1f)
+                            // The camp takes a carried widget anywhere over it, after its other widgets.
+                            .then(if (p == 0) Modifier.spot(drag, Spot(Zone.Ladera(0), Spot.END)) else Modifier)
                             .nestedScroll(leftovers)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -197,7 +204,20 @@ fun CampamentoScreen(
             DockCard(apps, home, onOpenApp, onAppMenu, drag, drop) { onOpenPetate(false) }
         }
         // The carried app follows the finger, a little lifted.
-        drag.held?.let { h ->
+        (drag.held as? HeldWidget)?.let { w ->
+            val half = with(LocalDensity.current) { Offset(WIDGET_GHOST_W.toPx() / 2, WIDGET_GHOST_H.toPx() / 2) }
+            Box(
+                Modifier
+                    .offset { (drag.finger - rootOrigin - half).round() }
+                    .graphicsLayer { alpha = 0.92f }
+                    .size(WIDGET_GHOST_W, WIDGET_GHOST_H)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Ink.raised)
+                    .border(1.5.dp, Ink.primary, RoundedCornerShape(20.dp)),
+                contentAlignment = Alignment.Center,
+            ) { Text(w.label, style = Type.small.copy(color = Ink.text), maxLines = 1) }
+        }
+        (drag.held as? Held)?.let { h ->
             val half = with(LocalDensity.current) { (TILE / 2).toPx() }
             Box(
                 Modifier
@@ -214,6 +234,26 @@ fun CampamentoScreen(
 }
 
 private const val EDGE_WAIT_MS = 500L
+private val WIDGET_GHOST_W = 168.dp
+private val WIDGET_GHOST_H = 72.dp
+
+/** A widget's hold, as the camp handles it: lift onto the board, follow the finger, then land or open its card. */
+private class CardGrip(
+    private val drag: DragBoard,
+    private val cargo: HeldWidget,
+    private val onMenu: () -> Unit,
+    private val onDrop: (Int, Zone, Int) -> Unit,
+) : Grip {
+    var origin = Offset.Zero
+
+    override fun lift(x: Float, y: Float) = drag.pick(cargo, origin + Offset(x, y))
+    override fun move(dx: Float, dy: Float) = drag.move(Offset(dx, dy))
+    override fun cancel() = drag.cancel()
+    override fun land(moved: Boolean) {
+        if (!moved) { drag.cancel(); onMenu(); return }
+        drag.release()?.let { (_, spot) -> onDrop(cargo.id, spot.zone, spot.index) }
+    }
+}
 
 /** A home tile that can be carried: its spot on the board, coral when a carried app would land on it, faded while lifted. */
 @Composable
@@ -233,7 +273,7 @@ private fun CarriedTile(
     labelColor: Color = Ink.text,
 ) {
     val spot = Spot(zone, index)
-    val lifted = drag.held?.let { it.app.packageName == app.packageName && it.from == zone } == true
+    val lifted = (drag.held as? Held)?.let { it.app.packageName == app.packageName && it.from == zone } == true
     AppTile(
         label = app.label,
         background = background,
@@ -320,28 +360,37 @@ private fun PageDots(pages: Int, current: Int) {
     }
 }
 
-/** A placed widget, drawn by its app inside a vivac card shape; holding it opens its card. */
+/**
+ * A placed widget, drawn by its app inside a vivac card shape. Holding it and letting go opens its card; holding and
+ * moving carries it. It is also a spot: something carried onto it lands in its place.
+ */
 @Composable
 private fun WidgetCard(
     id: Int,
     rows: Int,
     heightDp: Int,
-    widgetView: (Context, Int, Float, Int, () -> Unit) -> View?,
-    onLongPress: () -> Unit,
+    widgetView: (Context, Int, Float, Int, Grip) -> View?,
+    grip: CardGrip,
+    drag: DragBoard,
+    spot: Spot,
 ) {
+    val lifted = (drag.held as? HeldWidget)?.id == id
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
             .height(heightDp.dp)
+            .spot(drag, spot)
+            .onGloballyPositioned { grip.origin = it.positionInRoot() }
+            .graphicsLayer { alpha = if (lifted) 0.3f else 1f }
             .clip(RoundedCornerShape(24.dp))
             .background(Ink.surface)
-            .border(1.dp, Ink.field, RoundedCornerShape(24.dp)),
+            .border(if (drag.target == spot && !lifted) 1.5.dp else 1.dp, if (drag.target == spot && !lifted) Ink.primary else Ink.field, RoundedCornerShape(24.dp)),
     ) {
         val width = maxWidth.value
         // key(id, rows): a new widget, or a new size, gets a fresh host view laid out for it.
         key(id, rows) {
             AndroidView(
-                factory = { ctx -> widgetView(ctx, id, width, rows, onLongPress) ?: android.widget.Space(ctx) },
+                factory = { ctx -> widgetView(ctx, id, width, rows, grip) ?: android.widget.Space(ctx) },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -537,7 +586,7 @@ private fun Via(
     val shown = pinned.mapNotNull { byPackage[it] }
     if (shown.isEmpty()) {
         // No route yet: while an app is carried, offer the place where it would start.
-        if (drag.held != null) {
+        if (drag.held is Held) {
             Box(
                 Modifier
                     .fillMaxWidth()

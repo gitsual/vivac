@@ -87,11 +87,11 @@ class Widgets(private val activity: Activity) : WidgetHost {
         return WidgetSize.heightDp((info.minHeight / density).toInt(), targetRows(info), rows)
     }
 
-    /** The live view of a placed widget at the size it is drawn, so responsive widgets lay out right; a held finger calls [onLongPress]. */
-    fun view(context: Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit): AppWidgetHostView? {
+    /** The live view of a placed widget at the size it is drawn, so responsive widgets lay out right; a held finger goes to [grip]. */
+    fun view(context: Context, id: Int, widthDp: Float, rows: Int, grip: Grip): AppWidgetHostView? {
         val info = manager.getAppWidgetInfo(id) ?: return null
         val view = host.createView(context, id, info)
-        (view as? WidgetFrame)?.onLongPress = onLongPress
+        (view as? WidgetFrame)?.grip = grip
         val heightDp = heightDp(id, rows).toFloat()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             view.updateAppWidgetSize(Bundle(), listOf(SizeF(widthDp, heightDp)))

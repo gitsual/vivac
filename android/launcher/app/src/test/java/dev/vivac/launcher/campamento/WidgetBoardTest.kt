@@ -124,4 +124,18 @@ class WidgetBoardTest {
         assertEquals(listOf(Placed(1, page = 1), Shelved("b", 1), Shelved("a", 1)), b.insertApp("b", page = 1, index = 1).onPage(1))
         assertEquals(listOf(Placed(1, page = 1), Shelved("a", 1), Shelved("b", 1), Shelved("c", 1)), b.insertApp("c", page = 1, index = 99).onPage(1))
     }
+
+    @Test
+    fun `a widget can be put at a given place on any page, the camp included`() {
+        val b = board(Placed(1), Placed(2), Placed(3, page = 1)).addApp("a", 1)
+        assertEquals(listOf(Placed(2), Placed(1)), b.insertWidget(2, page = 0, index = 0).onPage(0))
+        assertEquals(listOf(Placed(3, page = 1), Placed(1, page = 1), Shelved("a", 1)), b.insertWidget(1, page = 1, index = 1).onPage(1))
+        assertEquals(listOf(Placed(1), Placed(2), Placed(3)), b.insertWidget(3, page = 0, index = 99).onPage(0))
+        assertEquals(b, b.insertWidget(42, page = 0, index = 0))
+    }
+
+    @Test
+    fun `a widget keeps its chosen rows when it moves`() {
+        assertEquals(Placed(1, page = 1, rows = 3), board(Placed(1, rows = 3), Placed(2, page = 1)).insertWidget(1, 1, 0).placed(1))
+    }
 }

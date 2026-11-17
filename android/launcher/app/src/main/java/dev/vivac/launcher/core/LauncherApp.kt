@@ -18,6 +18,7 @@ import dev.vivac.launcher.campamento.PhoneFacts
 import dev.vivac.launcher.petate.AppMenuSheet
 import dev.vivac.launcher.petate.PetateScreen
 import dev.vivac.launcher.widgets.CampMenuSheet
+import dev.vivac.launcher.widgets.Grip
 import dev.vivac.launcher.widgets.PlacedWidget
 import dev.vivac.launcher.widgets.WidgetPickerSheet
 import dev.vivac.launcher.widgets.WidgetMenuSheet
@@ -26,8 +27,8 @@ import dev.vivac.launcher.widgets.WidgetMenuSheet
 interface WidgetViews {
     /** Drawn height for [rows] (0: the widget's own size). */
     fun heightDp(id: Int, rows: Int): Int
-    /** The live view; holding a finger on it calls [onLongPress]. */
-    fun view(context: Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit): View?
+    /** The live view; a finger held on it goes to [grip]. */
+    fun view(context: Context, id: Int, widthDp: Float, rows: Int, grip: Grip): View?
 }
 
 /** The whole launcher on screen, driven by [launcher]. */
@@ -56,6 +57,8 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onDrop = launcher::drop,
             onCampMenu = launcher::openCampMenu,
             drag = drag,
+            onWidgetDrop = launcher::dropWidget,
+            widgetLabel = { id -> launcher.placedWidgets().firstOrNull { it.id == id }?.label ?: "widget" },
         )
     }
     AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->

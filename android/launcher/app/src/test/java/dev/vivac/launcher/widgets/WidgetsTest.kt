@@ -83,7 +83,7 @@ class WidgetsTest {
         assertEquals(180, widgets.heightDp(7))
         assertEquals(2, widgets.defaultRows(7))
         assertEquals(270, widgets.heightDp(7, rows = 3))
-        assertNotNull(widgets.view(activity, 7, 360f, rows = 3) {})
+        assertNotNull(widgets.view(activity, 7, 360f, rows = 3, Recorder()))
         widgets.requestConfigure(7)
         widgets.delete(7)
         widgets.stopListening()
@@ -96,38 +96,71 @@ class WidgetsTest {
         assertFalse(widgets.needsConfiguring(99))
         assertEquals("widget", widgets.label(99))
         assertEquals(72, widgets.heightDp(99))
-        assertNull(widgets.view(activity, 99, 360f, rows = 0) {})
+        assertNull(widgets.view(activity, 99, 360f, rows = 0, Recorder()))
     }
 
     private fun touch(view: android.view.View, action: Int, x: Float = 20f, y: Float = 20f) =
         view.dispatchTouchEvent(MotionEvent.obtain(0, SystemClock.uptimeMillis(), action, x, y, 0))
 
-    private fun placedView(onLongPress: () -> Unit): android.view.View {
+    private class Recorder : Grip {
+        val calls = mutableListOf<String>()
+        override fun lift(x: Float, y: Float) { calls += "lift:${x.toInt()},${y.toInt()}" }
+        override fun move(dx: Float, dy: Float) { calls += "move:${dx.toInt()},${dy.toInt()}" }
+        override fun land(moved: Boolean) { calls += "land:$moved" }
+        override fun cancel() { calls += "cancel" }
+    }
+
+    private fun placedView(grip: Grip): android.view.View {
         manager.addBoundWidget(7, provider("a.clock", "Reloj"))
-        return Widgets(activity).view(activity, 7, 360f, rows = 0, onLongPress)!!.apply { layout(0, 0, 400, 200) }
+        return Widgets(activity).view(activity, 7, 360f, rows = 0, grip)!!.apply { layout(0, 0, 400, 200) }
+    }
+
+    private fun hold() = ShadowLooper.idleMainLooper(ViewConfiguration.getLongPressTimeout() + 50L, TimeUnit.MILLISECONDS)
+
+    @Test
+    fun `holding a finger still on a widget and letting go opens vivac's card for it`() {
+        val grip = Recorder()
+        val view = placedView(grip)
+        touch(view, MotionEvent.ACTION_DOWN)
+        hold()
+        assertEquals(listOf("lift:20,20"), grip.calls)
+        // The rest of that gesture is vivac's, not the widget's.
+        assertTrue(touch(view, MotionEvent.ACTION_UP))
+        assertEquals(listOf("lift:20,20", "land:false"), grip.calls)
     }
 
     @Test
-    fun `holding a finger on a widget opens vivac's card for it`() {
-        var pressed = 0
-        val view = placedView { pressed++ }
+    fun `holding a widget and moving carries it, and the finger's path is passed on`() {
+        val grip = Recorder()
+        val view = placedView(grip)
         touch(view, MotionEvent.ACTION_DOWN)
-        ShadowLooper.idleMainLooper(ViewConfiguration.getLongPressTimeout() + 50L, TimeUnit.MILLISECONDS)
-        assertEquals(1, pressed)
-        // The rest of that gesture is vivac's, not the widget's.
-        assertTrue(touch(view, MotionEvent.ACTION_UP))
+        hold()
+        assertTrue(touch(view, MotionEvent.ACTION_MOVE, y = 120f))
+        touch(view, MotionEvent.ACTION_MOVE, x = 60f, y = 120f)
+        touch(view, MotionEvent.ACTION_UP, x = 60f, y = 120f)
+        assertEquals(listOf("lift:20,20", "move:0,100", "move:40,0", "land:true"), grip.calls)
+    }
+
+    @Test
+    fun `a carry the system takes back is cancelled`() {
+        val grip = Recorder()
+        val view = placedView(grip)
+        touch(view, MotionEvent.ACTION_DOWN)
+        hold()
+        touch(view, MotionEvent.ACTION_CANCEL)
+        assertEquals(listOf("lift:20,20", "cancel"), grip.calls)
     }
 
     @Test
     fun `a tap or a scroll still belongs to the widget`() {
-        var pressed = 0
-        val view = placedView { pressed++ }
+        val grip = Recorder()
+        val view = placedView(grip)
         touch(view, MotionEvent.ACTION_DOWN)
         touch(view, MotionEvent.ACTION_UP)
         touch(view, MotionEvent.ACTION_DOWN)
         touch(view, MotionEvent.ACTION_MOVE, y = 200f)
         touch(view, MotionEvent.ACTION_CANCEL)
-        ShadowLooper.idleMainLooper(ViewConfiguration.getLongPressTimeout() + 50L, TimeUnit.MILLISECONDS)
-        assertEquals(0, pressed)
+        hold()
+        assertEquals(emptyList<String>(), grip.calls)
     }
 }

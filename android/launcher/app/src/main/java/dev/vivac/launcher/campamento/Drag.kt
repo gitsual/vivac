@@ -29,8 +29,21 @@ import androidx.compose.ui.semantics.semantics
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.core.Zone
 
-/** The app being carried: what it is, where it came from, and the tone its tile is drawn in. */
-data class Held(val app: InstalledApp, val from: Zone, val tone: Color)
+/** Something being carried, from [from]; [takes] says which zones it can land in. */
+sealed interface Cargo {
+    val from: Zone
+    fun takes(zone: Zone): Boolean
+}
+
+/** An app being carried: what it is, where it came from, and the tone its tile is drawn in. Never onto the camp's widgets. */
+data class Held(val app: InstalledApp, override val from: Zone, val tone: Color) : Cargo {
+    override fun takes(zone: Zone) = zone != Zone.Ladera(0) && zone != Zone.Petate
+}
+
+/** A widget being carried: it lands only among the things on a page. */
+data class HeldWidget(val id: Int, override val from: Zone, val label: String) : Cargo {
+    override fun takes(zone: Zone) = zone is Zone.Ladera
+}
 
 /** A place a carried app can land: a tile's spot in a zone, or the end of a zone ([index] = [END]). */
 data class Spot(val zone: Zone, val index: Int) {
@@ -42,7 +55,7 @@ data class Spot(val zone: Zone, val index: Int) {
  * and every spot that can take it, as the screen last laid them out.
  */
 class DragBoard {
-    var held by mutableStateOf<Held?>(null); private set
+    var held by mutableStateOf<Cargo?>(null); private set
     var finger by mutableStateOf(Offset.Zero); private set
     private val spots = mutableMapOf<Spot, Rect>()
     /** The visible area: spots outside it (a ladera off screen) take nothing. */
@@ -51,21 +64,24 @@ class DragBoard {
     fun place(spot: Spot, bounds: Rect) { spots[spot] = bounds }
     fun forget(spot: Spot) { spots.remove(spot) }
 
-    fun pick(held: Held, at: Offset) { this.held = held; finger = at }
+    fun pick(held: Cargo, at: Offset) { this.held = held; finger = at }
     fun move(by: Offset) { finger += by }
     fun cancel() { held = null }
 
-    /** Where the carried app would land now: the tile under the finger, else the zone it is over. */
+    /** Where the carried thing would land now: the tile under the finger, else the zone it is over. */
     val target: Spot? get() = held?.let { spotAt(finger) }
 
     fun spotAt(at: Offset): Spot? {
-        val visible = spots.filterValues { screen == Rect.Zero || it.overlaps(screen) }
+        val cargo = held
+        val visible = spots.filter { (spot, bounds) ->
+            (screen == Rect.Zero || bounds.overlaps(screen)) && (cargo == null || cargo.takes(spot.zone))
+        }
         visible.entries.filter { it.key.index != Spot.END }.firstOrNull { it.value.contains(at) }?.let { return it.key }
         return visible.entries.firstOrNull { it.key.index == Spot.END && it.value.contains(at) }?.key
     }
 
     /** Lets go: the drop it makes, or null when the finger is over nothing that takes apps. */
-    fun release(): Pair<Held, Spot>? {
+    fun release(): Pair<Cargo, Spot>? {
         val h = held ?: return null
         val spot = spotAt(finger)
         held = null
@@ -127,7 +143,7 @@ fun Modifier.carriable(
                     board.cancel()
                     onMenu()
                 } else {
-                    board.release()?.let { (h, s) -> onDrop(h, s) }
+                    board.release()?.let { (h, s) -> onDrop(h as Held, s) }
                     onLand()
                 }
             }

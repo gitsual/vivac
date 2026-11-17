@@ -56,8 +56,8 @@ class MainActivity : ComponentActivity() {
         refresh()
         val views = object : WidgetViews {
             override fun heightDp(id: Int, rows: Int) = widgets.heightDp(id, rows)
-            override fun view(context: Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit) =
-                widgets.view(context, id, widthDp, rows, onLongPress)
+            override fun view(context: Context, id: Int, widthDp: Float, rows: Int, grip: dev.vivac.launcher.widgets.Grip) =
+                widgets.view(context, id, widthDp, rows, grip)
         }
 
         setContent {

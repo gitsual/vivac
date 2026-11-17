@@ -1,6 +1,7 @@
 package dev.vivac.launcher.core
 
 import dev.vivac.launcher.apps.InstalledApp
+import dev.vivac.launcher.campamento.Placed
 import dev.vivac.launcher.campamento.Shelved
 import dev.vivac.launcher.petate.AppShortcut
 import dev.vivac.launcher.petate.MenuEntry
@@ -401,6 +402,21 @@ class LauncherTest {
         l.drop("com.termux", from = Zone.Petate, to = Zone.Dock, index = 0)
         assertEquals(listOf("com.termux", "com.android.settings", "org.thoughtcrime.securesms", "com.tailscale.ipn"), l.shownDock())
         assertEquals(emptyList<String>(), actions.calls)
+    }
+
+    @Test
+    fun `a widget dragged onto a page lands at that place, and only pages take widgets`() {
+        widgets.placed = mutableMapOf(1 to "a", 2 to "b")
+        store.values["widgets"] = "1:0:0,2:0:0,@com.termux:1"
+        val l = many()
+        l.dropWidget(2, Zone.Ladera(0), 0)
+        assertEquals(listOf(2, 1), l.board.ids)
+        l.dropWidget(1, Zone.Ladera(1), 0)
+        assertEquals(listOf(Placed(1, page = 1), Shelved("com.termux", 1)), l.board.onPage(1))
+        assertEquals("2:0:0,1:1:0,@com.termux:1", store.values["widgets"])
+        l.dropWidget(1, Zone.Via, 0)
+        l.dropWidget(1, Zone.Dock, 0)
+        assertEquals(listOf(Placed(1, page = 1), Shelved("com.termux", 1)), l.board.onPage(1))
     }
 
     @Test

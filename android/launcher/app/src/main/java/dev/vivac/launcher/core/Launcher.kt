@@ -250,6 +250,11 @@ class Launcher(
         showPage(board.placed(id)?.page ?: 0)
     }
 
+    /** A widget dragged onto a page lands at [index] there; only pages (the camp and the laderas) take widgets. */
+    fun dropWidget(id: Int, to: Zone, index: Int) {
+        if (to is Zone.Ladera) saveBoard(board.insertWidget(id, to.page, index))
+    }
+
     fun removeWidget(id: Int) {
         widgetMenu = null
         campMenu = false

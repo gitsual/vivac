@@ -31,6 +31,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.campamento.PhoneFacts
 import dev.vivac.launcher.petate.AppShortcut
+import dev.vivac.launcher.widgets.Grip
 import dev.vivac.launcher.widgets.WidgetOption
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -52,11 +53,13 @@ class LauncherAppTest {
     private val actions = FakeActions()
     private val widgets = FakeWidgets()
     private val drawn = mutableListOf<Int>()
+    private val grips = mutableMapOf<Int, Grip>()
     private val views = object : WidgetViews {
         override fun heightDp(id: Int, rows: Int) = if (rows > 0) rows * 90 else 120
-        override fun view(context: Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit): View {
+        override fun view(context: Context, id: Int, widthDp: Float, rows: Int, grip: Grip): View {
             drawn += id
-            return TextView(context).apply { text = "w$id"; setOnLongClickListener { onLongPress(); true } }
+            grips[id] = grip
+            return TextView(context).apply { text = "w$id"; setOnLongClickListener { grip.lift(0f, 0f); grip.land(moved = false); true } }
         }
     }
     private lateinit var launcher: Launcher
@@ -269,6 +272,46 @@ class LauncherAppTest {
             v!!.performLongClick()
         }
         assertEquals(1, launcher.widgetMenu)
+    }
+
+    @Test
+    fun `a widget carried by its grip lands where it is let go`() {
+        widgets.placed = mutableMapOf(1 to "Reloj", 2 to "Tiempo")
+        store.values["widgets"] = "1,2"
+        show()
+        val from = viewCentre("w2")
+        val to = viewCentre("w1")
+        compose.runOnUiThread { grips.getValue(2).lift(40f, 40f) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Tiempo").assertExists()
+        compose.runOnUiThread { grips.getValue(2).move(0f, to.y - from.y); grips.getValue(2).land(moved = true) }
+        compose.waitForIdle()
+        assertEquals(listOf(2, 1), launcher.board.ids)
+        assertEquals(null, launcher.widgetMenu)
+    }
+
+    @Test
+    fun `a widget carried over the route or let go after a cancel stays where it was`() {
+        widgets.placed = mutableMapOf(1 to "Reloj", 2 to "Tiempo")
+        store.values["widgets"] = "1,2"
+        store.values["pinned"] = "app.organicmaps"
+        show()
+        compose.runOnUiThread { grips.getValue(1).lift(1f, 1f); grips.getValue(1).cancel() }
+        compose.waitForIdle()
+        assertEquals(listOf(1, 2), launcher.board.ids)
+    }
+
+    /** The centre of a widget's view, in the coordinates Compose lays the screen out in. */
+    private fun viewCentre(text: String): androidx.compose.ui.geometry.Offset {
+        var at = androidx.compose.ui.geometry.Offset.Zero
+        compose.runOnUiThread {
+            val root = compose.activity.findViewById<android.view.ViewGroup>(android.R.id.content).getChildAt(0)
+            val v = find(root) { it is TextView && it.text == text }!!
+            val a = IntArray(2).also { v.getLocationInWindow(it) }
+            val r = IntArray(2).also { root.getLocationInWindow(it) }
+            at = androidx.compose.ui.geometry.Offset(a[0] - r[0] + v.width / 2f, a[1] - r[1] + v.height / 2f)
+        }
+        return at
     }
 
     private fun find(v: View, match: (View) -> Boolean): View? {
