@@ -62,13 +62,16 @@ import dev.vivac.launcher.theme.Type
 @Composable
 fun PetateScreen(
     apps: List<InstalledApp>,
+    hidden: Set<String>,
     focusSearch: Boolean,
     onOpenApp: (String) -> Unit,
     onAppMenu: (String) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf<Group?>(null) }
-    val found = remember(apps, query) { Pack.search(apps, query) }
+    var showHidden by rememberSaveable { mutableStateOf(false) }
+    if (hidden.isEmpty()) showHidden = false
+    val found = remember(apps, hidden, showHidden, query) { Pack.search(Pack.visible(apps, hidden, showHidden), query) }
     val shelves = remember(found, filter) { Pack.grouped(found, filter) }
     val focus = remember { FocusRequester() }
     LaunchedEffect(focusSearch) { if (focusSearch) focus.requestFocus() }
@@ -87,8 +90,9 @@ fun PetateScreen(
         }
         SearchField(query, { query = it }, focus) { shelves.firstOrNull()?.second?.singleOrNull()?.let { onOpenApp(it.packageName) } }
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip("Todo", filter == null) { filter = null }
-            Group.entries.forEach { g -> Chip(g.title, filter == g) { filter = if (filter == g) null else g } }
+            Chip("Todo", filter == null && !showHidden) { filter = null; showHidden = false }
+            Group.entries.forEach { g -> Chip(g.title, filter == g && !showHidden) { filter = if (filter == g) null else g; showHidden = false } }
+            if (hidden.isNotEmpty()) Chip("Ocultas · ${hidden.size}", showHidden) { showHidden = !showHidden; filter = null }
         }
         if (shelves.isEmpty()) {
             Text("Nada en el petate con «$query».", style = Type.body.copy(color = Ink.textMuted))

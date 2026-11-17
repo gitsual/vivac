@@ -43,6 +43,8 @@ object Glyph {
     const val INFO = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 11v6 M12 7.5v.5"
     const val SQUARE = "M5 5h14v14H5z"
     const val PLUS = "M12 5v14M5 12h14"
+    const val EYE_OFF = "M3 3l18 18 M10.6 6.1A9.6 9.6 0 0 1 12 6c5 0 9 6 9 6a15 15 0 0 1-3 3.4 M6.6 7.6C4.3 9.2 3 12 3 12s4 6 9 6a8.6 8.6 0 0 0 4-1"
+    const val EYE = "M3 12s4-6 9-6 9 6 9 6-4 6-9 6-9-6-9-6z M12 9.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5z"
     const val DOT = "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z"
     const val DOCK = "M3 17h18 M6 13h3v4H6z M10.5 13h3v4h-3z M15 13h3v4h-3z"
     const val TENT = "M3 20L12 4l9 16z M12 20v-6"

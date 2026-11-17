@@ -54,6 +54,7 @@ private enum class Screen { CAMPAMENTO, PETATE }
 private const val KEY_DOCK = "dock"
 private const val KEY_PINNED = "pinned"
 private const val KEY_WIDGETS = "widgets"
+private const val KEY_HIDDEN = "hidden"
 private const val REQ_BIND = 7001
 private const val REQ_CONFIGURE = 7002
 private const val KEY_PENDING = "pendingWidget"
@@ -90,7 +91,7 @@ class MainActivity : ComponentActivity() {
         icons = AppIcons(this)
         widgets = Widgets(this)
         watcher = source.watch { changed -> icons.forget(changed); refresh() }
-        home = Home.decode(prefs.getString(KEY_DOCK, null), prefs.getString(KEY_PINNED, null))
+        home = Home.decode(prefs.getString(KEY_DOCK, null), prefs.getString(KEY_PINNED, null), prefs.getString(KEY_HIDDEN, null))
         // Drop widgets whose app was uninstalled while vivac was not running.
         board = WidgetBoard.decode(prefs.getString(KEY_WIDGETS, null)).let { b -> WidgetBoard(b.ids.filter(widgets::exists)) }
         pendingWidget = savedInstanceState?.getInt(KEY_PENDING, -1) ?: -1
@@ -113,7 +114,7 @@ class MainActivity : ComponentActivity() {
                         CampamentoScreen(
                             stamp = stamp,
                             facts = f,
-                            apps = apps,
+                            apps = visibleApps(),
                             home = home,
                             onOpenApp = { actions.open(it) },
                             onAppMenu = ::openMenu,
@@ -129,6 +130,7 @@ class MainActivity : ComponentActivity() {
                     }
                     Screen.PETATE -> PetateScreen(
                         apps = apps,
+                        hidden = home.hidden.toSet(),
                         focusSearch = focusSearch,
                         onOpenApp = { actions.open(it); screen = Screen.CAMPAMENTO },
                         onAppMenu = ::openMenu,
@@ -160,6 +162,7 @@ class MainActivity : ComponentActivity() {
                             is MenuEntry.Shortcut -> actions.openShortcut(m.app.packageName, entry.shortcut.id)
                             is MenuEntry.Dock -> apply(home.copy(dock = shownDock()).toggleDock(m.app.packageName))
                             is MenuEntry.Pin -> apply(home.togglePin(m.app.packageName))
+                            is MenuEntry.Hide -> apply(HomeChange(home.toggleHidden(m.app.packageName)))
                             MenuEntry.Info -> actions.info(m.app.packageName)
                             MenuEntry.Uninstall -> actions.uninstall(m.app.packageName)
                         }
@@ -173,18 +176,24 @@ class MainActivity : ComponentActivity() {
     private fun openMenu(packageName: String) {
         val app = apps.find { it.packageName == packageName } ?: return
         val shortcuts = actions.shortcuts(packageName)
-        val entries = AppMenu.build(shortcuts, app.isSystem, inDock = packageName in shownDock(), pinned = packageName in home.pinned)
+        val entries = AppMenu.build(shortcuts, app.isSystem, inDock = packageName in shownDock(), pinned = packageName in home.pinned, hidden = packageName in home.hidden)
         menu = OpenMenu(app, entries, actions.canReadShortcuts())
     }
 
     /** The dock as it is on screen: your choice, or the default favourites until you edit it. */
     private fun shownDock(): List<String> =
-        Dock.pick(apps.map { it.packageName }.toSet(), home.dock).filterIsInstance<DockSlot.App>().map { it.packageName }
+        Dock.pick(visibleApps().map { it.packageName }.toSet(), home.dock).filterIsInstance<DockSlot.App>().map { it.packageName }
 
     private fun apply(change: HomeChange) {
         val next = change.home ?: return Toast.makeText(this, change.refusal, Toast.LENGTH_LONG).show()
         home = next
-        prefs.edit().putString(KEY_DOCK, next.encodeDock()).putString(KEY_PINNED, next.encodePinned()).apply()
+        prefs.edit().putString(KEY_DOCK, next.encodeDock()).putString(KEY_PINNED, next.encodePinned()).putString(KEY_HIDDEN, next.encodeHidden()).apply()
+    }
+
+    /** Hidden apps never reach the Campamento (dock, pins); only the Petate's "Ocultas" shows them. */
+    private fun visibleApps(): List<InstalledApp> {
+        val hidden = home.hidden.toSet()
+        return apps.filter { it.packageName !in hidden }
     }
 
     /** Placing a widget: allocate an id, get the bind permission if needed, then its configuration if it has one. */

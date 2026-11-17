@@ -42,4 +42,10 @@ class AppMenuTest {
         val menu = AppMenu.build(listOf(s("a", " "), s("b", "Buscar")), isSystem = true)
         assertEquals(listOf(MenuEntry.Shortcut(s("b", "Buscar")), MenuEntry.Info), menu)
     }
+
+    @Test
+    fun `hide toggle comes right before info`() {
+        val menu = AppMenu.build(emptyList(), isSystem = true, inDock = false, pinned = false, hidden = true)
+        assertEquals(listOf(MenuEntry.Dock(false), MenuEntry.Pin(false), MenuEntry.Hide(hidden = true), MenuEntry.Info), menu)
+    }
 }

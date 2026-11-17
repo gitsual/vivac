@@ -48,4 +48,19 @@ class HomeTest {
             Dock.pick(installed, chosen = listOf("app.organicmaps", "not.installed", "com.termux")),
         )
     }
+
+    @Test
+    fun `hiding an app also takes it off the dock and the pins, and it can come back`() {
+        val home = Home(dock = listOf("a", "b"), pinned = listOf("b", "c"))
+        val hidden = home.toggleHidden("b")
+        assertEquals(Home(dock = listOf("a"), pinned = listOf("c"), hidden = listOf("b")), hidden)
+        assertEquals(Home(dock = listOf("a"), pinned = listOf("c")), hidden.toggleHidden("b"))
+    }
+
+    @Test
+    fun `hidden apps survive storage and drop out when uninstalled`() {
+        val home = Home(hidden = listOf("x", "y"))
+        assertEquals(home, Home.decode(home.encodeDock(), home.encodePinned(), home.encodeHidden()))
+        assertEquals(Home(hidden = listOf("y")), home.keepOnly(setOf("y")))
+    }
 }

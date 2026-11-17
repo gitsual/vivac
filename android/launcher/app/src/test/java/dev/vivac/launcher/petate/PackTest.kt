@@ -92,4 +92,11 @@ class PackTest {
         assertEquals(a, Pack.toneIndex(whatsapp.copy(label = "otro"), 6))
         assertTrue(a in 0 until 6)
     }
+
+    @Test
+    fun `hidden apps leave the shelves, and only they show when asking for them`() {
+        val apps = listOf(termux, whatsapp, settings)
+        assertEquals(listOf(termux, settings), Pack.visible(apps, hidden = setOf("com.whatsapp"), showHidden = false))
+        assertEquals(listOf(whatsapp), Pack.visible(apps, hidden = setOf("com.whatsapp"), showHidden = true))
+    }
 }

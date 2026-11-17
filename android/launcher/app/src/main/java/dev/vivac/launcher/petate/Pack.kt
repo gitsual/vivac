@@ -55,6 +55,10 @@ object Pack {
         return if (second == null) "$head" else "$head${second.lowercaseChar()}"
     }
 
+    /** The Petate shows either the apps you did not hide, or, when you ask for them, only the hidden ones. */
+    fun visible(apps: List<InstalledApp>, hidden: Set<String>, showHidden: Boolean): List<InstalledApp> =
+        apps.filter { (it.packageName in hidden) == showHidden }
+
     fun search(apps: List<InstalledApp>, query: String): List<InstalledApp> {
         val needle = fold(query.trim())
         if (needle.isEmpty()) return apps
