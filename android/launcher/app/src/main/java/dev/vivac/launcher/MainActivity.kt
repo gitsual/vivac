@@ -18,9 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
 import dev.vivac.launcher.apps.AndroidAppSource
 import dev.vivac.launcher.apps.AppActions
-import dev.vivac.launcher.apps.AppIcons
 import dev.vivac.launcher.apps.Dots
-import dev.vivac.launcher.apps.LocalAppIcons
 import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.PrefsStore
 import dev.vivac.launcher.campamento.PhoneFacts
@@ -39,7 +37,6 @@ private const val KEY_PENDING = "pendingWidget"
 class MainActivity : ComponentActivity() {
     private lateinit var source: AndroidAppSource
     private lateinit var actions: AppActions
-    private lateinit var icons: AppIcons
     private lateinit var widgets: Widgets
     private lateinit var launcher: Launcher
     private var watcher: LauncherApps.Callback? = null
@@ -53,10 +50,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
         source = AndroidAppSource(this)
         actions = AppActions(this)
-        icons = AppIcons(this)
         widgets = Widgets(this)
         launcher = Launcher(source, PrefsStore(getSharedPreferences("home", MODE_PRIVATE)), actions, widgets, savedInstanceState?.getInt(KEY_PENDING, -1) ?: -1)
-        watcher = source.watch { changed -> icons.forget(changed); refresh() }
+        watcher = source.watch { refresh() }
         refresh()
         val views = object : WidgetViews {
             override fun heightDp(id: Int) = widgets.heightDp(id)
@@ -65,7 +61,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val dots by Dots.live.collectAsState()
-            CompositionLocalProvider(LocalAppIcons provides icons, LocalDots provides dots) {
+            CompositionLocalProvider(LocalDots provides dots) {
                 facts?.let { LauncherApp(launcher, stamp, it, actions, views) }
             }
         }

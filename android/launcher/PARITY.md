@@ -52,7 +52,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 
 | # | Feature | Status |
 |---|---------|--------|
-| I1 | Themed (monochrome) icons with colour fallback | done |
+| I1 | One ink for every icon: vivac's own line glyph per app, monogram for apps without one | done |
 | I2 | Choose themed / original colour icons | todo |
 | I3 | Icon packs (ADW / Nova standard appfilter.xml) | todo |
 | I4 | Custom icon per app (from a pack) | todo |
