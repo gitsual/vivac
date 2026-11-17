@@ -16,7 +16,7 @@ import dev.vivac.launcher.theme.Monogram
 /** Provided once by the activity, so every tile shares one icon cache. */
 val LocalAppIcons = staticCompositionLocalOf<AppIcons?> { null }
 
-/** What sits inside a tile: the themed glyph in the tile's tone, else the colour icon, else the monogram. */
+/** What sits inside a tile: the app's glyph in the tile's tone, else the monogram. Never a colour icon. */
 @Composable
 fun AppFace(app: InstalledApp, tone: Color) {
     val icons = LocalAppIcons.current
@@ -24,7 +24,6 @@ fun AppFace(app: InstalledApp, tone: Color) {
     when (val i = icon) {
         // Decorative: the tile's label already names the app for TalkBack.
         is AppIcon.Glyph -> Image(i.image, contentDescription = null, colorFilter = ColorFilter.tint(tone), modifier = Modifier.size(48.dp))
-        is AppIcon.Full -> Image(i.image, contentDescription = null, modifier = Modifier.size(44.dp))
         null -> Monogram(Pack.monogram(app), tone)
     }
 }

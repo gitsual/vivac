@@ -5,6 +5,9 @@ import android.graphics.Color
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.InsetDrawable
+import android.graphics.drawable.ShapeDrawable
+import android.graphics.drawable.shapes.OvalShape
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
@@ -27,12 +30,27 @@ class AppIconsTest {
         assertTrue(icons("a" to adaptive(ColorDrawable(Color.BLACK))).load("a") is AppIcon.Glyph)
     }
 
+    /** A foreground with a drawn shape: a small disc in the middle of the 108-unit layer, the rest transparent. */
+    private fun drawn() = InsetDrawable(ShapeDrawable(OvalShape()).apply { paint.color = Color.WHITE }, 0.3f)
+
     @Test
-    fun `a blank themed layer, or none at all, falls back to the colour icon`() = runBlocking {
-        val i = icons("blank" to adaptive(ColorDrawable(Color.TRANSPARENT)), "plain" to ColorDrawable(Color.BLUE), "old" to adaptive(null))
-        assertTrue(i.load("blank") is AppIcon.Full)
-        assertTrue(i.load("plain") is AppIcon.Full)
-        assertTrue(i.load("old") is AppIcon.Full)
+    fun `without a themed layer, vivac makes one from the foreground's silhouette`() = runBlocking {
+        val i = icons("drawn" to AdaptiveIconDrawable(ColorDrawable(Color.RED), drawn(), null))
+        assertTrue(i.load("drawn") is AppIcon.Glyph)
+    }
+
+    @Test
+    fun `a blank themed layer also falls back to the silhouette`() = runBlocking {
+        val i = icons("blank" to AdaptiveIconDrawable(ColorDrawable(Color.RED), drawn(), ColorDrawable(Color.TRANSPARENT)))
+        assertTrue(i.load("blank") is AppIcon.Glyph)
+    }
+
+    @Test
+    fun `no colour icon ever shows, a solid foreground or a legacy icon gets the monogram`() = runBlocking {
+        val i = icons("solid" to adaptive(null), "plain" to ColorDrawable(Color.BLUE), "empty" to AdaptiveIconDrawable(ColorDrawable(Color.RED), ColorDrawable(Color.TRANSPARENT), null))
+        assertNull(i.load("solid"))
+        assertNull(i.load("plain"))
+        assertNull(i.load("empty"))
     }
 
     @Test
@@ -42,7 +60,7 @@ class AppIconsTest {
 
     @Test
     fun `icons are cached until forgotten`() = runBlocking {
-        val i = icons("a" to ColorDrawable(Color.BLUE))
+        val i = icons("a" to adaptive(ColorDrawable(Color.BLACK)))
         i.load("a"); i.load("a")
         assertEquals(listOf("a"), asked)
         i.forget("a")
