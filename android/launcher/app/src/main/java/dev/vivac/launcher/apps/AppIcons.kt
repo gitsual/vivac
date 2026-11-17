@@ -24,17 +24,20 @@ sealed interface AppIcon {
     data class Full(val image: ImageBitmap) : AppIcon
 }
 
-/** Adapter: loads icons from LauncherApps off the main thread and keeps them in memory. */
-class AppIcons(context: Context) {
-    private val launcherApps = context.getSystemService(LauncherApps::class.java)
+/** Adapter: loads icons off the main thread and keeps them in memory. [find] gives an app's raw icon. */
+class AppIcons(context: Context, private val find: (packageName: String) -> Drawable?) {
+    /** Icons as LauncherApps gives them for the current profile. */
+    constructor(context: Context) : this(context, { pkg ->
+        context.getSystemService(LauncherApps::class.java).getActivityList(pkg, Process.myUserHandle()).firstOrNull()?.getIcon(0)
+    })
+
     private val density = context.resources.displayMetrics.density
     private val cache = LruCache<String, AppIcon>(256)
 
     suspend fun load(packageName: String): AppIcon? {
         cache.get(packageName)?.let { return it }
         return withContext(Dispatchers.IO) {
-            val drawable = launcherApps.getActivityList(packageName, Process.myUserHandle()).firstOrNull()?.getIcon(0)
-                ?: return@withContext null
+            val drawable = find(packageName) ?: return@withContext null
             render(drawable)?.also { cache.put(packageName, it) }
         }
     }

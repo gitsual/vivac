@@ -54,7 +54,7 @@ class Widgets(private val activity: Activity) : WidgetHost {
     override fun allocate(): Int = host.allocateAppWidgetId()
 
     override fun bindIfAllowed(id: Int, option: WidgetOption): Boolean =
-        manager.bindAppWidgetIdIfAllowed(id, Process.myUserHandle(), ComponentName.unflattenFromString(option.key), null)
+        manager.bindAppWidgetIdIfAllowed(id, ComponentName.unflattenFromString(option.key))
 
     /** The system dialog that asks you to allow vivac to place this widget. */
     fun bindRequest(id: Int, option: WidgetOption): Intent =

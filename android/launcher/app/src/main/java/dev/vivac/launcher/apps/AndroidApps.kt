@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
+import android.content.pm.ShortcutInfo
 import android.net.Uri
 import android.os.Process
 import android.os.UserHandle
@@ -59,10 +60,17 @@ class AppActions(private val context: Context) : Actions {
         val query = LauncherApps.ShortcutQuery()
             .setPackage(packageName)
             .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST)
-        return runCatching { launcherApps.getShortcuts(query, Process.myUserHandle()).orEmpty() }
-            .getOrDefault(emptyList())
-            .sortedBy { it.rank }
-            .map { AppShortcut(it.id, it.shortLabel?.toString().orEmpty()) }
+        return ordered(runCatching { launcherApps.getShortcuts(query, Process.myUserHandle()).orEmpty() }.getOrDefault(emptyList()))
+    }
+
+    companion object {
+        /**
+         * Ranks are counted separately for manifest and dynamic shortcuts; like the Pixel launcher,
+         * the app's declared ones come first.
+         */
+        fun ordered(shortcuts: List<ShortcutInfo>): List<AppShortcut> =
+            shortcuts.sortedWith(compareBy<ShortcutInfo>({ !it.isDeclaredInManifest }, { it.rank }))
+                .map { AppShortcut(it.id, it.shortLabel?.toString().orEmpty()) }
     }
 
     override fun openShortcut(packageName: String, id: String) {
