@@ -83,12 +83,16 @@ fun AppTile(
     badge: String? = null,
     labelColor: Color = Ink.text,
     tile: Dp = 56.dp,
+    /** Replaces the tile's own tap and long press, for tiles that can also be dragged (see the Campamento). */
+    gestures: Modifier? = null,
     content: @Composable () -> Unit,
 ) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(role = Role.Button, onClickLabel = "Abrir $label", onLongClickLabel = onLongClick?.let { "Opciones de $label" }, onLongClick = onLongClick, onClick = onClick)
+            .then(
+                gestures ?: Modifier.combinedClickable(role = Role.Button, onClickLabel = "Abrir $label", onLongClickLabel = onLongClick?.let { "Opciones de $label" }, onLongClick = onLongClick, onClick = onClick),
+            )
             .semantics { if (dot) stateDescription = "con avisos" },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),

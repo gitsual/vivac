@@ -116,4 +116,12 @@ class WidgetBoardTest {
         assertEquals("4 × 2", WidgetSize.cells(targetColumns = 4, targetRows = 2))
         assertEquals("", WidgetSize.cells(targetColumns = 0, targetRows = 0))
     }
+
+    @Test
+    fun `an app can be put at a given place among the things on a ladera`() {
+        val b = board(Placed(1, page = 1)).addApp("a", 1).addApp("b", 1)
+        assertEquals(listOf(Shelved("b", 1), Placed(1, page = 1), Shelved("a", 1)), b.insertApp("b", page = 1, index = 0).onPage(1))
+        assertEquals(listOf(Placed(1, page = 1), Shelved("b", 1), Shelved("a", 1)), b.insertApp("b", page = 1, index = 1).onPage(1))
+        assertEquals(listOf(Placed(1, page = 1), Shelved("a", 1), Shelved("b", 1), Shelved("c", 1)), b.insertApp("c", page = 1, index = 99).onPage(1))
+    }
 }

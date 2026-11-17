@@ -44,6 +44,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.round
+import dev.vivac.launcher.core.Zone
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.LaunchedEffect
@@ -102,7 +115,28 @@ fun CampamentoScreen(
     widgetView: (Context, id: Int, widthDp: Float, rows: Int, onLongPress: () -> Unit) -> View?,
     onWidgetMenu: (Int) -> Unit,
     onCampMenu: () -> Unit,
+    onDrop: (packageName: String, from: Zone, to: Zone, index: Int) -> Unit = { _, _, _, _ -> },
 ) {
+    val drag = remember { DragBoard() }
+    val dp = LocalDensity.current.density
+    val drop: (Held, Spot) -> Unit = { h, spot -> onDrop(h.app.packageName, h.from, spot.zone, spot.index) }
+    var rootOrigin by remember { mutableStateOf(Offset.Zero) }
+    val currentPage by rememberUpdatedState(page)
+    val pageCount by rememberUpdatedState(board.pages)
+    // Holding a carried app at the left or right edge for a moment turns the page.
+    LaunchedEffect(drag.held) {
+        if (drag.held == null) return@LaunchedEffect
+        while (true) {
+            delay(EDGE_WAIT_MS)
+            val edge = 28f * dp
+            val dir = when {
+                drag.finger.x < drag.screen.left + edge -> -1
+                drag.finger.x > drag.screen.right - edge -> 1
+                else -> 0
+            }
+            if (dir != 0) onPage((currentPage + dir).coerceIn(0, pageCount - 1))
+        }
+    }
     val onSwipe: (Swipe) -> Unit = { s ->
         when (s) {
             Swipe.DOWN -> onShowNotifications()
@@ -117,6 +151,7 @@ fun CampamentoScreen(
         Modifier
             .fillMaxSize()
             .background(Ink.deep)
+            .onGloballyPositioned { drag.screen = it.boundsInRoot(); rootOrigin = it.positionInRoot() }
             .swipes(onSwipe)
             .pointerInput(Unit) { detectTapGestures(onLongPress = { onCampMenu() }) },
     ) {
@@ -150,25 +185,83 @@ fun CampamentoScreen(
                         if (p == 0) {
                             FactsStrip(facts, onOpenAbout)
                             board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
-                            Via(apps, home.pinned, onOpenApp, onAppMenu)
+                            Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop)
                         } else {
-                            Ladera(board.onPage(p), apps, card, onOpenApp, onAppMenu)
+                            Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop)
                         }
                     }
                 }
             }
             if (board.pages > 1) PageDots(board.pages, page)
             SearchPill { onOpenPetate(true) }
-            DockCard(apps, home.dock, onOpenApp, onAppMenu) { onOpenPetate(false) }
+            DockCard(apps, home, onOpenApp, onAppMenu, drag, drop) { onOpenPetate(false) }
+        }
+        // The carried app follows the finger, a little lifted.
+        drag.held?.let { h ->
+            val half = with(LocalDensity.current) { (TILE / 2).toPx() }
+            Box(
+                Modifier
+                    .offset { (drag.finger - rootOrigin - Offset(half, half)).round() }
+                    .graphicsLayer { scaleX = 1.12f; scaleY = 1.12f; alpha = 0.92f }
+                    .size(TILE)
+                    .clip(RoundedCornerShape(TILE / 3))
+                    .background(Ink.raised)
+                    .border(1.5.dp, Ink.primary, RoundedCornerShape(TILE / 3)),
+                contentAlignment = Alignment.Center,
+            ) { AppFace(h.app, h.tone) }
         }
     }
+}
+
+private const val EDGE_WAIT_MS = 500L
+
+/** A home tile that can be carried: its spot on the board, coral when a carried app would land on it, faded while lifted. */
+@Composable
+private fun CarriedTile(
+    app: InstalledApp,
+    zone: Zone,
+    index: Int,
+    drag: DragBoard,
+    tone: Color,
+    background: Color,
+    onOpenApp: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
+    onDrop: (Held, Spot) -> Unit,
+    modifier: Modifier = Modifier,
+    badge: String? = null,
+    tile: androidx.compose.ui.unit.Dp = 56.dp,
+    labelColor: Color = Ink.text,
+) {
+    val spot = Spot(zone, index)
+    val lifted = drag.held?.let { it.app.packageName == app.packageName && it.from == zone } == true
+    AppTile(
+        label = app.label,
+        background = background,
+        border = if (drag.target == spot && !lifted) Ink.primary else Ink.field,
+        badge = badge,
+        tile = tile,
+        labelColor = labelColor,
+        onClick = { onOpenApp(app.packageName) },
+        dot = app.packageName in LocalDots.current,
+        modifier = modifier.spot(drag, spot).graphicsLayer { alpha = if (lifted) 0.3f else 1f },
+        gestures = Modifier.carriable(drag, Held(app, zone, tone), app.label, { onOpenApp(app.packageName) }, { onAppMenu(app.packageName) }, onDrop),
+    ) { AppFace(app, tone) }
 }
 
 /**
  * A ladera: what you put there, in order. Widgets as cards, apps in rows of four between them.
  */
 @Composable
-private fun Ladera(items: List<Item>, apps: List<InstalledApp>, card: @Composable (Placed) -> Unit, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit) {
+private fun Ladera(
+    page: Int,
+    items: List<Item>,
+    apps: List<InstalledApp>,
+    card: @Composable (Placed) -> Unit,
+    onOpenApp: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
+    drag: DragBoard,
+    onDrop: (Held, Spot) -> Unit,
+) {
     val byPackage = apps.associateBy { it.packageName }
     // Consecutive apps form one block, so they share rows; each widget is a block of its own.
     val blocks = mutableListOf<Any>()
@@ -189,22 +282,21 @@ private fun Ladera(items: List<Item>, apps: List<InstalledApp>, card: @Composabl
             (block as List<InstalledApp>).chunked(4).forEach { row ->
                 Row(Modifier.fillMaxWidth()) {
                     row.forEach { app ->
-                        AppTile(
-                            label = app.label,
-                            background = Ink.surface,
-                            border = Ink.field,
-                            onClick = { onOpenApp(app.packageName) },
-                            onLongClick = { onAppMenu(app.packageName) },
-                            dot = app.packageName in LocalDots.current,
+                        CarriedTile(
+                            app, Zone.Ladera(page), items.indexOfFirst { it is Shelved && it.packageName == app.packageName }, drag,
+                            Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)], Ink.surface, onOpenApp, onAppMenu, onDrop,
                             modifier = Modifier.weight(1f),
-                        ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                        )
                     }
                     repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
     }
-    Text("Mantén pulsado un widget o una app para traerlos a esta ladera.", style = Type.small)
+    // The rest of the ladera takes a carried app at its end.
+    Box(Modifier.fillMaxWidth().heightIn(min = 96.dp).spot(drag, Spot(Zone.Ladera(page), Spot.END))) {
+        Text("Mantén pulsado un widget o una app para traerlos a esta ladera.", style = Type.small)
+    }
 }
 
 /** Where you are: the Campamento's mark and one per ladera; the current one is a coral bar. */
@@ -433,10 +525,30 @@ private val ROW_GAP = 10.dp
  * that snakes like a topo (see [Route]).
  */
 @Composable
-private fun Via(apps: List<InstalledApp>, pinned: List<String>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit) {
+private fun Via(
+    apps: List<InstalledApp>,
+    pinned: List<String>,
+    onOpenApp: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
+    drag: DragBoard,
+    onDrop: (Held, Spot) -> Unit,
+) {
     val byPackage = apps.associateBy { it.packageName }
     val shown = pinned.mapNotNull { byPackage[it] }
-    if (shown.isEmpty()) return
+    if (shown.isEmpty()) {
+        // No route yet: while an app is carried, offer the place where it would start.
+        if (drag.held != null) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .spot(drag, Spot(Zone.Via, Spot.END))
+                    .border(1.5.dp, if (drag.target?.zone == Zone.Via) Ink.primary else Ink.borderControl, RoundedCornerShape(24.dp)),
+                contentAlignment = Alignment.Center,
+            ) { Text("Suelta aquí para empezar la vía", style = Type.small) }
+        }
+        return
+    }
     val rows = Route.rows(shown.size, 4)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
@@ -447,6 +559,7 @@ private fun Via(apps: List<InstalledApp>, pinned: List<String>, onOpenApp: (Stri
         Column(
             Modifier
                 .fillMaxWidth()
+                .spot(drag, Spot(Zone.Via, Spot.END))
                 .drawBehind {
                     val cell = size.width / 4
                     val rowH = (size.height + ROW_GAP.toPx()) / rows.size
@@ -482,17 +595,10 @@ private fun Via(apps: List<InstalledApp>, pinned: List<String>, onOpenApp: (Stri
                         if (index == null) Spacer(Modifier.weight(1f))
                         else {
                             val app = shown[index]
-                            AppTile(
-                                label = app.label,
-                                background = Ink.surface,
-                                border = Ink.field,
-                                badge = Route.pitch(index),
-                                tile = TILE,
-                                onClick = { onOpenApp(app.packageName) },
-                                onLongClick = { onAppMenu(app.packageName) },
-                                dot = app.packageName in LocalDots.current,
-                                modifier = Modifier.weight(1f),
-                            ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                            CarriedTile(
+                                app, Zone.Via, index, drag, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)], Ink.surface,
+                                onOpenApp, onAppMenu, onDrop, modifier = Modifier.weight(1f), badge = Route.pitch(index), tile = TILE,
+                            )
                         }
                     }
                 }
@@ -523,9 +629,17 @@ private fun SearchPill(onClick: () -> Unit) {
 
 /** Motif 4, la cordada: the apps you always carry, roped to the Petate, which closes the line in coral. */
 @Composable
-private fun DockCard(apps: List<InstalledApp>, chosen: List<String>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit, onOpenPetate: () -> Unit) {
+private fun DockCard(
+    apps: List<InstalledApp>,
+    home: Home,
+    onOpenApp: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
+    drag: DragBoard,
+    onDrop: (Held, Spot) -> Unit,
+    onOpenPetate: () -> Unit,
+) {
     val byPackage = apps.associateBy { it.packageName }
-    val slots = Dock.pick(byPackage.keys, chosen)
+    val slots = Dock.pick(byPackage.keys, home.dock, home.dockChosen)
     Column(
         Modifier
             .fillMaxWidth()
@@ -538,20 +652,16 @@ private fun DockCard(apps: List<InstalledApp>, chosen: List<String>, onOpenApp: 
     ) {
         Text("LA CORDADA", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.padding(start = 10.dp))
         // Five equal columns: on a 412dp Pixel five fixed tiles do not fit and labels got clipped.
-        Row(Modifier.fillMaxWidth()) {
-            slots.forEach { slot ->
+        Row(Modifier.fillMaxWidth().spot(drag, Spot(Zone.Dock, Spot.END))) {
+            slots.forEachIndexed { i, slot ->
                 when (slot) {
                     is DockSlot.App -> {
                         val app = byPackage.getValue(slot.packageName)
                         val deep = app.packageName == "com.termux"
-                        AppTile(
-                            label = app.label,
-                            background = if (deep) Ink.deep else Ink.field,
-                            onClick = { onOpenApp(app.packageName) },
-                            onLongClick = { onAppMenu(app.packageName) },
-                            dot = app.packageName in LocalDots.current,
-                            modifier = Modifier.weight(1f),
-                        ) { AppFace(app, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                        CarriedTile(
+                            app, Zone.Dock, i, drag, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)],
+                            if (deep) Ink.deep else Ink.field, onOpenApp, onAppMenu, onDrop, modifier = Modifier.weight(1f),
+                        )
                     }
                     DockSlot.Petate -> AppTile(
                         label = "Petate",

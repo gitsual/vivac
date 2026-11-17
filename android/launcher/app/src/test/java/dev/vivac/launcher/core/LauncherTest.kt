@@ -331,4 +331,85 @@ class LauncherTest {
         l.refresh()
         assertEquals(emptyList<String>(), l.board.apps)
     }
+
+    private val tailscale = InstalledApp("Tailscale", "com.tailscale.ipn", false)
+    private fun many() = Launcher(FakeSource(listOf(termux, signal, maps, settings, tailscale)), store, actions, widgets).also { it.refresh() }
+
+    @Test
+    fun `dragging within the dock reorders it, starting from the default favourites`() {
+        val l = many()
+        assertEquals(listOf("com.termux", "org.thoughtcrime.securesms", "com.tailscale.ipn"), l.shownDock())
+        l.drop("com.tailscale.ipn", from = Zone.Dock, to = Zone.Dock, index = 0)
+        assertEquals(listOf("com.tailscale.ipn", "com.termux", "org.thoughtcrime.securesms"), l.shownDock())
+    }
+
+    @Test
+    fun `dragging within the route reorders the pitches`() {
+        store.values["pinned"] = "com.termux,app.organicmaps,org.thoughtcrime.securesms"
+        val l = many()
+        l.drop("org.thoughtcrime.securesms", from = Zone.Via, to = Zone.Via, index = 0)
+        assertEquals(listOf("org.thoughtcrime.securesms", "com.termux", "app.organicmaps"), l.home.pinned)
+    }
+
+    @Test
+    fun `an app dragged from the route to the dock leaves the route, and back again`() {
+        store.values["pinned"] = "app.organicmaps"
+        val l = many()
+        l.drop("app.organicmaps", from = Zone.Via, to = Zone.Dock, index = 1)
+        assertEquals(listOf("com.termux", "app.organicmaps", "org.thoughtcrime.securesms", "com.tailscale.ipn"), l.shownDock())
+        assertEquals(emptyList<String>(), l.home.pinned)
+        l.drop("com.termux", from = Zone.Dock, to = Zone.Via, index = 0)
+        assertEquals(listOf("com.termux"), l.home.pinned)
+        assertEquals(false, "com.termux" in l.shownDock())
+    }
+
+    @Test
+    fun `a full dock refuses one more and says why, keeping things where they were`() {
+        store.values["dock"] = "com.termux,org.thoughtcrime.securesms,com.tailscale.ipn,com.android.settings"
+        store.values["pinned"] = "app.organicmaps"
+        val l = many()
+        l.drop("app.organicmaps", from = Zone.Via, to = Zone.Dock, index = 0)
+        assertEquals(listOf("app.organicmaps"), l.home.pinned)
+        assertEquals(4, l.shownDock().size)
+        assertTrue(actions.calls.any { it.startsWith("say:") })
+    }
+
+    @Test
+    fun `apps move between the camp and a ladera, and within a ladera, by dragging`() {
+        val l = many()
+        l.drop("com.termux", from = Zone.Dock, to = Zone.Ladera(1), index = 0)
+        assertEquals(listOf("com.termux"), l.board.apps)
+        assertEquals(false, "com.termux" in l.shownDock())
+        l.drop("app.organicmaps", from = Zone.Petate, to = Zone.Ladera(1), index = 0)
+        assertEquals(listOf("app.organicmaps", "com.termux"), l.board.apps)
+        l.drop("com.termux", from = Zone.Ladera(1), to = Zone.Ladera(1), index = 0)
+        assertEquals(listOf("com.termux", "app.organicmaps"), l.board.apps)
+        l.drop("com.termux", from = Zone.Ladera(1), to = Zone.Via, index = 0)
+        assertEquals(listOf("app.organicmaps"), l.board.apps)
+        assertEquals(listOf("com.termux"), l.home.pinned)
+    }
+
+    @Test
+    fun `dropping where it already is changes nothing`() {
+        store.values["pinned"] = "com.termux"
+        val l = many()
+        l.drop("com.termux", from = Zone.Via, to = Zone.Via, index = 0)
+        assertEquals(listOf("com.termux"), l.home.pinned)
+        assertEquals(emptyList<String>(), actions.calls)
+    }
+
+    @Test
+    fun `a dock you emptied stays empty, also after a restart`() {
+        val l = many()
+        l.shownDock().forEach { l.drop(it, from = Zone.Dock, to = Zone.Ladera(1), index = 0) }
+        assertEquals(emptyList<String>(), l.shownDock())
+        assertEquals(emptyList<String>(), many().shownDock())
+    }
+
+    @Test
+    fun `pinning before ever choosing a dock keeps the default favourites after a restart`() {
+        val l = many()
+        l.openMenu("app.organicmaps"); l.pick(MenuEntry.Pin(false))
+        assertEquals(listOf("com.termux", "org.thoughtcrime.securesms", "com.tailscale.ipn"), many().shownDock())
+    }
 }

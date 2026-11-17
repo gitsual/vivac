@@ -34,8 +34,8 @@ object Dock {
     private const val APP_SLOTS = 4
 
     /** Your chosen dock when you have one, else the first installed favourites; the Petate always closes it. */
-    fun pick(installed: Set<String>, chosen: List<String> = emptyList()): List<DockSlot> {
-        val source = chosen.ifEmpty { favourites }
+    fun pick(installed: Set<String>, chosen: List<String> = emptyList(), chosenSet: Boolean = chosen.isNotEmpty()): List<DockSlot> {
+        val source = if (chosenSet) chosen else favourites
         return source.filter { it in installed }.take(APP_SLOTS).map { DockSlot.App(it) } + DockSlot.Petate
     }
 }

@@ -10,12 +10,22 @@ import dev.vivac.launcher.campamento.DockSlot
 import dev.vivac.launcher.campamento.Home
 import dev.vivac.launcher.campamento.HomeChange
 import dev.vivac.launcher.campamento.Placed
+import dev.vivac.launcher.campamento.Shelved
 import dev.vivac.launcher.campamento.WidgetBoard
 import dev.vivac.launcher.petate.AppMenu
 import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
 
 enum class Screen { CAMPAMENTO, PETATE }
+
+/** Where an app sits on the home screen, as a drag sees it: picked up from one zone, dropped in another. */
+sealed interface Zone {
+    data object Dock : Zone
+    data object Via : Zone
+    data class Ladera(val page: Int) : Zone
+    /** Not on the home screen yet (dragged in from the Petate). */
+    data object Petate : Zone
+}
 
 /** The two answers Android sends back while placing a widget. */
 enum class WidgetStep { BIND, CONFIGURE }
@@ -73,7 +83,7 @@ class Launcher(
 
     /** The dock as it is on screen: your choice, or the default favourites until you edit it. */
     fun shownDock(): List<String> =
-        Dock.pick(visibleApps().map { it.packageName }.toSet(), home.dock).filterIsInstance<DockSlot.App>().map { it.packageName }
+        Dock.pick(visibleApps().map { it.packageName }.toSet(), home.dock, home.dockChosen).filterIsInstance<DockSlot.App>().map { it.packageName }
 
     fun openPetate(search: Boolean) {
         focusSearch = search
@@ -178,6 +188,45 @@ class Launcher(
         }
     }
 
+    /**
+     * A dragged app let go over [to] at [index]: it ends up at that place, leaving where it was. A full dock or
+     * route refuses it and says why; dropping it where it already was changes nothing.
+     */
+    fun drop(packageName: String, from: Zone, to: Zone, index: Int) {
+        if (from == to && position(packageName, from) == index) return
+        val dock = shownDock().toMutableList()
+        val pinned = home.pinned.toMutableList()
+        var next = board
+        when (from) {
+            Zone.Dock -> dock.remove(packageName)
+            Zone.Via -> pinned.remove(packageName)
+            is Zone.Ladera -> if (to !is Zone.Ladera) next = next.removeApp(packageName)
+            Zone.Petate -> Unit
+        }
+        when (to) {
+            Zone.Dock -> {
+                if (dock.size >= Home.DOCK_MAX) return actions.say("El dock ya tiene ${Home.DOCK_MAX} apps: quita una primero.")
+                dock.add(index.coerceIn(0, dock.size), packageName)
+            }
+            Zone.Via -> {
+                if (pinned.size >= Home.PINNED_MAX) return actions.say("La vía ya tiene ${Home.PINNED_MAX} largos: quita uno primero.")
+                pinned.add(index.coerceIn(0, pinned.size), packageName)
+            }
+            is Zone.Ladera -> next = next.insertApp(packageName, to.page, index)
+            Zone.Petate -> Unit
+        }
+        val dockTouched = from == Zone.Dock || to == Zone.Dock
+        apply(HomeChange(home.copy(dock = if (dockTouched) dock else home.dock, pinned = pinned, dockChosen = home.dockChosen || dockTouched)))
+        if (next != board) saveBoard(next)
+    }
+
+    private fun position(packageName: String, zone: Zone): Int = when (zone) {
+        Zone.Dock -> shownDock().indexOf(packageName)
+        Zone.Via -> home.pinned.indexOf(packageName)
+        is Zone.Ladera -> board.onPage(zone.page).indexOfFirst { it is Shelved && it.packageName == packageName }
+        Zone.Petate -> -1
+    }
+
     /** The ladera an app goes to: the one in view, else the last one, else a new one. */
     private fun ladera(): Int = page.takeIf { it > 0 } ?: (board.pages - 1).takeIf { it > 0 } ?: 1
 
@@ -229,7 +278,7 @@ class Launcher(
     private fun apply(change: HomeChange) {
         val next = change.home ?: return actions.say(change.refusal.orEmpty())
         home = next
-        store.put(mapOf(KEY_DOCK to next.encodeDock(), KEY_PINNED to next.encodePinned(), KEY_HIDDEN to next.encodeHidden()))
+        store.put(mapOf(KEY_PINNED to next.encodePinned(), KEY_HIDDEN to next.encodeHidden()) + (next.storedDock()?.let { mapOf(KEY_DOCK to it) } ?: emptyMap()))
     }
 
     companion object {

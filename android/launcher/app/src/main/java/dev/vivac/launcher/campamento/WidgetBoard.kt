@@ -34,6 +34,16 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
     fun addApp(packageName: String, page: Int): WidgetBoard =
         if (Shelved(packageName, page.coerceAtLeast(1)) in items) this else WidgetBoard(items.filterNot { it is Shelved && it.packageName == packageName } + Shelved(packageName, page.coerceAtLeast(1))).compact()
 
+    /** Puts an app at [index] among the things on a ladera (moving it if it was elsewhere); past the end appends. */
+    fun insertApp(packageName: String, page: Int, index: Int): WidgetBoard {
+        val target = page.coerceAtLeast(1)
+        val rest = items.filterNot { it is Shelved && it.packageName == packageName }
+        val onTarget = rest.filter { it.page == target }.toMutableList()
+        onTarget.add(index.coerceIn(0, onTarget.size), Shelved(packageName, target))
+        val last = maxOf(target, rest.maxOfOrNull { it.page } ?: 0)
+        return WidgetBoard((0..last).flatMap { p -> if (p == target) onTarget else rest.filter { it.page == p } }).compact()
+    }
+
     fun removeApp(packageName: String) = WidgetBoard(items.filterNot { it is Shelved && it.packageName == packageName }).compact()
 
     /** Forget apps that are no longer installed. */

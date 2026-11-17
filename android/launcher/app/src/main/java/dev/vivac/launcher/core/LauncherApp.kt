@@ -48,6 +48,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                 widgetHeightDp = widgetViews::heightDp,
                 widgetView = widgetViews::view,
                 onWidgetMenu = launcher::openWidgetMenu,
+                onDrop = launcher::drop,
                 onCampMenu = launcher::openCampMenu,
             )
             Screen.PETATE -> PetateScreen(

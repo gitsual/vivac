@@ -60,7 +60,15 @@ class HomeTest {
     @Test
     fun `hidden apps survive storage and drop out when uninstalled`() {
         val home = Home(hidden = listOf("x", "y"))
-        assertEquals(home, Home.decode(home.encodeDock(), home.encodePinned(), home.encodeHidden()))
+        assertEquals(home, Home.decode(home.storedDock(), home.encodePinned(), home.encodeHidden()))
         assertEquals(Home(hidden = listOf("y")), home.keepOnly(setOf("y")))
+    }
+
+    @Test
+    fun `an emptied dock is still a chosen dock, and is stored as such`() {
+        val emptied = Home(dock = listOf("a")).toggleDock("a").home!!
+        assertEquals("", emptied.storedDock())
+        assertEquals(emptied, Home.decode(emptied.storedDock(), null))
+        assertEquals(null, Home().storedDock())
     }
 }

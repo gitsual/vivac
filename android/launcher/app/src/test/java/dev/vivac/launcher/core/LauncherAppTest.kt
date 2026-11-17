@@ -290,4 +290,45 @@ class LauncherAppTest {
         compose.onAllNodesWithText("Termux").assertCountEquals(2)
         compose.onNodeWithContentDescription("Ladera 1, página 2 de 2").assertExists()
     }
+
+    private fun centre(text: String) = compose.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
+
+    /** Holds [from] past the long-press time, then carries it to [to]'s centre and lets go. */
+    private fun carry(from: String, to: androidx.compose.ui.geometry.Offset) {
+        val start = centre(from)
+        compose.onNodeWithText(from, useUnmergedTree = true).performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithText(from, useUnmergedTree = true).performTouchInput {
+            val by = to - start
+            repeat(10) { moveBy(by / 10f) }
+            up()
+        }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `dragging a pitch onto another reorders the route`() {
+        store.values["pinned"] = "app.organicmaps,com.android.settings"
+        show()
+        carry("Ajustes", centre("Organic Maps"))
+        assertEquals(listOf("com.android.settings", "app.organicmaps"), launcher.home.pinned)
+        assertEquals(emptyList<String>(), actions.calls)
+    }
+
+    @Test
+    fun `dragging a dock app onto the route moves it there`() {
+        store.values["pinned"] = "app.organicmaps"
+        show()
+        carry("Termux", centre("Organic Maps"))
+        assertEquals(listOf("com.termux", "app.organicmaps"), launcher.home.pinned)
+        assertEquals(false, "com.termux" in launcher.shownDock())
+    }
+
+    @Test
+    fun `letting go over nothing leaves everything where it was`() {
+        store.values["pinned"] = "app.organicmaps"
+        show()
+        carry("Organic Maps", centre("CAMPAMENTO"))
+        assertEquals(listOf("app.organicmaps"), launcher.home.pinned)
+    }
 }
