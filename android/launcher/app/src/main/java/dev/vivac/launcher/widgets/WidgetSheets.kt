@@ -60,11 +60,26 @@ private fun VivacSheet(onDismiss: () -> Unit, content: @Composable () -> Unit) {
 
 /** Long press on the Campamento's background: add a widget, or take one away. */
 @Composable
-fun CampMenuSheet(placed: List<PlacedWidget>, onAdd: () -> Unit, onRemove: (Int) -> Unit, onDismiss: () -> Unit) {
+fun CampMenuSheet(
+    placed: List<PlacedWidget>,
+    dotsAllowed: Boolean,
+    onAdd: () -> Unit,
+    onRemove: (Int) -> Unit,
+    onAllowDots: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     VivacSheet(onDismiss) {
         Text("Campamento", style = Type.section, modifier = Modifier.padding(bottom = 8.dp).semantics { heading() })
         Row52("Añadir widget", Glyph.PLUS, Ink.accentText, onAdd)
         placed.forEach { w -> Row52("Quitar «${w.label}»", Glyph.SQUARE, Color(0xFFBD6161)) { onRemove(w.id) } }
+        if (!dotsAllowed) {
+            Row52("Activar puntos de aviso", Glyph.DOT, Ink.accentText, onAllowDots)
+            Text(
+                "Android pide darle a vivac acceso a las notificaciones. vivac solo mira de qué app es cada aviso, nunca su texto.",
+                style = Type.small,
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 2.dp),
+            )
+        }
     }
 }
 

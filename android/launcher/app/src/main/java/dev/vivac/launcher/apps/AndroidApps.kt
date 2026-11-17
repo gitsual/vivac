@@ -91,6 +91,15 @@ class AppActions(private val context: Context) {
         true
     }.getOrDefault(false)
 
+    /** The system page where you allow (or revoke) vivac's notification access for the dots. */
+    fun notificationAccess(): Boolean {
+        val me = android.content.ComponentName(context, DotsListener::class.java)
+        val detail = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS)
+            .putExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, me.flattenToString())
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return start(detail) || start(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     fun systemSettings(): Boolean = start(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
     fun securityUpdates(): Boolean = start(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

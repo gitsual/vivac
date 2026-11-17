@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.vivac.launcher.apps.AppFace
+import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.petate.Pack
 import dev.vivac.launcher.theme.AppTile
@@ -316,6 +317,7 @@ private fun DockRow(apps: List<InstalledApp>, chosen: List<String>, onOpenApp: (
                         background = if (deep) Ink.deep else Ink.field,
                         onClick = { onOpenApp(app.packageName) },
                         onLongClick = { onAppMenu(app.packageName) },
+                        dot = app.packageName in LocalDots.current,
                         modifier = Modifier.weight(1f),
                     ) { AppFace(app, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
                 }
@@ -343,6 +345,7 @@ private fun AMano(apps: List<InstalledApp>, pinned: List<String>, onOpenApp: (St
                         background = Ink.field,
                         onClick = { onOpenApp(app.packageName) },
                         onLongClick = { onAppMenu(app.packageName) },
+                        dot = app.packageName in LocalDots.current,
                         modifier = Modifier.weight(1f),
                     ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
                 }

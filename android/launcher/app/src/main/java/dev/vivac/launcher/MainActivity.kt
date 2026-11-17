@@ -15,6 +15,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -22,6 +23,9 @@ import androidx.compose.ui.graphics.toArgb
 import dev.vivac.launcher.apps.AndroidAppSource
 import dev.vivac.launcher.apps.AppActions
 import dev.vivac.launcher.apps.AppIcons
+import dev.vivac.launcher.apps.Dots
+import dev.vivac.launcher.apps.DotsListener
+import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.LocalAppIcons
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.campamento.CampamentoScreen
@@ -100,7 +104,8 @@ class MainActivity : ComponentActivity() {
                     delay(60_000L - System.currentTimeMillis() % 60_000L)
                 }
             }
-            CompositionLocalProvider(LocalAppIcons provides icons) {
+            val dots by Dots.live.collectAsState()
+            CompositionLocalProvider(LocalAppIcons provides icons, LocalDots provides dots) {
             BackHandler(enabled = screen == Screen.PETATE) { screen = Screen.CAMPAMENTO }
             AnimatedContent(screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
                 when (current) {
@@ -133,8 +138,10 @@ class MainActivity : ComponentActivity() {
             if (campMenu) {
                 CampMenuSheet(
                     placed = board.ids.map { PlacedWidget(it, widgets.label(it)) },
+                    dotsAllowed = DotsListener.isAllowed(this@MainActivity),
                     onAdd = { campMenu = false; picker = widgets.options() },
                     onRemove = { id -> campMenu = false; removeWidget(id) },
+                    onAllowDots = { campMenu = false; actions.notificationAccess() },
                     onDismiss = { campMenu = false },
                 )
             }

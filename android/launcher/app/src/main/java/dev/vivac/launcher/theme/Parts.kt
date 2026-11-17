@@ -8,6 +8,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -38,6 +43,7 @@ object Glyph {
     const val INFO = "M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z M12 11v6 M12 7.5v.5"
     const val SQUARE = "M5 5h14v14H5z"
     const val PLUS = "M12 5v14M5 12h14"
+    const val DOT = "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z"
     const val DOCK = "M3 17h18 M6 13h3v4H6z M10.5 13h3v4h-3z M15 13h3v4h-3z"
     const val TENT = "M3 20L12 4l9 16z M12 20v-6"
 }
@@ -62,19 +68,37 @@ fun AppTile(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    dot: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(role = Role.Button, onClickLabel = "Abrir $label", onLongClickLabel = onLongClick?.let { "Opciones de $label" }, onLongClick = onLongClick, onClick = onClick),
+            .combinedClickable(role = Role.Button, onClickLabel = "Abrir $label", onLongClickLabel = onLongClick?.let { "Opciones de $label" }, onLongClick = onLongClick, onClick = onClick)
+            .semantics { if (dot) stateDescription = "con avisos" },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Box(
-            Modifier.size(56.dp).clip(RoundedCornerShape(18.dp)).background(background),
-            contentAlignment = Alignment.Center,
-        ) { content() }
+        Box(Modifier.size(56.dp)) {
+            Box(
+                Modifier.matchParentSize().clip(RoundedCornerShape(18.dp)).background(background),
+                contentAlignment = Alignment.Center,
+            ) { content() }
+            // Notification dot: coral with a ring of the page colour so it reads on any icon.
+            if (dot) {
+                Box(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 3.dp, y = (-3).dp)
+                        .size(14.dp)
+                        .clip(CircleShape)
+                        .background(Ink.surface)
+                        .padding(2.5.dp)
+                        .clip(CircleShape)
+                        .background(Ink.primary),
+                )
+            }
+        }
         Text(
             label,
             style = Type.label,

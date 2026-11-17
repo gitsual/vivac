@@ -50,6 +50,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.vivac.launcher.apps.AppFace
+import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.theme.AppTile
 import dev.vivac.launcher.theme.Glyph
@@ -113,6 +114,7 @@ fun PetateScreen(
                         background = if (deep) Ink.deep else Ink.field,
                         onClick = { onOpenApp(app.packageName) },
                         onLongClick = { onAppMenu(app.packageName) },
+                        dot = app.packageName in LocalDots.current,
                     ) {
                         AppFace(app, if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)])
                     }
