@@ -59,10 +59,32 @@ object Pack {
     fun visible(apps: List<InstalledApp>, hidden: Set<String>, showHidden: Boolean): List<InstalledApp> =
         apps.filter { (it.packageName in hidden) == showHidden }
 
+    /** Matches the label anywhere, or its initials from the start ("om" finds Organic Maps). */
     fun search(apps: List<InstalledApp>, query: String): List<InstalledApp> {
         val needle = fold(query.trim())
         if (needle.isEmpty()) return apps
-        return apps.filter { fold(it.label).contains(needle) }
+        return apps.filter { fold(it.label).contains(needle) || initials(it.label).startsWith(needle) }
+    }
+
+    /** First letter of each word, plus every inner capital: "KeePassDX" gives "kpdx". */
+    private fun initials(label: String): String =
+        label.split(Regex("[\\s:·-]+")).filter { it.isNotEmpty() }.joinToString("") { word ->
+            "${word.first()}${word.drop(1).filter { it.isUpperCase() }}"
+        }.let(::fold)
+
+    /** The altimeter letter an app files under: its folded first letter, or '#' for anything else. */
+    fun initialOf(app: InstalledApp): Char =
+        fold(app.label.trim()).firstOrNull()?.takeIf { it in 'a'..'z' }?.uppercaseChar() ?: '#'
+
+    /** For each letter, the position of its first app in the Petate's grid, where each shelf header is one item. */
+    fun jumps(shelves: List<Pair<Group, List<InstalledApp>>>): Map<Char, Int> {
+        val jumps = linkedMapOf<Char, Int>()
+        var index = 0
+        shelves.forEach { (_, apps) ->
+            index++ // the shelf header
+            apps.forEach { app -> jumps.putIfAbsent(initialOf(app), index); index++ }
+        }
+        return jumps
     }
 
     /** Groups in fixed order, each sorted alphabetically in Spanish; empty groups are left out. */

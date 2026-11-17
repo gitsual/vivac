@@ -44,14 +44,18 @@ class Launcher(
     var campMenu by mutableStateOf(false); private set
     var picker by mutableStateOf<List<WidgetOption>?>(null); private set
     var pendingWidget = pendingWidget; private set
+    /** "Último largo": what you opened through vivac, newest first. vivac's own history, no usage permission. */
+    var recent by mutableStateOf(store.get(KEY_RECENT).orEmpty().split(",").filter { it.isNotBlank() }); private set
 
     fun refresh() {
         apps = source.installed()
         // An empty list means Android is not ready (e.g. right after boot), not that every app is gone:
         // never let that wipe the dock and pins.
         if (apps.isNotEmpty()) {
-            val kept = home.keepOnly(apps.map { it.packageName }.toSet())
+            val installed = apps.map { it.packageName }.toSet()
+            val kept = home.keepOnly(installed)
             if (kept != home) apply(HomeChange(kept))
+            if (recent.any { it !in installed }) saveRecent(recent.filter { it in installed })
         }
     }
 
@@ -70,12 +74,18 @@ class Launcher(
         screen = Screen.PETATE
     }
 
-    fun openApp(packageName: String) = actions.open(packageName)
+    fun openApp(packageName: String) {
+        actions.open(packageName)
+        saveRecent((listOf(packageName) + (recent - packageName)).take(RECENT_MAX))
+    }
 
     fun openFromPetate(packageName: String) {
-        actions.open(packageName)
+        openApp(packageName)
         screen = Screen.CAMPAMENTO
     }
+
+    /** The last pitch as the Petate shows it: hidden apps stay out. */
+    fun visibleRecent(): List<String> = recent.filter { it !in home.hidden }
 
     /** Back: from the Petate to the camp. False when there was nowhere to go back to. */
     fun back(): Boolean {
@@ -175,6 +185,11 @@ class Launcher(
         store.put(mapOf(KEY_WIDGETS to next.encode()))
     }
 
+    private fun saveRecent(next: List<String>) {
+        recent = next
+        store.put(mapOf(KEY_RECENT to next.joinToString(",")))
+    }
+
     private fun apply(change: HomeChange) {
         val next = change.home ?: return actions.say(change.refusal.orEmpty())
         home = next
@@ -186,5 +201,7 @@ class Launcher(
         const val KEY_PINNED = "pinned"
         const val KEY_HIDDEN = "hidden"
         const val KEY_WIDGETS = "widgets"
+        const val KEY_RECENT = "recent"
+        const val RECENT_MAX = 5
     }
 }

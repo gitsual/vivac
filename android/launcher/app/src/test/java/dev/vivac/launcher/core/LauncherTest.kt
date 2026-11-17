@@ -220,4 +220,32 @@ class LauncherTest {
         l.onHomePressed()
         assertNull(l.menu)
     }
+
+    @Test
+    fun `the last pitch remembers what you opened, newest first, five at most, without repeats`() {
+        val l = launcher()
+        l.openApp("com.termux")
+        l.openFromPetate("app.organicmaps")
+        l.openApp("com.termux")
+        assertEquals(listOf("com.termux", "app.organicmaps"), l.recent)
+        listOf("a", "b", "c", "d").forEach { l.openApp(it) }
+        assertEquals(listOf("d", "c", "b", "a", "com.termux"), l.recent)
+    }
+
+    @Test
+    fun `the last pitch survives a restart and forgets uninstalled apps`() {
+        launcher().apply { openApp("org.thoughtcrime.securesms"); openApp("com.termux") }
+        source.apps = listOf(termux, maps, settings)
+        assertEquals(listOf("com.termux"), launcher().recent)
+    }
+
+    @Test
+    fun `hidden apps stay out of the last pitch`() {
+        val l = launcher()
+        l.openApp("com.termux")
+        l.openApp("app.organicmaps")
+        l.openMenu("app.organicmaps")
+        l.pick(MenuEntry.Hide(false))
+        assertEquals(listOf("com.termux"), l.visibleRecent())
+    }
 }

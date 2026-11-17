@@ -66,6 +66,33 @@ class PackTest {
     }
 
     @Test
+    fun `search also matches initials, from words and inner capitals`() {
+        val keepass = app("KeePassDX", "com.kunzisoft.keepass.libre")
+        val localsend = app("LocalSend", "org.localsend.localsend_app")
+        val apps = listOf(maps, keepass, localsend, whatsapp)
+        assertEquals(listOf(maps), Pack.search(apps, "om"))
+        assertEquals(listOf(keepass), Pack.search(apps, "KP"))
+        assertEquals(listOf(localsend), Pack.search(apps, "ls"))
+    }
+
+    @Test
+    fun `every app files under one altimeter letter, accents folded, the rest under hash`() {
+        assertEquals('C', Pack.initialOf(app("Cámara", "a.c")))
+        assertEquals('O', Pack.initialOf(maps))
+        assertEquals('#', Pack.initialOf(app("1Password", "a.p")))
+        assertEquals('#', Pack.initialOf(app("", "a.e")))
+    }
+
+    @Test
+    fun `the altimeter jumps to the first app of each letter, counting the shelf headers`() {
+        val angel = app("Ángel", "a.a")
+        val zeta = app("Zeta", "z.z")
+        val shelves = Pack.grouped(listOf(termux, angel, zeta, whatsapp, settings), filter = null)
+        // Items: [Infra header, Termux, Día a día header, Ángel, WhatsApp, Zeta, Sistema header, Ajustes]
+        assertEquals(mapOf('T' to 1, 'A' to 3, 'W' to 4, 'Z' to 5), Pack.jumps(shelves))
+    }
+
+    @Test
     fun `groups come in fixed order, sorted the Spanish way, empty ones dropped`() {
         val zeta = app("Zeta", "z.z")
         val angel = app("Ángel", "a.a")

@@ -6,12 +6,15 @@ data class AppShortcut(val id: String, val label: String)
 sealed interface MenuEntry {
     data class Shortcut(val shortcut: AppShortcut) : MenuEntry
     /** "Poner en el dock" or "Quitar del dock", depending on [inDock]. */
-    data class Dock(val inDock: Boolean) : MenuEntry
+    /** Where the app sits on the Campamento: dock, pins, or hidden. */
+    sealed interface Place : MenuEntry
+
+    data class Dock(val inDock: Boolean) : Place
 
     /** "Fijar en el campamento" or "Quitar del campamento", depending on [pinned]. */
-    data class Pin(val pinned: Boolean) : MenuEntry
+    data class Pin(val pinned: Boolean) : Place
     /** "Ocultar del petate" or "Mostrar en el petate", depending on [hidden]. */
-    data class Hide(val hidden: Boolean) : MenuEntry
+    data class Hide(val hidden: Boolean) : Place
     data object Info : MenuEntry
     data object Uninstall : MenuEntry
 }
