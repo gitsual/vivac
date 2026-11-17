@@ -37,7 +37,9 @@ read -rsp 'Repeat it: ' pass2; echo
 ssh-keygen -q -t ed25519 -N "$pass1" -C vivac-os -f "$dir/id_ed25519"
 cd "$src"
 printf '\n%s\n%s\n' "$pass1" "$pass1" | script/encrypt-keys "keys/$device"
-printf '%s' "$pass1" | systemd-creds encrypt --with-key=tpm2 --name=vivac-os-keys - "$keys/passphrase.cred"
+# --user: as a non-root user only user-scoped credentials are allowed
+# (sealed to this user, with the TPM when present; --with-key=tpm2 is refused there).
+printf '%s' "$pass1" | systemd-creds --user encrypt --name=vivac-os-keys - "$keys/passphrase.cred"
 chmod 600 "$keys/passphrase.cred"
 unset pass1 pass2
 sha256sum "$dir/avb_pkmd.bin"

@@ -15,7 +15,8 @@ cred="$root/keys/passphrase.cred"
 
 [[ -d "$src/keys/$device" ]] || { printf 'no keys in %s/keys/%s (run vivac-os-keys-init)\n' "$src" "$device" >&2; exit 1; }
 if [[ -f "$cred" ]]; then
-	key_pass="$(systemd-creds decrypt --name=vivac-os-keys "$cred" -)"
+	# User-scoped credential: as a non-root user systemd-creds refuses system scope.
+	key_pass="$(systemd-creds --user decrypt --name=vivac-os-keys "$cred" -)"
 else
 	read -rsp 'vivac-os key passphrase: ' key_pass
 	echo
