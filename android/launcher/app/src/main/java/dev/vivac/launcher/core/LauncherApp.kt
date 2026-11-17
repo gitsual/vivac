@@ -7,7 +7,12 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import dev.vivac.launcher.campamento.DragBoard
 import dev.vivac.launcher.campamento.CampamentoScreen
 import dev.vivac.launcher.campamento.PhoneFacts
 import dev.vivac.launcher.petate.AppMenuSheet
@@ -29,36 +34,51 @@ interface WidgetViews {
 @Composable
 fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: Actions, widgetViews: WidgetViews) {
     BackHandler(enabled = launcher.screen == Screen.PETATE) { launcher.back() }
+    val drag = remember { DragBoard() }
+    val camp: @Composable () -> Unit = {
+        CampamentoScreen(
+            stamp = stamp,
+            facts = facts,
+            apps = launcher.visibleApps(),
+            home = launcher.home,
+            onOpenApp = launcher::openApp,
+            onAppMenu = launcher::openMenu,
+            onOpenPetate = launcher::openPetate,
+            onOpenSettings = actions::systemSettings,
+            onOpenAbout = actions::securityUpdates,
+            onShowNotifications = actions::showNotifications,
+            board = launcher.board,
+            page = launcher.page,
+            onPage = launcher::showPage,
+            widgetHeightDp = widgetViews::heightDp,
+            widgetView = widgetViews::view,
+            onWidgetMenu = launcher::openWidgetMenu,
+            onDrop = launcher::drop,
+            onCampMenu = launcher::openCampMenu,
+            drag = drag,
+        )
+    }
     AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
         when (current) {
-            Screen.CAMPAMENTO -> CampamentoScreen(
-                stamp = stamp,
-                facts = facts,
-                apps = launcher.visibleApps(),
-                home = launcher.home,
-                onOpenApp = launcher::openApp,
-                onAppMenu = launcher::openMenu,
-                onOpenPetate = launcher::openPetate,
-                onOpenSettings = actions::systemSettings,
-                onOpenAbout = actions::securityUpdates,
-                onShowNotifications = actions::showNotifications,
-                board = launcher.board,
-                page = launcher.page,
-                onPage = launcher::showPage,
-                widgetHeightDp = widgetViews::heightDp,
-                widgetView = widgetViews::view,
-                onWidgetMenu = launcher::openWidgetMenu,
-                onDrop = launcher::drop,
-                onCampMenu = launcher::openCampMenu,
-            )
-            Screen.PETATE -> PetateScreen(
-                apps = launcher.apps,
-                hidden = launcher.home.hidden.toSet(),
-                focusSearch = launcher.focusSearch,
-                onOpenApp = launcher::openFromPetate,
-                onAppMenu = launcher::openMenu,
-                recent = launcher.visibleRecent().mapNotNull { pkg -> launcher.apps.find { it.packageName == pkg } },
-            )
+            Screen.CAMPAMENTO -> camp()
+            Screen.PETATE -> Box {
+                // An app lifted out of the petate is carried over the camp: the camp comes up underneath and the
+                // petate goes see-through, staying in place so the finger keeps its hold on the tile.
+                val lifted = drag.held?.from == Zone.Petate
+                if (lifted) camp()
+                PetateScreen(
+                    apps = launcher.apps,
+                    hidden = launcher.home.hidden.toSet(),
+                    focusSearch = launcher.focusSearch,
+                    onOpenApp = launcher::openFromPetate,
+                    onAppMenu = launcher::openMenu,
+                    recent = launcher.visibleRecent().mapNotNull { pkg -> launcher.apps.find { it.packageName == pkg } },
+                    drag = drag,
+                    onDrop = { h, spot -> launcher.drop(h.app.packageName, h.from, spot.zone, spot.index) },
+                    onLand = { launcher.back() },
+                    modifier = Modifier.graphicsLayer { alpha = if (lifted) 0f else 1f },
+                )
+            }
         }
     }
     if (launcher.campMenu) {

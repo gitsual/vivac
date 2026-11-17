@@ -390,6 +390,20 @@ class LauncherTest {
     }
 
     @Test
+    fun `an app carried out of the petate lands in the camp, once, even onto a full dock it is already in`() {
+        val l = many()
+        l.drop("app.organicmaps", from = Zone.Petate, to = Zone.Via, index = 0)
+        assertEquals(listOf("app.organicmaps"), l.home.pinned)
+        l.drop("app.organicmaps", from = Zone.Petate, to = Zone.Via, index = 5)
+        assertEquals(listOf("app.organicmaps"), l.home.pinned)
+        l.drop("com.android.settings", from = Zone.Petate, to = Zone.Dock, index = 0)
+        assertEquals(listOf("com.android.settings", "com.termux", "org.thoughtcrime.securesms", "com.tailscale.ipn"), l.shownDock())
+        l.drop("com.termux", from = Zone.Petate, to = Zone.Dock, index = 0)
+        assertEquals(listOf("com.termux", "com.android.settings", "org.thoughtcrime.securesms", "com.tailscale.ipn"), l.shownDock())
+        assertEquals(emptyList<String>(), actions.calls)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

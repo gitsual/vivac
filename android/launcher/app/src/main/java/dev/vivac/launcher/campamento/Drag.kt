@@ -82,7 +82,7 @@ fun Modifier.spot(board: DragBoard, spot: Spot): Modifier {
 
 /**
  * The gestures of a tile that can be carried: tap opens it; holding opens its menu; holding and moving lifts it
- * and carries it to wherever it is let go. TalkBack keeps the plain open and options actions.
+ * and carries it to wherever it is let go, then [onLand] runs whether it landed or not. TalkBack keeps the plain open and options actions.
  */
 @Composable
 fun Modifier.carriable(
@@ -92,6 +92,7 @@ fun Modifier.carriable(
     onOpen: () -> Unit,
     onMenu: () -> Unit,
     onDrop: (Held, Spot) -> Unit,
+    onLand: () -> Unit = {},
 ): Modifier {
     val haptics = LocalHapticFeedback.current
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -127,6 +128,7 @@ fun Modifier.carriable(
                     onMenu()
                 } else {
                     board.release()?.let { (h, s) -> onDrop(h, s) }
+                    onLand()
                 }
             }
         }

@@ -67,6 +67,12 @@ import dev.vivac.launcher.apps.AppFace
 import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.theme.AppTile
+import androidx.compose.ui.graphics.Color
+import dev.vivac.launcher.core.Zone
+import dev.vivac.launcher.campamento.carriable
+import dev.vivac.launcher.campamento.Spot
+import dev.vivac.launcher.campamento.Held
+import dev.vivac.launcher.campamento.DragBoard
 import dev.vivac.launcher.theme.Glyph
 import dev.vivac.launcher.theme.Ink
 import dev.vivac.launcher.theme.LineIcon
@@ -81,7 +87,15 @@ fun PetateScreen(
     onOpenApp: (String) -> Unit,
     onAppMenu: (String) -> Unit,
     recent: List<InstalledApp> = emptyList(),
+    drag: DragBoard? = null,
+    onDrop: (Held, Spot) -> Unit = { _, _ -> },
+    onLand: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
+    // Holding an app and moving lifts it out of the petate, to be carried onto the camp.
+    val carry: @Composable (InstalledApp, Color) -> Modifier? = { app, tone ->
+        drag?.let { Modifier.carriable(it, Held(app, Zone.Petate, tone), app.label, { onOpenApp(app.packageName) }, { onAppMenu(app.packageName) }, onDrop, onLand) }
+    }
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf<Group?>(null) }
     var showHidden by rememberSaveable { mutableStateOf(false) }
@@ -95,7 +109,7 @@ fun PetateScreen(
     val focus = remember { FocusRequester() }
     LaunchedEffect(focusSearch) { if (focusSearch) focus.requestFocus() }
 
-    Box(Modifier.fillMaxSize().background(Ink.deep)) {
+    Box(modifier.fillMaxSize().background(Ink.deep)) {
         Contours(Modifier.fillMaxSize(), color = Ink.surface)
         Column(
             Modifier
@@ -116,7 +130,7 @@ fun PetateScreen(
                     Group.entries.forEach { g -> Chip(g.title, filter == g && !showHidden) { filter = if (filter == g) null else g; showHidden = false } }
                     if (hidden.isNotEmpty()) Chip("Ocultas · ${hidden.size}", showHidden) { showHidden = !showHidden; filter = null }
                 }
-                if (recent.isNotEmpty() && query.isBlank() && !showHidden) LastPitch(recent, onOpenApp, onAppMenu)
+                if (recent.isNotEmpty() && query.isBlank() && !showHidden) LastPitch(recent, onOpenApp, onAppMenu, carry)
                 if (shelves.isEmpty()) {
                     Text("Nada en el petate con «$query».", style = Type.body.copy(color = Ink.textMuted))
                 }
@@ -133,6 +147,7 @@ fun PetateScreen(
                         item(key = "h-${group.name}", span = { GridItemSpan(maxLineSpan) }) { ShelfHeader(group, list.size) }
                         items(list, key = { it.packageName }) { app ->
                             val deep = app.packageName.startsWith("com.termux")
+                            val tone = if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]
                             AppTile(
                                 label = app.label,
                                 background = if (deep) Ink.deep else Ink.surface,
@@ -140,8 +155,9 @@ fun PetateScreen(
                                 onClick = { onOpenApp(app.packageName) },
                                 onLongClick = { onAppMenu(app.packageName) },
                                 dot = app.packageName in LocalDots.current,
+                                gestures = carry(app, tone),
                             ) {
-                                AppFace(app, if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)])
+                                AppFace(app, tone)
                             }
                         }
                     }
@@ -175,11 +191,17 @@ private fun ShelfHeader(group: Group, count: Int) {
 
 /** "Último largo": the apps you opened last through vivac, newest first. */
 @Composable
-private fun LastPitch(recent: List<InstalledApp>, onOpenApp: (String) -> Unit, onAppMenu: (String) -> Unit) {
+private fun LastPitch(
+    recent: List<InstalledApp>,
+    onOpenApp: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
+    carry: @Composable (InstalledApp, Color) -> Modifier?,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("ÚLTIMO LARGO", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.semantics { heading() })
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             recent.forEach { app ->
+                val tone = Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]
                 AppTile(
                     label = app.label,
                     background = Ink.surface,
@@ -188,7 +210,8 @@ private fun LastPitch(recent: List<InstalledApp>, onOpenApp: (String) -> Unit, o
                     onClick = { onOpenApp(app.packageName) },
                     onLongClick = { onAppMenu(app.packageName) },
                     modifier = Modifier.width(60.dp),
-                ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                    gestures = carry(app, tone),
+                ) { AppFace(app, tone) }
             }
         }
     }

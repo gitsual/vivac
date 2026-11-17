@@ -325,6 +325,44 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `an app carried out of the petate starts the route, and the petate closes`() {
+        show()
+        compose.runOnUiThread { launcher.openPetate(false) }
+        compose.waitForIdle()
+        val tile = compose.onNodeWithText("Ajustes", useUnmergedTree = true)
+        val start = centre("Ajustes")
+        tile.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_000)
+        tile.performTouchInput { repeat(5) { moveBy(androidx.compose.ui.geometry.Offset(0f, -20f)) } }
+        compose.waitForIdle()
+        // The petate gives way to the camp as soon as the app is lifted.
+        val target = centre("Suelta aquí para empezar la vía")
+        tile.performTouchInput {
+            val by = target - (start + androidx.compose.ui.geometry.Offset(0f, -100f))
+            repeat(10) { moveBy(by / 10f) }
+            up()
+        }
+        compose.waitForIdle()
+        assertEquals(listOf("com.android.settings"), launcher.home.pinned)
+        assertEquals(Screen.CAMPAMENTO, launcher.screen)
+        assertEquals(emptyList<String>(), actions.calls)
+    }
+
+    @Test
+    fun `an app carried out of the petate and let go over nothing just closes it`() {
+        show()
+        compose.runOnUiThread { launcher.openPetate(false) }
+        compose.waitForIdle()
+        val tile = compose.onNodeWithText("Ajustes", useUnmergedTree = true)
+        tile.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_000)
+        tile.performTouchInput { repeat(5) { moveBy(androidx.compose.ui.geometry.Offset(0f, -20f)) }; up() }
+        compose.waitForIdle()
+        assertEquals(Screen.CAMPAMENTO, launcher.screen)
+        assertEquals(emptyList<String>(), launcher.home.pinned)
+    }
+
+    @Test
     fun `letting go over nothing leaves everything where it was`() {
         store.values["pinned"] = "app.organicmaps"
         show()

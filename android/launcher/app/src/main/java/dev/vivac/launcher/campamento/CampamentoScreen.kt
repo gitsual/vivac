@@ -116,8 +116,8 @@ fun CampamentoScreen(
     onWidgetMenu: (Int) -> Unit,
     onCampMenu: () -> Unit,
     onDrop: (packageName: String, from: Zone, to: Zone, index: Int) -> Unit = { _, _, _, _ -> },
+    drag: DragBoard = remember { DragBoard() },
 ) {
-    val drag = remember { DragBoard() }
     val dp = LocalDensity.current.density
     val drop: (Held, Spot) -> Unit = { h, spot -> onDrop(h.app.packageName, h.from, spot.zone, spot.index) }
     var rootOrigin by remember { mutableStateOf(Offset.Zero) }
