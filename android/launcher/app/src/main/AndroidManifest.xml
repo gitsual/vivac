@@ -6,6 +6,9 @@
     <!-- "Desinstalar" opens the system confirmation; Android requires this to send ACTION_DELETE. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
+    <!-- Android 15: the home app may show the private space (normal permission, granted at install). -->
+    <uses-permission android:name="android.permission.ACCESS_HIDDEN_PROFILES" />
+
     <!-- A launcher must see every launchable app; Android 11+ hides them otherwise. -->
     <queries>
         <intent>

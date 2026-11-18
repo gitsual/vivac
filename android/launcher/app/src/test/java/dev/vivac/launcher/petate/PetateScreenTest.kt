@@ -23,6 +23,8 @@ import dev.vivac.launcher.apps.InstalledApp
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import androidx.compose.ui.test.performScrollTo
+import dev.vivac.launcher.apps.Profile
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
@@ -162,5 +164,50 @@ class PetateScreenTest {
         compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("casa")
         compose.onNodeWithText("Ir a casa").performClick()
         assertEquals(listOf(chat), opened)
+    }
+
+    @Test
+    fun `the work profile and private space have their own chips, open their apps there, and lock`() {
+        val asked = mutableListOf<String>()
+        val work = Profile(10, Profile.Kind.WORK, locked = false, apps = listOf(InstalledApp("Slack", "com.slack", false)))
+        val private = Profile(11, Profile.Kind.PRIVATE, locked = true, apps = emptyList())
+        compose.setContent {
+            PetateScreen(
+                listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = { asked += "main:$it" }, onAppMenu = { asked += "menu:$it" },
+                profiles = listOf(work, private),
+                onOpenInProfile = { pkg, id -> asked += "open:$id:$pkg" },
+                onLockProfile = { asked += "lock:${it.id}" },
+            )
+        }
+        compose.onNodeWithText("Trabajo").performScrollTo().performClick()
+        compose.onNodeWithText("Termux").assertDoesNotExist()
+        compose.onNodeWithText("Perfil de trabajo · 1 apps").assertExists()
+        compose.onNodeWithText("Slack").performClick()
+        compose.onNodeWithText("Slack").performTouchInput { longClick() }
+        compose.onNodeWithText("Pausar").performClick()
+        compose.onNodeWithText("Privado").performScrollTo().performClick()
+        compose.onNodeWithText("Espacio privado bloqueado: desbloquéalo para ver sus apps.").assertExists()
+        compose.onNodeWithText("Desbloquear").performClick()
+        compose.onNodeWithText("Todo").performScrollTo().performClick()
+        compose.onNodeWithText("Termux").assertExists()
+        assertEquals(listOf("open:10:com.slack", "lock:10", "lock:11"), asked)
+    }
+
+    @Test
+    fun `a paused work profile and an open private space say so`() {
+        compose.setContent {
+            PetateScreen(
+                listOf(termux), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {},
+                profiles = listOf(
+                    Profile(10, Profile.Kind.WORK, locked = true, apps = emptyList()),
+                    Profile(11, Profile.Kind.PRIVATE, locked = false, apps = listOf(InstalledApp("Banco", "a.bank", false))),
+                ),
+            )
+        }
+        compose.onNodeWithText("Trabajo").performScrollTo().performClick()
+        compose.onNodeWithText("Reanudar").assertExists()
+        compose.onNodeWithText("Privado").performScrollTo().performClick()
+        compose.onNodeWithText("Espacio privado abierto · 1 apps").assertExists()
+        compose.onNodeWithText("Bloquear").assertExists()
     }
 }

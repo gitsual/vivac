@@ -97,6 +97,14 @@ class MainActivityTest {
     }
 
     @Test
+    fun `a profile locked or unlocked refreshes the apps`() {
+        start()
+        app.sendBroadcast(Intent("android.intent.action.PROFILE_UNAVAILABLE"))
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        compose.waitForIdle()
+    }
+
+    @Test
     fun `a copy of the camp is written to the file you choose and read back from one`() {
         prefs.edit().putString("pinned", "app.organicmaps").commit()
         start()

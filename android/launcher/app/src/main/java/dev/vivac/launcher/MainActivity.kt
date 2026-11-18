@@ -108,9 +108,22 @@ class MainActivity : ComponentActivity() {
         override fun onReceive(context: Context, intent: Intent) = tick()
     }
 
+    /** A work profile paused or resumed, the private space locked or unlocked: its apps come and go. */
+    private val profilesChanged = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = launcher.refresh()
+    }
+
     override fun onStart() {
         super.onStart()
         widgets.startListening()
+        val profiles = IntentFilter().apply {
+            addAction(Intent.ACTION_MANAGED_PROFILE_AVAILABLE)
+            addAction(Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE)
+            // Intent.ACTION_PROFILE_(UN)AVAILABLE, Android 15 (the private space); vivac compiles against 14.
+            addAction("android.intent.action.PROFILE_AVAILABLE")
+            addAction("android.intent.action.PROFILE_UNAVAILABLE")
+        }
+        registerReceiver(profilesChanged, profiles)
         val times = IntentFilter().apply {
             addAction(Intent.ACTION_TIME_TICK)
             addAction(Intent.ACTION_TIME_CHANGED)
@@ -122,6 +135,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         unregisterReceiver(clock)
+        unregisterReceiver(profilesChanged)
         widgets.stopListening()
         super.onStop()
     }

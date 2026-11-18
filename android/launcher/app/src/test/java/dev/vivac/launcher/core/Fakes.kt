@@ -5,8 +5,9 @@ import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.petate.AppShortcut
 import dev.vivac.launcher.widgets.WidgetOption
 
-class FakeSource(var apps: List<InstalledApp>) : AppSource {
+class FakeSource(var apps: List<InstalledApp>, var others: List<dev.vivac.launcher.apps.Profile> = emptyList()) : AppSource {
     override fun installed() = apps
+    override fun profiles() = others
 }
 
 class FakeStore(val values: MutableMap<String, String> = mutableMapOf()) : Store {
@@ -41,6 +42,8 @@ class FakeActions : Actions {
     override fun isHome() = home
     override fun askToBeHome() { calls += "askHome" }
     override fun backUp() { calls += "backup" }
+    override fun openInProfile(packageName: String, profile: Long) { calls += "openIn:$profile:$packageName" }
+    override fun lockProfile(profile: Long, locked: Boolean) { calls += "lockProfile:$profile:$locked" }
     var allShortcuts = listOf<Pair<String, AppShortcut>>()
     override fun allShortcuts() = allShortcuts
     override fun pickBackup() { calls += "restore" }

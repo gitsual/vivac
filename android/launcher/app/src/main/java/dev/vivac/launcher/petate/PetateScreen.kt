@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import dev.vivac.launcher.apps.AppFace
 import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.InstalledApp
+import dev.vivac.launcher.apps.Profile
 import dev.vivac.launcher.theme.AppTile
 import androidx.compose.ui.graphics.Color
 import dev.vivac.launcher.core.Zone
@@ -97,6 +98,9 @@ fun PetateScreen(
     onStoreSearch: (String) -> Unit = {},
     shortcuts: List<FoundShortcut> = emptyList(),
     onOpenShortcut: (FoundShortcut) -> Unit = {},
+    profiles: List<Profile> = emptyList(),
+    onOpenInProfile: (String, Long) -> Unit = { _, _ -> },
+    onLockProfile: (Profile) -> Unit = {},
 ) {
     // Holding an app and moving lifts it out of the petate, to be carried onto the camp.
     val carry: @Composable (InstalledApp, Color) -> Modifier? = { app, tone ->
@@ -106,7 +110,12 @@ fun PetateScreen(
     var filter by rememberSaveable { mutableStateOf<Group?>(null) }
     var showHidden by rememberSaveable { mutableStateOf(false) }
     if (hidden.isEmpty()) showHidden = false
-    val found = remember(apps, hidden, showHidden, query) { Pack.search(Pack.visible(apps, hidden, showHidden), query) }
+    // A chosen profile (work, private space) shows only its apps.
+    var profileId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val profile = profiles.firstOrNull { it.id == profileId }
+    val found = remember(apps, hidden, showHidden, query, profile) {
+        Pack.search(profile?.apps ?: Pack.visible(apps, hidden, showHidden), query)
+    }
     val shelves = remember(found, filter) { Pack.grouped(found, filter) }
     val jumps = remember(shelves) { Pack.jumps(shelves) }
     val grid = rememberLazyGridState()
@@ -132,11 +141,14 @@ fun PetateScreen(
                 Text("Petate", style = Type.title.copy(fontSize = 44.sp, lineHeight = 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
                 SearchField(query, { query = it }, focus) { shelves.firstOrNull()?.second?.singleOrNull()?.let { onOpenApp(it.packageName) } }
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip("Todo", filter == null && !showHidden) { filter = null; showHidden = false }
-                    Group.entries.forEach { g -> Chip(g.title, filter == g && !showHidden) { filter = if (filter == g) null else g; showHidden = false } }
-                    if (hidden.isNotEmpty()) Chip("Ocultas · ${hidden.size}", showHidden) { showHidden = !showHidden; filter = null }
+                    val main = profile == null
+                    Chip("Todo", main && filter == null && !showHidden) { filter = null; showHidden = false; profileId = null }
+                    Group.entries.forEach { g -> Chip(g.title, main && filter == g && !showHidden) { filter = if (filter == g) null else g; showHidden = false; profileId = null } }
+                    if (hidden.isNotEmpty()) Chip("Ocultas · ${hidden.size}", main && showHidden) { showHidden = !showHidden; filter = null; profileId = null }
+                    profiles.forEach { p -> Chip(p.kind.title, profileId == p.id) { profileId = if (profileId == p.id) null else p.id; filter = null; showHidden = false } }
                 }
-                if (recent.isNotEmpty() && query.isBlank() && !showHidden) LastPitch(recent, onOpenApp, onAppMenu, carry)
+                if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
+                if (recent.isNotEmpty() && query.isBlank() && !showHidden && profile == null) LastPitch(recent, onOpenApp, onAppMenu, carry)
                 val answer = remember(query) { Calc.answer(query) }
                 if (answer != null) Answer(answer) { onCopy(answer) }
                 val foundShortcuts = remember(query, shortcuts) { Pack.searchShortcuts(shortcuts, query).take(4) }
@@ -168,10 +180,11 @@ fun PetateScreen(
                                 label = app.label,
                                 background = if (deep) Ink.deep else Ink.surface,
                                 border = Ink.field,
-                                onClick = { onOpenApp(app.packageName) },
-                                onLongClick = { onAppMenu(app.packageName) },
-                                dot = app.packageName in LocalDots.current,
-                                gestures = carry(app, tone),
+                                onClick = { if (profile != null) onOpenInProfile(app.packageName, profile.id) else onOpenApp(app.packageName) },
+                                onLongClick = { if (profile == null) onAppMenu(app.packageName) },
+                                dot = profile == null && app.packageName in LocalDots.current,
+                                badge = profile?.let { if (it.kind == Profile.Kind.WORK) "TRAB" else "PRIV" },
+                                gestures = if (profile == null) carry(app, tone) else null,
                             ) {
                                 AppFace(app, tone)
                             }
@@ -184,6 +197,38 @@ fun PetateScreen(
                 }
             }
         }
+    }
+}
+
+/** A profile's state, and the button that pauses or locks it (and back). */
+@Composable
+private fun ProfileBar(profile: Profile, onToggle: () -> Unit) {
+    val private = profile.kind == Profile.Kind.PRIVATE
+    val state = when {
+        private && profile.locked -> "Espacio privado bloqueado: desbloquéalo para ver sus apps."
+        private -> "Espacio privado abierto · ${profile.apps.size} apps"
+        profile.locked -> "Perfil de trabajo en pausa: sus apps no avisan ni se abren."
+        else -> "Perfil de trabajo · ${profile.apps.size} apps"
+    }
+    val action = when {
+        private && profile.locked -> "Desbloquear"
+        private -> "Bloquear"
+        profile.locked -> "Reanudar"
+        else -> "Pausar"
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(end = 24.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Ink.surface)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        LineIcon(Glyph.LOCK, Ink.text, 20.dp)
+        Text(state, style = Type.small.copy(color = Ink.text), modifier = Modifier.weight(1f))
+        Chip(action, true, onToggle)
     }
 }
 

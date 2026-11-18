@@ -89,6 +89,9 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     onStoreSearch = actions::storeSearch,
                     shortcuts = launcher.petateShortcuts,
                     onOpenShortcut = launcher::openShortcutFromPetate,
+                    profiles = launcher.profiles,
+                    onOpenInProfile = launcher::openInProfile,
+                    onLockProfile = launcher::lockProfile,
                     modifier = Modifier.graphicsLayer { alpha = if (lifted) 0f else 1f },
                 )
             }

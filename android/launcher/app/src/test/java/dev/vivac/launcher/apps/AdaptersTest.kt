@@ -214,4 +214,23 @@ class AdaptersTest {
         AppActions(activity).pickBackup()
         assertEquals(AppActions.REQ_RESTORE, shadowOf(activity).nextStartedActivityForResult.requestCode)
     }
+
+    @Test
+    fun `other profiles are listed with their apps, opened and locked through android`() {
+        val source = AndroidAppSource(app)
+        assertEquals(emptyList<Profile>(), source.profiles())
+        val users = shadowOf(app.getSystemService(android.os.UserManager::class.java))
+        users.addProfile(0, 10, "Trabajo", 0)
+        val workHandle = android.os.UserHandle.getUserHandleForUid(10 * 100_000)
+        users.setSerialNumberForUser(workHandle, 42L)
+        shadowOf(app.getSystemService(LauncherApps::class.java)).addActivity(workHandle, Robo.activity(app, "Slack", "com.slack", user = workHandle))
+        val profiles = source.profiles()
+        assertEquals(listOf(Profile(42L, Profile.Kind.WORK, false, listOf(InstalledApp("Slack", "com.slack", false)))), profiles)
+        val actions = AppActions(app)
+        actions.openInProfile("com.slack", 42L)
+        actions.openInProfile("com.slack", 99L)
+        actions.openInProfile("nope", 42L)
+        actions.lockProfile(42L, true)
+        actions.lockProfile(99L, true)
+    }
 }

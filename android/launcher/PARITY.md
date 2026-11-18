@@ -31,7 +31,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | D1 | All apps, grouped, alphabetical | done |
 | D2 | Search ignoring case and accents; Go opens a single result | done |
 | D3 | Hide apps, with a way to see them again | done |
-| D4 | Work profile and Private space apps, badged, in their own chip | todo |
+| D4 | Work profile and Private space apps, badged, in their own chip | done: "Trabajo"/"Privado" chips, open in their profile, pause/lock from the petate (ACCESS_HIDDEN_PROFILES) |
 | D5 | Recent apps row (from vivac's own launch history, no usage permission) | done ("Último largo") |
 | D6 | Fuzzy search: initials ("om" → Organic Maps) and typo tolerance | done: initials; one slip (two for long words) when nothing matches exactly |
 | D7 | Search app shortcuts, not only apps | done: "ATAJOS" results, gathered when the petate opens |

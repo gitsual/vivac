@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.vivac.launcher.apps.AppSource
 import dev.vivac.launcher.apps.InstalledApp
+import dev.vivac.launcher.apps.Profile
 import dev.vivac.launcher.campamento.Dock
 import dev.vivac.launcher.campamento.DockSlot
 import dev.vivac.launcher.campamento.Home
@@ -98,9 +99,20 @@ class Launcher(
         actions.say(if (locked) "Campamento bloqueado: nada se mueve hasta que lo desbloquees." else "Campamento desbloqueado.")
     }
 
+    /** The phone's work profile and private space, as of the last refresh. */
+    var profiles by mutableStateOf(emptyList<Profile>()); private set
+
+    fun openInProfile(packageName: String, profile: Long) {
+        actions.openInProfile(packageName, profile)
+        screen = Screen.CAMPAMENTO
+    }
+
+    fun lockProfile(profile: Profile) = actions.lockProfile(profile.id, !profile.locked)
+
     fun refresh() {
         installed = source.installed()
         apps = named()
+        profiles = source.profiles()
         // An empty list means Android is not ready (e.g. right after boot), not that every app is gone:
         // never let that wipe the dock and pins.
         if (apps.isNotEmpty()) {

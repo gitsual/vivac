@@ -1,6 +1,7 @@
 package dev.vivac.launcher.core
 
 import dev.vivac.launcher.apps.InstalledApp
+import dev.vivac.launcher.apps.Profile
 import dev.vivac.launcher.campamento.Placed
 import dev.vivac.launcher.campamento.Shelved
 import dev.vivac.launcher.campamento.WidgetBoard
@@ -549,6 +550,22 @@ class LauncherTest {
         l.openShortcutFromPetate(l.petateShortcuts.single())
         assertEquals("shortcut:org.thoughtcrime.securesms/chat", actions.calls.last())
         assertEquals(Screen.CAMPAMENTO, l.screen)
+    }
+
+    @Test
+    fun `the work profile and private space are read on refresh, open their apps and lock`() {
+        val work = Profile(10, Profile.Kind.WORK, locked = false, apps = listOf(signal))
+        val private = Profile(11, Profile.Kind.PRIVATE, locked = true, apps = emptyList())
+        val l = Launcher(FakeSource(listOf(termux), listOf(work, private)), store, actions, widgets).also { it.refresh() }
+        assertEquals(listOf(work, private), l.profiles)
+        l.openPetate(false)
+        l.openInProfile("org.thoughtcrime.securesms", 10)
+        assertEquals("openIn:10:org.thoughtcrime.securesms", actions.calls.last())
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+        l.lockProfile(private)
+        assertEquals("lockProfile:11:false", actions.calls.last())
+        l.lockProfile(work)
+        assertEquals("lockProfile:10:true", actions.calls.last())
     }
 
     @Test

@@ -7,6 +7,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.content.pm.ShortcutInfo
 import android.net.Uri
+import android.os.Build
 import android.os.Process
 import android.os.UserHandle
 import android.provider.Settings
@@ -14,11 +15,37 @@ import dev.vivac.launcher.core.Actions
 import dev.vivac.launcher.petate.AppShortcut
 
 /** Adapter: installed apps of the current profile, read from LauncherApps. */
+/** UserManager.USER_TYPE_PROFILE_PRIVATE (Android 15). */
+private const val USER_TYPE_PRIVATE = "android.os.usertype.profile.PRIVATE"
+
 class AndroidAppSource(private val context: Context) : AppSource {
     private val launcherApps = context.getSystemService(LauncherApps::class.java)
 
-    override fun installed(): List<InstalledApp> =
-        launcherApps.getActivityList(null, Process.myUserHandle())
+    private val users = context.getSystemService(android.os.UserManager::class.java)
+
+    override fun installed(): List<InstalledApp> = appsOf(Process.myUserHandle())
+
+    /**
+     * Every profile besides the main one. Android 15 shows the private space only to the home app that declares
+     * ACCESS_HIDDEN_PROFILES; a locked private space lists no apps.
+     */
+    override fun profiles(): List<Profile> = launcherApps.profiles.filter { it != Process.myUserHandle() }.map { user ->
+        val kind = if (userType(user) == USER_TYPE_PRIVATE) Profile.Kind.PRIVATE else Profile.Kind.WORK
+        val locked = users.isQuietModeEnabled(user)
+        Profile(users.getSerialNumberForUser(user), kind, locked, if (locked && kind == Profile.Kind.PRIVATE) emptyList() else appsOf(user))
+    }
+
+    /**
+     * LauncherApps.getLauncherUserInfo(user).userType, Android 15+. vivac compiles against Android 14,
+     * so it is reached by name; older Androids have no private space and answer null.
+     */
+    private fun userType(user: UserHandle): String? = runCatching {
+        val info = LauncherApps::class.java.getMethod("getLauncherUserInfo", UserHandle::class.java).invoke(launcherApps, user)
+        info?.javaClass?.getMethod("getUserType")?.invoke(info) as String?
+    }.getOrNull()
+
+    private fun appsOf(user: UserHandle): List<InstalledApp> =
+        launcherApps.getActivityList(null, user)
             .filter { it.applicationInfo.packageName != context.packageName }
             .map {
                 InstalledApp(
@@ -48,6 +75,7 @@ class AndroidAppSource(private val context: Context) : AppSource {
 /** Adapter: starting apps, their shortcuts and their system pages. */
 class AppActions(private val context: Context) : Actions {
     private val launcherApps = context.getSystemService(LauncherApps::class.java)
+    private val users = context.getSystemService(android.os.UserManager::class.java)
 
     /**
      * The app's own shortcuts, by rank. Android only shares them with the default launcher,
@@ -82,6 +110,18 @@ class AppActions(private val context: Context) : Actions {
         fun ordered(shortcuts: List<ShortcutInfo>): List<AppShortcut> =
             shortcuts.sortedWith(compareBy<ShortcutInfo>({ !it.isDeclaredInManifest }, { it.rank }))
                 .map { AppShortcut(it.id, it.shortLabel?.toString().orEmpty()) }
+    }
+
+    override fun openInProfile(packageName: String, profile: Long) {
+        val user = users.getUserForSerialNumber(profile) ?: return
+        val activity = launcherApps.getActivityList(packageName, user).firstOrNull() ?: return
+        runCatching { launcherApps.startMainActivity(activity.componentName, user, null, null) }
+    }
+
+    /** Pausing a work profile, or locking the private space; unlocking asks for its credential. */
+    override fun lockProfile(profile: Long, locked: Boolean) {
+        val user = users.getUserForSerialNumber(profile) ?: return
+        runCatching { users.requestQuietModeEnabled(locked, user) }
     }
 
     override fun openShortcut(packageName: String, id: String) {

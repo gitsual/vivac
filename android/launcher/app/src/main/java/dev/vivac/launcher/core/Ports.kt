@@ -20,6 +20,10 @@ interface Actions {
     /** Android only shares app shortcuts with the default launcher. */
     fun canReadShortcuts(): Boolean
     fun openShortcut(packageName: String, id: String)
+    /** Starts an app in another profile ([Profile.id]). */
+    fun openInProfile(packageName: String, profile: Long)
+    /** Pauses or resumes a work profile, locks or unlocks the private space (Android asks for the credential). */
+    fun lockProfile(profile: Long, locked: Boolean)
     /** Tells Android which of [packageName]'s shortcuts vivac keeps on the home screen (all of them, each time). */
     fun pinShortcuts(packageName: String, ids: List<String>)
     fun showNotifications()
