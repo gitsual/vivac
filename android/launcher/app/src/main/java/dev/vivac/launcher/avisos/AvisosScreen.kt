@@ -158,9 +158,11 @@ private fun QuickSection(quick: List<Quick>, byPackage: Map<String, InstalledApp
                 rows = androidx.compose.foundation.lazy.grid.GridCells.Fixed(ROWS),
                 modifier = Modifier.fillMaxWidth().height(TILE_HEIGHT * ROWS).testTag("quick:grid"),
             ) {
-                items(present.size, key = { present[it].toString() }) { i ->
-                    val q = present[i]
-                    QuickTile(q, byPackage, on = isOn(q), chosen = false, Modifier.width(TILE_WIDTH).height(TILE_HEIGHT)) { act.run(q) }
+                val laid = QuickTiles.columns(present)
+                items(laid.size, key = { laid[it]?.toString() ?: "empty:$it" }) { i ->
+                    val q = laid[i]
+                    if (q == null) Spacer(Modifier.width(TILE_WIDTH).height(TILE_HEIGHT))
+                    else QuickTile(q, byPackage, on = isOn(q), chosen = false, Modifier.width(TILE_WIDTH).height(TILE_HEIGHT)) { act.run(q) }
                 }
             }
         } else {
@@ -410,7 +412,10 @@ private fun Pill(text: String, onClick: () -> Unit) {
     )
 }
 
-/** Closes the shade when the finger keeps pulling up after the list has reached its end. */
+/**
+ * Closes the shade when the finger keeps pulling after the list can go no further: up past its end, or down past
+ * its top.
+ */
 private class PullToClose(private val threshold: Float, private val onClose: () -> Unit) :
     androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
     private var pull = 0f
@@ -420,12 +425,12 @@ private class PullToClose(private val threshold: Float, private val onClose: () 
         available: androidx.compose.ui.geometry.Offset,
         source: androidx.compose.ui.input.nestedscroll.NestedScrollSource,
     ): androidx.compose.ui.geometry.Offset {
-        if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) pull = (pull + available.y).coerceAtMost(0f)
+        if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) pull += available.y
         return androidx.compose.ui.geometry.Offset.Zero
     }
 
     override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
-        val close = pull < -threshold
+        val close = kotlin.math.abs(pull) > threshold
         pull = 0f
         if (close) onClose()
         return androidx.compose.ui.unit.Velocity.Zero

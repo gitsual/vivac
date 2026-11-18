@@ -53,6 +53,15 @@ object QuickTiles {
         return list.toMutableList().apply { removeAt(at); add(to, quick) }
     }
 
+    /**
+     * The order a two-row grid that fills column by column needs, for each page of eight to read row by row as
+     * Android's quick settings do: four across, then four more below. A short last page is padded with nulls (empty
+     * places) so its tiles stay in the top row.
+     */
+    fun columns(list: List<Quick>): List<Quick?> = list.chunked(8).flatMap { page ->
+        (0 until minOf(page.size, 4)).flatMap { c -> listOf(page[c], page.getOrNull(c + 4)) }
+    }
+
     /** Every control not in the shade yet, to add. */
     fun available(list: List<Quick>): List<Control> = Control.entries.filter { Quick.Of(it) !in list }
 

@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.animation.core.animateDecay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.input.pointer.positionChange
@@ -814,7 +815,7 @@ private fun Clock(stamp: String) {
     val time = stamp.substringAfter(" · ", stamp)
     val day = stamp.substringBefore(" · ", "").split(" ")
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        Text(time, style = Type.hour, modifier = Modifier.weight(1f))
+        FitHour(time, Modifier.weight(1f))
         if (day.size == 3) {
             Column(Modifier.padding(bottom = 10.dp), horizontalAlignment = Alignment.End) {
                 Text(day[0], style = Type.mono)
@@ -825,7 +826,26 @@ private fun Clock(stamp: String) {
     }
 }
 
-/** Battery, free space and the GrapheneOS build as map annotations between two hairlines. */
+/**
+ * The hour on one line, as big as fits beside the date: wide hours (00:00, 12:00) shrink a little rather than wrap
+ * or run under it.
+ */
+@Composable
+private fun FitHour(time: String, modifier: Modifier) {
+    BoxWithConstraints(modifier) {
+        val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+        val room = constraints.maxWidth
+        val style = remember(time, room) {
+            var size = Type.hour.fontSize.value
+            fun fits(sp: Float) = measurer.measure(time, Type.hour.copy(fontSize = sp.sp, lineHeight = sp.sp), maxLines = 1, softWrap = false).size.width <= room
+            while (size > 24f && !fits(size)) size *= 0.96f
+            Type.hour.copy(fontSize = size.sp, lineHeight = size.sp)
+        }
+        Text(time, style = style, maxLines = 1, softWrap = false)
+    }
+}
+
+/** Battery and free space as map annotations between two hairlines. */
 @Composable
 private fun FactsStrip(facts: PhoneFacts, onOpenAbout: () -> Unit) {
     Row(
@@ -838,23 +858,59 @@ private fun FactsStrip(facts: PhoneFacts, onOpenAbout: () -> Unit) {
                 drawLine(Ink.field, Offset(0f, size.height), Offset(size.width, size.height), w)
             },
     ) {
-        Fact("BATERÍA", "${facts.batteryPercent} %", Modifier.weight(1f)) {
-            if (facts.charging) Text("cargando", style = Type.mono, color = Ink.okText)
-            else Gauge(facts.batteryPercent / 100f)
+        // The battery's icon says its level and whether it is charging; the number sits beside it.
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(start = 10.dp, top = 10.dp, bottom = 10.dp, end = 6.dp)
+                .semantics(mergeDescendants = true) {
+                    contentDescription = "Batería al ${facts.batteryPercent} %" + if (facts.charging) ", cargando" else ""
+                },
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("BATERÍA", style = Type.cota.copy(fontSize = 10.sp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Battery(facts.batteryPercent, facts.charging)
+                Text("${facts.batteryPercent} %", style = Type.figure.copy(fontSize = 20.sp, lineHeight = 26.sp), maxLines = 1)
+            }
         }
         Rule()
         Fact("LIBRE", "${facts.freeGb} GB", Modifier.weight(1f)) {
             Gauge(if (facts.totalGb > 0) facts.freeGb.toFloat() / facts.totalGb else 0f)
         }
-        Rule()
-        Fact(
-            "GRAPHENEOS",
-            facts.build,
-            Modifier
-                .weight(1f)
-                .clickable(role = Role.Button, onClickLabel = "Ver información del teléfono", onClick = onOpenAbout),
-            valueStyle = Type.mono.copy(fontSize = 13.sp, lineHeight = 26.sp, color = Ink.text),
-        ) { Text("parche ${facts.securityPatch}", style = Type.mono.copy(fontSize = 10.sp), maxLines = 1) }
+    }
+}
+
+/**
+ * A battery drawn in line: filled to its level, coral when low, summit green with a bolt while charging.
+ */
+@Composable
+private fun Battery(percent: Int, charging: Boolean) {
+    val level = percent.coerceIn(0, 100) / 100f
+    val fill = when {
+        charging -> Ink.ok
+        percent <= 15 -> Ink.primary
+        else -> Ink.text
+    }
+    Canvas(Modifier.size(width = 34.dp, height = 18.dp)) {
+        val stroke = 1.5.dp.toPx()
+        val nub = 3.dp.toPx()
+        val body = Size(size.width - nub - stroke, size.height - stroke)
+        val corner = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
+        drawRoundRect(Ink.textMuted, Offset(stroke / 2, stroke / 2), body, corner, style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+        drawRoundRect(Ink.textMuted, Offset(size.width - nub, size.height * 0.3f), Size(nub, size.height * 0.4f), androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()))
+        val inset = stroke + 1.5.dp.toPx()
+        val inner = Size((body.width - 2 * inset + stroke) * level, body.height - 2 * inset + stroke)
+        drawRoundRect(fill, Offset(inset, inset), inner, androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+        if (charging) {
+            val w = size.width - nub
+            val h = size.height
+            val bolt = androidx.compose.ui.graphics.Path().apply {
+                moveTo(w * 0.56f, h * 0.12f); lineTo(w * 0.36f, h * 0.56f); lineTo(w * 0.52f, h * 0.56f)
+                lineTo(w * 0.44f, h * 0.88f); lineTo(w * 0.66f, h * 0.42f); lineTo(w * 0.5f, h * 0.42f); close()
+            }
+            drawPath(bolt, Ink.deep)
+        }
     }
 }
 
@@ -920,10 +976,6 @@ private fun Via(
     }
     val rows = Route.rows(shown.size, 4)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-            Text("Vía del campamento", style = Type.section, modifier = Modifier.weight(1f).semantics { heading() })
-            Text("${shown.size} ${if (shown.size == 1) "LARGO" else "LARGOS"} · A MANO", style = Type.cota.copy(fontSize = 10.sp))
-        }
         val dash = with(LocalDensity.current) { floatArrayOf(2.dp.toPx(), 7.dp.toPx()) }
         Column(
             Modifier

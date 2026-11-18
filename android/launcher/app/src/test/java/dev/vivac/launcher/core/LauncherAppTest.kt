@@ -50,6 +50,8 @@ import dev.vivac.launcher.widgets.Grip
 import dev.vivac.launcher.widgets.WidgetOption
 import dev.vivac.launcher.avisos.Control
 import dev.vivac.launcher.avisos.Quick
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -103,10 +105,12 @@ class LauncherAppTest {
         show()
         compose.onNodeWithText("15:48").assertExists()
         compose.onNodeWithText("17").assertExists()
-        compose.onNodeWithText("2026111301").assertExists()
         compose.onNodeWithText("25 GB").assertExists()
         compose.onNodeWithText("99 %").assertExists()
-        compose.onNodeWithText("cargando").assertExists()
+        // The battery's state is in its icon: no "cargando" written out, and no GrapheneOS build on the camp.
+        compose.onNodeWithContentDescription("Batería al 99 %, cargando").assertExists()
+        compose.onNodeWithText("cargando").assertDoesNotExist()
+        compose.onNodeWithText("2026111301").assertDoesNotExist()
         compose.onNodeWithText("Termux").performClick()
         assertEquals(listOf("open:com.termux"), actions.calls)
     }
@@ -137,10 +141,8 @@ class LauncherAppTest {
     }
 
     @Test
-    fun `the facts card opens the phone's info, and the gear vivac's phone settings`() {
+    fun `the gear opens vivac's phone settings`() {
         show()
-        compose.onNodeWithText("2026111301").performClick()
-        assertEquals(listOf("about"), actions.calls)
         compose.onNodeWithContentDescription("Ajustes del sistema").performClick()
         compose.waitForIdle()
         assertEquals(Screen.SISTEMA, launcher.screen)
@@ -153,7 +155,7 @@ class LauncherAppTest {
         compose.onNodeWithText("Termux").performTouchInput { longClick() }
         compose.onNodeWithText("com.termux").assertExists()
         compose.onNodeWithText("Fijar en el campamento").tap()
-        compose.onNodeWithText("Vía del campamento").assertExists()
+        compose.onNodeWithText("Vía del campamento").assertDoesNotExist()
         compose.onNodeWithText("L1").assertExists()
         // Now both in the dock and pinned.
         compose.onAllNodesWithText("Termux").assertCountEquals(2)
@@ -252,7 +254,7 @@ class LauncherAppTest {
         val six = (1..6).map { InstalledApp("App $it", "p.a$it", false) }
         store.values["pinned"] = six.joinToString(",") { it.packageName }
         show(apps = six)
-        compose.onNodeWithText("6 LARGOS · A MANO").assertExists()
+        compose.onNodeWithText("6 LARGOS · A MANO").assertDoesNotExist()
         listOf("L1", "L4", "L5", "L6").forEach { compose.onNodeWithText(it).assertExists() }
         val root = compose.activity.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
@@ -956,7 +958,7 @@ class LauncherAppTest {
         // The ladera has turned into view...
         compose.onNodeWithTag("cell:1:1").assertIsDisplayed()
         // ...and the camp, where the widget's own view still holds the finger, is not torn down.
-        compose.onNodeWithText("2026111301").assertExists()
+        compose.onNodeWithText("25 GB").assertExists()
     }
 
     @Test
@@ -996,11 +998,11 @@ class LauncherAppTest {
     }
 
     @Test
-    fun `a short pull down in the shade does not close it`() {
+    fun `pulling down from the top of the notices also closes the shade`() {
         withNotices(aviso("a", "Ana"))
         compose.onNodeWithTag("avisos:list").performTouchInput { swipeDown() }
         compose.waitForIdle()
-        assertEquals(Screen.AVISOS, launcher.screen)
+        assertEquals(Screen.CAMPAMENTO, launcher.screen)
     }
 
     @Test
@@ -1027,5 +1029,26 @@ class LauncherAppTest {
         compose.onNodeWithTag("widget:1").performTouchInput { swipeUp() }
         compose.waitForIdle()
         assertEquals(Screen.CAMPAMENTO, launcher.screen)
+    }
+
+    @Test
+    // The Pixel 8: 1080 × 2400 px at 420 dpi, so the hour gets the room it has on the phone.
+    @org.robolectric.annotation.Config(qualifiers = "w411dp-h914dp-420dpi")
+    fun `the widest hours fit beside the date without running under it`() {
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets).also { it.refresh() }
+        var stamp by androidx.compose.runtime.mutableStateOf("mié 18 nov · 02:00")
+        compose.setContent { LauncherApp(launcher, stamp, facts, actions, views) }
+        for (hour in listOf("02:00", "12:00", "00:00", "20:08")) {
+            compose.runOnUiThread { stamp = "mié 18 nov · $hour" }
+            compose.waitForIdle()
+            val node = compose.onNodeWithText(hour).fetchSemanticsNode()
+            val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            node.config[androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+            val layout = layouts.single()
+            assertEquals("$hour on one line", 1, layout.lineCount)
+            assertTrue("$hour drawn past its box", layout.getLineRight(0) <= layout.size.width)
+            val date = compose.onNodeWithText("18").fetchSemanticsNode().boundsInRoot
+            assertTrue("$hour runs under the date", node.boundsInRoot.left + layout.size.width <= date.left)
+        }
     }
 }
