@@ -68,6 +68,37 @@ Nothing here is compiled or visually checked yet (needs the full soong analysis,
 ~38 GB, so swap first): `m VivacThemeFramework VivacThemeSystemUI VivacThemeSettings`.
 `tests/cases/test_os_theme.sh` checks the sources are consistent.
 
+## Shade redirect (system UI code patch)
+
+Swiping the status bar down while vivac's home is in front opens the launcher's own
+shade. Inside any other app Android's shade is untouched. Patch
+`frameworks/base/0002-vivac-shade-redirect.patch` (hook, 2 hunks in
+`PhoneStatusBarViewController.kt`) plus the new class `VivacShadeRedirect.kt` in
+`vivac-files/` (all the logic, so upstream merges only touch the hook).
+
+- Hook: `PhoneStatusBarViewTouchHandler.onTouchEvent`, after the "panels enabled" check, so
+  the gesture is judged where the status bar receives it, before Android's shade starts.
+- Armed at `ACTION_DOWN` (no binder): keyguard not locked (`KeyguardManager`), one finger,
+  not the top edge (`y < 1`), shade fully collapsed and enabled, not dual shade.
+- Fires once, when the move passes touch slop, downward and more vertical than horizontal,
+  still one finger: the task in front has `ACTIVITY_TYPE_HOME`, its package is
+  `dev.vivac.launcher` and the default home resolves to that package.
+- Then `startActivityAsUser(UserHandle.CURRENT)` of `dev.vivac.launcher/.AvisosEntry`, action
+  `dev.vivac.launcher.action.OPEN_AVISOS`, `NEW_TASK | SINGLE_TOP`; Android's tracking
+  gets an `ACTION_CANCEL` and the rest of the gesture is swallowed.
+- Fallback: any check failing, any exception (component missing, permission) means nothing
+  is swallowed and Android's shade opens as usual. The decision is made once per gesture.
+- Not redirected: `expandNotificationsPanel` and other API calls (they never go through
+  the touch path), two-finger or sideways swipes, an already expanded shade, taps, lock screen.
+- A second pull while vivac's shade is up (vivac still on top) is routed to vivac again;
+  `SINGLE_TOP` just re-delivers the intent, which the launcher treats as "open", so it is a no-op.
+- Limit: only the legacy touch path is patched. Our release configs leave `scene_container`
+  and `status_bar_event_forwarding_modernization` at their disabled default; if upstream
+  turns either on, the hook has to move (the test cases will not notice).
+- Not compiled: no Kotlin toolchain without the soong analysis. Check with
+  `m SystemUI` after the next sync, before flashing.
+`tests/cases/test_os_shade_redirect.sh` checks the contract against the launcher manifest.
+
 ## Switching the phone (manual, wipes it, NOT done yet)
 
 1. `vivac-os-backup ~/m2/vivac-os/backups/$(date +%F)` and every box in its

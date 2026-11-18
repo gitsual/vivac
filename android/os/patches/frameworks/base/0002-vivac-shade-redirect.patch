@@ -1,0 +1,40 @@
+diff --git a/packages/SystemUI/src/com/android/systemui/statusbar/phone/PhoneStatusBarViewController.kt b/packages/SystemUI/src/com/android/systemui/statusbar/phone/PhoneStatusBarViewController.kt
+index 8e907fb31..c895c595d 100644
+--- a/packages/SystemUI/src/com/android/systemui/statusbar/phone/PhoneStatusBarViewController.kt
++++ b/packages/SystemUI/src/com/android/systemui/statusbar/phone/PhoneStatusBarViewController.kt
+@@ -95,6 +95,14 @@ private constructor(
+     private val shadeInvocationSplitRatio: Float =
+         resources.getFloat(R.dimen.config_invocationGestureSplitRatio)
+ 
++    // vivac: opens the launcher's own shade when the status bar is swiped down over vivac's home.
++    private val vivacShadeRedirect =
++        VivacShadeRedirect(mView.context) {
++            shadeViewController.isViewEnabled &&
++                !shadeModeInteractor.isDualShade &&
++                panelExpansionInteractor.isFullyCollapsed
++        }
++
+     // Creates a [View.OnTouchListener] that only handles mouse click events.
+     private fun createMouseClickListener(onClick: () -> Unit): View.OnTouchListener =
+         object : View.OnTouchListener {
+@@ -401,6 +409,20 @@ private constructor(
+                 return true
+             }
+ 
++            // vivac: a plain swipe down over vivac's home screen goes to the launcher's shade.
++            when (vivacShadeRedirect.onStatusBarTouch(event)) {
++                VivacShadeRedirect.Action.PASS -> {}
++                VivacShadeRedirect.Action.SWALLOW -> return true
++                VivacShadeRedirect.Action.REDIRECTED -> {
++                    // Android's shade already saw the DOWN of this gesture: cancel its tracking.
++                    val cancel = MotionEvent.obtain(event)
++                    cancel.action = MotionEvent.ACTION_CANCEL
++                    shadeViewController.handleExternalTouch(cancel)
++                    cancel.recycle()
++                    return true
++                }
++            }
++
+             if (event.action == MotionEvent.ACTION_DOWN) {
+                 // If the view that would receive the touch is disabled, just have status
+                 // bar eat the gesture.
