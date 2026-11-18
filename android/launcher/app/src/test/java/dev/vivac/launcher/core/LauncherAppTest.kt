@@ -281,7 +281,7 @@ class LauncherAppTest {
         listOf("Antes", "Después", "Ladera nueva", "Quitar del campamento").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
         compose.onNodeWithContentDescription("Más bajo").tap()
         compose.onNodeWithText("5 filas").assertExists()
-        compose.onNodeWithText("CAMPAMENTO").performTouchInput { click() }
+        compose.onNodeWithText("LIBRE").performTouchInput { click() }
         // A tap is told from a double tap only once the double-tap time has passed.
         compose.mainClock.advanceTimeBy(500)
         compose.waitForIdle()
@@ -441,7 +441,7 @@ class LauncherAppTest {
         compose.waitForIdle()
         compose.runOnUiThread { launcher.showPage(1) }
         compose.waitForIdle()
-        compose.onNodeWithText("LADERA 1").assertExists()
+        compose.onNode(androidx.compose.ui.test.hasContentDescription("Ladera 1, página 2", substring = true)).assertExists()
         // The hint is for an empty ladera: under something, it would only add space to scroll into.
         compose.onNodeWithText("Mantén pulsado un widget o una app para traerlos a esta ladera.").assertDoesNotExist()
         compose.onAllNodesWithText("Termux").assertCountEquals(2)
@@ -759,7 +759,7 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertTrue(launcher.doubleTapLock)
         actions.lockService = true
-        compose.onNodeWithText("CAMPAMENTO").performTouchInput { doubleClick() }
+        compose.onNodeWithText("LIBRE").performTouchInput { doubleClick() }
         compose.waitForIdle()
         assertEquals("lock", actions.calls.last())
     }
@@ -789,7 +789,7 @@ class LauncherAppTest {
     fun `letting go over nothing leaves everything where it was`() {
         store.values["pinned"] = "app.organicmaps"
         show()
-        carry("Organic Maps", centre("CAMPAMENTO"))
+        carry("Organic Maps", centre("LIBRE"))
         assertEquals(listOf("app.organicmaps"), launcher.home.pinned)
     }
 
@@ -798,7 +798,7 @@ class LauncherAppTest {
         show()
         compose.runOnUiThread { launcher.showPage(launcher.board.pages) }
         compose.waitForIdle()
-        compose.onNodeWithText("LADERA 1").assertExists()
+        compose.onNode(androidx.compose.ui.test.hasContentDescription("Ladera 1, página 2", substring = true)).assertExists()
         compose.onNodeWithContentDescription("Añadir apps a esta ladera").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("AÑADIR A LA LADERA 1").assertExists()
@@ -1088,5 +1088,13 @@ class LauncherAppTest {
         compose.onNodeWithContentDescription("Brillo").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(0.9f) }
         compose.waitForIdle()
         assertEquals(0.9f, launcher.brightness, 0.01f)
+    }
+
+    @Test
+    fun `swiping an app's card to the right takes its notices away`() {
+        val notices = withNotices(aviso("a", "Ana"), aviso("b", "Bea", minutesAgo = 1), aviso("c", "Ruta", pkg = "app.organicmaps", minutesAgo = 5))
+        compose.onNodeWithTag("card:app.organicmaps").performScrollTo().performTouchInput { swipeRight(startX = width * 0.3f, endX = width.toFloat()) }
+        compose.waitForIdle()
+        assertEquals(listOf("dismiss:c"), notices.calls)
     }
 }

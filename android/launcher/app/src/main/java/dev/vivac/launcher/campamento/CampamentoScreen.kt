@@ -196,7 +196,7 @@ fun CampamentoScreen(
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Header(if (page == 0) "CAMPAMENTO" else "LADERA $page", onOpenSettings)
+            Header(onOpenSettings)
             val pager = rememberPagerState(initialPage = page) { shownPages }
             // The launcher decides the page (home, a widget sent elsewhere); a swipe tells it where you went.
             LaunchedEffect(page) { if (pager.currentPage != page) pager.animateScrollToPage(page) }
@@ -815,9 +815,10 @@ private fun Beam(modifier: Modifier) {
 }
 
 @Composable
-private fun Header(title: String, onOpenSettings: () -> Unit) {
+private fun Header(onOpenSettings: () -> Unit) {
+    // No page name: the dots below say where you are, and TalkBack reads them.
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = Type.cota, modifier = Modifier.weight(1f).semantics { heading() })
+        Spacer(Modifier.weight(1f))
         // The headlamp itself: the beam starts here.
         Box(
             Modifier

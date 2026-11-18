@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
@@ -133,7 +134,16 @@ fun AvisosScreen(
                     }
                 }
                 items(shelf, key = { it.packageName }) { group ->
-                    GroupCard(group, byPackage[group.packageName], now, act)
+                    // The whole card swiped to the right takes the app's notices away; each notice inside still
+                    // goes on its own with a swipe either way.
+                    if (group.avisos.any { it.clearable }) {
+                        Swiped(
+                            group.packageName,
+                            { act.dismissApp(it) },
+                            toLeft = false,
+                            modifier = Modifier.testTag("card:${group.packageName}").systemGestureExclusion(),
+                        ) { GroupCard(group, byPackage[group.packageName], now, act) }
+                    } else GroupCard(group, byPackage[group.packageName], now, act)
                 }
             }
             if (Avisos.anyClearable(avisos)) {
@@ -413,7 +423,13 @@ private fun Notice(aviso: Aviso, act: AvisosActions) {
 /** A notice that goes when swiped off either side. */
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun Swiped(key: String, onDismiss: (String) -> Unit, content: @Composable () -> Unit) {
+private fun Swiped(
+    key: String,
+    onDismiss: (String) -> Unit,
+    toLeft: Boolean = true,
+    modifier: Modifier = Modifier.testTag("swipe:$key"),
+    content: @Composable () -> Unit,
+) {
     // The box asks more than once as the swipe settles; the notice is dismissed only the first time.
     var gone by remember { mutableStateOf(false) }
     val state = androidx.compose.material3.rememberSwipeToDismissBoxState(
@@ -423,7 +439,7 @@ private fun Swiped(key: String, onDismiss: (String) -> Unit, content: @Composabl
             away
         },
     )
-    androidx.compose.material3.SwipeToDismissBox(state, backgroundContent = {}, modifier = Modifier.testTag("swipe:$key")) { content() }
+    androidx.compose.material3.SwipeToDismissBox(state, backgroundContent = {}, modifier = modifier, enableDismissFromEndToStart = toLeft) { content() }
 }
 
 @Composable
