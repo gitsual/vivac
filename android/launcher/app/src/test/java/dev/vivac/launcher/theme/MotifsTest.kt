@@ -17,7 +17,7 @@ class MotifsTest {
         assertTrue("spread $spread", spread in 15.0..30.0)
     }
 
-    private fun radii(ring: Int) = Rings.points(ring, Offset(500f, 300f), inner = 80f).map { (it - Offset(500f, 300f)).getDistance() }
+    private fun radii(ring: Int) = Rings.points(ring.toFloat(), Offset(500f, 300f), inner = 80f).map { (it - Offset(500f, 300f)).getDistance() }
 
     @Test
     fun `the first ring is a perfect circle around the centre`() {
@@ -42,5 +42,19 @@ class MotifsTest {
         // Most of the time it rests.
         assertTrue(flares.count { it < 0.01f } > 150)
         assertTrue(Motion.SWAY_DEGREES >= 7f)
+    }
+
+    @Test
+    fun `the travelling rings loop seamlessly, the end of one round the start of the next`() {
+        val start = Rings.travelling(0f).map { it.first to it.second }
+        val end = Rings.travelling(0.9999f).map { it.first to it.second }
+        // Each ring at the end sits where the next one was at the start, as visible.
+        start.drop(1).zip(end.dropLast(1)).forEach { (s, e) ->
+            assertEquals(s.first, e.first, 0.01f)
+            assertEquals(s.second, e.second, 0.01f)
+        }
+        // A new ring is born faint at the circle and the last fades out far away.
+        assertEquals(0f, start.first().second, 0.01f)
+        assertEquals(0f, end.last().second, 0.01f)
     }
 }

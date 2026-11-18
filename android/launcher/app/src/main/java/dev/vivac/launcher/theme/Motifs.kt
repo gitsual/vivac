@@ -36,7 +36,10 @@ private val contourPaths = listOf(
     "M270 -30C390 -35 455 80 438 180C420 285 305 330 210 315C105 298 70 205 92 110C112 25 175 -27 270 -30Z",
 )
 
-/** The camp's rings around [centre]: each drawn once into its own layer, swelling about the centre. */
+/**
+ * The camp's rings around [centre]: the circle stays, and rings are born from it and travel out for ever, growing
+ * and losing their roundness, fading far away. They are drawn in their own layer, so only the rings redraw.
+ */
 @Composable
 private fun RingsAround(modifier: Modifier, color: Color, centre: Offset, innerRadius: androidx.compose.ui.unit.Dp) {
     val moving = Motion.allowed(LocalContext.current)
@@ -44,32 +47,23 @@ private fun RingsAround(modifier: Modifier, color: Color, centre: Offset, innerR
         rememberInfiniteTransition(label = "rings").animateFloat(
             initialValue = 0f,
             targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(Motion.PERIOD_MS, easing = LinearEasing)),
-            label = "swell",
+            animationSpec = infiniteRepeatable(tween(Rings.STEP_MS, easing = LinearEasing)),
+            label = "travel",
         )
     } else null
-    Box(modifier) {
-        (0 until Rings.COUNT).forEach { i ->
-            Canvas(
-                Modifier
-                    .matchParentSize()
-                    .graphicsLayer {
-                        if (phase != null) {
-                            val g = Motion.swell(phase.value, i, Rings.COUNT)
-                            scaleX = g
-                            scaleY = g
-                            transformOrigin = TransformOrigin(centre.x / size.width, centre.y / size.height)
-                        }
-                    },
-            ) {
-                val outline = Rings.points(i, centre, innerRadius.toPx())
-                val path = Path().apply {
-                    moveTo(outline[0].x, outline[0].y)
-                    outline.drop(1).forEach { lineTo(it.x, it.y) }
-                    close()
-                }
-                drawPath(path, color, style = Stroke(width = density))
+    Canvas(modifier.graphicsLayer { }) {
+        val inner = innerRadius.toPx()
+        val stroke = Stroke(width = density)
+        drawCircle(color, inner, centre, style = stroke)
+        Rings.travelling(phase?.value ?: 0.5f).forEach { (u, alpha) ->
+            if (alpha <= 0f) return@forEach
+            val outline = Rings.points(u, centre, inner)
+            val path = Path().apply {
+                moveTo(outline[0].x, outline[0].y)
+                outline.drop(1).forEach { lineTo(it.x, it.y) }
+                close()
             }
+            drawPath(path, color.copy(alpha = color.alpha * alpha), style = stroke)
         }
     }
 }
@@ -126,24 +120,44 @@ private val SUMMIT = Rings.SUMMIT
  */
 object Rings {
     val SUMMIT = Offset(262f, 130f)
+    /** How many rings travel out at once. */
     const val COUNT = 8
-    /** Each ring's size, as many times the first. */
-    private val SIZE = floatArrayOf(1f, 2.3f, 3.9f, 5.9f, 8.4f, 11.5f, 15.3f, 20f)
-    /** How uneven each ring is, as a share of its size: none for the first. */
+    /** How uneven a ring is per step out, as a share of its size: none at the circle. */
     private const val UNEVEN = 0.045f
     private const val STEPS = 144
+    /** One ring's journey from the circle to the next ring's place, in milliseconds. */
+    const val STEP_MS = 3_200
 
-    /** The outline of [ring] around [centre], the first ring [inner] pixels in radius. */
-    fun points(ring: Int, centre: Offset, inner: Float): List<Offset> {
-        val radius = inner * SIZE[ring]
-        val uneven = UNEVEN * ring
+    /** A ring's size at [u] steps out, as many times the circle: growing faster the further out it is. */
+    fun size(u: Float): Float = 1f + u + 0.25f * u * u
+
+    /**
+     * The outline of the ring [u] steps out from [centre] (0 is the circle itself, [inner] pixels in radius): bigger
+     * and more uneven as [u] grows, its shape changing continuously, so a ring can travel smoothly outwards.
+     */
+    fun points(u: Float, centre: Offset, inner: Float): List<Offset> {
+        val radius = inner * size(u)
+        val uneven = UNEVEN * u
         return (0 until STEPS).map { i ->
             val a = 2.0 * PI * i / STEPS
-            // A few slow waves, at fixed phases per ring, so each ring has its own shape and they never cross.
-            val wave = 0.55 * kotlin.math.sin(2 * a + 0.7 * ring) + 0.3 * kotlin.math.sin(3 * a + 1.9 * ring) + 0.15 * kotlin.math.sin(5 * a + 0.4 * ring)
+            val wave = 0.55 * kotlin.math.sin(2 * a + 0.7 * u) + 0.3 * kotlin.math.sin(3 * a + 1.9 * u) + 0.15 * kotlin.math.sin(5 * a + 0.4 * u)
             val r = radius * (1 + uneven * wave).toFloat()
             Offset(centre.x + r * kotlin.math.cos(a).toFloat(), centre.y + r * kotlin.math.sin(a).toFloat())
         }
+    }
+
+    /**
+     * The rings travelling out at [phase] (0..1 of one step): each one's place in steps and how visible it is. One
+     * is born at the circle, faint, as the furthest fades away, so the end of a step is the start of the next.
+     */
+    fun travelling(phase: Float): List<Pair<Float, Float>> = (0 until COUNT).map { i ->
+        val u = i + phase
+        val alpha = when {
+            u < 1f -> u
+            u > COUNT - 1f -> COUNT - u
+            else -> 1f
+        }
+        u to alpha.coerceIn(0f, 1f)
     }
 }
 
