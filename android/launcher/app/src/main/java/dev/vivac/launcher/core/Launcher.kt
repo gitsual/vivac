@@ -207,6 +207,31 @@ class Launcher(
 
     fun dismissPicker() { picker = null }
 
+    fun backUp() {
+        campMenu = false
+        actions.backUp()
+    }
+
+    fun askRestore() {
+        campMenu = false
+        actions.pickBackup()
+    }
+
+    fun exportLayout(): String = Backup.export(store)
+
+    /** Puts a copy back: every choice it holds replaces the current one, this phone's widgets stay. */
+    fun restoreLayout(text: String) {
+        if (!Backup.restore(text, store)) return actions.say("Ese archivo no es una copia del campamento de vivac.")
+        home = Home.decode(store.get(KEY_DOCK), store.get(KEY_PINNED), store.get(KEY_HIDDEN))
+        board = loadBoard()
+        recent = store.get(KEY_RECENT).orEmpty().split(",").filter { it.isNotBlank() }
+        names = decodeNames(store.get(KEY_NAMES))
+        locked = store.get(KEY_LOCKED) == "1"
+        doubleTapLock = store.get(KEY_DOUBLE_TAP) == "1"
+        refresh()
+        actions.say("Campamento restaurado.")
+    }
+
     fun becomeHome() {
         campMenu = false
         actions.askToBeHome()

@@ -78,7 +78,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | # | Feature | Status |
 |---|---------|--------|
 | S1 | vivac settings screen (everything configurable above, in one place) | todo |
-| S2 | Back up and restore the layout to a file (Storage Access Framework) | todo |
+| S2 | Back up and restore the layout to a file (Storage Access Framework) | done: camp menu; text file; widgets stay out (their ids are per phone) |
 | S3 | Survive uninstalled apps, reboot, process death | done |
 | S4 | Set vivac as the default home from inside the app | done: camp menu, RoleManager dialog (default-apps page as fallback) |
 

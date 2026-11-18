@@ -71,12 +71,31 @@ class MainActivity : ComponentActivity() {
     @Deprecated("The widget host API still answers through onActivityResult")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data
+        if (resultCode == RESULT_OK && uri != null) {
+            when (requestCode) {
+                AppActions.REQ_BACKUP -> return saveCopy(uri)
+                AppActions.REQ_RESTORE -> return readCopy(uri)
+            }
+        }
         val step = when (requestCode) {
             Widgets.REQ_BIND -> WidgetStep.BIND
             Widgets.REQ_CONFIGURE -> WidgetStep.CONFIGURE
             else -> return
         }
         launcher.onWidgetResult(step, resultCode == RESULT_OK)
+    }
+
+    private fun saveCopy(uri: android.net.Uri) {
+        val ok = runCatching { contentResolver.openOutputStream(uri, "wt")!!.use { it.write(launcher.exportLayout().toByteArray()) } }
+            .onFailure { android.util.Log.w("vivac", "copy not saved", it) }.isSuccess
+        actions.say(if (ok) "Copia del campamento guardada." else "No se pudo guardar la copia.")
+    }
+
+    private fun readCopy(uri: android.net.Uri) {
+        runCatching { contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() } }
+            .onSuccess(launcher::restoreLayout)
+            .onFailure { actions.say("No se pudo leer ese archivo.") }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

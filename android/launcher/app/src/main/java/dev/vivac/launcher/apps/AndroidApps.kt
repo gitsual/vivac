@@ -65,6 +65,8 @@ class AppActions(private val context: Context) : Actions {
 
     companion object {
         const val REQ_HOME = 7003
+        const val REQ_BACKUP = 7004
+        const val REQ_RESTORE = 7005
         /**
          * Ranks are counted separately for manifest and dynamic shortcuts; like the Pixel launcher,
          * the app's declared ones come first.
@@ -135,6 +137,21 @@ class AppActions(private val context: Context) : Actions {
 
     override fun lockScreen(): Boolean = LockService.lock()
 
+    override fun backUp() {
+        val name = "vivac-campamento-" + java.time.LocalDate.now() + ".txt"
+        forResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain").putExtra(Intent.EXTRA_TITLE, name), REQ_BACKUP)
+    }
+
+    override fun pickBackup() {
+        forResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain"), REQ_RESTORE)
+    }
+
+    /** Screens that answer back (files, roles) need vivac's activity; there is always one when you tap these. */
+    private fun forResult(intent: Intent, code: Int) {
+        @Suppress("DEPRECATION")
+        (context as? android.app.Activity)?.startActivityForResult(intent, code)
+    }
+
     override fun isHome(): Boolean =
         context.getSystemService(android.app.role.RoleManager::class.java).isRoleHeld(android.app.role.RoleManager.ROLE_HOME)
 
@@ -143,8 +160,7 @@ class AppActions(private val context: Context) : Actions {
         val roles = context.getSystemService(android.app.role.RoleManager::class.java)
         val activity = context as? android.app.Activity
         if (activity != null && roles.isRoleAvailable(android.app.role.RoleManager.ROLE_HOME)) {
-            @Suppress("DEPRECATION")
-            activity.startActivityForResult(roles.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME), REQ_HOME)
+            forResult(roles.createRequestRoleIntent(android.app.role.RoleManager.ROLE_HOME), REQ_HOME)
         } else {
             start(Intent(Settings.ACTION_HOME_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }

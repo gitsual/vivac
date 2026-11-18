@@ -105,6 +105,8 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onToggleDoubleTap = launcher::toggleDoubleTapLock,
             isHome = actions.isHome(),
             onBecomeHome = launcher::becomeHome,
+            onBackUp = launcher::backUp,
+            onRestore = launcher::askRestore,
             onDismiss = launcher::dismissCampMenu,
         )
     }

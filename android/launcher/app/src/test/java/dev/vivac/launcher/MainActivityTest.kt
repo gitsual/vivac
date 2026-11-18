@@ -25,6 +25,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import dev.vivac.launcher.apps.Robo
 import dev.vivac.launcher.widgets.Widgets
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -86,13 +87,38 @@ class MainActivityTest {
         ReflectionHelpers.callInstanceMethod<Unit>(it, "onNewIntent", ClassParameter.from(Intent::class.java, intent))
     }
 
-    private fun result(requestCode: Int, resultCode: Int) = scenario.onActivity {
+    private fun result(requestCode: Int, resultCode: Int, data: Intent? = null) = scenario.onActivity {
         ReflectionHelpers.callInstanceMethod<Unit>(
             it, "onActivityResult",
             ClassParameter.from(Int::class.javaPrimitiveType, requestCode),
             ClassParameter.from(Int::class.javaPrimitiveType, resultCode),
-            ClassParameter.from(Intent::class.java, null),
+            ClassParameter.from(Intent::class.java, data),
         )
+    }
+
+    @Test
+    fun `a copy of the camp is written to the file you choose and read back from one`() {
+        prefs.edit().putString("pinned", "app.organicmaps").commit()
+        start()
+        val resolver = shadowOf(app.contentResolver)
+        val file = android.net.Uri.parse("content://docs/copia.txt")
+        val written = java.io.ByteArrayOutputStream()
+        resolver.registerOutputStream(file, written)
+        result(dev.vivac.launcher.apps.AppActions.REQ_BACKUP, android.app.Activity.RESULT_OK, Intent().setData(file))
+        val copy = written.toString()
+        assertTrue(copy.contains("pinned=app.organicmaps"))
+        assertEquals("Copia del campamento guardada.", org.robolectric.shadows.ShadowToast.getTextOfLatestToast())
+        resolver.registerInputStream(file, copy.replace("pinned=app.organicmaps", "pinned=com.termux").byteInputStream())
+        result(dev.vivac.launcher.apps.AppActions.REQ_RESTORE, android.app.Activity.RESULT_OK, Intent().setData(file))
+        assertEquals("com.termux", prefs.getString("pinned", null))
+        val broken = android.net.Uri.parse("content://docs/rota.txt")
+        resolver.registerInputStreamSupplier(broken) { throw java.io.IOException("gone") }
+        result(dev.vivac.launcher.apps.AppActions.REQ_RESTORE, android.app.Activity.RESULT_OK, Intent().setData(broken))
+        assertEquals("No se pudo leer ese archivo.", org.robolectric.shadows.ShadowToast.getTextOfLatestToast())
+        resolver.registerOutputStream(broken, object : java.io.OutputStream() { override fun write(b: Int) = throw java.io.IOException("full") })
+        result(dev.vivac.launcher.apps.AppActions.REQ_BACKUP, android.app.Activity.RESULT_OK, Intent().setData(broken))
+        assertEquals("No se pudo guardar la copia.", org.robolectric.shadows.ShadowToast.getTextOfLatestToast())
+        result(dev.vivac.launcher.apps.AppActions.REQ_BACKUP, android.app.Activity.RESULT_CANCELED, null)
     }
 
     @Test

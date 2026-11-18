@@ -38,6 +38,10 @@ interface Actions {
     fun isHome(): Boolean
     /** Android's own dialog to make vivac the home app. */
     fun askToBeHome()
+    /** Android's "save as" screen for a copy of the camp; the activity writes it when you choose the place. */
+    fun backUp()
+    /** Android's file picker for a copy to restore. */
+    fun pickBackup()
     /** The web search app you use (or the browser), for [query]. */
     fun webSearch(query: String)
     /** The app store you use (any that answers market:// links), for [query]. */

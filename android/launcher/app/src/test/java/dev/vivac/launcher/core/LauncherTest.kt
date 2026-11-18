@@ -514,6 +514,31 @@ class LauncherTest {
     }
 
     @Test
+    fun `the camp is copied to a file and restored from one, every choice coming back at once`() {
+        store.values["pinned"] = "app.organicmaps"
+        val l = many()
+        l.rename("com.termux", "Consola")
+        l.openCampMenu()
+        l.backUp()
+        assertEquals("backup", actions.calls.last())
+        assertFalse(l.campMenu)
+        val copy = l.exportLayout()
+        l.drop("app.organicmaps", from = Zone.Via, to = Zone.Dock, index = 0)
+        l.rename("com.termux", "")
+        l.toggleLock()
+        l.openCampMenu()
+        l.askRestore()
+        assertEquals("restore", actions.calls.last())
+        l.restoreLayout(copy)
+        assertEquals(listOf("app.organicmaps"), l.home.pinned)
+        assertEquals("Consola", l.apps.first { it.packageName == "com.termux" }.label)
+        assertFalse(l.locked)
+        assertTrue(actions.calls.last().startsWith("say:Campamento restaurado"))
+        l.restoreLayout("no es una copia")
+        assertTrue(actions.calls.last().startsWith("say:Ese archivo no es"))
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

@@ -205,5 +205,11 @@ class AdaptersTest {
         shadowOf(app.getSystemService(android.app.role.RoleManager::class.java)).addAvailableRole(android.app.role.RoleManager.ROLE_HOME)
         AppActions(activity).askToBeHome()
         assertEquals(AppActions.REQ_HOME, shadowOf(activity).nextStartedActivityForResult.requestCode)
+        AppActions(activity).backUp()
+        val save = shadowOf(activity).nextStartedActivityForResult
+        assertEquals(AppActions.REQ_BACKUP, save.requestCode)
+        assertEquals(Intent.ACTION_CREATE_DOCUMENT, save.intent.action)
+        AppActions(activity).pickBackup()
+        assertEquals(AppActions.REQ_RESTORE, shadowOf(activity).nextStartedActivityForResult.requestCode)
     }
 }
