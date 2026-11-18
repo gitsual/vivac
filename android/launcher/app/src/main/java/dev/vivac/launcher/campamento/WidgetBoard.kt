@@ -218,8 +218,8 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
 /** How tall a widget is drawn, and how its size reads in the picker. */
 object WidgetSize {
     const val MIN_DP = 72
-    const val MAX_DP = 420
-    const val MAX_ROWS = 5
+    const val MAX_ROWS = 6
+    const val MAX_DP = MAX_ROWS * 90
 
     /** Roughly the row height of a stock launcher grid on a Pixel. */
     private const val ROW_DP = 90

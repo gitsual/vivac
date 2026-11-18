@@ -6,6 +6,7 @@ import android.widget.TextView
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.runtime.CompositionLocalProvider
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -100,9 +101,10 @@ class LauncherAppTest {
     }
 
     @Test
-    fun `the petate tile and the search pill open the petate, back returns`() {
+    fun `the dock has no petate tile, and a swipe or the search pill open the petate, back returns`() {
         show()
-        compose.onNodeWithText("Petate").performClick()
+        compose.onNodeWithText("Petate").assertDoesNotExist()
+        compose.runOnUiThread { launcher.openPetate(false) }
         compose.onNodeWithContentDescription("Buscar en el petate").assertExists()
         assertEquals(false, launcher.focusSearch)
         compose.runOnUiThread { launcher.back() }
@@ -245,7 +247,7 @@ class LauncherAppTest {
     }
 
     @Test
-    fun `a widget's card resizes it, sends it to a new ladera and takes it away`() {
+    fun `holding a widget only lets you change its size, up to six rows`() {
         widgets.placed = mutableMapOf(1 to "Reloj", 2 to "Música")
         store.values["widgets"] = "1,2"
         show()
@@ -254,17 +256,10 @@ class LauncherAppTest {
         compose.onNodeWithText("2 filas").assertExists()
         compose.onNodeWithContentDescription("Más alto").tap()
         compose.onNodeWithText("3 filas").assertExists()
-        compose.onNodeWithText("Antes").tap()
-        assertEquals(listOf(2, 1), launcher.board.ids)
-        compose.onNodeWithText("Ladera nueva").tap()
-        compose.waitForIdle()
-        assertEquals(1, launcher.page)
-        compose.onNodeWithText("LADERA 1").assertExists()
-        compose.onNodeWithContentDescription("Ladera 1, página 2 de 2").assertExists()
-        compose.runOnUiThread { launcher.openWidgetMenu(2) }
-        compose.onNodeWithText("Quitar del campamento").tap()
-        assertEquals(listOf(1), launcher.board.ids)
-        assertEquals(1, launcher.board.pages)
+        repeat(3) { compose.onNodeWithContentDescription("Más alto").tap() }
+        compose.onNodeWithText("6 filas").assertExists()
+        compose.onNodeWithContentDescription("Más alto").assertIsNotEnabled()
+        listOf("Antes", "Después", "Ladera nueva", "Quitar del campamento").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
     }
 
     @Test

@@ -19,16 +19,10 @@ class CampTest {
     }
 
     @Test
-    fun `dock takes the first four installed favourites, then the Petate`() {
-        val installed = setOf("com.whatsapp", "com.termux", "app.vanadium.browser", "com.tailscale.ipn", "org.telegram.messenger")
+    fun `dock takes the first five installed favourites, and no petate tile`() {
+        val installed = setOf("com.whatsapp", "com.termux", "app.vanadium.browser", "com.tailscale.ipn", "org.thoughtcrime.securesms", "org.telegram.messenger")
         assertEquals(
-            listOf(
-                DockSlot.App("com.termux"),
-                DockSlot.App("com.whatsapp"),
-                DockSlot.App("app.vanadium.browser"),
-                DockSlot.App("com.tailscale.ipn"),
-                DockSlot.Petate,
-            ),
+            listOf("com.termux", "org.thoughtcrime.securesms", "com.whatsapp", "app.vanadium.browser", "com.tailscale.ipn"),
             Dock.pick(installed),
         )
     }
@@ -37,7 +31,7 @@ class CampTest {
     fun `signal wins over whatsapp when both are there, and missing apps are skipped`() {
         val installed = setOf("org.thoughtcrime.securesms", "com.whatsapp")
         assertEquals(
-            listOf(DockSlot.App("org.thoughtcrime.securesms"), DockSlot.App("com.whatsapp"), DockSlot.Petate),
+            listOf("org.thoughtcrime.securesms", "com.whatsapp"),
             Dock.pick(installed),
         )
     }

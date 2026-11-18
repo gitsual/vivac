@@ -90,11 +90,11 @@ class LauncherTest {
 
     @Test
     fun `a refused change is said out loud and changes nothing`() {
-        store.values["dock"] = "a,b,c,com.termux"
-        source.apps = source.apps + listOf("a", "b", "c").map { InstalledApp(it, it, false) }
+        store.values["dock"] = "a,b,c,d,com.termux"
+        source.apps = source.apps + listOf("a", "b", "c", "d").map { InstalledApp(it, it, false) }
         val l = launcher()
         l.openMenu("app.organicmaps"); l.pick(MenuEntry.Dock(false))
-        assertEquals(listOf("say:El dock ya tiene 4 apps: quita una primero."), actions.calls)
+        assertEquals(listOf("say:El dock ya tiene 5 apps: quita una primero."), actions.calls)
     }
 
     @Test
@@ -369,12 +369,13 @@ class LauncherTest {
 
     @Test
     fun `a full dock refuses one more and says why, keeping things where they were`() {
-        store.values["dock"] = "com.termux,org.thoughtcrime.securesms,com.tailscale.ipn,com.android.settings"
+        store.values["dock"] = "com.termux,org.thoughtcrime.securesms,com.tailscale.ipn,com.android.settings,x.fifth"
         store.values["pinned"] = "app.organicmaps"
-        val l = many()
+        val fifth = InstalledApp("Quinta", "x.fifth", false)
+        val l = Launcher(FakeSource(listOf(termux, signal, maps, settings, tailscale, fifth)), store, actions, widgets).also { it.refresh() }
         l.drop("app.organicmaps", from = Zone.Via, to = Zone.Dock, index = 0)
         assertEquals(listOf("app.organicmaps"), l.home.pinned)
-        assertEquals(4, l.shownDock().size)
+        assertEquals(5, l.shownDock().size)
         assertTrue(actions.calls.any { it.startsWith("say:") })
     }
 

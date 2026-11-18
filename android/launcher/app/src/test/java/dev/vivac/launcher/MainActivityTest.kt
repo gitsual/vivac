@@ -19,6 +19,8 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.swipeUp
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -172,12 +174,12 @@ class MainActivityTest {
     @Test
     fun `pressing home from the petate goes back to the camp`() {
         start()
-        compose.onNodeWithText("Petate").performClick()
+        compose.onRoot().performTouchInput { swipeUp() }
         compose.onNodeWithContentDescription("Buscar en el petate").assertExists()
         deliver(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME))
         compose.onNodeWithContentDescription("Buscar en el petate").assertDoesNotExist()
         // Any other intent leaves the screen alone.
-        compose.onNodeWithText("Petate").performClick()
+        compose.onRoot().performTouchInput { swipeUp() }
         deliver(Intent(Intent.ACTION_VIEW))
         compose.onNodeWithContentDescription("Buscar en el petate").assertExists()
     }

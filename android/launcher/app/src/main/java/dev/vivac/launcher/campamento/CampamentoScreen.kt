@@ -217,7 +217,7 @@ fun CampamentoScreen(
             }
             if (board.pages > 1) PageDots(board.pages, page)
             SearchPill { onOpenPetate(true) }
-            DockCard(apps, home, onOpenApp, onAppMenu, drag, drop) { onOpenPetate(false) }
+            DockCard(apps, home, onOpenApp, onAppMenu, drag, drop)
         }
         // The carried app follows the finger, a little lifted.
         val carriedLabel = when (val c = drag.held) { is HeldWidget -> c.label; is HeldItem -> c.label; else -> null }
@@ -789,7 +789,7 @@ private fun SearchPill(onClick: () -> Unit) {
     }
 }
 
-/** Motif 4, la cordada: the apps you always carry, roped to the Petate, which closes the line in coral. */
+/** Motif 4, la cordada: the apps you always carry, five abreast. */
 @Composable
 private fun DockCard(
     apps: List<InstalledApp>,
@@ -798,7 +798,6 @@ private fun DockCard(
     onAppMenu: (String) -> Unit,
     drag: DragBoard,
     onDrop: (Held, Spot) -> Unit,
-    onOpenPetate: () -> Unit,
 ) {
     val byPackage = apps.associateBy { it.packageName }
     val slots = Dock.pick(byPackage.keys, home.dock, home.dockChosen)
@@ -815,25 +814,16 @@ private fun DockCard(
         Text("LA CORDADA", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.padding(start = 10.dp))
         // Five equal columns: on a 412dp Pixel five fixed tiles do not fit and labels got clipped.
         Row(Modifier.fillMaxWidth().spot(drag, Spot(Zone.Dock, Spot.END))) {
-            slots.forEachIndexed { i, slot ->
-                when (slot) {
-                    is DockSlot.App -> {
-                        val app = byPackage.getValue(slot.packageName)
-                        val deep = app.packageName == "com.termux"
-                        CarriedTile(
-                            app, Zone.Dock, i, drag, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)],
-                            if (deep) Ink.deep else Ink.field, onOpenApp, onAppMenu, onDrop, modifier = Modifier.weight(1f),
-                        )
-                    }
-                    DockSlot.Petate -> AppTile(
-                        label = "Petate",
-                        background = Ink.primary,
-                        labelColor = Ink.accentText,
-                        onClick = onOpenPetate,
-                        modifier = Modifier.weight(1f),
-                    ) { LineIcon(Glyph.PETATE, Ink.onPrimary) }
-                }
+            slots.forEachIndexed { i, packageName ->
+                val app = byPackage.getValue(packageName)
+                val deep = app.packageName == "com.termux"
+                CarriedTile(
+                    app, Zone.Dock, i, drag, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)],
+                    if (deep) Ink.deep else Ink.field, onOpenApp, onAppMenu, onDrop, modifier = Modifier.weight(1f),
+                )
             }
+            // Room is always kept for five, so a short dock does not stretch its tiles.
+            repeat(Home.DOCK_MAX - slots.size) { Spacer(Modifier.weight(1f)) }
         }
     }
 }

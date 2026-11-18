@@ -108,7 +108,8 @@ class WidgetBoardTest {
     fun `a widget's rows, when you have not chosen, come from its height`() {
         assertEquals(2, WidgetSize.rowsOf(heightDp = 180))
         assertEquals(1, WidgetSize.rowsOf(heightDp = 72))
-        assertEquals(WidgetSize.MAX_ROWS, WidgetSize.rowsOf(heightDp = 420))
+        assertEquals(6, WidgetSize.MAX_ROWS)
+        assertEquals(WidgetSize.MAX_ROWS, WidgetSize.rowsOf(heightDp = 540))
     }
 
     @Test

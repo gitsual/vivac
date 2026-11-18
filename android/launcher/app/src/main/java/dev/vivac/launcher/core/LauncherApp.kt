@@ -187,18 +187,11 @@ fun LauncherApp(
     }
     launcher.widgetMenu?.let { id ->
         val placed = launcher.board.placed(id) ?: return@let
-        val onPage = launcher.board.onPage(placed.page)
         WidgetMenuSheet(
             label = launcher.placedWidgets().firstOrNull { it.id == id }?.label ?: "widget",
             rows = launcher.widgetRows(id),
             page = placed.page,
-            pages = launcher.board.pages,
-            first = onPage.firstOrNull() == placed,
-            last = onPage.lastOrNull() == placed,
             onResize = { launcher.resizeWidget(id, it) },
-            onShift = { launcher.shiftWidget(id, it) },
-            onMove = { launcher.moveWidget(id, it) },
-            onRemove = { launcher.removeWidget(id) },
             onDismiss = launcher::dismissWidgetMenu,
         )
     }

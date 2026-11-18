@@ -16,12 +16,6 @@ object Stamp {
     }
 }
 
-/** One place in the dock: an app, or the door to the Petate. */
-sealed interface DockSlot {
-    data class App(val packageName: String) : DockSlot
-    data object Petate : DockSlot
-}
-
 object Dock {
     /** Favourites in order of preference; Signal goes before WhatsApp when both exist. */
     private val favourites = listOf(
@@ -31,11 +25,11 @@ object Dock {
         "app.vanadium.browser",
         "com.tailscale.ipn",
     )
-    private const val APP_SLOTS = 4
+    private const val APP_SLOTS = Home.DOCK_MAX
 
-    /** Your chosen dock when you have one, else the first installed favourites; the Petate always closes it. */
-    fun pick(installed: Set<String>, chosen: List<String> = emptyList(), chosenSet: Boolean = chosen.isNotEmpty()): List<DockSlot> {
+    /** Your chosen dock when you have one, else the first installed favourites. The Petate has no tile: a swipe up opens it. */
+    fun pick(installed: Set<String>, chosen: List<String> = emptyList(), chosenSet: Boolean = chosen.isNotEmpty()): List<String> {
         val source = if (chosenSet) chosen else favourites
-        return source.filter { it in installed }.take(APP_SLOTS).map { DockSlot.App(it) } + DockSlot.Petate
+        return source.filter { it in installed }.take(APP_SLOTS)
     }
 }

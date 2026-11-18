@@ -13,11 +13,11 @@ class HomeTest {
     }
 
     @Test
-    fun `the dock holds four apps, a fifth is refused`() {
-        val full = Home(dock = listOf("a", "b", "c", "d"))
-        val change = full.toggleDock("e")
+    fun `the dock holds five apps, a sixth is refused`() {
+        val full = Home(dock = listOf("a", "b", "c", "d", "e"))
+        val change = full.toggleDock("f")
         assertNull(change.home)
-        assertEquals("El dock ya tiene 4 apps: quita una primero.", change.refusal)
+        assertEquals("El dock ya tiene 5 apps: quita una primero.", change.refusal)
     }
 
     @Test
@@ -44,7 +44,7 @@ class HomeTest {
     fun `a dock you chose replaces the default favourites`() {
         val installed = setOf("com.termux", "com.whatsapp", "app.organicmaps")
         assertEquals(
-            listOf(DockSlot.App("app.organicmaps"), DockSlot.App("com.termux"), DockSlot.Petate),
+            listOf("app.organicmaps", "com.termux"),
             Dock.pick(installed, chosen = listOf("app.organicmaps", "not.installed", "com.termux")),
         )
     }

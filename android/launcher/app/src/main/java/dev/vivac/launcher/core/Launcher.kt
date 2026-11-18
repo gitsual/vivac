@@ -7,7 +7,6 @@ import dev.vivac.launcher.apps.AppSource
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.apps.Profile
 import dev.vivac.launcher.campamento.Dock
-import dev.vivac.launcher.campamento.DockSlot
 import dev.vivac.launcher.campamento.Home
 import dev.vivac.launcher.campamento.HomeChange
 import dev.vivac.launcher.campamento.Placed
@@ -323,7 +322,7 @@ class Launcher(
 
     /** The dock as it is on screen: your choice, or the default favourites until you edit it. */
     fun shownDock(): List<String> =
-        Dock.pick(visibleApps().map { it.packageName }.toSet(), home.dock, home.dockChosen).filterIsInstance<DockSlot.App>().map { it.packageName }
+        Dock.pick(visibleApps().map { it.packageName }.toSet(), home.dock, home.dockChosen)
 
     /** The shortcuts the Petate's search looks through, gathered each time it opens. */
     var petateShortcuts by mutableStateOf(emptyList<FoundShortcut>()); private set
