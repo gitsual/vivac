@@ -45,6 +45,19 @@
             </intent-filter>
         </activity>
 
+        <!-- vivac-os's SystemUI opens vivac's own shade here when you pull down on the home screen. Only the
+             system holds STATUS_BAR_SERVICE, so no app can open it. -->
+        <activity-alias
+            android:name=".AvisosEntry"
+            android:exported="true"
+            android:permission="android.permission.STATUS_BAR_SERVICE"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="dev.vivac.launcher.action.OPEN_AVISOS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Another app's "Add to home screen" (shortcuts and widgets); Android sends it only to the default home app. -->
         <activity
             android:name=".PinActivity"

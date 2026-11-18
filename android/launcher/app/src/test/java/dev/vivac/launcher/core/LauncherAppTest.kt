@@ -824,12 +824,13 @@ class LauncherAppTest {
         return notices
     }
 
-    private fun aviso(key: String, title: String, pkg: String = "com.termux", reply: Boolean = false) =
-        dev.vivac.launcher.avisos.Aviso(key, pkg, title, "texto de $title", System.currentTimeMillis(), ongoing = false, clearable = true, summary = false, canReply = reply)
+    /** A notice posted [minutesAgo] minutes ago, so the shade's order is fixed. */
+    private fun aviso(key: String, title: String, pkg: String = "com.termux", reply: Boolean = false, minutesAgo: Long = 0) =
+        dev.vivac.launcher.avisos.Aviso(key, pkg, title, "texto de $title", System.currentTimeMillis() - minutesAgo * 60_000, ongoing = false, clearable = true, summary = false, canReply = reply)
 
     @Test
     fun `vivac's shade shows each app's notices, which open, go, are answered, or all go at once`() {
-        val notices = withNotices(aviso("a", "Ana", reply = true), aviso("b", "Bea"), aviso("c", "Ruta", pkg = "app.organicmaps"))
+        val notices = withNotices(aviso("a", "Ana", reply = true), aviso("b", "Bea", minutesAgo = 1), aviso("c", "Ruta", pkg = "app.organicmaps", minutesAgo = 5))
         compose.onNodeWithText("Avisos").assertExists()
         compose.onNodeWithText("TERMUX").assertExists()
         compose.onNodeWithText("ORGANIC MAPS").assertExists()

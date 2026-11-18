@@ -236,6 +236,11 @@ class Launcher(
     fun openContact(contact: Contact) { directory?.openContact(contact); screen = Screen.CAMPAMENTO }
     fun openEvent(event: CalendarEvent) { directory?.openEvent(event); screen = Screen.CAMPAMENTO }
 
+    /** vivac's own shade, which needs notification access; without it, Android's. */
+    fun openAvisos() {
+        if (notices != null && actions.dotsAllowed()) screen = Screen.AVISOS else actions.showNotifications()
+    }
+
     /** Android's own shade, for its quick settings. */
     fun openAndroidShade() = actions.showNotifications()
 
@@ -309,7 +314,7 @@ class Launcher(
             Gesture.PETATE -> openPetate(false)
             Gesture.SEARCH -> openPetate(true)
             // vivac's own shade needs notification access; without it, Android's.
-            Gesture.NOTIFICATIONS -> if (notices != null && actions.dotsAllowed()) screen = Screen.AVISOS else actions.showNotifications()
+            Gesture.NOTIFICATIONS -> openAvisos()
             Gesture.LOCK -> if (!actions.lockScreen()) askForLockService()
             Gesture.APP -> app?.takeIf { pkg -> apps.any { it.packageName == pkg } }?.let(::openApp)
             Gesture.NOTHING -> Unit

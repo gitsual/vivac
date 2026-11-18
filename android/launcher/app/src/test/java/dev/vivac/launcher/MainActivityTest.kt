@@ -239,4 +239,37 @@ class MainActivityTest {
         start()
         scenario.moveToState(androidx.lifecycle.Lifecycle.State.DESTROYED)
     }
+
+    private fun allowNotices(on: Boolean) {
+        val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+        val me = android.content.ComponentName(app, dev.vivac.launcher.apps.DotsListener::class.java).flattenToString()
+        android.provider.Settings.Secure.putString(app.contentResolver, "enabled_notification_listeners", if (on) me else "")
+    }
+
+    @Test
+    fun `the system's pull-down on the home screen opens vivac's shade, or Android's without notification access`() {
+        allowNotices(false)
+        start()
+        deliver(Intent(MainActivity.ACTION_OPEN_AVISOS))
+        compose.onNodeWithText("VIVAC · AVISOS").assertDoesNotExist()
+        allowNotices(true)
+        deliver(Intent(MainActivity.ACTION_OPEN_AVISOS))
+        compose.onNodeWithText("VIVAC · AVISOS").assertExists()
+    }
+
+    @Test
+    fun `started cold by the system's pull-down, vivac opens straight on its shade`() {
+        allowNotices(true)
+        val intent = Intent(androidx.test.core.app.ApplicationProvider.getApplicationContext(), MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_AVISOS)
+        scenario = ActivityScenario.launch(intent)
+        compose.onNodeWithText("VIVAC · AVISOS").assertExists()
+    }
+
+    @Test
+    fun `only the system can open vivac's shade from outside, through its entry`() {
+        val app = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+        val entry = app.packageManager.getActivityInfo(android.content.ComponentName(app, "dev.vivac.launcher.AvisosEntry"), 0)
+        assertEquals("android.permission.STATUS_BAR_SERVICE", entry.permission)
+        assertEquals(MainActivity::class.java.name, entry.targetActivity)
+    }
 }

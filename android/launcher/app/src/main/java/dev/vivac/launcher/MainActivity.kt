@@ -55,6 +55,8 @@ class MainActivity : ComponentActivity() {
         actions = AppActions(this)
         widgets = Widgets(this)
         launcher = Launcher(source, PrefsStore(getSharedPreferences("home", MODE_PRIVATE)), actions, widgets, savedInstanceState?.getInt(KEY_PENDING, -1) ?: -1, dev.vivac.launcher.apps.AndroidDirectory(this), dev.vivac.launcher.apps.AndroidNotices)
+        // Started by the system's pull-down on the home screen: open straight on vivac's shade.
+        if (savedInstanceState == null && intent?.action == ACTION_OPEN_AVISOS) launcher.openAvisos()
         watcher = source.watch { refresh() }
         refresh()
         val views = object : WidgetViews {
@@ -153,6 +155,7 @@ class MainActivity : ComponentActivity() {
     /** Pressing Home while vivac is in front brings you back to the Campamento. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.action == ACTION_OPEN_AVISOS) return launcher.openAvisos()
         if (intent.hasCategory(Intent.CATEGORY_HOME)) {
             launcher.onHomePressed()
             // Swiping home from an app: tell Android where its icon is, so the window closes into it.
@@ -176,5 +179,10 @@ class MainActivity : ComponentActivity() {
     private fun tick() {
         stamp = Stamp.format(LocalDateTime.now())
         facts = PhoneFacts.read(this)
+    }
+
+    companion object {
+        /** What vivac-os's SystemUI sends, through the AvisosEntry alias, when you pull down on the home screen. */
+        const val ACTION_OPEN_AVISOS = "dev.vivac.launcher.action.OPEN_AVISOS"
     }
 }
