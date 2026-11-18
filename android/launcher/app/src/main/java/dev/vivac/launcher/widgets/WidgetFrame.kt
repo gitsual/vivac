@@ -36,6 +36,9 @@ class WidgetFrame(context: Context) : AppWidgetHostView(context) {
     private var downY = 0f
     private var lastX = 0f
     private var lastY = 0f
+    // Where the finger is on screen: a carry follows it there, even when the widget's page slides under it.
+    private var screenX = 0f
+    private var screenY = 0f
     private var travelled = 0f
     private var held = false
     private val press = Runnable {
@@ -64,6 +67,7 @@ class WidgetFrame(context: Context) : AppWidgetHostView(context) {
                 held = false
                 downX = event.x; downY = event.y
                 lastX = event.x; lastY = event.y
+                screenX = event.rawX; screenY = event.rawY
                 clock.postDelayed(press, ViewConfiguration.getLongPressTimeout().toLong())
             }
             MotionEvent.ACTION_MOVE -> if (!held && (abs(event.x - downX) > slop || abs(event.y - downY) > slop)) {
@@ -83,9 +87,9 @@ class WidgetFrame(context: Context) : AppWidgetHostView(context) {
         if (!held) return super.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
-                val dx = event.x - lastX
-                val dy = event.y - lastY
-                lastX = event.x; lastY = event.y
+                val dx = event.rawX - screenX
+                val dy = event.rawY - screenY
+                screenX = event.rawX; screenY = event.rawY
                 travelled += abs(dx) + abs(dy)
                 grip?.move(dx, dy)
             }

@@ -223,4 +223,18 @@ class WidgetsTest {
         touch(parent, MotionEvent.ACTION_MOVE, x = 200f)
         assertFalse(parent.handsOff)
     }
+
+    @Test
+    fun `a carried widget follows the finger on screen, even when its page slides away under it`() {
+        val grip = Recorder()
+        val frame = placedView(grip)
+        val parent = inParent(frame)
+        touch(parent, MotionEvent.ACTION_DOWN)
+        hold()
+        // The page turns: the widget's own view slides a whole screen to the left, the finger stays put.
+        frame.offsetLeftAndRight(-500)
+        touch(parent, MotionEvent.ACTION_MOVE, x = 80f)
+        touch(parent, MotionEvent.ACTION_UP, x = 80f)
+        assertEquals(listOf("lift:20,20", "move:60,0", "land:true"), grip.calls)
+    }
 }
