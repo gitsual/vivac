@@ -24,14 +24,15 @@ import dev.vivac.launcher.theme.Monogram
 fun AppFace(app: InstalledApp, tone: Color) {
     // Decorative: the tile's label already names the app for TalkBack.
     val choice = LocalIconChoice.current
+    val override = LocalIconOverrides.current[app.packageName]
     val icons = LocalAppIcons.current
-    val image by produceState<ImageBitmap?>(null, app.packageName, choice, icons) {
-        value = if (icons == null || choice.style == IconStyle.GLYPHS) null else icons.load(app.packageName, choice)
+    val image by produceState<ImageBitmap?>(null, app.packageName, choice, override, icons) {
+        value = if (icons == null || (override == null && choice.style == IconStyle.GLYPHS)) null else icons.load(app.packageName, choice, override)
     }
     val icon = image
     when {
         icon == null -> Glyph(app, tone)
-        choice.style == IconStyle.THEMED -> Image(icon, null, Modifier.size(40.dp).testTag("icon:themed"), colorFilter = ColorFilter.tint(tone))
+        override == null && choice.style == IconStyle.THEMED -> Image(icon, null, Modifier.size(40.dp).testTag("icon:themed"), colorFilter = ColorFilter.tint(tone))
         else -> Image(icon, null, Modifier.size(44.dp).testTag("icon:image"))
     }
 }

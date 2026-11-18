@@ -711,6 +711,28 @@ class LauncherTest {
     }
 
     @Test
+    fun `an app can wear its own icon, chosen from its menu, until you put it back`() {
+        val l = many()
+        l.openMenu("com.termux")
+        l.pick(MenuEntry.ChangeIcon)
+        assertEquals("com.termux", l.iconPicker?.packageName)
+        l.setIcon("com.termux", IconOverride.Pack("a.pack", "terminal_alt"))
+        assertEquals(null, l.iconPicker)
+        l.setIcon("app.organicmaps", IconOverride.App)
+        l.setIcon("org.thoughtcrime.securesms", IconOverride.Glyph)
+        val again = many()
+        assertEquals(IconOverride.Pack("a.pack", "terminal_alt"), again.iconFor["com.termux"])
+        assertEquals(IconOverride.App, again.iconFor["app.organicmaps"])
+        assertEquals(IconOverride.Glyph, again.iconFor["org.thoughtcrime.securesms"])
+        l.setIcon("com.termux", null)
+        assertEquals(null, many().iconFor["com.termux"])
+        l.openMenu("com.termux"); l.pick(MenuEntry.ChangeIcon); l.cancelIconPicker()
+        assertEquals(null, l.iconPicker)
+        store.values["iconFor"] = "x=pack:onlyone,y=weird"
+        assertEquals(emptyMap<String, IconOverride>(), many().iconFor)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

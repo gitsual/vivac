@@ -15,14 +15,14 @@ object Backup {
         Launcher.KEY_DOCK, Launcher.KEY_PINNED, Launcher.KEY_HIDDEN, Launcher.KEY_WIDGETS, Launcher.KEY_RECENT,
         Launcher.KEY_NAMES, Launcher.KEY_LOCKED, Launcher.KEY_DOUBLE_TAP, Launcher.KEY_WALLPAPER,
         Launcher.KEY_COLUMNS, Launcher.KEY_LABELS, Launcher.KEY_COUNTS, Launcher.KEY_SWIPE_UP, Launcher.KEY_SWIPE_DOWN,
-        Launcher.KEY_ICONS, Launcher.KEY_ICON_PACK,
+        Launcher.KEY_ICONS, Launcher.KEY_ICON_PACK, Launcher.KEY_ICON_FOR,
     )
 
     private val DEFAULTS = mapOf(
         Launcher.KEY_NAMES to "", Launcher.KEY_LOCKED to "0", Launcher.KEY_DOUBLE_TAP to "0", Launcher.KEY_WALLPAPER to "0",
         Launcher.KEY_COLUMNS to "4", Launcher.KEY_LABELS to "1", Launcher.KEY_COUNTS to "0",
         Launcher.KEY_SWIPE_UP to "PETATE", Launcher.KEY_SWIPE_DOWN to "NOTIFICATIONS",
-        Launcher.KEY_ICONS to "GLYPHS", Launcher.KEY_ICON_PACK to "",
+        Launcher.KEY_ICONS to "GLYPHS", Launcher.KEY_ICON_PACK to "", Launcher.KEY_ICON_FOR to "",
     )
 
     fun export(store: Store): String = buildString {

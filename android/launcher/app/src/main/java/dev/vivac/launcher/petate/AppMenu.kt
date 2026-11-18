@@ -25,6 +25,8 @@ sealed interface MenuEntry {
     data object Rename : MenuEntry
     /** "Meter en una carpeta": offered by the sheet, like [Rename]. */
     data object ToFolder : MenuEntry
+    /** "Cambiar el icono": offered by the sheet, like [Rename]. */
+    data object ChangeIcon : MenuEntry
     data object Info : MenuEntry
     data object Uninstall : MenuEntry
 }

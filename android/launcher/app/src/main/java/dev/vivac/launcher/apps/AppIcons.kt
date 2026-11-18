@@ -13,6 +13,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
+import dev.vivac.launcher.core.IconOverride
 import dev.vivac.launcher.core.IconPackInfo
 import dev.vivac.launcher.core.IconStyle
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +23,8 @@ import kotlinx.coroutines.withContext
 data class IconChoice(val style: IconStyle = IconStyle.GLYPHS, val pack: String? = null)
 
 val LocalIconChoice = compositionLocalOf { IconChoice() }
+/** Icons chosen app by app, over the general style. */
+val LocalIconOverrides = compositionLocalOf { emptyMap<String, dev.vivac.launcher.core.IconOverride>() }
 val LocalAppIcons = compositionLocalOf<AppIcons?> { null }
 
 /**
@@ -50,6 +53,26 @@ class AppIcons(
     private val px = (48 * context.resources.displayMetrics.density).toInt()
     private val cache = LruCache<String, ImageBitmap>(300)
     private val filters = mutableMapOf<String, Map<String, String>>()
+
+    /** The app's icon: the one you chose for it ([override]), else the general [choice]. */
+    suspend fun load(packageName: String, choice: IconChoice, override: IconOverride? = null): ImageBitmap? = when (override) {
+        null -> load(packageName, choice)
+        IconOverride.Glyph -> null
+        IconOverride.App -> load(packageName, IconChoice(IconStyle.ORIGINAL))
+        is IconOverride.Pack -> packIcon(override.pack, override.drawable)
+    }
+
+    /** One drawable of a pack, by name, as the icon picker shows it. */
+    suspend fun packIcon(pack: String, name: String): ImageBitmap? {
+        val key = "drawable|$pack|$name"
+        cache.get(key)?.let { return it }
+        return withContext(io) { packDrawable(pack, name)?.toBitmap(px, px)?.asImageBitmap() }?.also { cache.put(key, it) }
+    }
+
+    /** Every icon a pack offers, by name, for choosing one by hand. */
+    suspend fun packIcons(pack: String): List<String> = withContext(io) {
+        filters.getOrPut(pack) { filterOf(pack) }.values.distinct().sorted()
+    }
 
     suspend fun load(packageName: String, choice: IconChoice): ImageBitmap? {
         if (choice.style == IconStyle.GLYPHS) return null

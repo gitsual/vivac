@@ -94,6 +94,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
         LocalLabels provides launcher.labels,
         LocalShowCounts provides launcher.showCounts,
         dev.vivac.launcher.apps.LocalIconChoice provides dev.vivac.launcher.apps.IconChoice(launcher.iconStyle, launcher.iconPack),
+        dev.vivac.launcher.apps.LocalIconOverrides provides launcher.iconFor,
     ) {
     AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
         when (current) {
@@ -210,6 +211,15 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onTakeOut = { launcher.takeOutOfFolder(id, it) },
             onRename = { launcher.renameFolder(id, it) },
             onDismiss = launcher::closeFolder,
+        )
+    }
+    launcher.iconPicker?.let { app ->
+        dev.vivac.launcher.apps.IconPickerSheet(
+            app = app,
+            current = launcher.iconFor[app.packageName],
+            packs = actions.iconPacks(),
+            onPick = { launcher.setIcon(app.packageName, it) },
+            onDismiss = launcher::cancelIconPicker,
         )
     }
     launcher.renaming?.let { app ->

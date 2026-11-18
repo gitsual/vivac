@@ -29,6 +29,28 @@ enum class IconStyle(val title: String) {
     PACK("Pack de iconos"),
 }
 
+/** One app's own icon, whatever the general style: vivac's glyph, the app's icon, or one drawable from a pack. */
+sealed interface IconOverride {
+    data object Glyph : IconOverride
+    data object App : IconOverride
+    data class Pack(val pack: String, val drawable: String) : IconOverride
+
+    companion object {
+        fun encode(o: IconOverride) = when (o) {
+            Glyph -> "glyph"
+            App -> "app"
+            is Pack -> "pack:${o.pack}:${o.drawable}"
+        }
+
+        fun decode(raw: String): IconOverride? = when {
+            raw == "glyph" -> Glyph
+            raw == "app" -> App
+            raw.startsWith("pack:") -> raw.removePrefix("pack:").split(":", limit = 2).takeIf { it.size == 2 }?.let { Pack(it[0], it[1]) }
+            else -> null
+        }
+    }
+}
+
 /** An installed icon pack (ADW/Nova convention). */
 data class IconPackInfo(val packageName: String, val label: String)
 
@@ -148,6 +170,25 @@ class Launcher(
     var iconStyle by mutableStateOf(IconStyle.entries.firstOrNull { it.name == store.get(KEY_ICONS) } ?: IconStyle.GLYPHS); private set
     /** The pack used when [iconStyle] is [IconStyle.PACK]. */
     var iconPack by mutableStateOf(store.get(KEY_ICON_PACK)?.takeIf { it.isNotBlank() }); private set
+
+    /** Icons you chose app by app (from its menu). */
+    var iconFor by mutableStateOf(decodeIcons(store.get(KEY_ICON_FOR))); private set
+    /** The app whose icon you are choosing. */
+    var iconPicker by mutableStateOf<InstalledApp?>(null); private set
+
+    fun cancelIconPicker() { iconPicker = null }
+
+    /** [icon] null: back to the general style. */
+    fun setIcon(packageName: String, icon: IconOverride?) {
+        iconPicker = null
+        iconFor = if (icon == null) iconFor - packageName else iconFor + (packageName to icon)
+        store.put(mapOf(KEY_ICON_FOR to iconFor.entries.joinToString(",") { (p, o) -> p + "=" + IconOverride.encode(o) }))
+    }
+
+    private fun decodeIcons(raw: String?): Map<String, IconOverride> = raw.orEmpty().split(",").mapNotNull { part ->
+        val (pkg, value) = part.split("=", limit = 2).takeIf { it.size == 2 } ?: return@mapNotNull null
+        IconOverride.decode(value)?.let { pkg to it }
+    }.toMap()
 
     fun chooseIcons(style: IconStyle) {
         iconStyle = style
@@ -357,6 +398,7 @@ class Launcher(
             }
             MenuEntry.Rename -> renaming = app
             MenuEntry.ToFolder -> folderPicker = app
+            MenuEntry.ChangeIcon -> iconPicker = app
             MenuEntry.Info -> actions.info(pkg)
             MenuEntry.Uninstall -> actions.uninstall(pkg)
         }
@@ -403,6 +445,7 @@ class Launcher(
         swipeDown = gesture(KEY_SWIPE_DOWN, Gesture.NOTIFICATIONS)
         iconStyle = IconStyle.entries.firstOrNull { it.name == store.get(KEY_ICONS) } ?: IconStyle.GLYPHS
         iconPack = store.get(KEY_ICON_PACK)?.takeIf { it.isNotBlank() }
+        iconFor = decodeIcons(store.get(KEY_ICON_FOR))
         refresh()
         actions.say("Campamento restaurado.")
     }
@@ -634,6 +677,7 @@ class Launcher(
         const val KEY_CONTACTS = "searchContacts"
         const val KEY_CALENDAR = "searchCalendar"
         const val KEY_ICON_PACK = "iconPack"
+        const val KEY_ICON_FOR = "iconFor"
 
         private fun encodeNames(names: Map<String, String>) =
             names.entries.joinToString(",") { (pkg, name) -> pkg + "=" + java.net.URLEncoder.encode(name, "UTF-8") }

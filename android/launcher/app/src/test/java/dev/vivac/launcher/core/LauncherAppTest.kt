@@ -27,6 +27,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
@@ -616,6 +617,27 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertEquals("a.pack", launcher.iconPack)
         compose.onNodeWithText("Las apps sin icono en este estilo siguen con su glifo de vivac.").assertExists()
+    }
+
+    @Test
+    fun `an app's icon is changed from its menu`() {
+        store.values["pinned"] = "app.organicmaps"
+        show()
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithText("Cambiar el icono").tap()
+        compose.waitForIdle()
+        compose.onNodeWithText("Con un pack de iconos instalado podrás elegir cualquiera de sus iconos.").assertExists()
+        compose.onNodeWithText("Icono de la app").tap()
+        compose.waitForIdle()
+        assertEquals(IconOverride.App, launcher.iconFor["app.organicmaps"])
+        actions.packs = listOf(IconPackInfo("a.pack", "Arcticons"))
+        compose.runOnUiThread { launcher.openMenu("app.organicmaps") }
+        compose.onNodeWithText("Cambiar el icono").tap()
+        compose.onNodeWithText("Arcticons").assertExists()
+        compose.onNodeWithContentDescription("Buscar icono en el pack").performTextInput("map")
+        compose.onNodeWithText("Como las demás").tap()
+        compose.waitForIdle()
+        assertEquals(null, launcher.iconFor["app.organicmaps"])
     }
 
     @Test

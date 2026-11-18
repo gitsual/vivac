@@ -59,7 +59,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | I1 | One ink for every icon: vivac's own line glyph per app, monogram for apps without one | done |
 | I2 | Choose themed / original colour icons | done: glyphs (default), themed (monochrome layer), apps' own; glyph fallback |
 | I3 | Icon packs (ADW / Nova standard appfilter.xml) | done: packs found by ADW/Nova action; appfilter from res/xml, res/raw or assets |
-| I4 | Custom icon per app (from a pack) | todo |
+| I4 | Custom icon per app (from a pack) | done: «Cambiar el icono» in the app menu: general style, glyph, app icon, or any pack drawable (searchable) |
 | I5 | Notification dots | done |
 | I6 | Notification count instead of a dot (optional) | done: settings toggle; 99+ cap |
 

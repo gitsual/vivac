@@ -17,6 +17,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
@@ -41,6 +44,46 @@ class AppIconsTest {
     @Test
     fun `a tile draws the app's own icon, and a themed one tinted, instead of the glyph`() {
         show(IconStyle.ORIGINAL, ColorDrawable(Color.RED))
+        compose.onNodeWithTag("icon:image", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun `an app's own choice wins over the general style`() = runBlocking {
+        val i = icons()
+        assertNull(i.load("org.signal", IconChoice(IconStyle.ORIGINAL), dev.vivac.launcher.core.IconOverride.Glyph))
+        assertNotNull(i.load("org.signal", IconChoice(IconStyle.GLYPHS), dev.vivac.launcher.core.IconOverride.App))
+        assertNotNull(i.load("org.signal", IconChoice(IconStyle.GLYPHS), dev.vivac.launcher.core.IconOverride.Pack("a.pack", "terminal")))
+        assertEquals(listOf("signal"), i.packIcons("a.pack"))
+        assertSame(i.packIcon("a.pack", "terminal"), i.packIcon("a.pack", "terminal"))
+    }
+
+    @Test
+    fun `a pack's icons are picked from a searchable grid`() {
+        val i = icons(filter = mapOf("a/b" to "terminal", "c/d" to "maps", "e/f" to "maps_alt"))
+        var picked: dev.vivac.launcher.core.IconOverride? = null
+        compose.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(LocalAppIcons provides i) {
+                IconPickerSheet(InstalledApp("Termux", "com.termux", false), null, listOf(IconPackInfo("a.pack", "Arcticons")), onPick = { picked = it }, onDismiss = {})
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Buscar icono en el pack").performTextInput("map")
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("terminal").assertDoesNotExist()
+        compose.onNodeWithContentDescription("maps alt").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        assertEquals(dev.vivac.launcher.core.IconOverride.Pack("a.pack", "maps_alt"), picked)
+    }
+
+    @Test
+    fun `an app wearing the app's own icon shows it even with glyphs everywhere else`() {
+        val i = icons()
+        compose.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalAppIcons provides i,
+                LocalIconOverrides provides mapOf("org.signal" to dev.vivac.launcher.core.IconOverride.App),
+            ) { AppFace(InstalledApp("Signal", "org.signal", false), androidx.compose.ui.graphics.Color.Green) }
+        }
+        compose.waitForIdle()
         compose.onNodeWithTag("icon:image", useUnmergedTree = true).assertExists()
     }
 
