@@ -158,4 +158,36 @@ class WidgetBoardTest {
         assertEquals(listOf(Placed(5, page = 1)), WidgetBoard().addOnLadera(5).onPage(1))
         assertEquals(listOf(Placed(5, page = 1)), WidgetBoard().addOnLadera(5).addOnLadera(5).onPage(1))
     }
+
+    @Test
+    fun `a new folder takes the app's place on its ladera, or goes on the given one`() {
+        val b = WidgetBoard().addApp("a", 1).addApp("b", 1)
+        val f = b.newFolder("Viaje", "a", page = 1)
+        assertEquals(listOf(Folder("f1", "Viaje", listOf("a"), 1), Shelved("b", 1)), f.onPage(1))
+        assertEquals(listOf(Shelved("a", 1), Shelved("b", 1), Folder("f1", "Nueva", listOf("c"), 1)), b.newFolder("Nueva", "c", page = 1).onPage(1))
+        assertEquals("f2", f.newFolder("Otra", "z", 1).items.filterIsInstance<Folder>().last().id)
+    }
+
+    @Test
+    fun `apps join a folder once, leaving any ladera spot, and a folder left with one app gives it back`() {
+        val b = WidgetBoard().addApp("a", 1).addApp("b", 1).newFolder("Viaje", "a", 1)
+        val joined = b.addToFolder("f1", "b").addToFolder("f1", "b")
+        assertEquals(listOf(Folder("f1", "Viaje", listOf("a", "b"), 1)), joined.onPage(1))
+        assertEquals("f1", joined.folderOf("b")?.id)
+        val left = joined.removeFromFolder("f1", "b")
+        assertEquals(listOf(Shelved("a", 1)), left.onPage(1))
+        assertEquals(b, b.addToFolder("nope", "b"))
+        assertEquals(b, b.removeFromFolder("nope", "b"))
+    }
+
+    @Test
+    fun `folders are renamed, forget uninstalled apps, and survive storage with any name`() {
+        val b = WidgetBoard().newFolder("Viaje", "a", 1).addToFolder("f1", "b").addToFolder("f1", "c").renameFolder("f1", "Días: 1, 2 | 3")
+        assertEquals("Días: 1, 2 | 3", b.folder("f1")?.name)
+        assertEquals(b, WidgetBoard.decode(b.encode()))
+        assertEquals(listOf("a", "c"), b.keepApps(setOf("a", "c")).folder("f1")?.apps)
+        assertEquals(listOf(Shelved("a", 1)), b.keepApps(setOf("a")).onPage(1))
+        assertEquals(1, b.keepApps(emptySet()).pages)
+        assertEquals(b, b.renameFolder("nope", "x"))
+    }
 }

@@ -13,6 +13,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import dev.vivac.launcher.campamento.DragBoard
+import dev.vivac.launcher.campamento.Folder
+import dev.vivac.launcher.campamento.FolderPickSheet
+import dev.vivac.launcher.campamento.FolderSheet
 import dev.vivac.launcher.campamento.CampamentoScreen
 import dev.vivac.launcher.campamento.PhoneFacts
 import dev.vivac.launcher.petate.AppMenuSheet
@@ -76,6 +79,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             locked = launcher.locked,
             onDoubleTap = launcher::onDoubleTap,
             wallpaper = launcher.showWallpaper,
+            onOpenFolder = launcher::openFolder,
         )
     }
     AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
@@ -148,6 +152,26 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onMove = { launcher.moveWidget(id, it) },
             onRemove = { launcher.removeWidget(id) },
             onDismiss = launcher::dismissWidgetMenu,
+        )
+    }
+    launcher.folderPicker?.let { app ->
+        FolderPickSheet(
+            app = app,
+            folders = launcher.board.items.filterIsInstance<Folder>(),
+            onPick = { launcher.putInFolder(app.packageName, it) },
+            onNew = { launcher.newFolder(app.packageName) },
+            onDismiss = launcher::cancelFolderPicker,
+        )
+    }
+    launcher.openFolder?.let { id ->
+        val folder = launcher.board.folder(id) ?: return@let
+        FolderSheet(
+            folder = folder,
+            apps = folder.apps.mapNotNull { pkg -> launcher.visibleApps().find { it.packageName == pkg } },
+            onOpenApp = { launcher.closeFolder(); launcher.openApp(it) },
+            onTakeOut = { launcher.takeOutOfFolder(id, it) },
+            onRename = { launcher.renameFolder(id, it) },
+            onDismiss = launcher::closeFolder,
         )
     }
     launcher.renaming?.let { app ->

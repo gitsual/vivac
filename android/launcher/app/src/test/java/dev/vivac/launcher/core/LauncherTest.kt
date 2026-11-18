@@ -584,6 +584,39 @@ class LauncherTest {
     }
 
     @Test
+    fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
+        store.values["pinned"] = "app.organicmaps"
+        val l = many()
+        l.openMenu("com.termux")
+        l.pick(MenuEntry.ToFolder)
+        assertEquals("com.termux", l.folderPicker?.packageName)
+        l.newFolder("com.termux")
+        assertEquals(null, l.folderPicker)
+        val id = l.board.folderOf("com.termux")!!.id
+        assertEquals(id, l.openFolder)
+        assertEquals("Carpeta", l.board.folder(id)?.name)
+        l.closeFolder()
+        l.drop("app.organicmaps", from = Zone.Via, to = Zone.Folder(id), index = 0)
+        assertEquals(emptyList<String>(), l.home.pinned)
+        assertEquals(listOf("com.termux", "app.organicmaps"), l.board.folder(id)?.apps)
+        l.openMenu("org.thoughtcrime.securesms"); l.pick(MenuEntry.ToFolder)
+        l.putInFolder("org.thoughtcrime.securesms", id)
+        assertEquals(3, l.board.folder(id)?.apps?.size)
+        assertFalse("org.thoughtcrime.securesms" in l.shownDock())
+        l.renameFolder(id, "  Viaje ")
+        assertEquals("Viaje", l.board.folder(id)?.name)
+        l.renameFolder(id, " ")
+        assertEquals("Viaje", l.board.folder(id)?.name)
+        l.takeOutOfFolder(id, "app.organicmaps")
+        l.takeOutOfFolder(id, "org.thoughtcrime.securesms")
+        assertEquals(null, l.board.folder(id))
+        assertEquals(null, l.openFolder)
+        l.cancelFolderPicker()
+        l.openFolder("nope")
+        assertEquals(null, l.openFolder)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

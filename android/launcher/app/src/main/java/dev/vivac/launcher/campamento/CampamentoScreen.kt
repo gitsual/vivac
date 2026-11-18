@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -125,6 +126,7 @@ fun CampamentoScreen(
     locked: Boolean = false,
     onDoubleTap: () -> Unit = {},
     wallpaper: Boolean = false,
+    onOpenFolder: (String) -> Unit = {},
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
@@ -201,7 +203,7 @@ fun CampamentoScreen(
                             board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
                             Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop)
                         } else {
-                            Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu)
+                            Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu, onOpenFolder)
                         }
                     }
                 }
@@ -311,6 +313,7 @@ private fun Ladera(
     onDrop: (Held, Spot) -> Unit,
     onShortcut: (Pinned) -> Unit,
     onShortcutMenu: (Pinned) -> Unit,
+    onOpenFolder: (String) -> Unit,
 ) {
     val byPackage = apps.associateBy { it.packageName }
     // Consecutive apps and shortcuts form one block, so they share rows; each widget is a block of its own.
@@ -318,9 +321,13 @@ private fun Ladera(
     items.forEach { item ->
         when (item) {
             is Placed -> blocks += item
-            is Shelved, is Pinned -> {
-                val pkg = if (item is Shelved) item.packageName else (item as Pinned).packageName
-                if (pkg !in byPackage) return@forEach
+            is Shelved, is Pinned, is Folder -> {
+                val known = when (item) {
+                    is Shelved -> item.packageName in byPackage
+                    is Pinned -> item.packageName in byPackage
+                    else -> (item as Folder).apps.any { it in byPackage }
+                }
+                if (!known) return@forEach
                 @Suppress("UNCHECKED_CAST")
                 (blocks.lastOrNull() as? MutableList<Item>)?.add(item) ?: blocks.add(mutableListOf(item))
             }
@@ -354,6 +361,10 @@ private fun Ladera(
                                     modifier = Modifier.weight(1f).spot(drag, Spot(Zone.Ladera(page), items.indexOf(item))),
                                 ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
                             }
+                            is Folder -> FolderTile(
+                                item, item.apps.mapNotNull { byPackage[it] }, drag, onOpenFolder,
+                                Modifier.weight(1f),
+                            )
                             is Placed -> Unit
                         }
                     }
@@ -365,6 +376,51 @@ private fun Ladera(
     // The rest of the ladera takes a carried app at its end.
     Box(Modifier.fillMaxWidth().heightIn(min = 96.dp).spot(drag, Spot(Zone.Ladera(page), Spot.END))) {
         Text("Mantén pulsado un widget o una app para traerlos a esta ladera.", style = Type.small)
+    }
+}
+
+/** A folder: up to four of its apps' glyphs in a two-by-two tile; a carried app dropped on it goes in. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun FolderTile(folder: Folder, apps: List<InstalledApp>, drag: DragBoard, onOpen: (String) -> Unit, modifier: Modifier) {
+    val spot = Spot(Zone.Folder(folder.id), 0)
+    Column(
+        modifier
+            .spot(drag, spot)
+            .clip(RoundedCornerShape(18.dp))
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel = "Abrir la carpeta ${folder.name}",
+                onClick = { onOpen(folder.id) },
+                onLongClick = { onOpen(folder.id) },
+            )
+            .semantics(mergeDescendants = true) { contentDescription = "Carpeta ${folder.name}, ${apps.size} apps" },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            Modifier
+                .size(TILE)
+                .clip(RoundedCornerShape(TILE / 3))
+                .background(Ink.raised)
+                .border(if (drag.target == spot) 1.5.dp else 1.dp, if (drag.target == spot) Ink.primary else Ink.field, RoundedCornerShape(TILE / 3))
+                .padding(7.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                apps.take(4).chunked(2).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                        row.forEach { app ->
+                            Box(Modifier.size(19.dp), contentAlignment = Alignment.Center) {
+                                val glyph = dev.vivac.launcher.apps.Glyphs.of(app.packageName)
+                                val tone = Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]
+                                if (glyph != null) LineIcon(glyph, tone, 17.dp) else Text(Pack.monogram(app), style = Type.cota.copy(fontSize = 8.sp, color = tone))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Text(folder.name, style = Type.small.copy(color = Ink.text), maxLines = 1)
     }
 }
 

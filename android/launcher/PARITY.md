@@ -14,7 +14,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | H2 | Apps pinned to the home screen | done |
 | H3 | Widgets: add, configure, remove | done |
 | H4 | Reorder dock, pins and widgets (move earlier / later) | done: drag apps within and between dock, route and laderas, and out of the petate; widgets by dragging too (card, or hold and move) |
-| H5 | Folders: group pinned apps, rename, open, take apps out | todo |
+| H5 | Folders: group pinned apps, rename, open, take apps out | done: on laderas; from the app menu or dropping an app on one; rename in place; one app left dissolves it |
 | H6 | Pin app shortcuts (deep shortcuts) to the home screen | done: pin beside each shortcut in the app menu; on a ladera, tap opens, hold to take off |
 | H7 | Accept "add to home screen" requests from apps (PinItemRequest: shortcuts and widgets) | done: PinActivity, to the last ladera |
 | H8 | Resize widgets (height in rows) | done (widget card: 1–5 rows) |

@@ -17,6 +17,9 @@ data class Shelved(val packageName: String, override val page: Int) : Item
 /** An app's shortcut (e.g. a chat) put on a ladera; [label] is what the app called it when it was pinned. */
 data class Pinned(val packageName: String, val id: String, val label: String, override val page: Int) : Item
 
+/** A folder on a ladera: a name and the apps in it, in order. */
+data class Folder(val id: String, val name: String, val apps: List<String>, override val page: Int) : Item
+
 /**
  * What sits on each page, in order. Pages never have gaps: a ladera left empty closes and the ones after
  * it move down; the Campamento never closes.
@@ -75,11 +78,51 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
     /** The ids of [packageName]'s shortcuts on the home screen, which Android must keep pinned. */
     fun shortcutsOf(packageName: String): List<String> = items.filterIsInstance<Pinned>().filter { it.packageName == packageName }.map { it.id }
 
+    fun folder(id: String): Folder? = items.firstOrNull { it is Folder && it.id == id } as Folder?
+
+    fun folderOf(packageName: String): Folder? = items.firstOrNull { it is Folder && packageName in it.apps } as Folder?
+
+    /** A folder holding [packageName]: in the app's place if it is on a ladera, else at the end of [page]. */
+    fun newFolder(name: String, packageName: String, page: Int): WidgetBoard {
+        val id = "f" + ((items.filterIsInstance<Folder>().mapNotNull { it.id.drop(1).toIntOrNull() }.maxOrNull() ?: 0) + 1)
+        val shelved = items.firstOrNull { it is Shelved && it.packageName == packageName }
+        val folder = Folder(id, name, listOf(packageName), shelved?.page ?: page.coerceAtLeast(1))
+        val rest = withoutInFolders(packageName)
+        return if (shelved != null) WidgetBoard(rest.items.map { if (it == shelved) folder else it }) else WidgetBoard(rest.items + folder).compact()
+    }
+
+    /** Puts an app in a folder (once), taking it off any ladera spot or other folder. */
+    fun addToFolder(id: String, packageName: String): WidgetBoard {
+        val target = folder(id) ?: return this
+        if (packageName in target.apps) return this
+        val rest = WidgetBoard(withoutInFolders(packageName).items.filterNot { it is Shelved && it.packageName == packageName })
+        return WidgetBoard(rest.items.map { if (it is Folder && it.id == id) it.copy(apps = it.apps + packageName) else it }).compact()
+    }
+
+    /** Takes an app out of a folder; a folder left with one app becomes that app, an empty one goes. */
+    fun removeFromFolder(id: String, packageName: String): WidgetBoard {
+        val target = folder(id) ?: return this
+        return WidgetBoard(items.mapNotNull { if (it == target) settle(target.copy(apps = target.apps - packageName)) else it }).compact()
+    }
+
+    fun renameFolder(id: String, name: String) =
+        WidgetBoard(items.map { if (it is Folder && it.id == id) it.copy(name = name) else it })
+
+    private fun withoutInFolders(packageName: String) =
+        WidgetBoard(items.mapNotNull { if (it is Folder && packageName in it.apps) settle(it.copy(apps = it.apps - packageName)) else it })
+
+    private fun settle(folder: Folder): Item? = when (folder.apps.size) {
+        0 -> null
+        1 -> Shelved(folder.apps.single(), folder.page)
+        else -> folder
+    }
+
     fun removeApp(packageName: String) = WidgetBoard(items.filterNot { it is Shelved && it.packageName == packageName }).compact()
 
     /** Forget apps that are no longer installed. */
     fun keepApps(installed: Set<String>) = WidgetBoard(
-        items.filter { (it !is Shelved || it.packageName in installed) && (it !is Pinned || it.packageName in installed) },
+        items.filter { (it !is Shelved || it.packageName in installed) && (it !is Pinned || it.packageName in installed) }
+            .mapNotNull { if (it is Folder) settle(it.copy(apps = it.apps.filter { pkg -> pkg in installed })) else it },
     ).compact()
 
     /** Sends a widget to the end of [page]; one past the last opens a new ladera. */
@@ -110,6 +153,7 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
             is Placed -> "${it.id}:${it.page}:${it.rows}"
             is Shelved -> "@${it.packageName}:${it.page}"
             is Pinned -> "#" + listOf(it.packageName, it.id, it.label).joinToString("|") { f -> URLEncoder.encode(f, "UTF-8") } + ":${it.page}"
+            is Folder -> "%" + listOf(it.id, it.name, it.apps.joinToString(";")).joinToString("|") { f -> URLEncoder.encode(f, "UTF-8") } + ":${it.page}"
         }
     }
 
@@ -123,6 +167,7 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
                 is Placed -> item.copy(page = page)
                 is Shelved -> item.copy(page = page)
                 is Pinned -> item.copy(page = page)
+                is Folder -> item.copy(page = page)
             }
         })
     }
@@ -132,7 +177,11 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
         fun decode(raw: String?) = WidgetBoard(
             raw.orEmpty().split(",").mapNotNull { part ->
                 val fields = part.trim().split(":")
-                if (fields[0].startsWith("#")) {
+                if (fields[0].startsWith("%")) {
+                    val parts = fields[0].drop(1).split("|").map { URLDecoder.decode(it, "UTF-8") }
+                    if (parts.size != 3 || parts[0].isBlank()) return@mapNotNull null
+                    Folder(parts[0], parts[1], parts[2].split(";").filter { it.isNotBlank() }, fields.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(1) ?: 1)
+                } else if (fields[0].startsWith("#")) {
                     val parts = fields[0].drop(1).split("|").map { URLDecoder.decode(it, "UTF-8") }
                     if (parts.size != 3 || parts[0].isBlank()) return@mapNotNull null
                     Pinned(parts[0], parts[1], parts[2], fields.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(1) ?: 1)
@@ -148,6 +197,7 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
                     is Placed -> "w${it.id}"
                     is Shelved -> "a${it.packageName}"
                     is Pinned -> "s${it.packageName}/${it.id}"
+                    is Folder -> "f${it.id}"
                 }
             },
         )

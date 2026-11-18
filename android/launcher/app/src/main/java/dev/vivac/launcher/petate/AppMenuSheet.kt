@@ -112,7 +112,10 @@ fun AppMenuSheet(
                 }
             }
             // Any app can be renamed; a shortcut's own menu is about the shortcut.
-            if (entries.none { it is MenuEntry.UnpinShortcut }) Entry("Cambiar el nombre", Glyph.PROMPT, Ink.text, Ink.text) { onPick(MenuEntry.Rename) }
+            if (entries.none { it is MenuEntry.UnpinShortcut }) {
+                Entry("Meter en una carpeta", Glyph.GRID, Ink.text, Ink.text) { onPick(MenuEntry.ToFolder) }
+                Entry("Cambiar el nombre", Glyph.PROMPT, Ink.text, Ink.text) { onPick(MenuEntry.Rename) }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (MenuEntry.Info in entries) Pill("Información de la app", Ink.borderControl, Ink.text, Modifier.weight(1f)) { onPick(MenuEntry.Info) }
                 if (MenuEntry.Uninstall in entries) Pill("Desinstalar", Ink.accentText, Ink.accentText, Modifier.weight(1f)) { onPick(MenuEntry.Uninstall) }

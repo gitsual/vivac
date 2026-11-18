@@ -28,6 +28,8 @@ sealed interface Zone {
     data class Ladera(val page: Int) : Zone
     /** Not on the home screen yet (dragged in from the Petate). */
     data object Petate : Zone
+    /** Into a folder on a ladera (dropped on it). */
+    data class Folder(val id: String) : Zone
 }
 
 /** The two answers Android sends back while placing a widget. */
@@ -239,6 +241,7 @@ class Launcher(
                 if (pkg in home.hidden) saveBoard(board.removeApp(pkg))
             }
             MenuEntry.Rename -> renaming = app
+            MenuEntry.ToFolder -> folderPicker = app
             MenuEntry.Info -> actions.info(pkg)
             MenuEntry.Uninstall -> actions.uninstall(pkg)
         }
@@ -326,6 +329,7 @@ class Launcher(
             is Zone.Ladera -> if (to !is Zone.Ladera) next = next.removeApp(packageName)
             // Out of the petate: an app already where it lands moves rather than appearing twice.
             Zone.Petate -> if (to == Zone.Dock) dock.remove(packageName) else if (to == Zone.Via) pinned.remove(packageName)
+            is Zone.Folder -> Unit
         }
         when (to) {
             Zone.Dock -> {
@@ -338,6 +342,7 @@ class Launcher(
             }
             is Zone.Ladera -> next = next.insertApp(packageName, to.page, index)
             Zone.Petate -> Unit
+            is Zone.Folder -> next = next.addToFolder(to.id, packageName)
         }
         val dockTouched = from == Zone.Dock || to == Zone.Dock
         apply(HomeChange(home.copy(dock = if (dockTouched) dock else home.dock, pinned = pinned, dockChosen = home.dockChosen || dockTouched)))
@@ -348,7 +353,7 @@ class Launcher(
         Zone.Dock -> shownDock().indexOf(packageName)
         Zone.Via -> home.pinned.indexOf(packageName)
         is Zone.Ladera -> board.onPage(zone.page).indexOfFirst { it is Shelved && it.packageName == packageName }
-        Zone.Petate -> -1
+        Zone.Petate, is Zone.Folder -> -1
     }
 
     /** The ladera an app goes to: the one in view, else the last one, else a new one. */
@@ -388,6 +393,46 @@ class Launcher(
         names = if (name.isEmpty() || name == originalLabel(packageName)) names - packageName else names + (packageName to name)
         store.put(mapOf(KEY_NAMES to encodeNames(names)))
         apps = named()
+    }
+
+    /** The app being put in a folder: the sheet that lists folders, or makes one. */
+    var folderPicker by mutableStateOf<InstalledApp?>(null); private set
+    /** The folder open on screen. */
+    var openFolder by mutableStateOf<String?>(null); private set
+
+    fun cancelFolderPicker() { folderPicker = null }
+
+    /** A new folder with the app, in its place on a ladera or on the one in view; it opens to be named. */
+    fun newFolder(packageName: String) {
+        folderPicker = null
+        saveBoard(board.newFolder("Carpeta", packageName, ladera()).let { it.withoutDockAndVia(packageName) })
+        openFolder = board.folderOf(packageName)?.id
+    }
+
+    fun putInFolder(packageName: String, id: String) {
+        folderPicker = null
+        saveBoard(board.addToFolder(id, packageName).withoutDockAndVia(packageName))
+    }
+
+    /** An app in a folder lives there alone: it leaves the dock and the route. */
+    private fun WidgetBoard.withoutDockAndVia(packageName: String): WidgetBoard {
+        val inDock = packageName in shownDock()
+        if (inDock || packageName in home.pinned) {
+            apply(HomeChange(home.copy(dock = if (inDock) shownDock() - packageName else home.dock, pinned = home.pinned - packageName, dockChosen = home.dockChosen || inDock)))
+        }
+        return this
+    }
+
+    fun openFolder(id: String) { if (board.folder(id) != null) openFolder = id }
+    fun closeFolder() { openFolder = null }
+
+    fun renameFolder(id: String, name: String) {
+        if (name.isNotBlank()) saveBoard(board.renameFolder(id, name.trim()))
+    }
+
+    fun takeOutOfFolder(id: String, packageName: String) {
+        saveBoard(board.removeFromFolder(id, packageName))
+        if (board.folder(id) == null) openFolder = null
     }
 
     fun cancelRename() {

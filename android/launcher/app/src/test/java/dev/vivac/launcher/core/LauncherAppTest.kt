@@ -23,6 +23,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
@@ -508,6 +510,57 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertEquals(null, launcher.menu)
         assertEquals(1, launcher.board.ids.size)
+    }
+
+    @Test
+    fun `a folder is made from an app's menu, takes a dragged app, opens, renames and gives apps back`() {
+        store.values["pinned"] = "app.organicmaps,com.android.settings"
+        store.values["widgets"] = "@com.termux:1"
+        show()
+        compose.runOnUiThread { launcher.showPage(1); launcher.openMenu("com.termux") }
+        compose.waitForIdle()
+        compose.onNodeWithText("Meter en una carpeta").tap()
+        compose.onNodeWithText("Carpeta nueva").tap()
+        compose.waitForIdle()
+        val id = launcher.board.folderOf("com.termux")!!.id
+        compose.onNodeWithContentDescription("Nombre de la carpeta").performTextReplacement("Consola")
+        compose.onNodeWithContentDescription("Nombre de la carpeta").performImeAction()
+        compose.runOnUiThread { launcher.closeFolder() }
+        compose.waitForIdle()
+        assertEquals("Consola", launcher.board.folder(id)?.name)
+        // Into the folder from the route: carried onto the folder tile on the ladera, via the page edge.
+        compose.runOnUiThread { launcher.showPage(0) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Ajustes").performTouchInput { longClick() }
+        compose.onNodeWithText("Meter en una carpeta").tap()
+        compose.onNodeWithText("Consola · 1 apps").tap()
+        compose.waitForIdle()
+        assertEquals(listOf("com.termux", "com.android.settings"), launcher.board.folder(id)?.apps)
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Carpeta Consola, 2 apps").performClick()
+        compose.waitForIdle()
+        compose.onAllNodesWithText("Ajustes").onLast().performTouchInput { longClick() }
+        compose.waitForIdle()
+        assertEquals(null, launcher.board.folder(id))
+        assertTrue(launcher.board.apps.contains("com.termux"))
+    }
+
+    @Test
+    fun `a carried app dropped on a folder goes in`() {
+        store.values["widgets"] = "%f1|Viaje|com.termux%3Bapp.organicmaps:1,@com.android.settings:1"
+        show()
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.waitForIdle()
+        val target = compose.onNodeWithContentDescription("Carpeta Viaje, 2 apps").fetchSemanticsNode().boundsInRoot.center
+        carry("Ajustes", target)
+        assertEquals(listOf("com.termux", "app.organicmaps", "com.android.settings"), launcher.board.folder("f1")?.apps)
+        compose.onNodeWithContentDescription("Carpeta Viaje, 3 apps").performTouchInput { longClick() }
+        compose.waitForIdle()
+        assertEquals("f1", launcher.openFolder)
+        compose.onAllNodesWithText("Organic Maps").onLast().tap()
+        assertEquals("open:app.organicmaps", actions.calls.last())
+        assertEquals(null, launcher.openFolder)
     }
 
     @Test

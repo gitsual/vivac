@@ -23,6 +23,8 @@ sealed interface MenuEntry {
     data class UnpinShortcut(val shortcut: AppShortcut) : Place
     /** "Cambiar el nombre": offered by the sheet for any app, not built into the list. */
     data object Rename : MenuEntry
+    /** "Meter en una carpeta": offered by the sheet, like [Rename]. */
+    data object ToFolder : MenuEntry
     data object Info : MenuEntry
     data object Uninstall : MenuEntry
 }
