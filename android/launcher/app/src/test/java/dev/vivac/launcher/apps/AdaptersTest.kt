@@ -67,7 +67,9 @@ class AdaptersTest {
         launcherApps.setHasShortcutHostPermission(false)
         assertFalse(actions.canReadShortcuts())
         assertEquals(emptyList<AppShortcut>(), actions.shortcuts("com.termux"))
+        assertEquals(emptyList<Pair<String, AppShortcut>>(), actions.allShortcuts())
         launcherApps.setHasShortcutHostPermission(true)
+        assertEquals(emptyList<Pair<String, AppShortcut>>(), actions.allShortcuts())
         assertTrue(actions.canReadShortcuts())
         // Robolectric cannot answer manifest-shortcut queries; a failing query is an empty menu, not a crash.
         assertEquals(emptyList<AppShortcut>(), actions.shortcuts("com.termux"))

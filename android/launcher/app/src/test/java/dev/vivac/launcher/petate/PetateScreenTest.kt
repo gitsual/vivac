@@ -150,4 +150,17 @@ class PetateScreenTest {
         compose.onNodeWithText("Buscar en la tienda").performClick()
         assertEquals(listOf("web:mapas", "store:mapas"), asked)
     }
+
+    @Test
+    fun `a search lists the shortcuts it matches, and a tap opens one`() {
+        val opened = mutableListOf<FoundShortcut>()
+        val chat = FoundShortcut(maps, AppShortcut("home", "Ir a casa"))
+        compose.setContent {
+            PetateScreen(listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {}, shortcuts = listOf(chat), onOpenShortcut = { opened += it })
+        }
+        compose.onNodeWithText("ATAJOS").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("casa")
+        compose.onNodeWithText("Ir a casa").performClick()
+        assertEquals(listOf(chat), opened)
+    }
 }

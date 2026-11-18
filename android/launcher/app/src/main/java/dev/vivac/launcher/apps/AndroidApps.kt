@@ -63,6 +63,14 @@ class AppActions(private val context: Context) : Actions {
         return ordered(runCatching { launcherApps.getShortcuts(query, Process.myUserHandle()).orEmpty() }.getOrDefault(emptyList()))
     }
 
+    override fun allShortcuts(): List<Pair<String, AppShortcut>> {
+        if (!canReadShortcuts()) return emptyList()
+        val query = LauncherApps.ShortcutQuery()
+            .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST)
+        val all = runCatching { launcherApps.getShortcuts(query, Process.myUserHandle()).orEmpty() }.getOrDefault(emptyList())
+        return all.groupBy { it.`package` }.flatMap { (pkg, list) -> ordered(list).map { pkg to it } }
+    }
+
     companion object {
         const val REQ_HOME = 7003
         const val REQ_BACKUP = 7004

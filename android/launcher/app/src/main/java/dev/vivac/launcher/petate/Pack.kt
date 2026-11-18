@@ -5,6 +5,9 @@ import java.text.Collator
 import java.text.Normalizer
 import java.util.Locale
 
+/** An app's shortcut, as the Petate's search finds it. */
+data class FoundShortcut(val app: InstalledApp, val shortcut: AppShortcut)
+
 /** The Petate's three shelves, in the order they are shown. */
 enum class Group(val title: String, val caption: String) {
     INFRA("Infra", "control del campamento"),
@@ -63,7 +66,34 @@ object Pack {
     fun search(apps: List<InstalledApp>, query: String): List<InstalledApp> {
         val needle = fold(query.trim())
         if (needle.isEmpty()) return apps
-        return apps.filter { fold(it.label).contains(needle) || initials(it.label).startsWith(needle) }
+        val exact = apps.filter { fold(it.label).contains(needle) || initials(it.label).startsWith(needle) }
+        if (exact.isNotEmpty()) return exact
+        // Nothing matches as typed: allow a slip (one letter, two for long words) on searches of five letters or more.
+        if (needle.length < 5) return emptyList()
+        val slips = if (needle.length >= 8) 2 else 1
+        return apps.filter { app -> fold(app.label).split(' ').any { word -> near(needle, word, slips) } }
+    }
+
+    /** The app shortcuts whose own name holds [query]. */
+    fun searchShortcuts(shortcuts: List<FoundShortcut>, query: String): List<FoundShortcut> {
+        val needle = fold(query.trim())
+        if (needle.isEmpty()) return emptyList()
+        return shortcuts.filter { fold(it.shortcut.label).contains(needle) }
+    }
+
+    /** [needle] is within [slips] edits (a swap counts as one) of how [word] starts. */
+    private fun near(needle: String, word: String, slips: Int): Boolean =
+        (needle.length - 1..needle.length + 1).any { n -> n in 1..word.length && distance(needle, word.take(n)) <= slips }
+
+    /** Optimal string alignment distance: insertions, deletions, substitutions and swaps of neighbours. */
+    private fun distance(a: String, b: String): Int {
+        val d = Array(a.length + 1) { i -> IntArray(b.length + 1) { j -> if (i == 0) j else if (j == 0) i else 0 } }
+        for (i in 1..a.length) for (j in 1..b.length) {
+            val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+            d[i][j] = minOf(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+            if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) d[i][j] = minOf(d[i][j], d[i - 2][j - 2] + 1)
+        }
+        return d[a.length][b.length]
     }
 
     /** First letter of each word, plus every inner capital: "KeePassDX" gives "kpdx". */

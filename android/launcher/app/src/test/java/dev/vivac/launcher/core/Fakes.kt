@@ -41,6 +41,8 @@ class FakeActions : Actions {
     override fun isHome() = home
     override fun askToBeHome() { calls += "askHome" }
     override fun backUp() { calls += "backup" }
+    var allShortcuts = listOf<Pair<String, AppShortcut>>()
+    override fun allShortcuts() = allShortcuts
     override fun pickBackup() { calls += "restore" }
     override fun webSearch(query: String) { calls += "web:$query" }
     override fun storeSearch(query: String) { calls += "store:$query" }

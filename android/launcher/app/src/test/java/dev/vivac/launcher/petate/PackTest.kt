@@ -126,4 +126,27 @@ class PackTest {
         assertEquals(listOf(termux, settings), Pack.visible(apps, hidden = setOf("com.whatsapp"), showHidden = false))
         assertEquals(listOf(whatsapp), Pack.visible(apps, hidden = setOf("com.whatsapp"), showHidden = true))
     }
+
+    @Test
+    fun `a slip of the finger still finds the app, exact matches first, short words must be exact`() {
+        val all = listOf(termux, tailscale, whatsapp, maps, settings)
+        assertEquals(listOf(tailscale), Pack.search(all, "tialscale"))
+        assertEquals(listOf(maps), Pack.search(all, "organci"))
+        assertEquals(listOf(whatsapp), Pack.search(all, "whatsap"))
+        assertEquals(listOf(termux), Pack.search(all, "trmux"))
+        assertEquals(emptyList<InstalledApp>(), Pack.search(all, "tmx"))
+        assertEquals(listOf(maps), Pack.search(all, "maps"))
+        assertEquals(emptyList<InstalledApp>(), Pack.search(all, "mapz"))
+        // A real match beats a near one: "termux" does not drag in anything that is one letter off.
+        assertEquals(listOf(termux), Pack.search(listOf(tailscale, termux), "termux"))
+    }
+
+    @Test
+    fun `shortcuts are found by their own name, never with an empty search`() {
+        val chat = FoundShortcut(whatsapp, AppShortcut("new", "Nuevo chat"))
+        val camera = FoundShortcut(whatsapp, AppShortcut("cam", "Cámara"))
+        assertEquals(listOf(chat), Pack.searchShortcuts(listOf(chat, camera), "chat"))
+        assertEquals(listOf(camera), Pack.searchShortcuts(listOf(chat, camera), "camara"))
+        assertEquals(emptyList<FoundShortcut>(), Pack.searchShortcuts(listOf(chat, camera), " "))
+    }
 }

@@ -14,6 +14,7 @@ import dev.vivac.launcher.campamento.Shelved
 import dev.vivac.launcher.campamento.WidgetBoard
 import dev.vivac.launcher.petate.AppMenu
 import dev.vivac.launcher.petate.AppShortcut
+import dev.vivac.launcher.petate.FoundShortcut
 import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
 
@@ -121,7 +122,17 @@ class Launcher(
     fun shownDock(): List<String> =
         Dock.pick(visibleApps().map { it.packageName }.toSet(), home.dock, home.dockChosen).filterIsInstance<DockSlot.App>().map { it.packageName }
 
+    /** The shortcuts the Petate's search looks through, gathered each time it opens. */
+    var petateShortcuts by mutableStateOf(emptyList<FoundShortcut>()); private set
+
+    fun openShortcutFromPetate(found: FoundShortcut) {
+        actions.openShortcut(found.app.packageName, found.shortcut.id)
+        screen = Screen.CAMPAMENTO
+    }
+
     fun openPetate(search: Boolean) {
+        val visible = visibleApps().associateBy { it.packageName }
+        petateShortcuts = actions.allShortcuts().mapNotNull { (pkg, s) -> visible[pkg]?.let { FoundShortcut(it, s) } }
         focusSearch = search
         screen = Screen.PETATE
     }

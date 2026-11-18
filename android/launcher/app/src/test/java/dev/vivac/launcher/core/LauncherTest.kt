@@ -539,6 +539,19 @@ class LauncherTest {
     }
 
     @Test
+    fun `opening the petate gathers the shortcuts of visible apps for its search, and one opens from there`() {
+        actions.allShortcuts = listOf("org.thoughtcrime.securesms" to AppShortcut("chat", "Nuevo chat"), "gone.app" to AppShortcut("x", "X"))
+        store.values["hidden"] = "app.organicmaps"
+        actions.allShortcuts = actions.allShortcuts + ("app.organicmaps" to AppShortcut("home", "Casa"))
+        val l = many()
+        l.openPetate(false)
+        assertEquals(listOf("Nuevo chat"), l.petateShortcuts.map { it.shortcut.label })
+        l.openShortcutFromPetate(l.petateShortcuts.single())
+        assertEquals("shortcut:org.thoughtcrime.securesms/chat", actions.calls.last())
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

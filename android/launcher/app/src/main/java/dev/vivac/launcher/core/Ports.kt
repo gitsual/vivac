@@ -15,6 +15,8 @@ interface Actions {
     fun info(packageName: String)
     fun uninstall(packageName: String)
     fun shortcuts(packageName: String): List<AppShortcut>
+    /** Every app's shortcuts, by package, for the Petate's search (empty unless vivac is the home app). */
+    fun allShortcuts(): List<Pair<String, AppShortcut>>
     /** Android only shares app shortcuts with the default launcher. */
     fun canReadShortcuts(): Boolean
     fun openShortcut(packageName: String, id: String)

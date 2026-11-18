@@ -87,6 +87,8 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     onCopy = actions::copy,
                     onWebSearch = actions::webSearch,
                     onStoreSearch = actions::storeSearch,
+                    shortcuts = launcher.petateShortcuts,
+                    onOpenShortcut = launcher::openShortcutFromPetate,
                     modifier = Modifier.graphicsLayer { alpha = if (lifted) 0f else 1f },
                 )
             }

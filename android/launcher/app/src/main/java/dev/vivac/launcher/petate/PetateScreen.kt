@@ -50,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -94,6 +95,8 @@ fun PetateScreen(
     onCopy: (String) -> Unit = {},
     onWebSearch: (String) -> Unit = {},
     onStoreSearch: (String) -> Unit = {},
+    shortcuts: List<FoundShortcut> = emptyList(),
+    onOpenShortcut: (FoundShortcut) -> Unit = {},
 ) {
     // Holding an app and moving lifts it out of the petate, to be carried onto the camp.
     val carry: @Composable (InstalledApp, Color) -> Modifier? = { app, tone ->
@@ -136,6 +139,8 @@ fun PetateScreen(
                 if (recent.isNotEmpty() && query.isBlank() && !showHidden) LastPitch(recent, onOpenApp, onAppMenu, carry)
                 val answer = remember(query) { Calc.answer(query) }
                 if (answer != null) Answer(answer) { onCopy(answer) }
+                val foundShortcuts = remember(query, shortcuts) { Pack.searchShortcuts(shortcuts, query).take(4) }
+                if (foundShortcuts.isNotEmpty()) ShortcutResults(foundShortcuts, onOpenShortcut)
                 if (query.isNotBlank()) {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Chip("Buscar en la web", false) { onWebSearch(query.trim()) }
@@ -176,6 +181,35 @@ fun PetateScreen(
                 Altimeter(jumps.keys, letter) { ch ->
                     letter = ch
                     jumps[ch]?.let { scope.launch { grid.scrollToItem(it) } }
+                }
+            }
+        }
+    }
+}
+
+/** Shortcuts whose name matches the search: the app's glyph, what it does, and whose it is. */
+@Composable
+private fun ShortcutResults(found: List<FoundShortcut>, onOpen: (FoundShortcut) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("ATAJOS", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.semantics { heading() })
+        found.forEach { f ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Ink.surface)
+                    .clickable(role = Role.Button, onClick = { onOpen(f) })
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(Ink.raised), contentAlignment = Alignment.Center) {
+                    AppFace(f.app, Ink.tileTones[Pack.toneIndex(f.app, Ink.tileTones.size)])
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(f.shortcut.label, style = Type.body)
+                    Text(f.app.label, style = Type.small)
                 }
             }
         }
