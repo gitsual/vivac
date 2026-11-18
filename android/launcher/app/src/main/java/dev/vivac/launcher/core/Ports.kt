@@ -34,6 +34,12 @@ interface Actions {
     fun systemPage(page: SystemPage)
     /** Switches the torch; false when the phone will not (no flash, or the camera is in use). */
     fun torch(on: Boolean): Boolean
+    /** Whether the screen turns with the phone. */
+    fun autoRotate(): Boolean
+    /** Turns auto-rotation on or off; false when you have not let vivac change system settings. */
+    fun setAutoRotate(on: Boolean): Boolean
+    /** Android's page for one app's notifications. */
+    fun notificationSettings(packageName: String)
     fun securityUpdates()
     /** A short message on screen (a toast in production). */
     fun say(text: String)
@@ -73,6 +79,10 @@ interface Notices {
     fun dismissAll()
     /** Answers a notice that takes a written reply; false when it could not. */
     fun reply(key: String, text: String): Boolean
+    /** Whether Do Not Disturb is on. */
+    fun quiet(): Boolean
+    /** Turns Do Not Disturb on (priority only) or off; false without notification access. */
+    fun setQuiet(on: Boolean): Boolean
 }
 
 /** Android's settings pages vivac's settings hub opens, with how the hub names them. */
@@ -91,11 +101,23 @@ enum class SystemPage(val title: String, val detail: String) {
     TELEFONO("Información del teléfono", "Modelo, versión, actualizaciones"),
     TODO("Todos los ajustes de Android", "La app de Ajustes, entera"),
     VOLUMEN("Volumen", "El panel de volumen de Android"),
+    WIFI("Wi-Fi", "El panel de Wi-Fi de Android"),
+    DATOS("Datos móviles", "La red móvil"),
+    AVION("Modo avión", "Redes e internet"),
+    ALARMAS("Alarmas", "Las alarmas del reloj"),
+    AHORRO("Ahorro de batería", "Cuándo se activa"),
+    PRIVACIDAD("Micrófono y cámara", "Los controles de privacidad"),
+    ENVIAR("Enviar pantalla", "A una tele o un altavoz"),
+    COMPARTIR("Compartir internet", "Punto de acceso y anclaje"),
+    NFC("NFC", "El panel de NFC de Android"),
+    TEMA("Tema oscuro", "Cuándo se oscurece el teléfono"),
+    LUZ("Luz nocturna", "Menos azul por la noche"),
+    PERMISO_AJUSTES("Cambiar ajustes del sistema", "El permiso que vivac necesita para girar la pantalla"),
     ;
 
     companion object {
-        /** The hub's list, in order: everything but the small panels the shade opens. */
-        val hub: List<SystemPage> get() = entries - VOLUMEN
+        /** The hub's list, in order; the rest are pages the shade's switches open. */
+        val hub: List<SystemPage> = listOf(INTERNET, BLUETOOTH, PANTALLA, SONIDO, BATERIA, NOTIFICACIONES, APPS, ALMACENAMIENTO, SEGURIDAD, UBICACION, SISTEMA, TELEFONO, TODO)
     }
 }
 

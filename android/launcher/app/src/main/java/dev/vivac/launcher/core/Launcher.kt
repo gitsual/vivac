@@ -268,6 +268,73 @@ class Launcher(
 
     var torch by mutableStateOf(false); private set
 
+    /** The shade's quick switches, in your order. */
+    var quick by mutableStateOf(dev.vivac.launcher.avisos.QuickTiles.decode(store.get(KEY_QUICK))); private set
+    /** Changing which switches the shade has, and their order. */
+    var editingQuick by mutableStateOf(false); private set
+    /** Choosing apps to have as switches. */
+    var pickingQuickApps by mutableStateOf(false); private set
+    var quiet by mutableStateOf(notices?.quiet() ?: false); private set
+    var rotation by mutableStateOf(actions.autoRotate()); private set
+
+    /** What a quick switch does: switches the torch, quiet or rotation itself; anything else opens Android's page for it, or the app. */
+    fun runQuick(q: dev.vivac.launcher.avisos.Quick) {
+        val c = when (q) {
+            is dev.vivac.launcher.avisos.Quick.App -> return openApp(q.packageName).also { screen = Screen.CAMPAMENTO }
+            is dev.vivac.launcher.avisos.Quick.Of -> q.control
+        }
+        when (c) {
+            dev.vivac.launcher.avisos.Control.LINTERNA -> toggleTorch()
+            dev.vivac.launcher.avisos.Control.NO_MOLESTAR -> {
+                if (notices?.setQuiet(!quiet) == true) quiet = !quiet else actions.say("No molestar necesita el acceso a las notificaciones.")
+            }
+            dev.vivac.launcher.avisos.Control.ROTACION -> {
+                if (actions.setAutoRotate(!rotation)) rotation = !rotation
+                else {
+                    actions.say("Para girar la pantalla desde aquí, deja que vivac cambie ajustes del sistema.")
+                    actions.systemPage(SystemPage.PERMISO_AJUSTES)
+                }
+            }
+            dev.vivac.launcher.avisos.Control.GRABAR, dev.vivac.launcher.avisos.Control.ANDROID -> openAndroidShade()
+            dev.vivac.launcher.avisos.Control.AJUSTES -> openSystem()
+            else -> actions.systemPage(PAGE_OF.getValue(c))
+        }
+    }
+
+    /** Whether a switch shows as on: only the ones vivac itself switches have a state. */
+    fun isOn(q: dev.vivac.launcher.avisos.Quick): Boolean = when ((q as? dev.vivac.launcher.avisos.Quick.Of)?.control) {
+        dev.vivac.launcher.avisos.Control.LINTERNA -> torch
+        dev.vivac.launcher.avisos.Control.NO_MOLESTAR -> quiet
+        dev.vivac.launcher.avisos.Control.ROTACION -> rotation
+        else -> false
+    }
+
+    fun toggleQuickEditing() { editingQuick = !editingQuick }
+    fun addQuick(q: dev.vivac.launcher.avisos.Quick) = saveQuick(dev.vivac.launcher.avisos.QuickTiles.add(quick, q))
+    fun removeQuick(q: dev.vivac.launcher.avisos.Quick) = saveQuick(dev.vivac.launcher.avisos.QuickTiles.remove(quick, q))
+    fun moveQuick(q: dev.vivac.launcher.avisos.Quick, delta: Int) = saveQuick(dev.vivac.launcher.avisos.QuickTiles.move(quick, q, delta))
+    fun openQuickApps() { pickingQuickApps = true }
+    fun closeQuickApps() { pickingQuickApps = false }
+
+    /** An app is a switch in the shade, or stops being one. */
+    fun toggleQuickApp(packageName: String) {
+        val q = dev.vivac.launcher.avisos.Quick.App(packageName)
+        saveQuick(if (q in quick) dev.vivac.launcher.avisos.QuickTiles.remove(quick, q) else dev.vivac.launcher.avisos.QuickTiles.add(quick, q))
+    }
+
+    private fun saveQuick(next: List<dev.vivac.launcher.avisos.Quick>) {
+        quick = next
+        store.put(mapOf(KEY_QUICK to dev.vivac.launcher.avisos.QuickTiles.encode(next)))
+    }
+
+    /** Clears every one of an app's notices that can be cleared. */
+    fun dismissApp(packageName: String) {
+        val n = notices ?: return
+        n.live.value.filter { it.packageName == packageName && it.clearable }.forEach { n.dismiss(it.key) }
+    }
+
+    fun noticeSettings(packageName: String) = actions.notificationSettings(packageName)
+
     fun toggleTorch() {
         if (actions.torch(!torch)) torch = !torch else actions.say("La linterna no se puede encender ahora.")
     }
@@ -394,6 +461,7 @@ class Launcher(
     /** Back: from the Petate to the camp. False when there was nowhere to go back to. */
     fun back(): Boolean {
         if (editing != null) { editing = null; return true }
+        if (editingQuick) { editingQuick = false; return true }
         if (screen == Screen.CAMPAMENTO) return false
         screen = Screen.CAMPAMENTO
         return true
@@ -752,6 +820,26 @@ class Launcher(
         const val KEY_SWIPE_DOWN = "swipeDown"
         const val KEY_SWIPE_UP_APP = "swipeUpApp"
         const val KEY_SWIPE_DOWN_APP = "swipeDownApp"
+        const val KEY_QUICK = "quick"
+
+        /** The Android page each quick switch opens, for the ones vivac cannot switch itself. */
+        private val PAGE_OF = mapOf(
+            dev.vivac.launcher.avisos.Control.WIFI to SystemPage.WIFI,
+            dev.vivac.launcher.avisos.Control.BLUETOOTH to SystemPage.BLUETOOTH,
+            dev.vivac.launcher.avisos.Control.DATOS to SystemPage.DATOS,
+            dev.vivac.launcher.avisos.Control.AVION to SystemPage.AVION,
+            dev.vivac.launcher.avisos.Control.ALARMA to SystemPage.ALARMAS,
+            dev.vivac.launcher.avisos.Control.AHORRO to SystemPage.AHORRO,
+            dev.vivac.launcher.avisos.Control.MICRO to SystemPage.PRIVACIDAD,
+            dev.vivac.launcher.avisos.Control.CAMARA to SystemPage.PRIVACIDAD,
+            dev.vivac.launcher.avisos.Control.UBICACION to SystemPage.UBICACION,
+            dev.vivac.launcher.avisos.Control.ENVIAR to SystemPage.ENVIAR,
+            dev.vivac.launcher.avisos.Control.COMPARTIR to SystemPage.COMPARTIR,
+            dev.vivac.launcher.avisos.Control.VOLUMEN to SystemPage.VOLUMEN,
+            dev.vivac.launcher.avisos.Control.NFC to SystemPage.NFC,
+            dev.vivac.launcher.avisos.Control.TEMA to SystemPage.TEMA,
+            dev.vivac.launcher.avisos.Control.LUZ to SystemPage.LUZ,
+        )
         const val KEY_ICONS = "icons"
         const val KEY_CONTACTS = "searchContacts"
         const val KEY_CALENDAR = "searchCalendar"

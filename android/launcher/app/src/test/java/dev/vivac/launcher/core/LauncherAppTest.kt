@@ -29,6 +29,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
@@ -44,7 +45,10 @@ import dev.vivac.launcher.campamento.PhoneFacts
 import dev.vivac.launcher.petate.AppShortcut
 import dev.vivac.launcher.widgets.Grip
 import dev.vivac.launcher.widgets.WidgetOption
+import dev.vivac.launcher.avisos.Control
+import dev.vivac.launcher.avisos.Quick
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -850,13 +854,54 @@ class LauncherAppTest {
     fun `tapping a notice opens it and the shade's switches reach the phone`() {
         val notices = withNotices(aviso("a", "Ana"))
         compose.onNodeWithContentDescription("Linterna").performClick()
-        compose.onNodeWithContentDescription("Volumen").performClick()
-        compose.onNodeWithContentDescription("Android").performClick()
-        compose.onNodeWithTag("aviso:a").performClick()
+        compose.onNodeWithContentDescription("Linterna, activado").assertExists()
+        compose.onNodeWithContentDescription("Wi-Fi").performClick()
+        // Two rows show; the rest unfold.
+        compose.onNodeWithContentDescription("Volumen").assertDoesNotExist()
+        compose.onNodeWithText("Ver los 18").performClick()
+        compose.onNodeWithContentDescription("Cortina de Android").performScrollTo().performClick()
+        compose.onNodeWithTag("aviso:a").performScrollTo().performClick()
         compose.waitForIdle()
         assertEquals(listOf("open:a"), notices.calls)
         assertEquals(Screen.CAMPAMENTO, launcher.screen)
-        assertTrue(actions.calls.containsAll(listOf("torch:true", "page:VOLUMEN", "notifications")))
+        assertTrue(actions.calls.containsAll(listOf("torch:true", "page:WIFI", "notifications")))
+    }
+
+    @Test
+    fun `the shade's switches are edited in place, taken out, moved, added, apps too`() {
+        withNotices()
+        compose.onNodeWithText("Editar").performClick()
+        compose.onNodeWithContentDescription("Wi-Fi").performClick()
+        compose.onNodeWithContentDescription("Mover después").performClick()
+        compose.waitForIdle()
+        assertEquals(Quick.Of(Control.WIFI), launcher.quick[1])
+        compose.onNodeWithText("Quitar").performClick()
+        compose.onNodeWithContentDescription("Añadir NFC").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Añadir Apps").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("ATAJOS DE LA CORTINA").assertExists()
+        compose.onNodeWithTag("adder:com.termux").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Termux, en la cortina").assertExists()
+        compose.runOnUiThread { launcher.closeQuickApps() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Hecho").performScrollTo().performClick()
+        compose.waitForIdle()
+        assertFalse(launcher.editingQuick)
+        assertFalse(Quick.Of(Control.WIFI) in launcher.quick)
+        assertEquals(listOf(Quick.Of(Control.NFC), Quick.App("com.termux")), launcher.quick.takeLast(2))
+    }
+
+    @Test
+    fun `a notice swiped away goes, an app's notices go together, and its notification settings open`() {
+        val notices = withNotices(aviso("a", "Ana"), aviso("b", "Bea", minutesAgo = 1), aviso("c", "Ruta", pkg = "app.organicmaps", minutesAgo = 5))
+        compose.onNodeWithTag("swipe:c").performScrollTo().performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Ajustes de los avisos de Termux").performScrollTo().performClick()
+        assertEquals("noticeSettings:com.termux", actions.calls.last())
+        compose.onNodeWithContentDescription("Descartar los de Termux").performScrollTo().performClick()
+        compose.waitForIdle()
+        assertEquals(listOf("dismiss:c", "dismiss:a", "dismiss:b"), notices.calls)
     }
 
     @Test

@@ -81,6 +81,13 @@ class DotsListener : NotificationListenerService() {
 
     internal fun dismissAll() { runCatching { cancelAllNotifications() } }
 
+    internal fun quiet(): Boolean = runCatching { currentInterruptionFilter }.getOrDefault(INTERRUPTION_FILTER_ALL).let {
+        it != INTERRUPTION_FILTER_ALL && it != INTERRUPTION_FILTER_UNKNOWN
+    }
+
+    internal fun setQuiet(on: Boolean): Boolean =
+        runCatching { requestInterruptionFilter(if (on) INTERRUPTION_FILTER_PRIORITY else INTERRUPTION_FILTER_ALL) }.isSuccess
+
     internal fun reply(key: String, text: String): Boolean {
         val action = shown[key]?.notification?.let(::replyAction) ?: return false
         val inputs = action.remoteInputs ?: return false
@@ -118,4 +125,6 @@ object AndroidNotices : Notices {
     override fun dismiss(key: String) { DotsListener.connected?.dismiss(key) }
     override fun dismissAll() { DotsListener.connected?.dismissAll() }
     override fun reply(key: String, text: String): Boolean = DotsListener.connected?.reply(key, text) ?: false
+    override fun quiet(): Boolean = DotsListener.connected?.quiet() ?: false
+    override fun setQuiet(on: Boolean): Boolean = DotsListener.connected?.setQuiet(on) ?: false
 }

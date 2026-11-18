@@ -63,8 +63,12 @@ class DotsListenerTest {
         AndroidNotices.open("nope")
         AndroidNotices.dismiss(ana.key)
         AndroidNotices.dismissAll()
+        assertEquals(true, AndroidNotices.setQuiet(true))
+        AndroidNotices.quiet()
         service.onListenerDisconnected()
         assertEquals(emptyList<dev.vivac.launcher.avisos.Aviso>(), AndroidNotices.live.value)
+        assertEquals(false, AndroidNotices.quiet())
+        assertEquals(false, AndroidNotices.setQuiet(true))
         // Without a connected listener the shade's buttons do nothing.
         AndroidNotices.open("x"); AndroidNotices.dismiss("x"); AndroidNotices.dismissAll()
         assertEquals(false, AndroidNotices.reply("x", "y"))

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,7 +45,6 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.vivac.launcher.apps.AppFace
 import dev.vivac.launcher.apps.InstalledApp
-import dev.vivac.launcher.core.SystemPage
 import dev.vivac.launcher.theme.Brand
 import dev.vivac.launcher.theme.Contours
 import dev.vivac.launcher.theme.Glyph
@@ -58,19 +58,40 @@ data class AvisosActions(
     val dismiss: (String) -> Unit = {},
     val dismissAll: () -> Unit = {},
     val reply: (String, String) -> Unit = { _, _ -> },
-    val page: (SystemPage) -> Unit = {},
-    val torch: () -> Unit = {},
-    val system: () -> Unit = {},
-    val androidShade: () -> Unit = {},
+    /** A quick switch tapped. */
+    val run: (Quick) -> Unit = {},
+    /** Into or out of changing the quick switches. */
+    val edit: () -> Unit = {},
+    val add: (Quick) -> Unit = {},
+    val remove: (Quick) -> Unit = {},
+    val move: (Quick, Int) -> Unit = { _, _ -> },
+    /** Choose apps to have as switches. */
+    val pickApps: () -> Unit = {},
+    /** Clears all of an app's notices. */
+    val dismissApp: (String) -> Unit = {},
+    /** Android's page for an app's notifications. */
+    val noticeSettings: (String) -> Unit = {},
     val close: () -> Unit = {},
 )
 
+/** How many switches show before "Ver todos". */
+private const val FOLDED = 8
+
 /**
- * vivac's own notification shade: a row of quick switches, then every app's notices in a card, newest first. A
- * notice opens with a tap, goes with its cross, and a chat's can be answered right here.
+ * vivac's own notification shade: your quick switches (two rows, or all of them; editable), then every app's
+ * notices in a card, newest first. A notice opens with a tap and goes with a swipe or its cross; a chat's can be
+ * answered right here.
  */
 @Composable
-fun AvisosScreen(avisos: List<Aviso>, apps: List<InstalledApp>, now: Long, torch: Boolean, act: AvisosActions) {
+fun AvisosScreen(
+    avisos: List<Aviso>,
+    apps: List<InstalledApp>,
+    now: Long,
+    quick: List<Quick>,
+    isOn: (Quick) -> Boolean,
+    editing: Boolean,
+    act: AvisosActions,
+) {
     val shelf = Avisos.shelf(avisos)
     val byPackage = apps.associateBy { it.packageName }
     Box(Modifier.fillMaxSize().background(Ink.deep)) {
@@ -84,29 +105,173 @@ fun AvisosScreen(avisos: List<Aviso>, apps: List<InstalledApp>, now: Long, torch
                 Pill("Cerrar", act.close)
             }
             Text("Avisos", style = Type.title.copy(fontSize = 44.sp, lineHeight = 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Quick(Glyph.WIFI, "Internet", false) { act.page(SystemPage.INTERNET) }
-                Quick(Glyph.VOLUME, "Volumen", false) { act.page(SystemPage.VOLUMEN) }
-                Quick(Glyph.TORCH, "Linterna", torch, act.torch)
-                Quick(Glyph.SLIDERS, "Ajustes", false, act.system)
-                Quick(Glyph.BELL, "Android", false, act.androidShade)
-            }
-            if (shelf.isEmpty()) {
-                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Text("Sin avisos. Todo en calma en el campamento.", style = Type.body.copy(color = Ink.textMuted), textAlign = TextAlign.Center)
-                }
-            } else {
-                LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(shelf, key = { it.packageName }) { group ->
-                        GroupCard(group, byPackage[group.packageName], now, act)
+            LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                item(key = "quick") { QuickSection(quick, byPackage, isOn, editing, act) }
+                if (shelf.isEmpty()) {
+                    item(key = "calm") {
+                        Text(
+                            "Sin avisos. Todo en calma en el campamento.",
+                            style = Type.body.copy(color = Ink.textMuted),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                        )
                     }
                 }
-                if (Avisos.anyClearable(avisos)) {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Pill("Borrar todo", act.dismissAll) }
+                items(shelf, key = { it.packageName }) { group ->
+                    GroupCard(group, byPackage[group.packageName], now, act)
+                }
+            }
+            if (Avisos.anyClearable(avisos)) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Pill("Borrar todo", act.dismissAll) }
+            }
+        }
+    }
+}
+
+/**
+ * The quick switches, four to a row. Folded to two rows until "Ver todos". Editing, a tapped switch is chosen to
+ * move or take out, and the ones not in the shade (and apps) wait below to be added.
+ */
+@Composable
+private fun QuickSection(quick: List<Quick>, byPackage: Map<String, InstalledApp>, isOn: (Quick) -> Boolean, editing: Boolean, act: AvisosActions) {
+    var unfolded by remember { mutableStateOf(false) }
+    var chosen by remember { mutableStateOf<Quick?>(null) }
+    // A switch whose app is gone is not shown.
+    val present = quick.filter { it !is Quick.App || it.packageName in byPackage }
+    val shown = if (editing || unfolded) present else present.take(FOLDED)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("ATAJOS", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.weight(1f))
+            Small(if (editing) "Hecho" else "Editar") { chosen = null; act.edit() }
+        }
+        shown.chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth()) {
+                row.forEach { q ->
+                    QuickTile(q, byPackage, on = isOn(q), chosen = editing && chosen == q, Modifier.weight(1f)) {
+                        if (editing) chosen = if (chosen == q) null else q else act.run(q)
+                    }
+                }
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        if (!editing && present.size > FOLDED) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Small(if (unfolded) "Ver menos" else "Ver los ${present.size}") { unfolded = !unfolded }
+            }
+        }
+        if (editing) {
+            val q = chosen
+            if (q != null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Round(BACK, "Mover antes") { act.move(q, -1) }
+                    Pill("Quitar") { act.remove(q); chosen = null }
+                    Round(Glyph.ARROW, "Mover después") { act.move(q, +1) }
+                }
+            } else {
+                Text("Toca un atajo para moverlo o quitarlo.", style = Type.small)
+            }
+            Text("AÑADIR", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.padding(top = 6.dp))
+            val extra: List<Quick?> = QuickTiles.available(quick).map { Quick.Of(it) } + null
+            extra.chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth()) {
+                    row.forEach { q ->
+                        if (q == null) AddTile("Apps", Glyph.PLUS, Modifier.weight(1f), act.pickApps)
+                        else AddTile((q as Quick.Of).control.title, glyphOf(q.control), Modifier.weight(1f)) { act.add(q) }
+                    }
+                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
     }
+}
+
+/** A quick switch: a round button, coral when on (or chosen to edit), its name under it. */
+@Composable
+private fun QuickTile(q: Quick, byPackage: Map<String, InstalledApp>, on: Boolean, chosen: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val label = when (q) {
+        is Quick.Of -> q.control.title
+        is Quick.App -> byPackage[q.packageName]?.label ?: q.packageName
+    }
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = if (on) "$label, activado" else label }
+            .testTag("quick:$label")
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(if (on) Ink.primary else Ink.raised)
+                .border(if (chosen) 2.dp else 1.dp, if (on || chosen) Ink.primary else Ink.field, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            when (q) {
+                is Quick.Of -> LineIcon(glyphOf(q.control), if (on) Ink.onPrimary else Ink.text, 24.dp)
+                is Quick.App -> byPackage[q.packageName]?.let { Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) { AppFace(it, Ink.text) } }
+            }
+        }
+        Text(label, style = Type.cota.copy(fontSize = 10.sp), maxLines = 2, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 2.dp))
+    }
+}
+
+/** A switch that can be added: dashed-looking, with a plus. */
+@Composable
+private fun AddTile(label: String, glyph: String, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(role = Role.Button, onClickLabel = "Añadir", onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = "Añadir $label" }
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(56.dp).clip(CircleShape).border(1.dp, Ink.borderControl, CircleShape), contentAlignment = Alignment.Center) {
+            LineIcon(glyph, Ink.textMuted, 22.dp)
+        }
+        Text(label, style = Type.cota.copy(fontSize = 10.sp), maxLines = 2, textAlign = TextAlign.Center)
+    }
+}
+
+@Composable
+private fun Small(text: String, onClick: () -> Unit) {
+    Text(
+        text,
+        style = Type.small.copy(color = Ink.accentText),
+        modifier = Modifier.clip(RoundedCornerShape(999.dp)).clickable(role = Role.Button, onClick = onClick).padding(horizontal = 10.dp, vertical = 8.dp),
+    )
+}
+
+private const val BACK = "M19 12H5M11 6l-6 6 6 6"
+
+/** Each control's line glyph, drawn on vivac's 24-unit grid. */
+internal fun glyphOf(c: Control): String = when (c) {
+    Control.WIFI -> Glyph.WIFI
+    Control.BLUETOOTH -> "M7 7l10 10-5 5V2l5 5L7 17"
+    Control.DATOS -> "M4 20v-3 M9 20v-7 M14 20v-11 M19 20V4"
+    Control.AVION -> "M12 3c1 0 1.5 1 1.5 2v5l7 4v2l-7-2v4l2 1.5V21l-3.5-1-3.5 1v-1.5l2-1.5v-4l-7 2v-2l7-4V5c0-1 .5-2 1.5-2z"
+    Control.NO_MOLESTAR -> "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"
+    Control.LINTERNA -> Glyph.TORCH
+    Control.ROTACION -> "M4 12a8 8 0 0 1 14-5.3 M18 3v4h-4 M20 12a8 8 0 0 1-14 5.3 M6 21v-4h4"
+    Control.ALARMA -> "M12 9v4l2.5 1.5 M12 21a8 8 0 1 0 0-16a8 8 0 1 0 0 16z M4 5l3-2.5 M20 5l-3-2.5"
+    Control.GRABAR -> "M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16z M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z"
+    Control.AHORRO -> "M3 8h15v8H3z M21 11v2 M6 11h4"
+    Control.MICRO -> "M9 5a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0z M5 11a7 7 0 0 0 14 0 M12 18v3"
+    Control.CAMARA -> "M3 8h4l2-3h6l2 3h4v11H3z M12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 1 0 0-7z"
+    Control.UBICACION -> "M12 21s-6-6-6-11a6 6 0 0 1 12 0c0 5-6 11-6 11z M12 8a2 2 0 1 0 0 4a2 2 0 1 0 0-4z"
+    Control.ENVIAR -> "M3 7V5h18v14h-7 M3 11a8 8 0 0 1 8 8 M3 15a4 4 0 0 1 4 4 M3 19h.01"
+    Control.COMPARTIR -> "M12 12h.01 M8.5 15.5a5 5 0 0 1 0-7 M15.5 8.5a5 5 0 0 1 0 7 M5.5 18.5a9 9 0 0 1 0-13 M18.5 5.5a9 9 0 0 1 0 13"
+    Control.VOLUMEN -> Glyph.VOLUME
+    Control.AJUSTES -> Glyph.SLIDERS
+    Control.ANDROID -> Glyph.BELL
+    Control.NFC -> "M6 8a6 6 0 0 0 0 8 M9.5 5.5a10 10 0 0 1 0 13 M15 7v10 M15 7l4 10 M19 7v10"
+    Control.TEMA -> "M12 3a9 9 0 1 0 0 18z M12 3a9 9 0 0 1 0 18"
+    Control.LUZ -> "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z M12 2v2 M12 20v2 M4 12H2 M22 12h-2 M5 5l1.5 1.5 M17.5 17.5L19 19 M5 19l1.5-1.5 M17.5 6.5L19 5"
 }
 
 /** One app's notices: its glyph and name, then each notice. */
@@ -125,8 +290,13 @@ private fun GroupCard(group: AvisoGroup, app: InstalledApp?, now: Long, act: Avi
             Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) { app?.let { AppFace(it, Ink.primary) } }
             Text((app?.label ?: group.packageName).uppercase(), style = Type.cota.copy(fontSize = 11.sp), modifier = Modifier.weight(1f), maxLines = 1)
             Text(Avisos.ago(group.avisos.first().postedAt, now), style = Type.cota.copy(fontSize = 11.sp))
+            val name = app?.label ?: group.packageName
+            Round(Glyph.SLIDERS, "Ajustes de los avisos de $name") { act.noticeSettings(group.packageName) }
+            if (group.avisos.count { it.clearable } > 1) Round(Glyph.CLOSE, "Descartar los de $name") { act.dismissApp(group.packageName) }
         }
-        group.avisos.forEach { aviso -> Notice(aviso, act) }
+        group.avisos.forEach { aviso ->
+            if (aviso.clearable) Swiped(aviso.key, act.dismiss) { Notice(aviso, act) } else Notice(aviso, act)
+        }
     }
 }
 
@@ -183,22 +353,17 @@ private fun Notice(aviso: Aviso, act: AvisosActions) {
     }
 }
 
-/** A quick switch: a round button with its glyph, coral when on, and its name under it. */
+/** A notice that goes when swiped off either side. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun Quick(glyph: String, label: String, on: Boolean, onClick: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Box(
-            Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(if (on) Ink.primary else Ink.raised)
-                .border(1.dp, if (on) Ink.primary else Ink.field, CircleShape)
-                .clickable(role = Role.Button, onClick = onClick)
-                .semantics { contentDescription = label },
-            contentAlignment = Alignment.Center,
-        ) { LineIcon(glyph, if (on) Ink.onPrimary else Ink.text, 24.dp) }
-        Text(label, style = Type.cota.copy(fontSize = 10.sp))
-    }
+private fun Swiped(key: String, onDismiss: (String) -> Unit, content: @Composable () -> Unit) {
+    val state = androidx.compose.material3.rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value != androidx.compose.material3.SwipeToDismissBoxValue.Settled) onDismiss(key)
+            value != androidx.compose.material3.SwipeToDismissBoxValue.Settled
+        },
+    )
+    androidx.compose.material3.SwipeToDismissBox(state, backgroundContent = {}, modifier = Modifier.testTag("swipe:$key")) { content() }
 }
 
 @Composable

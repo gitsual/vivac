@@ -259,4 +259,20 @@ class AdaptersTest {
         assertEquals(true, actions.torch(true))
         assertEquals(true, shadowOf(cameras).getTorchMode("0"))
     }
+
+    @Test
+    fun `rotation changes only with permission to change settings, and an app's notification page opens`() {
+        val actions = AppActions(app)
+        // Whatever Android answers about the permission, vivac follows it.
+        val allowed = Settings.System.canWrite(app)
+        assertEquals(allowed, actions.setAutoRotate(true))
+        assertEquals(allowed, actions.autoRotate())
+        actions.notificationSettings("com.termux")
+        nextIntent()!!.let {
+            assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, it.action)
+            assertEquals("com.termux", it.getStringExtra(Settings.EXTRA_APP_PACKAGE))
+        }
+        actions.systemPage(dev.vivac.launcher.core.SystemPage.PERMISO_AJUSTES)
+        assertEquals("package:${app.packageName}", nextIntent()?.dataString)
+    }
 }

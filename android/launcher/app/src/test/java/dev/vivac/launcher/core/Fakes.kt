@@ -24,6 +24,10 @@ class FakeNotices(avisos: List<dev.vivac.launcher.avisos.Aviso> = emptyList()) :
     override fun dismiss(key: String) { calls += "dismiss:$key"; live.value = live.value.filterNot { it.key == key } }
     override fun dismissAll() { calls += "dismissAll"; live.value = live.value.filterNot { it.clearable } }
     override fun reply(key: String, text: String): Boolean { calls += "reply:$key:$text"; return replies }
+    var quietOn = false
+    var quietWorks = true
+    override fun quiet() = quietOn
+    override fun setQuiet(on: Boolean): Boolean { calls += "quiet:$on"; if (quietWorks) quietOn = on; return quietWorks }
 }
 
 /** Records every request vivac hands to Android, so tests can check what would have happened. */
@@ -45,6 +49,11 @@ class FakeActions : Actions {
     var torchWorks = true
     override fun systemPage(page: SystemPage) { calls += "page:${page.name}" }
     override fun torch(on: Boolean): Boolean { calls += "torch:$on"; return torchWorks }
+    var rotationOn = false
+    var canWriteSettings = true
+    override fun autoRotate() = rotationOn
+    override fun setAutoRotate(on: Boolean): Boolean { calls += "rotate:$on"; if (canWriteSettings) rotationOn = on; return canWriteSettings }
+    override fun notificationSettings(packageName: String) { calls += "noticeSettings:$packageName" }
     override fun securityUpdates() { calls += "about" }
     override fun say(text: String) { calls += "say:$text" }
     override fun copy(text: String) { calls += "copy:$text" }

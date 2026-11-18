@@ -139,13 +139,25 @@ fun FolderSheet(
     }
 }
 
-/** Picks the apps on a ladera: each tap puts an app there, or takes it off again; a search narrows the list. */
+/**
+ * Picks apps for a place (a ladera, the shade's switches): each tap puts an app there, or takes it off again; a
+ * search narrows the list. [chosenLabel] is how TalkBack says an app is already there.
+ */
 @Composable
-fun AddToLaderaSheet(page: Int, apps: List<InstalledApp>, here: Set<String>, onToggle: (String) -> Unit, onDismiss: () -> Unit) {
+fun PickAppsSheet(
+    heading: String,
+    title: String,
+    apps: List<InstalledApp>,
+    chosen: Set<String>,
+    chosenLabel: String,
+    onToggle: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val here = chosen
     var query by remember { mutableStateOf("") }
     Sheet(onDismiss) {
-        Text("AÑADIR A LA LADERA $page", style = Type.cota.copy(fontSize = 10.sp))
-        Text("Toca las apps que quieres aquí", style = Type.title.copy(fontSize = 24.sp, lineHeight = 28.sp), modifier = Modifier.semantics { heading() })
+        Text(heading, style = Type.cota.copy(fontSize = 10.sp))
+        Text(title, style = Type.title.copy(fontSize = 24.sp, lineHeight = 28.sp), modifier = Modifier.semantics { heading() })
         Row(
             Modifier
                 .fillMaxWidth()
@@ -176,7 +188,7 @@ fun AddToLaderaSheet(page: Int, apps: List<InstalledApp>, here: Set<String>, onT
                         .background(Ink.raised)
                         .border(if (on) 1.5.dp else 0.dp, if (on) Ink.primary else Ink.raised, RoundedCornerShape(16.dp))
                         .clickable(role = Role.Checkbox) { onToggle(app.packageName) }
-                        .semantics(mergeDescendants = true) { contentDescription = if (on) "${app.label}, en esta ladera" else app.label }
+                        .semantics(mergeDescendants = true) { contentDescription = if (on) "${app.label}, $chosenLabel" else app.label }
                         .testTag("adder:${app.packageName}")
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,

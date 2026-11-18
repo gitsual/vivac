@@ -145,11 +145,14 @@ fun LauncherApp(
                     avisos = avisos,
                     apps = launcher.apps,
                     now = System.currentTimeMillis(),
-                    torch = launcher.torch,
+                    quick = launcher.quick,
+                    isOn = launcher::isOn,
+                    editing = launcher.editingQuick,
                     act = dev.vivac.launcher.avisos.AvisosActions(
                         open = launcher::openAviso, dismiss = launcher::dismissAviso, dismissAll = launcher::dismissAllAvisos,
-                        reply = launcher::replyAviso, page = launcher::openSystemPage, torch = launcher::toggleTorch,
-                        system = launcher::openSystem, androidShade = launcher::openAndroidShade, close = { launcher.back() },
+                        reply = launcher::replyAviso, run = launcher::runQuick, edit = launcher::toggleQuickEditing,
+                        add = launcher::addQuick, remove = launcher::removeQuick, move = launcher::moveQuick, pickApps = launcher::openQuickApps,
+                        dismissApp = launcher::dismissApp, noticeSettings = launcher::noticeSettings, close = { launcher.back() },
                     ),
                 )
             }
@@ -219,12 +222,25 @@ fun LauncherApp(
         WidgetPickerSheet(options, onPick = launcher::addWidget, onDismiss = launcher::dismissPicker)
     }
     launcher.addingTo?.let { at ->
-        dev.vivac.launcher.campamento.AddToLaderaSheet(
-            page = at,
+        dev.vivac.launcher.campamento.PickAppsSheet(
+            heading = "AÑADIR A LA LADERA $at",
+            title = "Toca las apps que quieres aquí",
             apps = launcher.visibleApps(),
-            here = launcher.board.onPage(at).filterIsInstance<dev.vivac.launcher.campamento.Shelved>().map { it.packageName }.toSet(),
+            chosen = launcher.board.onPage(at).filterIsInstance<dev.vivac.launcher.campamento.Shelved>().map { it.packageName }.toSet(),
+            chosenLabel = "en esta ladera",
             onToggle = launcher::toggleOnLadera,
             onDismiss = launcher::closeAdder,
+        )
+    }
+    if (launcher.pickingQuickApps) {
+        dev.vivac.launcher.campamento.PickAppsSheet(
+            heading = "ATAJOS DE LA CORTINA",
+            title = "Toca las apps que quieres como atajo",
+            apps = launcher.visibleApps(),
+            chosen = launcher.quick.filterIsInstance<dev.vivac.launcher.avisos.Quick.App>().map { it.packageName }.toSet(),
+            chosenLabel = "en la cortina",
+            onToggle = launcher::toggleQuickApp,
+            onDismiss = launcher::closeQuickApps,
         )
     }
     launcher.folderPicker?.let { app ->

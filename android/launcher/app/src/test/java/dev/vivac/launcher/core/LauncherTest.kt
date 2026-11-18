@@ -9,6 +9,9 @@ import dev.vivac.launcher.campamento.Pinned
 import dev.vivac.launcher.petate.AppShortcut
 import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
+import dev.vivac.launcher.avisos.Control
+import dev.vivac.launcher.avisos.Quick
+import dev.vivac.launcher.avisos.QuickTiles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -884,5 +887,75 @@ class LauncherTest {
         assertEquals("say:La linterna no se puede encender ahora.", actions.calls.last())
         assertTrue(l.back())
         assertEquals(Screen.CAMPAMENTO, l.screen)
+    }
+
+    @Test
+    fun `each quick switch does its job, a page, the torch, quiet, rotation, Android's shade, vivac's settings, an app`() {
+        actions.dotsOn = true
+        val notices = FakeNotices()
+        val l = Launcher(source, store, actions, widgets, notices = notices).also { it.refresh() }
+        l.runQuick(Quick.Of(Control.WIFI))
+        l.runQuick(Quick.Of(Control.LINTERNA))
+        l.runQuick(Quick.Of(Control.GRABAR))
+        l.runQuick(Quick.Of(Control.ROTACION))
+        assertEquals(listOf("page:WIFI", "torch:true", "notifications", "rotate:true"), actions.calls)
+        assertTrue(l.isOn(Quick.Of(Control.LINTERNA)))
+        assertTrue(l.isOn(Quick.Of(Control.ROTACION)))
+        assertFalse(l.isOn(Quick.Of(Control.WIFI)))
+        l.runQuick(Quick.Of(Control.NO_MOLESTAR))
+        assertEquals(listOf("quiet:true"), notices.calls)
+        assertTrue(l.isOn(Quick.Of(Control.NO_MOLESTAR)))
+        l.runQuick(Quick.Of(Control.AJUSTES))
+        assertEquals(Screen.SISTEMA, l.screen)
+        l.runQuick(Quick.App("com.termux"))
+        assertEquals("open:com.termux", actions.calls.last())
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+    }
+
+    @Test
+    fun `rotation without permission to change settings asks for it, quiet without access says so`() {
+        actions.canWriteSettings = false
+        val notices = FakeNotices().also { it.quietWorks = false }
+        val l = Launcher(source, store, actions, widgets, notices = notices).also { it.refresh() }
+        l.runQuick(Quick.Of(Control.ROTACION))
+        assertEquals(listOf("rotate:true", "say:Para girar la pantalla desde aquí, deja que vivac cambie ajustes del sistema.", "page:PERMISO_AJUSTES"), actions.calls)
+        l.runQuick(Quick.Of(Control.NO_MOLESTAR))
+        assertEquals("say:No molestar necesita el acceso a las notificaciones.", actions.calls.last())
+        assertFalse(l.isOn(Quick.Of(Control.NO_MOLESTAR)))
+    }
+
+    @Test
+    fun `the shade's switches are added, taken out, moved and remembered, apps included`() {
+        val l = launcher()
+        assertEquals(QuickTiles.DEFAULT, l.quick)
+        l.removeQuick(Quick.Of(Control.WIFI))
+        l.addQuick(Quick.Of(Control.NFC))
+        l.moveQuick(Quick.Of(Control.NFC), -1)
+        l.toggleQuickApp("com.termux")
+        l.toggleQuickApp("com.tailscale.ipn")
+        val expected = QuickTiles.DEFAULT.drop(1).filterNot { it == Quick.App("com.tailscale.ipn") }.let {
+            it.dropLast(1) + Quick.Of(Control.NFC) + it.last() + Quick.App("com.termux")
+        }
+        assertEquals(expected, l.quick)
+        assertEquals(expected, launcher().quick)
+        l.toggleQuickEditing()
+        assertTrue(l.editingQuick)
+        l.openQuickApps()
+        assertTrue(l.pickingQuickApps)
+        l.closeQuickApps()
+        assertFalse(l.pickingQuickApps)
+        assertTrue(l.back())
+        assertFalse(l.editingQuick)
+    }
+
+    @Test
+    fun `all of an app's notices go at once, and its notification settings open`() {
+        actions.dotsOn = true
+        val notices = FakeNotices(listOf(aviso("a"), aviso("b"), aviso("c", "x.other"), aviso("d", clearable = false)))
+        val l = Launcher(source, store, actions, widgets, notices = notices).also { it.refresh() }
+        l.dismissApp("org.thoughtcrime.securesms")
+        assertEquals(listOf("dismiss:a", "dismiss:b"), notices.calls)
+        l.noticeSettings("x.other")
+        assertEquals("noticeSettings:x.other", actions.calls.last())
     }
 }

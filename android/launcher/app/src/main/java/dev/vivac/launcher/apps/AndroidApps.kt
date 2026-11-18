@@ -173,6 +173,17 @@ class AppActions(private val context: Context) : Actions {
         val action = when (page) {
             dev.vivac.launcher.core.SystemPage.INTERNET -> Settings.Panel.ACTION_INTERNET_CONNECTIVITY
             dev.vivac.launcher.core.SystemPage.VOLUMEN -> Settings.Panel.ACTION_VOLUME
+            dev.vivac.launcher.core.SystemPage.WIFI -> Settings.Panel.ACTION_WIFI
+            dev.vivac.launcher.core.SystemPage.DATOS -> Settings.ACTION_NETWORK_OPERATOR_SETTINGS
+            dev.vivac.launcher.core.SystemPage.AVION -> Settings.ACTION_AIRPLANE_MODE_SETTINGS
+            dev.vivac.launcher.core.SystemPage.ALARMAS -> android.provider.AlarmClock.ACTION_SHOW_ALARMS
+            dev.vivac.launcher.core.SystemPage.AHORRO -> Settings.ACTION_BATTERY_SAVER_SETTINGS
+            dev.vivac.launcher.core.SystemPage.PRIVACIDAD -> "android.settings.PRIVACY_CONTROLS"
+            dev.vivac.launcher.core.SystemPage.ENVIAR -> Settings.ACTION_CAST_SETTINGS
+            dev.vivac.launcher.core.SystemPage.COMPARTIR -> "android.settings.TETHER_SETTINGS"
+            dev.vivac.launcher.core.SystemPage.NFC -> Settings.Panel.ACTION_NFC
+            dev.vivac.launcher.core.SystemPage.TEMA -> "android.settings.DARK_THEME_SETTINGS"
+            dev.vivac.launcher.core.SystemPage.LUZ -> Settings.ACTION_NIGHT_DISPLAY_SETTINGS
             dev.vivac.launcher.core.SystemPage.BLUETOOTH -> Settings.ACTION_BLUETOOTH_SETTINGS
             dev.vivac.launcher.core.SystemPage.PANTALLA -> Settings.ACTION_DISPLAY_SETTINGS
             dev.vivac.launcher.core.SystemPage.SONIDO -> Settings.ACTION_SOUND_SETTINGS
@@ -185,8 +196,24 @@ class AppActions(private val context: Context) : Actions {
             dev.vivac.launcher.core.SystemPage.SISTEMA -> Settings.ACTION_LOCALE_SETTINGS
             dev.vivac.launcher.core.SystemPage.TELEFONO -> Settings.ACTION_DEVICE_INFO_SETTINGS
             dev.vivac.launcher.core.SystemPage.TODO -> Settings.ACTION_SETTINGS
+            dev.vivac.launcher.core.SystemPage.PERMISO_AJUSTES -> Settings.ACTION_MANAGE_WRITE_SETTINGS
         }
-        if (!start(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) start(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val intent = Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (page == dev.vivac.launcher.core.SystemPage.PERMISO_AJUSTES) intent.data = Uri.fromParts("package", context.packageName, null)
+        if (!start(intent)) start(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    override fun autoRotate(): Boolean =
+        Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
+
+    /** Needs "change system settings", which you grant vivac in Android's settings. */
+    override fun setAutoRotate(on: Boolean): Boolean {
+        if (!Settings.System.canWrite(context)) return false
+        return Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, if (on) 1 else 0)
+    }
+
+    override fun notificationSettings(packageName: String) {
+        start(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     /** The torch of the first camera with a flash; no permission needed, but the camera must be free. */
