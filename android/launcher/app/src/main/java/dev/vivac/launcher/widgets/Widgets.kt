@@ -94,7 +94,18 @@ class Widgets(private val activity: Activity) : WidgetHost {
     /** The live view of a placed widget at the size it is drawn, so responsive widgets lay out right; a held finger goes to [grip]. */
     fun view(context: Context, id: Int, widthDp: Float, rows: Int, grip: Grip): AppWidgetHostView? {
         val info = manager.getAppWidgetInfo(id) ?: return null
-        val view = host.createView(context, id, info)
+        // Drawn at night, as all of vivac is: a widget with a dark look uses it.
+        // A wrapper around the activity, not a new context, so the widget's buttons still start apps from it.
+        val night = android.view.ContextThemeWrapper(context, context.theme).apply {
+            applyOverrideConfiguration(
+                android.content.res.Configuration(context.resources.configuration).apply {
+                    uiMode = (uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK.inv()) or android.content.res.Configuration.UI_MODE_NIGHT_YES
+                },
+            )
+        }
+        val view = host.createView(night, id, info)
+        // A widget drawn with the system's colours takes vivac's palette instead of the wallpaper's.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) view.setColorResources(WidgetColors.resources())
         (view as? WidgetFrame)?.grip = grip
         val heightDp = heightDp(id, rows).toFloat()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
