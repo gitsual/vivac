@@ -966,4 +966,15 @@ class LauncherTest {
         l.openSystem()
         assertFalse(l.hidesStatusBar)
     }
+
+    @Test
+    fun `back on a ladera goes to the page before, down to the camp, where it does nothing`() {
+        val l = launcher()
+        l.showPage(1)
+        assertTrue(l.canGoBack)
+        assertTrue(l.back())
+        assertEquals(0, l.page)
+        assertFalse(l.canGoBack)
+        assertFalse(l.back())
+    }
 }

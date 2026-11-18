@@ -462,9 +462,14 @@ class Launcher(
     fun visibleRecent(): List<String> = recent.filter { it !in home.hidden }
 
     /** Back: from the Petate to the camp. False when there was nowhere to go back to. */
+    /** Whether Back has something to do; on the camp's first page it does not, as on any home screen. */
+    val canGoBack: Boolean get() = screen != Screen.CAMPAMENTO || editing != null || editingQuick || page > 0
+
     fun back(): Boolean {
         if (editing != null) { editing = null; return true }
         if (editingQuick) { editingQuick = false; return true }
+        // On a ladera, Back walks to the page before, down to the camp.
+        if (screen == Screen.CAMPAMENTO && page > 0) { page -= 1; return true }
         if (screen == Screen.CAMPAMENTO) return false
         screen = Screen.CAMPAMENTO
         return true

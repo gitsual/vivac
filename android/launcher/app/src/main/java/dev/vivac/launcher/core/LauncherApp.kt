@@ -54,7 +54,7 @@ fun LauncherApp(
     /** Shared with the activity, which answers Android's swipe-home animation with a tile's place. */
     drag: DragBoard = remember { DragBoard() },
 ) {
-    BackHandler(enabled = launcher.screen != Screen.CAMPAMENTO || launcher.editing != null) { launcher.back() }
+    BackHandler(enabled = launcher.canGoBack) { launcher.back() }
     // Notification access is granted in Android's settings: read it again each time vivac comes back to the front.
     // A count, not the lifecycle state: no frame is drawn while vivac is away, so the state would come back unchanged.
     var resumes by remember { androidx.compose.runtime.mutableIntStateOf(0) }
