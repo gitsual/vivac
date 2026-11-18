@@ -29,6 +29,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.click
@@ -129,11 +130,13 @@ class LauncherAppTest {
     }
 
     @Test
-    fun `header and via card open the system pages`() {
+    fun `the facts card opens the phone's info, and the gear vivac's phone settings`() {
         show()
-        compose.onNodeWithContentDescription("Ajustes del sistema").performClick()
         compose.onNodeWithText("2026111301").performClick()
-        assertEquals(listOf("settings", "about"), actions.calls)
+        assertEquals(listOf("about"), actions.calls)
+        compose.onNodeWithContentDescription("Ajustes del sistema").performClick()
+        compose.waitForIdle()
+        assertEquals(Screen.SISTEMA, launcher.screen)
     }
 
     @Test
@@ -809,5 +812,62 @@ class LauncherAppTest {
         val cell = compose.onNodeWithTag("cell:1:6").fetchSemanticsNode().boundsInRoot.center
         carry("Termux", cell)
         assertEquals(List(6) { dev.vivac.launcher.campamento.Gap(1) } + dev.vivac.launcher.campamento.Shelved("com.termux", 1), launcher.board.onPage(1))
+    }
+
+    private fun withNotices(vararg avisos: dev.vivac.launcher.avisos.Aviso): FakeNotices {
+        val notices = FakeNotices(avisos.toList())
+        actions.dotsOn = true
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets, notices = notices).also { it.refresh() }
+        compose.setContent { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views) }
+        compose.runOnUiThread { launcher.onSwipeDown() }
+        compose.waitForIdle()
+        return notices
+    }
+
+    private fun aviso(key: String, title: String, pkg: String = "com.termux", reply: Boolean = false) =
+        dev.vivac.launcher.avisos.Aviso(key, pkg, title, "texto de $title", System.currentTimeMillis(), ongoing = false, clearable = true, summary = false, canReply = reply)
+
+    @Test
+    fun `vivac's shade shows each app's notices, which open, go, are answered, or all go at once`() {
+        val notices = withNotices(aviso("a", "Ana", reply = true), aviso("b", "Bea"), aviso("c", "Ruta", pkg = "app.organicmaps"))
+        compose.onNodeWithText("Avisos").assertExists()
+        compose.onNodeWithText("TERMUX").assertExists()
+        compose.onNodeWithText("ORGANIC MAPS").assertExists()
+        compose.onNodeWithText("texto de Ana").assertExists()
+        compose.onNodeWithText("Responder").performClick()
+        compose.onNodeWithContentDescription("Respuesta").performTextInput("voy")
+        compose.onNodeWithContentDescription("Enviar respuesta").performClick()
+        compose.onAllNodesWithContentDescription("Descartar")[0].performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Borrar todo").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf("reply:a:voy", "dismiss:a", "dismissAll"), notices.calls)
+        compose.onNodeWithText("Sin avisos. Todo en calma en el campamento.").assertExists()
+    }
+
+    @Test
+    fun `tapping a notice opens it and the shade's switches reach the phone`() {
+        val notices = withNotices(aviso("a", "Ana"))
+        compose.onNodeWithContentDescription("Linterna").performClick()
+        compose.onNodeWithContentDescription("Volumen").performClick()
+        compose.onNodeWithContentDescription("Android").performClick()
+        compose.onNodeWithTag("aviso:a").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf("open:a"), notices.calls)
+        assertEquals(Screen.CAMPAMENTO, launcher.screen)
+        assertTrue(actions.calls.containsAll(listOf("torch:true", "page:VOLUMEN", "notifications")))
+    }
+
+    @Test
+    fun `the gear opens vivac's phone settings, whose rows open Android's pages or vivac's own`() {
+        show()
+        compose.onNodeWithContentDescription("Ajustes del sistema").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("Teléfono").assertExists()
+        compose.onNodeWithText("Batería").performClick()
+        assertEquals("page:BATERIA", actions.calls.last())
+        compose.onNodeWithText("Ajustes de vivac").performClick()
+        compose.waitForIdle()
+        assertEquals(Screen.AJUSTES, launcher.screen)
     }
 }

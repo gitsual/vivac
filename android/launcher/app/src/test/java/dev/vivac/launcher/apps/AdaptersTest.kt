@@ -235,4 +235,28 @@ class AdaptersTest {
         actions.lockProfile(42L, true)
         actions.lockProfile(99L, true)
     }
+
+    @Test
+    fun `every page of vivac's settings hub opens its own Android page, or the whole Settings app when missing`() {
+        val actions = AppActions(app)
+        val opened = dev.vivac.launcher.core.SystemPage.entries.map { page -> actions.systemPage(page); nextIntent()!! }
+        assertEquals(dev.vivac.launcher.core.SystemPage.entries.size, opened.map { it.action }.toSet().size)
+        assertTrue(opened.all { it.flags and Intent.FLAG_ACTIVITY_NEW_TASK != 0 })
+        assertEquals(Settings.Panel.ACTION_VOLUME, opened[dev.vivac.launcher.core.SystemPage.VOLUMEN.ordinal].action)
+        shadowOf(app).checkActivities(true)
+        actions.systemPage(dev.vivac.launcher.core.SystemPage.BATERIA)
+        assertEquals(null, nextIntent())
+    }
+
+    @Test
+    fun `the torch uses the camera with a flash, and says no when there is none`() {
+        val actions = AppActions(app)
+        assertEquals(false, actions.torch(true))
+        val cameras = app.getSystemService(android.hardware.camera2.CameraManager::class.java)
+        val flash = org.robolectric.shadows.ShadowCameraCharacteristics.newCameraCharacteristics()
+        shadowOf(flash).set(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE, true)
+        shadowOf(cameras).addCamera("0", flash)
+        assertEquals(true, actions.torch(true))
+        assertEquals(true, shadowOf(cameras).getTorchMode("0"))
+    }
 }

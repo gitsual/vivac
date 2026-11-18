@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
         source = AndroidAppSource(this)
         actions = AppActions(this)
         widgets = Widgets(this)
-        launcher = Launcher(source, PrefsStore(getSharedPreferences("home", MODE_PRIVATE)), actions, widgets, savedInstanceState?.getInt(KEY_PENDING, -1) ?: -1, dev.vivac.launcher.apps.AndroidDirectory(this))
+        launcher = Launcher(source, PrefsStore(getSharedPreferences("home", MODE_PRIVATE)), actions, widgets, savedInstanceState?.getInt(KEY_PENDING, -1) ?: -1, dev.vivac.launcher.apps.AndroidDirectory(this), dev.vivac.launcher.apps.AndroidNotices)
         watcher = source.watch { refresh() }
         refresh()
         val views = object : WidgetViews {

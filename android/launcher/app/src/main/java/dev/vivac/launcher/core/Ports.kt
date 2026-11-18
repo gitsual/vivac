@@ -30,6 +30,10 @@ interface Actions {
     fun notificationAccess()
     fun dotsAllowed(): Boolean
     fun systemSettings()
+    /** One of Android's settings pages, or one of its small panels (internet, volume). */
+    fun systemPage(page: SystemPage)
+    /** Switches the torch; false when the phone will not (no flash, or the camera is in use). */
+    fun torch(on: Boolean): Boolean
     fun securityUpdates()
     /** A short message on screen (a toast in production). */
     fun say(text: String)
@@ -56,6 +60,43 @@ interface Actions {
     fun webSearch(query: String)
     /** The app store you use (any that answers market:// links), for [query]. */
     fun storeSearch(query: String)
+}
+
+/** Port: the phone's notifications, for vivac's own shade, and what you do with them. */
+interface Notices {
+    /** What is on the phone now; empty while notification access is off. */
+    val live: kotlinx.coroutines.flow.StateFlow<List<dev.vivac.launcher.avisos.Aviso>>
+    /** Runs the notice's own action (opens the chat, the mail...). */
+    fun open(key: String)
+    fun dismiss(key: String)
+    /** Clears every notice that can be cleared, as Android's "Clear all" does. */
+    fun dismissAll()
+    /** Answers a notice that takes a written reply; false when it could not. */
+    fun reply(key: String, text: String): Boolean
+}
+
+/** Android's settings pages vivac's settings hub opens, with how the hub names them. */
+enum class SystemPage(val title: String, val detail: String) {
+    INTERNET("Internet", "Wi-Fi y datos móviles"),
+    BLUETOOTH("Bluetooth", "Auriculares, reloj, coche"),
+    PANTALLA("Pantalla", "Brillo, tema oscuro, tamaño del texto"),
+    SONIDO("Sonido y vibración", "Volumen, no molestar, tonos"),
+    BATERIA("Batería", "Uso y ahorro de batería"),
+    NOTIFICACIONES("Notificaciones", "Qué apps te avisan y cómo"),
+    APPS("Aplicaciones", "Permisos, apps por defecto"),
+    ALMACENAMIENTO("Almacenamiento", "Qué ocupa espacio"),
+    SEGURIDAD("Seguridad y privacidad", "Bloqueo, huella, permisos"),
+    UBICACION("Ubicación", "Qué apps saben dónde estás"),
+    SISTEMA("Idioma y región", "Idioma, formatos de fecha y números"),
+    TELEFONO("Información del teléfono", "Modelo, versión, actualizaciones"),
+    TODO("Todos los ajustes de Android", "La app de Ajustes, entera"),
+    VOLUMEN("Volumen", "El panel de volumen de Android"),
+    ;
+
+    companion object {
+        /** The hub's list, in order: everything but the small panels the shade opens. */
+        val hub: List<SystemPage> get() = entries - VOLUMEN
+    }
 }
 
 /** Port: the app-widget host. Ids are Android's; [WidgetOption.key] names the provider. */

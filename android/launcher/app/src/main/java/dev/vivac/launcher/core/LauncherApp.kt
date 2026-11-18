@@ -9,6 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
 import dev.vivac.launcher.ajustes.SettingsActions
 import dev.vivac.launcher.ajustes.SettingsScreen
@@ -72,7 +74,7 @@ fun LauncherApp(
             onOpenApp = launcher::openApp,
             onAppMenu = launcher::openMenu,
             onOpenPetate = launcher::openPetate,
-            onOpenSettings = actions::systemSettings,
+            onOpenSettings = launcher::openSystem,
             onOpenAbout = actions::securityUpdates,
             onShowNotifications = actions::showNotifications,
             board = launcher.board,
@@ -129,6 +131,27 @@ fun LauncherApp(
                     chooseIcons = launcher::chooseIcons, chooseIconPack = launcher::chooseIconPack,
                     toggleContacts = launcher::toggleContacts, toggleCalendar = launcher::toggleCalendar,
                 ),
+            )
+            Screen.AVISOS -> {
+                val noNotices = remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<dev.vivac.launcher.avisos.Aviso>()) }
+                val avisos by (launcher.notices?.live ?: noNotices).collectAsState()
+                dev.vivac.launcher.avisos.AvisosScreen(
+                    avisos = avisos,
+                    apps = launcher.apps,
+                    now = System.currentTimeMillis(),
+                    torch = launcher.torch,
+                    act = dev.vivac.launcher.avisos.AvisosActions(
+                        open = launcher::openAviso, dismiss = launcher::dismissAviso, dismissAll = launcher::dismissAllAvisos,
+                        reply = launcher::replyAviso, page = launcher::openSystemPage, torch = launcher::toggleTorch,
+                        system = launcher::openSystem, androidShade = launcher::openAndroidShade, close = { launcher.back() },
+                    ),
+                )
+            }
+            Screen.SISTEMA -> dev.vivac.launcher.ajustes.SystemScreen(
+                facts = "BATERÍA ${facts.batteryPercent} %${if (facts.charging) " · CARGANDO" else ""} · LIBRE ${facts.freeGb} DE ${facts.totalGb} GB",
+                onPage = launcher::openSystemPage,
+                onVivac = launcher::openSettings,
+                onClose = { launcher.back() },
             )
             Screen.PETATE -> Box {
                 // An app lifted out of the petate is carried over the camp: the camp comes up underneath and the

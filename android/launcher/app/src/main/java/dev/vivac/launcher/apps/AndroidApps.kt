@@ -168,6 +168,37 @@ class AppActions(private val context: Context) : Actions {
 
     override fun dotsAllowed(): Boolean = DotsListener.isAllowed(context)
 
+    /** The settings page or panel for [page]; Android's whole Settings app if this phone has no such page. */
+    override fun systemPage(page: dev.vivac.launcher.core.SystemPage) {
+        val action = when (page) {
+            dev.vivac.launcher.core.SystemPage.INTERNET -> Settings.Panel.ACTION_INTERNET_CONNECTIVITY
+            dev.vivac.launcher.core.SystemPage.VOLUMEN -> Settings.Panel.ACTION_VOLUME
+            dev.vivac.launcher.core.SystemPage.BLUETOOTH -> Settings.ACTION_BLUETOOTH_SETTINGS
+            dev.vivac.launcher.core.SystemPage.PANTALLA -> Settings.ACTION_DISPLAY_SETTINGS
+            dev.vivac.launcher.core.SystemPage.SONIDO -> Settings.ACTION_SOUND_SETTINGS
+            dev.vivac.launcher.core.SystemPage.BATERIA -> Intent.ACTION_POWER_USAGE_SUMMARY
+            dev.vivac.launcher.core.SystemPage.NOTIFICACIONES -> "android.settings.NOTIFICATION_SETTINGS"
+            dev.vivac.launcher.core.SystemPage.APPS -> Settings.ACTION_APPLICATION_SETTINGS
+            dev.vivac.launcher.core.SystemPage.ALMACENAMIENTO -> Settings.ACTION_INTERNAL_STORAGE_SETTINGS
+            dev.vivac.launcher.core.SystemPage.SEGURIDAD -> Settings.ACTION_SECURITY_SETTINGS
+            dev.vivac.launcher.core.SystemPage.UBICACION -> Settings.ACTION_LOCATION_SOURCE_SETTINGS
+            dev.vivac.launcher.core.SystemPage.SISTEMA -> Settings.ACTION_LOCALE_SETTINGS
+            dev.vivac.launcher.core.SystemPage.TELEFONO -> Settings.ACTION_DEVICE_INFO_SETTINGS
+            dev.vivac.launcher.core.SystemPage.TODO -> Settings.ACTION_SETTINGS
+        }
+        if (!start(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))) start(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** The torch of the first camera with a flash; no permission needed, but the camera must be free. */
+    override fun torch(on: Boolean): Boolean = runCatching {
+        val cameras = context.getSystemService(android.hardware.camera2.CameraManager::class.java) ?: return false
+        val id = cameras.cameraIdList.firstOrNull {
+            cameras.getCameraCharacteristics(it).get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        } ?: return false
+        cameras.setTorchMode(id, on)
+        true
+    }.getOrDefault(false)
+
     override fun say(text: String) = android.widget.Toast.makeText(context, text, android.widget.Toast.LENGTH_LONG).show()
 
     /** A search app if there is one; else the browser on DuckDuckGo (GrapheneOS ships no Google search). */

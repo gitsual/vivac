@@ -15,6 +15,17 @@ class FakeStore(val values: MutableMap<String, String> = mutableMapOf()) : Store
     override fun put(changes: Map<String, String>) { values += changes }
 }
 
+/** The phone's notifications, as a test sets them; what you do with them is recorded. */
+class FakeNotices(avisos: List<dev.vivac.launcher.avisos.Aviso> = emptyList()) : Notices {
+    val calls = mutableListOf<String>()
+    var replies = true
+    override val live = kotlinx.coroutines.flow.MutableStateFlow(avisos)
+    override fun open(key: String) { calls += "open:$key" }
+    override fun dismiss(key: String) { calls += "dismiss:$key"; live.value = live.value.filterNot { it.key == key } }
+    override fun dismissAll() { calls += "dismissAll"; live.value = live.value.filterNot { it.clearable } }
+    override fun reply(key: String, text: String): Boolean { calls += "reply:$key:$text"; return replies }
+}
+
 /** Records every request vivac hands to Android, so tests can check what would have happened. */
 class FakeActions : Actions {
     val calls = mutableListOf<String>()
@@ -31,6 +42,9 @@ class FakeActions : Actions {
     override fun notificationAccess() { calls += "notificationAccess" }
     override fun dotsAllowed() = dotsOn
     override fun systemSettings() { calls += "settings" }
+    var torchWorks = true
+    override fun systemPage(page: SystemPage) { calls += "page:${page.name}" }
+    override fun torch(on: Boolean): Boolean { calls += "torch:$on"; return torchWorks }
     override fun securityUpdates() { calls += "about" }
     override fun say(text: String) { calls += "say:$text" }
     override fun copy(text: String) { calls += "copy:$text" }

@@ -18,7 +18,7 @@ import dev.vivac.launcher.petate.FoundShortcut
 import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
 
-enum class Screen { CAMPAMENTO, PETATE, AJUSTES }
+enum class Screen { CAMPAMENTO, PETATE, AJUSTES, AVISOS, SISTEMA }
 
 /** How apps are drawn: vivac's glyphs (the default), the system's themed icons, the apps' own, or a pack's. */
 enum class IconStyle(val title: String) {
@@ -100,6 +100,8 @@ class Launcher(
     pendingWidget: Int = -1,
     /** Your contacts and calendars; none in tests that do not need them. */
     private val directory: Directory? = null,
+    /** The phone's notifications for vivac's own shade; none in tests that do not need them. */
+    val notices: Notices? = null,
 ) {
     var apps by mutableStateOf(emptyList<InstalledApp>()); private set
     var home by mutableStateOf(Home.decode(store.get(KEY_DOCK), store.get(KEY_PINNED), store.get(KEY_HIDDEN))); private set
@@ -234,6 +236,37 @@ class Launcher(
     fun openContact(contact: Contact) { directory?.openContact(contact); screen = Screen.CAMPAMENTO }
     fun openEvent(event: CalendarEvent) { directory?.openEvent(event); screen = Screen.CAMPAMENTO }
 
+    /** Android's own shade, for its quick settings. */
+    fun openAndroidShade() = actions.showNotifications()
+
+    fun openAviso(key: String) {
+        notices?.open(key)
+        screen = Screen.CAMPAMENTO
+    }
+
+    fun dismissAviso(key: String) { notices?.dismiss(key) }
+
+    fun dismissAllAvisos() { notices?.dismissAll() }
+
+    fun replyAviso(key: String, text: String) {
+        val said = text.trim().takeIf { it.isNotEmpty() } ?: return
+        if (notices?.reply(key, said) != true) actions.say("No se pudo responder desde aquí: ábrelo para contestar.")
+    }
+
+    /** vivac's settings hub: the phone's settings, grouped and named the vivac way. */
+    fun openSystem() {
+        campMenu = false
+        screen = Screen.SISTEMA
+    }
+
+    fun openSystemPage(page: SystemPage) = actions.systemPage(page)
+
+    var torch by mutableStateOf(false); private set
+
+    fun toggleTorch() {
+        if (actions.torch(!torch)) torch = !torch else actions.say("La linterna no se puede encender ahora.")
+    }
+
     fun openSettings() {
         campMenu = false
         screen = Screen.AJUSTES
@@ -275,7 +308,8 @@ class Launcher(
         when (g) {
             Gesture.PETATE -> openPetate(false)
             Gesture.SEARCH -> openPetate(true)
-            Gesture.NOTIFICATIONS -> actions.showNotifications()
+            // vivac's own shade needs notification access; without it, Android's.
+            Gesture.NOTIFICATIONS -> if (notices != null && actions.dotsAllowed()) screen = Screen.AVISOS else actions.showNotifications()
             Gesture.LOCK -> if (!actions.lockScreen()) askForLockService()
             Gesture.APP -> app?.takeIf { pkg -> apps.any { it.packageName == pkg } }?.let(::openApp)
             Gesture.NOTHING -> Unit

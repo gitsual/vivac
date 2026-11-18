@@ -820,4 +820,69 @@ class LauncherTest {
         l.openMenu("app.organicmaps"); l.pick(MenuEntry.Pin(false))
         assertEquals(listOf("com.termux", "org.thoughtcrime.securesms", "com.tailscale.ipn"), many().shownDock())
     }
+
+    private fun aviso(key: String, pkg: String = "org.thoughtcrime.securesms", clearable: Boolean = true) =
+        dev.vivac.launcher.avisos.Aviso(key, pkg, "Ana", "hola", 1, ongoing = !clearable, clearable = clearable, summary = false, canReply = true)
+
+    @Test
+    fun `swiping down opens vivac's own shade once notification access is on, else Android's`() {
+        val notices = FakeNotices()
+        val l = Launcher(source, store, actions, widgets, notices = notices).also { it.refresh() }
+        l.onSwipeDown()
+        assertEquals(listOf("notifications"), actions.calls)
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+        actions.dotsOn = true
+        l.onSwipeDown()
+        assertEquals(Screen.AVISOS, l.screen)
+        // Android's own shade is one tap away, for its quick settings.
+        l.openAndroidShade()
+        assertEquals(listOf("notifications", "notifications"), actions.calls)
+        assertTrue(l.back())
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+    }
+
+    @Test
+    fun `without a notices port swiping down always opens Android's shade`() {
+        actions.dotsOn = true
+        launcher().onSwipeDown()
+        assertEquals(listOf("notifications"), actions.calls)
+    }
+
+    @Test
+    fun `in the shade a notice opens and takes you home, is cleared, cleared with the rest, or answered`() {
+        actions.dotsOn = true
+        val notices = FakeNotices(listOf(aviso("a"), aviso("b"), aviso("music", "x.music", clearable = false)))
+        val l = Launcher(source, store, actions, widgets, notices = notices).also { it.refresh() }
+        l.onSwipeDown()
+        l.dismissAviso("a")
+        l.replyAviso("b", "  vale  ")
+        l.replyAviso("b", "   ")
+        l.dismissAllAvisos()
+        assertEquals(listOf("dismiss:a", "reply:b:vale", "dismissAll"), notices.calls)
+        notices.replies = false
+        l.replyAviso("b", "otra")
+        assertEquals("say:No se pudo responder desde aquí: ábrelo para contestar.", actions.calls.last())
+        l.openAviso("music")
+        assertEquals("open:music", notices.calls.last())
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+    }
+
+    @Test
+    fun `the gear opens vivac's settings hub, whose pages Android opens, and the torch switches`() {
+        val l = launcher()
+        l.openSystem()
+        assertEquals(Screen.SISTEMA, l.screen)
+        l.openSystemPage(SystemPage.BATERIA)
+        assertEquals(listOf("page:BATERIA"), actions.calls)
+        l.toggleTorch()
+        assertTrue(l.torch)
+        l.toggleTorch()
+        assertFalse(l.torch)
+        actions.torchWorks = false
+        l.toggleTorch()
+        assertFalse(l.torch)
+        assertEquals("say:La linterna no se puede encender ahora.", actions.calls.last())
+        assertTrue(l.back())
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+    }
 }
