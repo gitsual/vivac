@@ -96,6 +96,39 @@ class MainActivityTest {
         )
     }
 
+    /** What Android's swipe-home handler puts in the home intent; [answers] gets what vivac replies. */
+    private fun swipeHome(pkg: String, answers: MutableList<android.os.Bundle>, enabled: Boolean = true): Intent {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper()) { answers += it.data; true }
+        val callback = android.os.Message.obtain().apply { replyTo = android.os.Messenger(handler) }
+        val contract = android.os.Bundle().apply {
+            putBoolean("gesture_nav_contract_enable", enabled)
+            putParcelable(Intent.EXTRA_COMPONENT_NAME, ComponentName(pkg, "$pkg.Main"))
+            putParcelable(Intent.EXTRA_USER, Process.myUserHandle())
+            putParcelable("android.intent.extra.REMOTE_CALLBACK", callback)
+        }
+        return Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).putExtra("gesture_nav_contract_v1", contract)
+    }
+
+    @Test
+    fun `swiping home from an app answers android with where that app's icon is`() {
+        start()
+        compose.waitForIdle()
+        val answers = mutableListOf<android.os.Bundle>()
+        deliver(swipeHome("com.termux", answers))
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        @Suppress("DEPRECATION")
+        val dock = answers.single().getParcelable<android.graphics.RectF>("gesture_nav_contract_icon_position")!!
+        assertTrue(!dock.isEmpty)
+        deliver(swipeHome("not.on.camp", answers))
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        @Suppress("DEPRECATION")
+        assertTrue(answers.last().getParcelable<android.graphics.RectF>("gesture_nav_contract_icon_position")!!.isEmpty)
+        deliver(swipeHome("com.termux", answers, enabled = false))
+        deliver(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).putExtra("gesture_nav_contract_v1", android.os.Bundle()))
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(2, answers.size)
+    }
+
     @Test
     fun `a profile locked or unlocked refreshes the apps`() {
         start()

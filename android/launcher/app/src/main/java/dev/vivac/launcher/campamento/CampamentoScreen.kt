@@ -297,7 +297,10 @@ private fun CarriedTile(
         onClick = { onOpenApp(app.packageName) },
         dot = app.packageName in LocalDots.current,
         count = LocalCounts.current[app.packageName] ?: 0,
-        modifier = modifier.spot(drag, spot).graphicsLayer { alpha = if (lifted) 0.3f else 1f },
+        modifier = modifier
+            .spot(drag, spot)
+            .onGloballyPositioned { drag.placeTile(app.packageName, zone, it.boundsInRoot()) }
+            .graphicsLayer { alpha = if (lifted) 0.3f else 1f },
         gestures = Modifier.carriable(drag, Held(app, zone, tone), app.label, { onOpenApp(app.packageName) }, { onAppMenu(app.packageName) }, onDrop),
     ) { AppFace(app, tone) }
 }

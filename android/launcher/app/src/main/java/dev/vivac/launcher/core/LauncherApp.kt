@@ -43,9 +43,16 @@ interface WidgetViews {
 
 /** The whole launcher on screen, driven by [launcher]. */
 @Composable
-fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: Actions, widgetViews: WidgetViews) {
+fun LauncherApp(
+    launcher: Launcher,
+    stamp: String,
+    facts: PhoneFacts,
+    actions: Actions,
+    widgetViews: WidgetViews,
+    /** Shared with the activity, which answers Android's swipe-home animation with a tile's place. */
+    drag: DragBoard = remember { DragBoard() },
+) {
     BackHandler(enabled = launcher.screen != Screen.CAMPAMENTO) { launcher.back() }
-    val drag = remember { DragBoard() }
     // Android draws the wallpaper behind a window that asks for it; vivac's camp then lets it show through.
     val window = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.window
     androidx.compose.runtime.LaunchedEffect(launcher.showWallpaper) {

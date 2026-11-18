@@ -71,7 +71,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | G2 | Double tap to lock the screen (accessibility service, opt-in) | done: camp menu toggle; LockService reads nothing |
 | G3 | Configurable gestures (swipe up/down, double tap → any action or app) | done: swipe up/down → petate, search, notices, lock, nothing; double tap → lock (opening a chosen app: todo) |
 | G4 | Home pressed on the camp: back to the top / close sheets | done: closes the petate, menus and sheets, back to page 0 |
-| G5 | Swipe-home animation into the icon (GestureNavContract, Android 11+, undocumented) | todo |
+| G5 | Swipe-home animation into the icon (GestureNavContract, Android 11+, undocumented) | done: answers with the dock/route tile; protocol read from GrapheneOS Launcher3 (FallbackSwipeHandler); check on device |
 
 ## Settings and data
 

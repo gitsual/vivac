@@ -18,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.toArgb
 import dev.vivac.launcher.apps.AndroidAppSource
 import dev.vivac.launcher.apps.AppActions
+import dev.vivac.launcher.apps.GestureContract
+import android.graphics.RectF
 import dev.vivac.launcher.apps.Dots
 import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.PrefsStore
@@ -35,6 +37,7 @@ private const val KEY_PENDING = "pendingWidget"
 
 /** Wiring only: Android adapters in, [Launcher] decides, [LauncherApp] draws. */
 class MainActivity : ComponentActivity() {
+    private val drag = dev.vivac.launcher.campamento.DragBoard()
     private lateinit var source: AndroidAppSource
     private lateinit var actions: AppActions
     private lateinit var widgets: Widgets
@@ -65,7 +68,7 @@ class MainActivity : ComponentActivity() {
             val dots by Dots.live.collectAsState()
             val counts by Dots.liveCounts.collectAsState()
             CompositionLocalProvider(LocalDots provides dots, dev.vivac.launcher.apps.LocalCounts provides counts, dev.vivac.launcher.apps.LocalAppIcons provides icons) {
-                facts?.let { LauncherApp(launcher, stamp, it, actions, views) }
+                facts?.let { LauncherApp(launcher, stamp, it, actions, views, drag) }
             }
         }
     }
@@ -150,7 +153,14 @@ class MainActivity : ComponentActivity() {
     /** Pressing Home while vivac is in front brings you back to the Campamento. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.hasCategory(Intent.CATEGORY_HOME)) launcher.onHomePressed()
+        if (intent.hasCategory(Intent.CATEGORY_HOME)) {
+            launcher.onHomePressed()
+            // Swiping home from an app: tell Android where its icon is, so the window closes into it.
+            GestureContract.from(intent)?.let { contract ->
+                val tile = drag.tileOf(contract.packageName)
+                contract.reply(tile?.let { RectF(it.left, it.top, it.right, it.bottom) } ?: RectF())
+            }
+        }
     }
 
     override fun onDestroy() {

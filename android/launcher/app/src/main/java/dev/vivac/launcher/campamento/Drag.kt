@@ -64,6 +64,16 @@ class DragBoard {
     var locked = false
 
     fun place(spot: Spot, bounds: Rect) { spots[spot] = bounds }
+
+    /** Where each app's tile sits on the camp, by zone: what Android's swipe home animates a closing app into. */
+    private val tiles = mutableMapOf<Pair<String, Zone>, Rect>()
+
+    fun placeTile(packageName: String, zone: Zone, bounds: Rect) { tiles[packageName to zone] = bounds }
+
+    /** The app's tile on screen: in the dock first (always visible), else on the route, else none. */
+    fun tileOf(packageName: String): Rect? = listOf(Zone.Dock, Zone.Via).firstNotNullOfOrNull { zone ->
+        tiles[packageName to zone]?.takeIf { screen == Rect.Zero || it.overlaps(screen) }
+    }
     fun forget(spot: Spot) { spots.remove(spot) }
 
     fun pick(held: Cargo, at: Offset) {
