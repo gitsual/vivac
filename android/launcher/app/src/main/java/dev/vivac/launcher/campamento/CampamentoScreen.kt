@@ -811,8 +811,12 @@ private fun Beam(modifier: Modifier, origin: Offset?) {
     Canvas(
         modifier.graphicsLayer {
             val t = phase?.value ?: 0f
+            val f = Motion.flare(t)
             rotationZ = Motion.sway(t)
-            alpha = Motion.glow(t) / Motion.GLOW_MAX
+            // Reaching forward: a touch longer and brighter for a moment.
+            scaleX = 1f + 0.07f * f
+            scaleY = 1f + 0.07f * f
+            alpha = ((Motion.glow(t) + 0.1f * f) / Motion.GLOW_MAX).coerceAtMost(1.3f)
             // It sways about the lamp itself, the centre of the smallest ring.
             transformOrigin = androidx.compose.ui.graphics.TransformOrigin(origin.x / size.width, origin.y / size.height)
             // One path: no offscreen buffer needed to fade it.
@@ -837,6 +841,15 @@ private fun Beam(modifier: Modifier, origin: Offset?) {
                 end = far,
             ),
         )
+    }
+    // The faintest dazzle as it reaches forward: a warm glow from the lamp over the whole camp, a few percent at most.
+    Canvas(
+        modifier.graphicsLayer {
+            alpha = 0.06f * Motion.flare(phase?.value ?: 0f)
+            compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
+        },
+    ) {
+        drawRect(Brush.radialGradient(listOf(Ink.text, Color.Transparent), center = origin, radius = size.width * 1.1f))
     }
 }
 

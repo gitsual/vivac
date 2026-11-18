@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.unit.dp
 
 /** Motif 1, curvas de nivel: the contour rings drawn behind the Campamento, from the design's SVG. */
@@ -34,6 +35,44 @@ private val contourPaths = listOf(
     "M265 0C360 -2 420 90 405 170C390 255 300 290 225 278C140 265 110 190 126 115C142 45 190 2 265 0Z",
     "M270 -30C390 -35 455 80 438 180C420 285 305 330 210 315C105 298 70 205 92 110C112 25 175 -27 270 -30Z",
 )
+
+/** The camp's rings around [centre]: each drawn once into its own layer, swelling about the centre. */
+@Composable
+private fun RingsAround(modifier: Modifier, color: Color, centre: Offset, innerRadius: androidx.compose.ui.unit.Dp) {
+    val moving = Motion.allowed(LocalContext.current)
+    val phase = if (moving) {
+        rememberInfiniteTransition(label = "rings").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(Motion.PERIOD_MS, easing = LinearEasing)),
+            label = "swell",
+        )
+    } else null
+    Box(modifier) {
+        (0 until Rings.COUNT).forEach { i ->
+            Canvas(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        if (phase != null) {
+                            val g = Motion.swell(phase.value, i, Rings.COUNT)
+                            scaleX = g
+                            scaleY = g
+                            transformOrigin = TransformOrigin(centre.x / size.width, centre.y / size.height)
+                        }
+                    },
+            ) {
+                val outline = Rings.points(i, centre, innerRadius.toPx())
+                val path = Path().apply {
+                    moveTo(outline[0].x, outline[0].y)
+                    outline.drop(1).forEach { lineTo(it.x, it.y) }
+                    close()
+                }
+                drawPath(path, color, style = Stroke(width = density))
+            }
+        }
+    }
+}
 
 /** The contour rings breathe: a slow swell that leaves the summit and travels outwards, like a wave. */
 object Motion {
@@ -50,7 +89,7 @@ object Motion {
 
     /** The headlamp: a slow sway, like someone breathing in the bivouac, every fourteen seconds. */
     const val LAMP_PERIOD_MS = 14_000
-    const val SWAY_DEGREES = 3f
+    const val SWAY_DEGREES = 8f
     /** The beam's strongest alpha breathes between these: dimmer, brighter, never off. */
     const val GLOW_MIN = 0.24f
     const val GLOW_MAX = 0.34f
@@ -62,6 +101,17 @@ object Motion {
     fun glow(phase: Float): Float =
         GLOW_MIN + (GLOW_MAX - GLOW_MIN) * (0.5f - 0.5f * cos(4f * PI.toFloat() * phase))
 
+    /**
+     * Once per sway, the beam reaches a little forward and flares, as if the lamp were turned towards you for a
+     * moment: 0 most of the time, rising to 1 and back over about a second.
+     */
+    fun flare(phase: Float): Float {
+        val d = kotlin.math.abs(phase - FLARE_AT)
+        return if (d >= FLARE_HALF) 0f else 0.5f + 0.5f * cos(PI.toFloat() * d / FLARE_HALF)
+    }
+    private const val FLARE_AT = 0.5f
+    private const val FLARE_HALF = 0.04f
+
     /** The scale of [ring] (0 = innermost) at [phase] (0..1 of the period). */
     fun swell(phase: Float, ring: Int, rings: Int): Float =
         1f + AMPLITUDE * sin(2f * PI.toFloat() * (phase - LAG * ring / rings))
@@ -70,20 +120,31 @@ object Motion {
 /** The summit the rings circle, in the paths' own units. */
 private val SUMMIT = Rings.SUMMIT
 
-/** Where the contour rings are centred and how big the smallest is, in the design's units. */
+/**
+ * The camp's contour rings, drawn around a summit: the first a perfect circle, each one out bigger and more
+ * uneven, as contour lines get further from a peak, the last ones running far off the screen.
+ */
 object Rings {
     val SUMMIT = Offset(262f, 130f)
-    /** The smallest ring's radius around the summit. */
-    const val INNER_RADIUS = 35f
-}
+    const val COUNT = 8
+    /** Each ring's size, as many times the first. */
+    private val SIZE = floatArrayOf(1f, 2.3f, 3.9f, 5.9f, 8.4f, 11.5f, 15.3f, 20f)
+    /** How uneven each ring is, as a share of its size: none for the first. */
+    private const val UNEVEN = 0.045f
+    private const val STEPS = 144
 
-/**
- * The rings' scale and offset so the summit falls on [centre] and the smallest ring has [innerRadius] (both in
- * pixels): around the camp's settings button.
- */
-fun ringsAround(centre: Offset, innerRadius: Float): Triple<Float, Float, Float> {
-    val s = innerRadius / Rings.INNER_RADIUS
-    return Triple(s, centre.x - Rings.SUMMIT.x * s, centre.y - Rings.SUMMIT.y * s)
+    /** The outline of [ring] around [centre], the first ring [inner] pixels in radius. */
+    fun points(ring: Int, centre: Offset, inner: Float): List<Offset> {
+        val radius = inner * SIZE[ring]
+        val uneven = UNEVEN * ring
+        return (0 until STEPS).map { i ->
+            val a = 2.0 * PI * i / STEPS
+            // A few slow waves, at fixed phases per ring, so each ring has its own shape and they never cross.
+            val wave = 0.55 * kotlin.math.sin(2 * a + 0.7 * ring) + 0.3 * kotlin.math.sin(3 * a + 1.9 * ring) + 0.15 * kotlin.math.sin(5 * a + 0.4 * ring)
+            val r = radius * (1 + uneven * wave).toFloat()
+            Offset(centre.x + r * kotlin.math.cos(a).toFloat(), centre.y + r * kotlin.math.sin(a).toFloat())
+        }
+    }
 }
 
 /** The headlamp's beam: its two edges, as a narrow cone from [origin] down and to the left across the screen. */
@@ -116,10 +177,11 @@ private fun placement(width: Float): Triple<Float, Float, Float> {
 fun Contours(
     modifier: Modifier = Modifier,
     color: Color = Ink.contour,
-    /** Where to centre the rings, in this box's pixels, with the smallest one [innerRadius] around it; else the design's place. */
+    /** Where to centre the rings, in this box's pixels, the first a circle [innerRadius] around it; else the design's rings. */
     centre: Offset? = null,
     innerRadius: androidx.compose.ui.unit.Dp = 30.dp,
 ) {
+    if (centre != null) return RingsAround(modifier, color, centre, innerRadius)
     val paths = remember { contourPaths.map { PathParser().parsePathString(it).toPath() } }
     val moving = Motion.allowed(LocalContext.current)
     val phase = if (moving) {
@@ -137,7 +199,7 @@ fun Contours(
                     .matchParentSize()
                     .graphicsLayer {
                         if (phase != null) {
-                            val (s, x, y) = centre?.let { ringsAround(it, innerRadius.toPx()) } ?: placement(size.width)
+                            val (s, x, y) = placement(size.width)
                             val g = Motion.swell(phase.value, i, paths.size)
                             scaleX = g
                             scaleY = g
@@ -145,7 +207,7 @@ fun Contours(
                         }
                     },
             ) {
-                val (s, x, y) = centre?.let { ringsAround(it, innerRadius.toPx()) } ?: placement(size.width)
+                val (s, x, y) = placement(size.width)
                 withTransform({
                     translate(left = x, top = y)
                     scale(s, s, pivot = Offset.Zero)
