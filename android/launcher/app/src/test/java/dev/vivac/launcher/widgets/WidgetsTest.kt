@@ -166,4 +166,32 @@ class WidgetsTest {
         hold()
         assertEquals(emptyList<String>(), grip.calls)
     }
+
+    /** The widget inside a parent, as on the camp: the parent only passes on a gesture someone took at its start. */
+    private fun inParent(view: android.view.View) = android.widget.FrameLayout(activity).apply {
+        addView(view)
+        val exactly = android.view.View.MeasureSpec.EXACTLY
+        measure(android.view.View.MeasureSpec.makeMeasureSpec(400, exactly), android.view.View.MeasureSpec.makeMeasureSpec(200, exactly))
+        layout(0, 0, 400, 200)
+    }
+
+    @Test
+    fun `a quick tap on a part of a widget that takes no touches never lifts it`() {
+        val grip = Recorder()
+        val parent = inParent(placedView(grip))
+        touch(parent, MotionEvent.ACTION_DOWN)
+        touch(parent, MotionEvent.ACTION_UP)
+        hold()
+        assertEquals(emptyList<String>(), grip.calls)
+    }
+
+    @Test
+    fun `holding a part of a widget that takes no touches still lands it when the finger lets go`() {
+        val grip = Recorder()
+        val parent = inParent(placedView(grip))
+        touch(parent, MotionEvent.ACTION_DOWN)
+        hold()
+        touch(parent, MotionEvent.ACTION_UP)
+        assertEquals(listOf("lift:20,20", "land:false"), grip.calls)
+    }
 }

@@ -53,7 +53,12 @@ class WidgetFrame(context: Context) : AppWidgetHostView(context) {
         if (width <= 0 || height <= 0) null
         else Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { draw(Canvas(it)) }
 
-    override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+    /**
+     * Every finger on the widget passes here first, so the hold's timer always learns of a release or a scroll.
+     * The gesture is kept even over a part of the widget that takes no touches: otherwise the parent stops passing
+     * it on, a release is never seen, and a widget lifted by the timer would stay up under no finger.
+     */
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 held = false
@@ -61,18 +66,17 @@ class WidgetFrame(context: Context) : AppWidgetHostView(context) {
                 lastX = event.x; lastY = event.y
                 clock.postDelayed(press, ViewConfiguration.getLongPressTimeout().toLong())
             }
-            MotionEvent.ACTION_MOVE -> if (abs(event.x - downX) > slop || abs(event.y - downY) > slop) clock.removeCallbacks(press)
+            MotionEvent.ACTION_MOVE -> if (!held && (abs(event.x - downX) > slop || abs(event.y - downY) > slop)) clock.removeCallbacks(press)
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> clock.removeCallbacks(press)
         }
-        return held
+        return super.dispatchTouchEvent(event) || event.actionMasked == MotionEvent.ACTION_DOWN
     }
+
+    override fun onInterceptTouchEvent(event: MotionEvent): Boolean = held
 
     /** Once held, the rest of the gesture is vivac's: it carries the widget, and the widget never sees a click. */
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (!held) {
-            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) clock.removeCallbacks(press)
-            return super.onTouchEvent(event)
-        }
+        if (!held) return super.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
                 val dx = event.x - lastX
