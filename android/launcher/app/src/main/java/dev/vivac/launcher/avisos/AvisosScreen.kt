@@ -363,9 +363,9 @@ private fun GroupCard(group: AvisoGroup, app: InstalledApp?, now: Long, act: Avi
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) { app?.let { AppFace(it, Ink.primary) } }
-            Text((app?.label ?: group.packageName).uppercase(), style = Type.cota.copy(fontSize = 11.sp), modifier = Modifier.weight(1f), maxLines = 1)
+            Text((app?.label ?: group.avisos.first().appLabel.ifBlank { "Sistema" }).uppercase(), style = Type.cota.copy(fontSize = 11.sp), modifier = Modifier.weight(1f), maxLines = 1)
             Text(Avisos.ago(group.avisos.first().postedAt, now), style = Type.cota.copy(fontSize = 11.sp))
-            val name = app?.label ?: group.packageName
+            val name = app?.label ?: group.avisos.first().appLabel.ifBlank { "Sistema" }
             Round(Glyph.SLIDERS, "Ajustes de los avisos de $name") { act.noticeSettings(group.packageName) }
             if (group.avisos.count { it.clearable } > 1) Round(Glyph.CLOSE, "Descartar los de $name") { act.dismissApp(group.packageName) }
         }

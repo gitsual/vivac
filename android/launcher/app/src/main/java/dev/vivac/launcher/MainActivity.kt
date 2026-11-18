@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
     private var watcher: LauncherApps.Callback? = null
 
     private var facts by mutableStateOf<PhoneFacts?>(null)
+    /** Mobile signal, Wi-Fi and Tailscale, followed while vivac is in front. */
+    private val status by lazy { dev.vivac.launcher.apps.AndroidStatus(this) }
     private var stamp by mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,7 +72,8 @@ class MainActivity : ComponentActivity() {
             val dots by Dots.live.collectAsState()
             val counts by Dots.liveCounts.collectAsState()
             CompositionLocalProvider(LocalDots provides dots, dev.vivac.launcher.apps.LocalCounts provides counts, dev.vivac.launcher.apps.LocalAppIcons provides icons) {
-                facts?.let { LauncherApp(launcher, stamp, it, actions, views, drag) }
+                val connections by status.live.collectAsState()
+                facts?.let { LauncherApp(launcher, stamp, it, actions, views, drag, connections) }
             }
         }
     }
@@ -137,10 +140,12 @@ class MainActivity : ComponentActivity() {
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
         }
         registerReceiver(clock, times)
+        status.start()
         tick()
     }
 
     override fun onStop() {
+        status.stop()
         unregisterReceiver(clock)
         unregisterReceiver(profilesChanged)
         widgets.stopListening()

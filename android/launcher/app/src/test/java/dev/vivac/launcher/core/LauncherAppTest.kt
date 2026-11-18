@@ -29,6 +29,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assertIsDisplayed
@@ -825,6 +826,14 @@ class LauncherAppTest {
         assertEquals(List(6) { dev.vivac.launcher.campamento.Gap(1) } + dev.vivac.launcher.campamento.Shelved("com.termux", 1), launcher.board.onPage(1))
     }
 
+    /** Draws the whole window into a bitmap, as the screen would: the camp's drawings run for real. */
+    private fun drawWindow() {
+        val root = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        compose.runOnUiThread { root.draw(android.graphics.Canvas(bitmap)) }
+        assertTrue(bitmap.width > 0)
+    }
+
     private fun withNotices(vararg avisos: dev.vivac.launcher.avisos.Aviso): FakeNotices {
         val notices = FakeNotices(avisos.toList())
         actions.dotsOn = true
@@ -844,6 +853,7 @@ class LauncherAppTest {
         val notices = withNotices(aviso("a", "Ana", reply = true), aviso("b", "Bea", minutesAgo = 1), aviso("c", "Ruta", pkg = "app.organicmaps", minutesAgo = 5))
         compose.onNodeWithText("Avisos").assertExists()
         compose.onNodeWithText("TERMUX").assertExists()
+        drawWindow()
         compose.onNodeWithText("ORGANIC MAPS").assertExists()
         compose.onNodeWithText("texto de Ana").assertExists()
         compose.onNodeWithText("Responder").performClick()
@@ -1132,5 +1142,20 @@ class LauncherAppTest {
         compose.onNodeWithContentDescription("Avisos de Termux y Organic Maps").performClick()
         compose.waitForIdle()
         assertEquals(Screen.AVISOS, launcher.screen)
+    }
+
+    @Test
+    fun `the camp shows the phone's signal, Wi-Fi and Tailscale, and system notices among the apps'`() {
+        actions.dotsOn = true
+        val system = dev.vivac.launcher.avisos.Aviso("s", "android", "USB", "Cargando", System.currentTimeMillis(), ongoing = false, clearable = true, summary = false, canReply = false, appLabel = "Sistema Android")
+        val notices = FakeNotices(listOf(aviso("a", "Ana", minutesAgo = 1), system))
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets, notices = notices).also { it.refresh() }
+        val status = dev.vivac.launcher.campamento.PhoneStatus(cell = 3, wifi = 2, tailscale = true)
+        compose.setContent { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views, status = status) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Cobertura 3 de 4, Wi-Fi 2 de 4, Tailscale conectado").assertExists()
+        compose.onNodeWithContentDescription("Avisos de Sistema Android y Termux").assertExists()
+        // Drawn for real: the bars, the arcs, Tailscale's dots, the rings and the beam.
+        drawWindow()
     }
 }

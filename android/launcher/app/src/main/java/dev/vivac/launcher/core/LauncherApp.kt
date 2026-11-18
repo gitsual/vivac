@@ -53,6 +53,8 @@ fun LauncherApp(
     widgetViews: WidgetViews,
     /** Shared with the activity, which answers Android's swipe-home animation with a tile's place. */
     drag: DragBoard = remember { DragBoard() },
+    /** The phone's connections, shown top right on the camp. */
+    status: dev.vivac.launcher.campamento.PhoneStatus = dev.vivac.launcher.campamento.PhoneStatus(),
 ) {
     BackHandler(enabled = launcher.canGoBack) { launcher.back() }
     // The phone's notices, for the shade and for vivac's chats widgets.
@@ -124,8 +126,10 @@ fun LauncherApp(
             onAddApps = launcher::openAdder,
             tintWidgets = launcher.tintWidgets,
             onOpenAvisos = launcher::openAvisos,
-            noticeApps = allAvisos.filter { !it.ongoing && !it.summary }.sortedByDescending { it.postedAt }.map { it.packageName }.distinct()
-                .mapNotNull { pkg -> launcher.apps.find { it.packageName == pkg } },
+            status = status,
+            // Every app with notices, the system's own included (named as Android names them).
+            noticeApps = allAvisos.filter { !it.ongoing && !it.summary }.sortedByDescending { it.postedAt }.distinctBy { it.packageName }
+                .map { a -> launcher.apps.find { it.packageName == a.packageName } ?: dev.vivac.launcher.apps.InstalledApp(a.appLabel.ifBlank { "Sistema" }, a.packageName, isSystem = true) },
             vivacWidget = { id, _ ->
                 when (val w = launcher.vivacWidget(id)) {
                     is dev.vivac.launcher.campamento.VivacWidget.Chats -> dev.vivac.launcher.widgets.ChatsWidget(

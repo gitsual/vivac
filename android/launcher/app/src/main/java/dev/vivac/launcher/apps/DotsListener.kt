@@ -60,6 +60,7 @@ class DotsListener : NotificationListenerService() {
             clearable = sbn.isClearable,
             summary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0,
             canReply = replyAction(n) != null,
+            appLabel = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() }.getOrDefault(""),
         )
     }
 

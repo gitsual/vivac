@@ -157,6 +157,7 @@ fun CampamentoScreen(
     noticeApps: List<InstalledApp> = emptyList(),
     /** vivac's shade (Android's when vivac may not read notifications). */
     onOpenAvisos: () -> Unit = onShowNotifications,
+    status: PhoneStatus = PhoneStatus(),
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
@@ -206,7 +207,7 @@ fun CampamentoScreen(
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Header(onOpenSettings, noticeApps, onOpenAvisos) { lamp = it }
+            Header(onOpenSettings, noticeApps, onOpenAvisos, status) { lamp = it }
             val pager = rememberPagerState(initialPage = page) { shownPages }
             // The launcher decides the page (home, a widget sent elsewhere); a swipe tells it where you went.
             LaunchedEffect(page) { if (pager.currentPage != page) pager.animateScrollToPage(page) }
@@ -854,10 +855,18 @@ private fun Beam(modifier: Modifier, origin: Offset?) {
 }
 
 @Composable
-private fun Header(onOpenSettings: () -> Unit, noticeApps: List<InstalledApp> = emptyList(), onNotices: () -> Unit = {}, onPlaced: (Offset) -> Unit = {}) {
-    // No page name: the dots below say where you are. Top left, the apps with notices, as a status bar would.
+private fun Header(
+    onOpenSettings: () -> Unit,
+    noticeApps: List<InstalledApp> = emptyList(),
+    onNotices: () -> Unit = {},
+    status: PhoneStatus = PhoneStatus(),
+    onPlaced: (Offset) -> Unit = {},
+) {
+    // No page name: the dots below say where you are. Top left, the apps with notices, as a status bar would; by
+    // the lamp, the connections.
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) { if (noticeApps.isNotEmpty()) NoticeGlyphs(noticeApps, onNotices) }
+        Connections(status, Modifier.padding(end = 14.dp))
         // The headlamp itself: the beam starts here.
         Box(
             Modifier
@@ -885,6 +894,52 @@ private fun Clock(stamp: String) {
                 Text(day[0], style = Type.mono)
                 Text(day[1], style = Type.figure.copy(fontSize = 22.sp, lineHeight = 26.sp))
                 Text(day[2], style = Type.mono)
+            }
+        }
+    }
+}
+
+/** Tailscale when it is up, Wi-Fi and mobile signal in bars: lit as strong as they are, the rest faint. */
+@Composable
+private fun Connections(status: PhoneStatus, modifier: Modifier) {
+    Row(
+        modifier.semantics(mergeDescendants = true) { contentDescription = status.spoken },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (status.tailscale) {
+            // Tailscale's mark of nine dots, drawn in vivac's line: the middle row lit.
+            Canvas(Modifier.size(16.dp)) {
+                val step = size.width / 3
+                for (r in 0..2) for (c in 0..2) {
+                    drawCircle(if (r == 1 || (r == 2 && c == 1)) Ink.text else Ink.borderControl, step * 0.18f, Offset(step * (c + 0.5f), step * (r + 0.5f)))
+                }
+            }
+        }
+        status.wifi?.let { level ->
+            Canvas(Modifier.size(width = 18.dp, height = 14.dp)) {
+                val w = 1.6.dp.toPx()
+                val centre = Offset(size.width / 2, size.height)
+                (1..3).forEach { arc ->
+                    val r = size.height * arc / 3.2f
+                    drawArc(
+                        if (level >= arc + 1 || (arc == 3 && level >= 4)) Ink.text else Ink.borderControl,
+                        startAngle = 225f, sweepAngle = 90f, useCenter = false,
+                        topLeft = Offset(centre.x - r, centre.y - r), size = Size(2 * r, 2 * r),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(w, cap = androidx.compose.ui.graphics.StrokeCap.Round),
+                    )
+                }
+                drawCircle(if (level >= 1) Ink.text else Ink.borderControl, w, Offset(centre.x, centre.y - w))
+            }
+        }
+        Canvas(Modifier.size(width = 16.dp, height = 14.dp)) {
+            val bar = size.width / 5.5f
+            (0..3).forEach { i ->
+                val h = size.height * (i + 1) / 4f
+                drawRoundRect(
+                    if ((status.cell ?: 0) > i) Ink.text else Ink.borderControl,
+                    Offset(i * bar * 1.5f, size.height - h), Size(bar, h), androidx.compose.ui.geometry.CornerRadius(bar / 3),
+                )
             }
         }
     }

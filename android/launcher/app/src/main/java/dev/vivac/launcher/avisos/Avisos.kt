@@ -17,6 +17,8 @@ data class Aviso(
     val summary: Boolean,
     /** Whether it takes a written reply (a chat's "Reply"). */
     val canReply: Boolean,
+    /** The app's name as Android gives it, for apps (the system's) that are not on the home screen. */
+    val appLabel: String = "",
 )
 
 /** One app's notices in the shade, newest first. */
