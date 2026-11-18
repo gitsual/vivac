@@ -6,6 +6,8 @@ import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,7 +80,12 @@ class DragBoard {
     /** A locked camp: nothing can be picked up. */
     var locked = false
 
-    fun place(spot: Spot, bounds: Rect) { spots[spot] = bounds }
+    /** Bumped when a spot moves under a held finger (a page turning), so [target] is worked out again. */
+    private var moved by mutableIntStateOf(0)
+
+    fun place(spot: Spot, bounds: Rect) {
+        if (spots.put(spot, bounds) != bounds && held != null) moved++
+    }
 
     /** Where each app's tile sits on the camp, by zone: what Android's swipe home animates a closing app into. */
     private val tiles = mutableMapOf<Pair<String, Zone>, Rect>()
@@ -98,8 +105,11 @@ class DragBoard {
     fun move(by: Offset) { finger += by }
     fun cancel() { held = null }
 
-    /** Where the carried thing would land now: the tile under the finger, else the zone it is over. */
-    val target: Spot? get() = held?.let { spotAt(finger) }
+    /**
+     * Where the carried thing would land now: the tile under the finger, else the zone it is over. Derived, so a
+     * tile that reads it is recomposed only when the target changes, not on every move of the finger.
+     */
+    val target: Spot? by derivedStateOf { moved; held?.let { spotAt(finger) } }
 
     fun spotAt(at: Offset): Spot? {
         val cargo = held

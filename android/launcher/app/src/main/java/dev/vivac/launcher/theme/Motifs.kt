@@ -9,6 +9,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import kotlin.math.PI
 import kotlin.math.cos
@@ -66,11 +69,27 @@ object Motion {
 /** The summit the rings circle, in the paths' own units. */
 private val SUMMIT = Offset(262f, 130f)
 
+/**
+ * Where the 390-wide board's rings land on a canvas [width] px wide: a 560x520 box at right -230, top -120,
+ * showing viewBox (40,-70) 450x430 with "meet" scaling (centred horizontally). Scale, then the offset of the
+ * paths' origin.
+ */
+private fun placement(width: Float): Triple<Float, Float, Float> {
+    val k = width / 390f
+    val s = minOf(560f / 450f, 520f / 430f) * k
+    val left = 60f * k + (560f * k - 450f * s) / 2f
+    val top = -120f * k
+    return Triple(s, left - 40f * s, top + 70f * s)
+}
+
+/**
+ * Each ring is drawn once into its own layer; the swell only scales that layer about the summit. The scaling is
+ * applied by the render thread, so the rings breathe without redrawing anything or touching the UI thread.
+ */
 @Composable
 fun Contours(modifier: Modifier = Modifier, color: Color = Ink.contour) {
     val paths = remember { contourPaths.map { PathParser().parsePathString(it).toPath() } }
     val moving = Motion.allowed(LocalContext.current)
-    // Read only while drawing: the swell redraws the canvas, it never recomposes the screen.
     val phase = if (moving) {
         rememberInfiniteTransition(label = "contours").animateFloat(
             initialValue = 0f,
@@ -79,21 +98,26 @@ fun Contours(modifier: Modifier = Modifier, color: Color = Ink.contour) {
             label = "swell",
         )
     } else null
-    Canvas(modifier) {
-        // Same placement as the 390-wide board: a 560x520 box at right -230, top -120,
-        // showing viewBox (40,-70) 450x430 with "meet" scaling (centred horizontally).
-        val k = size.width / 390f
-        val s = minOf(560f / 450f, 520f / 430f) * k
-        val left = 60f * k + (560f * k - 450f * s) / 2f
-        val top = -120f * k
-        val t = phase?.value ?: 0.25f
-        withTransform({
-            translate(left = left - 40f * s, top = top + 70f * s)
-            scale(s, s, pivot = Offset.Zero)
-        }) {
-            paths.forEachIndexed { i, path ->
-                val g = if (phase == null) 1f else Motion.swell(t, i, paths.size)
-                scale(g, g, pivot = SUMMIT) {
+    Box(modifier) {
+        paths.forEachIndexed { i, path ->
+            Canvas(
+                Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        if (phase != null) {
+                            val (s, x, y) = placement(size.width)
+                            val g = Motion.swell(phase.value, i, paths.size)
+                            scaleX = g
+                            scaleY = g
+                            transformOrigin = TransformOrigin((x + SUMMIT.x * s) / size.width, (y + SUMMIT.y * s) / size.height)
+                        }
+                    },
+            ) {
+                val (s, x, y) = placement(size.width)
+                withTransform({
+                    translate(left = x, top = y)
+                    scale(s, s, pivot = Offset.Zero)
+                }) {
                     drawPath(path, color, style = Stroke(width = density / s) /* 1dp after scaling */)
                 }
             }

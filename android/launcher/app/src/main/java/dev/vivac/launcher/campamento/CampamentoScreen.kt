@@ -69,7 +69,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -622,7 +621,7 @@ private fun Modifier.swipes(onSwipe: (Swipe) -> Unit): Modifier = pointerInput(U
 @Composable
 private fun Beam(modifier: Modifier) {
     val moving = Motion.allowed(LocalContext.current)
-    // Read only while drawing: the sway redraws the canvas, it never recomposes the screen.
+    // The beam is drawn once; the sway and the glow are its layer's rotation and alpha, applied by the render thread.
     val phase = if (moving) {
         rememberInfiniteTransition(label = "lamp").animateFloat(
             initialValue = 0f,
@@ -631,8 +630,16 @@ private fun Beam(modifier: Modifier) {
             label = "sway",
         )
     } else null
-    Canvas(modifier) {
-        val t = phase?.value ?: 0f
+    Canvas(
+        modifier.graphicsLayer {
+            val t = phase?.value ?: 0f
+            rotationZ = Motion.sway(t)
+            alpha = Motion.glow(t) / Motion.GLOW_MAX
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin((size.width - 46.dp.toPx()) / size.width, 66.dp.toPx() / size.height)
+            // One path: no offscreen buffer needed to fade it.
+            compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
+        },
+    ) {
         val origin = Offset(size.width - 46.dp.toPx(), 66.dp.toPx())
         val beam = Path().apply {
             moveTo(origin.x, origin.y)
@@ -640,18 +647,16 @@ private fun Beam(modifier: Modifier) {
             lineTo(70.dp.toPx(), size.height * 0.66f)
             close()
         }
-        rotate(Motion.sway(t), pivot = origin) {
-            drawPath(
-                beam,
-                Brush.linearGradient(
-                    0f to Ink.primary.copy(alpha = Motion.glow(t)),
-                    0.55f to Ink.primary.copy(alpha = 0.06f),
-                    1f to Color.Transparent,
-                    start = origin,
-                    end = Offset(0f, size.height * 0.62f),
-                ),
-            )
-        }
+        drawPath(
+            beam,
+            Brush.linearGradient(
+                0f to Ink.primary.copy(alpha = Motion.GLOW_MAX),
+                0.55f to Ink.primary.copy(alpha = 0.06f),
+                1f to Color.Transparent,
+                start = origin,
+                end = Offset(0f, size.height * 0.62f),
+            ),
+        )
     }
 }
 

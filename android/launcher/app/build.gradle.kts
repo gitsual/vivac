@@ -20,7 +20,10 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            // Signed with the debug key, so it installs over the debug build on the phone and keeps its data.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
