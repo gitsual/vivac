@@ -1067,4 +1067,18 @@ class LauncherAppTest {
         val dp = compose.activity.resources.displayMetrics.density
         assertTrue("above $above below $below", above > 48 * dp && kotlin.math.abs(above - below) < 48 * dp)
     }
+
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "w411dp-h914dp-420dpi")
+    fun `with room to spare the route's rows spread apart`() {
+        val eight = (1..8).map { InstalledApp("App $it", "p.a$it", false) }
+        store.values["pinned"] = eight.joinToString(",") { it.packageName }
+        show(apps = eight)
+        compose.waitForIdle()
+        val first = compose.onNodeWithText("App 1").fetchSemanticsNode().boundsInRoot
+        val second = compose.onNodeWithText("App 5").fetchSemanticsNode().boundsInRoot
+        val dp = compose.activity.resources.displayMetrics.density
+        // From the bottom of a row's name to the top of the next row's tile, well past the old 10dp.
+        assertTrue("rows ${(second.top - first.bottom) / dp}dp apart", second.top - first.bottom > 40 * dp)
+    }
 }

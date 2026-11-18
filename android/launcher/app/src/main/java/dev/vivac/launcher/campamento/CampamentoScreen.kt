@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.geometry.Size
 import androidx.compose.animation.core.animateDecay
 import kotlinx.coroutines.launch
@@ -242,11 +243,23 @@ fun CampamentoScreen(
                                 FactsStrip(facts, onOpenAbout)
                                 board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
                             }
-                            val gaps = with(LocalDensity.current) { (2 * 16).dp.toPx() }
-                            val spare = with(LocalDensity.current) { viewport.toPx() } - abovePx - routePx - gaps
-                            if (spare > 0 && routePx > 0) Spacer(Modifier.height(with(LocalDensity.current) { (spare / 2).toDp() }))
+                            // Part of the room goes between the route's rows, so they breathe; the rest above and below.
+                            val dens = LocalDensity.current
+                            val rowCount = Route.rows(home.pinned.count { pkg -> apps.any { it.packageName == pkg } }, 4).size
+                            var gapPx by remember { mutableIntStateOf(0) }
+                            val basePx = with(dens) { ROW_GAP.toPx() }
+                            val gaps = with(dens) { (2 * 16).dp.toPx() }
+                            // The route's height with its rows at the base gap, whatever gap it has now.
+                            val natural = routePx - (rowCount - 1).coerceAtLeast(0) * (gapPx.takeIf { it > 0 } ?: basePx.toInt())
+                            val room = with(dens) { viewport.toPx() } - abovePx - natural - gaps
+                            val rowGap = if (rowCount > 1 && routePx > 0 && room > 0) {
+                                (basePx + room * 0.5f / (rowCount - 1)).coerceAtMost(with(dens) { 56.dp.toPx() })
+                            } else basePx
+                            gapPx = rowGap.toInt()
+                            val spare = with(dens) { viewport.toPx() } - abovePx - routePx - gaps
+                            if (spare > 0 && routePx > 0) Spacer(Modifier.height(with(dens) { (spare / 2).toDp() }))
                             Box(Modifier.fillMaxWidth().onSizeChanged { routePx = it.height }.testTag("via")) {
-                                Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop)
+                                Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop, rowGap = with(dens) { rowGap.toDp() })
                             }
                         } else {
                             Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu, onOpenFolder, viewport) { c, spot ->
@@ -967,6 +980,8 @@ private fun Via(
     onAppMenu: (String) -> Unit,
     drag: DragBoard,
     onDrop: (Held, Spot) -> Unit,
+    /** The space between the route's rows: more when the camp has room to spare. */
+    rowGap: Dp = ROW_GAP,
 ) {
     val byPackage = apps.associateBy { it.packageName }
     val shown = pinned.mapNotNull { byPackage[it] }
@@ -993,7 +1008,7 @@ private fun Via(
                 .spot(drag, Spot(Zone.Via, Spot.END))
                 .drawBehind {
                     val cell = size.width / 4
-                    val rowH = (size.height + ROW_GAP.toPx()) / rows.size
+                    val rowH = (size.height + rowGap.toPx()) / rows.size
                     val centre = { index: Int ->
                         val r = rows.indexOfFirst { index in it }
                         Offset(cell * (rows[r].indexOf(index) + 0.5f), r * rowH + BADGE_OVERHANG.toPx() + TILE.toPx() / 2)
@@ -1018,7 +1033,7 @@ private fun Via(
                         style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, pathEffect = PathEffect.dashPathEffect(dash)),
                     )
                 },
-            verticalArrangement = Arrangement.spacedBy(ROW_GAP),
+            verticalArrangement = Arrangement.spacedBy(rowGap),
         ) {
             rows.forEach { row ->
                 Row(Modifier.fillMaxWidth()) {
