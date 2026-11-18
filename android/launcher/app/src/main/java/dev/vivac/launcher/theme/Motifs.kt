@@ -82,8 +82,9 @@ object Motion {
         Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
 
     /** The headlamp: a slow sway, like someone breathing in the bivouac, every fourteen seconds. */
-    const val LAMP_PERIOD_MS = 14_000
-    const val SWAY_DEGREES = 8f
+    /** A wide swing, from down the left to past the right edge, as quick at its quickest as the old 8° every 14 s. */
+    const val SWAY_DEGREES = 28f
+    const val LAMP_PERIOD_MS = 49_000
     /** The beam's strongest alpha breathes between these: dimmer, brighter, never off. */
     const val GLOW_MIN = 0.24f
     const val GLOW_MAX = 0.34f
@@ -96,15 +97,15 @@ object Motion {
         GLOW_MIN + (GLOW_MAX - GLOW_MIN) * (0.5f - 0.5f * cos(4f * PI.toFloat() * phase))
 
     /**
-     * Once per sway, the beam reaches a little forward and flares, as if the lamp were turned towards you for a
-     * moment: 0 most of the time, rising to 1 and back over about a second.
+     * At each end of its swing, the beam reaches a little forward and flares, as if the lamp were turned towards you
+     * for a moment: 0 most of the time, rising to 1 and back over about a second.
      */
     fun flare(phase: Float): Float {
-        val d = kotlin.math.abs(phase - FLARE_AT)
+        // At each end of the swing, where the beam turns.
+        val d = minOf(kotlin.math.abs(phase - 0.25f), kotlin.math.abs(phase - 0.75f))
         return if (d >= FLARE_HALF) 0f else 0.5f + 0.5f * cos(PI.toFloat() * d / FLARE_HALF)
     }
-    private const val FLARE_AT = 0.5f
-    private const val FLARE_HALF = 0.04f
+    private const val FLARE_HALF = 0.012f
 
     /** The scale of [ring] (0 = innermost) at [phase] (0..1 of the period). */
     fun swell(phase: Float, ring: Int, rings: Int): Float =
@@ -126,7 +127,7 @@ object Rings {
     private const val UNEVEN = 0.045f
     private const val STEPS = 144
     /** One ring's journey from the circle to the next ring's place, in milliseconds. */
-    const val STEP_MS = 3_200
+    const val STEP_MS = 6_400
 
     /** A ring's size at [u] steps out, as many times the circle: growing faster the further out it is. */
     fun size(u: Float): Float = 1f + u + 0.25f * u * u
@@ -161,11 +162,15 @@ object Rings {
     }
 }
 
+/** Where the beam points at rest, in degrees clockwise from the right (90 is straight down), and its half width. */
+const val BEAM_ANGLE = 112f
+const val BEAM_HALF = 11f
+
 /** The headlamp's beam: its two edges, as a narrow cone from [origin] down and to the left across the screen. */
 fun beamEdges(origin: Offset, width: Float, height: Float): Pair<Offset, Offset> {
     val reach = kotlin.math.hypot(width, height) * 1.2f
-    val centre = Math.toRadians(122.0)
-    val half = Math.toRadians(11.0)
+    val centre = Math.toRadians(BEAM_ANGLE.toDouble())
+    val half = Math.toRadians(BEAM_HALF.toDouble())
     fun edge(a: Double) = Offset(origin.x + reach * kotlin.math.cos(a).toFloat(), origin.y + reach * kotlin.math.sin(a).toFloat())
     return edge(centre - half) to edge(centre + half)
 }

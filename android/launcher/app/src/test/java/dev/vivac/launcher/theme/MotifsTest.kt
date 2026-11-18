@@ -57,4 +57,19 @@ class MotifsTest {
         assertEquals(0f, start.first().second, 0.01f)
         assertEquals(0f, end.last().second, 0.01f)
     }
+
+    @Test
+    fun `the beam swings from down the left to past the right edge, at the speed it had`() {
+        // At its furthest right, the cone's right edge points right of straight down, so it leaves by the right side.
+        assertTrue(BEAM_ANGLE - Motion.SWAY_DEGREES - BEAM_HALF < 80f)
+        // At its furthest left it still points down and to the left.
+        assertTrue(BEAM_ANGLE + Motion.SWAY_DEGREES + BEAM_HALF < 180f)
+        // The swing is wider but no faster: the same degrees per second at its quickest as before (8° every 14 s).
+        assertEquals(8f / 14_000f, Motion.SWAY_DEGREES / Motion.LAMP_PERIOD_MS, 1e-5f)
+    }
+
+    @Test
+    fun `the rings travel slowly`() {
+        assertTrue(Rings.STEP_MS >= 6_000)
+    }
 }
