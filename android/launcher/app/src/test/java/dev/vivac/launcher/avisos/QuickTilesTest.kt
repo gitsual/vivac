@@ -42,14 +42,4 @@ class QuickTilesTest {
         assertEquals(QuickTiles.DEFAULT, QuickTiles.decode(null))
         assertEquals(emptyList<Quick>(), QuickTiles.decode(""))
     }
-
-    @Test
-    fun `in two rows that scroll sideways, each page of eight reads row by row, a short last page padded`() {
-        val tiles = (1..10).map { Quick.App("p$it") }
-        // Laid out column by column (two to a column), so the screen shows p1 p2 p3 p4 over p5 p6 p7 p8.
-        assertEquals(
-            listOf("p1", "p5", "p2", "p6", "p3", "p7", "p4", "p8", "p9", null, "p10", null),
-            QuickTiles.columns(tiles).map { (it as Quick.App?)?.packageName },
-        )
-    }
 }

@@ -863,9 +863,14 @@ class LauncherAppTest {
         compose.onNodeWithContentDescription("Linterna").performClick()
         compose.onNodeWithContentDescription("Linterna, activado").assertExists()
         compose.onNodeWithContentDescription("Wi-Fi").performClick()
-        // Two rows show; the rest come in scrolling sideways.
-        compose.onNodeWithText("Ver los 18").assertDoesNotExist()
-        compose.onNodeWithTag("quick:grid").performScrollToNode(androidx.compose.ui.test.hasContentDescription("Cortina de Android"))
+        // Whole pages of eight: the last switches are two swipes away, never half shown at the edge.
+        compose.onNodeWithContentDescription("Cortina de Android").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Atajos, página 1 de 3").assertExists()
+        repeat(2) {
+            compose.onNodeWithTag("quick:pages").performTouchInput { swipeLeft() }
+            compose.waitForIdle()
+        }
+        compose.onNodeWithContentDescription("Atajos, página 3 de 3").assertExists()
         compose.onNodeWithContentDescription("Cortina de Android").performClick()
         compose.onNodeWithTag("aviso:a").performScrollTo().performClick()
         compose.waitForIdle()

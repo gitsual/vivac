@@ -80,9 +80,8 @@ data class AvisosActions(
     val close: () -> Unit = {},
 )
 
-/** Two rows of switches, as Android shows them; the rest come in from the right. */
+/** Two rows of switches a page, as Android shows them. */
 private const val ROWS = 2
-private val TILE_WIDTH = 78.dp
 private val TILE_HEIGHT = 100.dp
 
 /**
@@ -109,10 +108,6 @@ fun AvisosScreen(
             Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 24.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("VIVAC · AVISOS", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.weight(1f))
-                Pill("Cerrar", act.close)
-            }
             Text("Avisos", style = Type.title.copy(fontSize = 44.sp, lineHeight = 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
             // Pulling up past the end of the list (or anywhere, when it is short) closes the shade, as Android's does.
             val density = androidx.compose.ui.platform.LocalDensity.current.density
@@ -154,7 +149,7 @@ fun AvisosScreen(
 }
 
 /**
- * The quick switches: two rows that scroll sideways, the rest coming in from the right. Editing, they are laid out
+ * The quick switches: pages of two rows of four, a swipe for the next whole page. Editing, they are laid out
  * four to a row; a tapped switch is chosen to move or take out, and the ones not in the shade (and apps) wait below.
  */
 @Composable
@@ -168,15 +163,31 @@ private fun QuickSection(quick: List<Quick>, byPackage: Map<String, InstalledApp
             Small(if (editing) "Hecho" else "Editar") { chosen = null; act.edit() }
         }
         if (!editing) {
-            androidx.compose.foundation.lazy.grid.LazyHorizontalGrid(
-                rows = androidx.compose.foundation.lazy.grid.GridCells.Fixed(ROWS),
-                modifier = Modifier.fillMaxWidth().height(TILE_HEIGHT * ROWS).testTag("quick:grid"),
-            ) {
-                val laid = QuickTiles.columns(present)
-                items(laid.size, key = { laid[it]?.toString() ?: "empty:$it" }) { i ->
-                    val q = laid[i]
-                    if (q == null) Spacer(Modifier.width(TILE_WIDTH).height(TILE_HEIGHT))
-                    else QuickTile(q, byPackage, on = isOn(q), chosen = false, Modifier.width(TILE_WIDTH).height(TILE_HEIGHT)) { act.run(q) }
+            // Whole pages of eight, two rows of four filling the width: a swipe brings the next whole page.
+            val pages = present.chunked(ROWS * 4)
+            val pager = androidx.compose.foundation.pager.rememberPagerState { pages.size }
+            androidx.compose.foundation.pager.HorizontalPager(pager, Modifier.fillMaxWidth().testTag("quick:pages")) { p ->
+                Column {
+                    pages[p].chunked(4).forEach { row ->
+                        Row(Modifier.fillMaxWidth()) {
+                            row.forEach { q -> QuickTile(q, byPackage, on = isOn(q), chosen = false, Modifier.weight(1f).height(TILE_HEIGHT)) { act.run(q) } }
+                            repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
+            }
+            if (pages.size > 1) {
+                Row(
+                    Modifier.fillMaxWidth().semantics { contentDescription = "Atajos, página ${pager.currentPage + 1} de ${pages.size}" },
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                ) {
+                    repeat(pages.size) { i ->
+                        Box(
+                            Modifier.height(6.dp).width(if (i == pager.currentPage) 18.dp else 6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(if (i == pager.currentPage) Ink.primary else Ink.borderControl),
+                        )
+                    }
                 }
             }
         } else {

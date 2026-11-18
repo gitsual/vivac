@@ -14,6 +14,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -251,10 +252,10 @@ class MainActivityTest {
         allowNotices(false)
         start()
         deliver(Intent(MainActivity.ACTION_OPEN_AVISOS))
-        compose.onNodeWithText("VIVAC · AVISOS").assertDoesNotExist()
+        compose.onNodeWithTag("avisos:list").assertDoesNotExist()
         allowNotices(true)
         deliver(Intent(MainActivity.ACTION_OPEN_AVISOS))
-        compose.onNodeWithText("VIVAC · AVISOS").assertExists()
+        compose.onNodeWithTag("avisos:list").assertExists()
     }
 
     @Test
@@ -262,7 +263,7 @@ class MainActivityTest {
         allowNotices(true)
         val intent = Intent(androidx.test.core.app.ApplicationProvider.getApplicationContext(), MainActivity::class.java).setAction(MainActivity.ACTION_OPEN_AVISOS)
         scenario = ActivityScenario.launch(intent)
-        compose.onNodeWithText("VIVAC · AVISOS").assertExists()
+        compose.onNodeWithTag("avisos:list").assertExists()
     }
 
     @Test
