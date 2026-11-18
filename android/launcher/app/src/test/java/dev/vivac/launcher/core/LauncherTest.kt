@@ -958,4 +958,12 @@ class LauncherTest {
         l.noticeSettings("x.other")
         assertEquals("noticeSettings:x.other", actions.calls.last())
     }
+
+    @Test
+    fun `the status bar hides only on the camp, so a pull from the top reaches vivac there`() {
+        val l = launcher()
+        assertTrue(l.hidesStatusBar)
+        l.openSystem()
+        assertFalse(l.hidesStatusBar)
+    }
 }

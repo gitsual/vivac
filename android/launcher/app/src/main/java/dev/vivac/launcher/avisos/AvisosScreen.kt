@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.Spacer
@@ -74,8 +76,10 @@ data class AvisosActions(
     val close: () -> Unit = {},
 )
 
-/** How many switches show before "Ver todos". */
-private const val FOLDED = 8
+/** Two rows of switches, as Android shows them; the rest come in from the right. */
+private const val ROWS = 2
+private val TILE_WIDTH = 78.dp
+private val TILE_HEIGHT = 100.dp
 
 /**
  * vivac's own notification shade: your quick switches (two rows, or all of them; editable), then every app's
@@ -129,34 +133,39 @@ fun AvisosScreen(
 }
 
 /**
- * The quick switches, four to a row. Folded to two rows until "Ver todos". Editing, a tapped switch is chosen to
- * move or take out, and the ones not in the shade (and apps) wait below to be added.
+ * The quick switches: two rows that scroll sideways, the rest coming in from the right. Editing, they are laid out
+ * four to a row; a tapped switch is chosen to move or take out, and the ones not in the shade (and apps) wait below.
  */
 @Composable
 private fun QuickSection(quick: List<Quick>, byPackage: Map<String, InstalledApp>, isOn: (Quick) -> Boolean, editing: Boolean, act: AvisosActions) {
-    var unfolded by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<Quick?>(null) }
     // A switch whose app is gone is not shown.
     val present = quick.filter { it !is Quick.App || it.packageName in byPackage }
-    val shown = if (editing || unfolded) present else present.take(FOLDED)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("ATAJOS", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.weight(1f))
             Small(if (editing) "Hecho" else "Editar") { chosen = null; act.edit() }
         }
-        shown.chunked(4).forEach { row ->
-            Row(Modifier.fillMaxWidth()) {
-                row.forEach { q ->
-                    QuickTile(q, byPackage, on = isOn(q), chosen = editing && chosen == q, Modifier.weight(1f)) {
-                        if (editing) chosen = if (chosen == q) null else q else act.run(q)
-                    }
+        if (!editing) {
+            androidx.compose.foundation.lazy.grid.LazyHorizontalGrid(
+                rows = androidx.compose.foundation.lazy.grid.GridCells.Fixed(ROWS),
+                modifier = Modifier.fillMaxWidth().height(TILE_HEIGHT * ROWS).testTag("quick:grid"),
+            ) {
+                items(present.size, key = { present[it].toString() }) { i ->
+                    val q = present[i]
+                    QuickTile(q, byPackage, on = isOn(q), chosen = false, Modifier.width(TILE_WIDTH).height(TILE_HEIGHT)) { act.run(q) }
                 }
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
-        }
-        if (!editing && present.size > FOLDED) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Small(if (unfolded) "Ver menos" else "Ver los ${present.size}") { unfolded = !unfolded }
+        } else {
+            present.chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth()) {
+                    row.forEach { q ->
+                        QuickTile(q, byPackage, on = isOn(q), chosen = chosen == q, Modifier.weight(1f)) {
+                            chosen = if (chosen == q) null else q
+                        }
+                    }
+                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
             }
         }
         if (editing) {
@@ -294,8 +303,11 @@ private fun GroupCard(group: AvisoGroup, app: InstalledApp?, now: Long, act: Avi
             Round(Glyph.SLIDERS, "Ajustes de los avisos de $name") { act.noticeSettings(group.packageName) }
             if (group.avisos.count { it.clearable } > 1) Round(Glyph.CLOSE, "Descartar los de $name") { act.dismissApp(group.packageName) }
         }
+        // Keyed by the notice, so a swipe's state stays with its own notice when the one above it goes.
         group.avisos.forEach { aviso ->
-            if (aviso.clearable) Swiped(aviso.key, act.dismiss) { Notice(aviso, act) } else Notice(aviso, act)
+            androidx.compose.runtime.key(aviso.key) {
+                if (aviso.clearable) Swiped(aviso.key, act.dismiss) { Notice(aviso, act) } else Notice(aviso, act)
+            }
         }
     }
 }
@@ -357,10 +369,13 @@ private fun Notice(aviso: Aviso, act: AvisosActions) {
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun Swiped(key: String, onDismiss: (String) -> Unit, content: @Composable () -> Unit) {
+    // The box asks more than once as the swipe settles; the notice is dismissed only the first time.
+    var gone by remember { mutableStateOf(false) }
     val state = androidx.compose.material3.rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
-            if (value != androidx.compose.material3.SwipeToDismissBoxValue.Settled) onDismiss(key)
-            value != androidx.compose.material3.SwipeToDismissBoxValue.Settled
+            val away = value != androidx.compose.material3.SwipeToDismissBoxValue.Settled
+            if (away && !gone) { gone = true; onDismiss(key) }
+            away
         },
     )
     androidx.compose.material3.SwipeToDismissBox(state, backgroundContent = {}, modifier = Modifier.testTag("swipe:$key")) { content() }

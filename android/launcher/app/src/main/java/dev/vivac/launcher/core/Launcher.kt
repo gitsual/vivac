@@ -241,6 +241,9 @@ class Launcher(
         if (notices != null && actions.dotsAllowed()) screen = Screen.AVISOS else actions.showNotifications()
     }
 
+    /** Whether Android's status bar hides: on the camp, where a pull from the top opens vivac's shade. */
+    val hidesStatusBar: Boolean get() = screen == Screen.CAMPAMENTO
+
     /** Android's own shade, for its quick settings. */
     fun openAndroidShade() = actions.showNotifications()
 

@@ -60,6 +60,17 @@ fun LauncherApp(
     var resumes by remember { androidx.compose.runtime.mutableIntStateOf(0) }
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { resumes++ }
     val dotsAllowed = remember(resumes) { actions.dotsAllowed() }
+    // On the camp the status bar hides, so a pull from the top edge reaches vivac (and opens its shade); a swipe
+    // there brings Android's bar back for a moment. Everywhere else the bar shows as usual.
+    val view = androidx.compose.ui.platform.LocalView.current
+    val hideBar = launcher.hidesStatusBar
+    androidx.compose.runtime.LaunchedEffect(hideBar) {
+        val window = (view.context as? android.app.Activity)?.window ?: return@LaunchedEffect
+        val bars = androidx.core.view.WindowCompat.getInsetsController(window, view)
+        bars.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        val status = androidx.core.view.WindowInsetsCompat.Type.statusBars()
+        if (hideBar) bars.hide(status) else bars.show(status)
+    }
     // Android draws the wallpaper behind a window that asks for it; vivac's camp then lets it show through.
     val window = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.window
     androidx.compose.runtime.LaunchedEffect(launcher.showWallpaper) {

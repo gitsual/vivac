@@ -29,6 +29,8 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.performTextReplacement
@@ -856,10 +858,10 @@ class LauncherAppTest {
         compose.onNodeWithContentDescription("Linterna").performClick()
         compose.onNodeWithContentDescription("Linterna, activado").assertExists()
         compose.onNodeWithContentDescription("Wi-Fi").performClick()
-        // Two rows show; the rest unfold.
-        compose.onNodeWithContentDescription("Volumen").assertDoesNotExist()
-        compose.onNodeWithText("Ver los 18").performClick()
-        compose.onNodeWithContentDescription("Cortina de Android").performScrollTo().performClick()
+        // Two rows show; the rest come in scrolling sideways.
+        compose.onNodeWithText("Ver los 18").assertDoesNotExist()
+        compose.onNodeWithTag("quick:grid").performScrollToNode(androidx.compose.ui.test.hasContentDescription("Cortina de Android"))
+        compose.onNodeWithContentDescription("Cortina de Android").performClick()
         compose.onNodeWithTag("aviso:a").performScrollTo().performClick()
         compose.waitForIdle()
         assertEquals(listOf("open:a"), notices.calls)
@@ -929,5 +931,14 @@ class LauncherAppTest {
         compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
         compose.waitForIdle()
         compose.onNodeWithText("Activar los puntos de aviso").assertDoesNotExist()
+    }
+
+    @Test
+    fun `swiping one notice inside an app's card takes only that one, the next stays in view`() {
+        val notices = withNotices(aviso("a", "Ana"), aviso("b", "Bea", minutesAgo = 1))
+        compose.onNodeWithTag("swipe:a").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        assertEquals(listOf("dismiss:a"), notices.calls)
+        compose.onNodeWithText("texto de Bea").assertIsDisplayed()
     }
 }
