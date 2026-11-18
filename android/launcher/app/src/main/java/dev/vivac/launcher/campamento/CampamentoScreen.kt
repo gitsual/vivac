@@ -421,9 +421,11 @@ private fun Ladera(
             }
         }
     }
-    // The rest of the ladera takes a carried app at its end.
-    Box(Modifier.fillMaxWidth().heightIn(min = 96.dp).spot(drag, Spot(Zone.Ladera(page), Spot.END))) {
-        Text("Mantén pulsado un widget o una app para traerlos a esta ladera.", style = Type.small)
+    // The rest of the ladera takes a carried thing at its end. It only takes room when the ladera is empty or
+    // something is being carried, so a full ladera has no blank space under it to scroll into.
+    val open = items.isEmpty() || drag.held != null
+    Box(Modifier.fillMaxWidth().heightIn(min = if (open) 96.dp else 0.dp).spot(drag, Spot(Zone.Ladera(page), Spot.END))) {
+        if (items.isEmpty()) Text("Mantén pulsado un widget o una app para traerlos a esta ladera.", style = Type.small)
     }
 }
 

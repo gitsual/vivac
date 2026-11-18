@@ -194,4 +194,33 @@ class WidgetsTest {
         touch(parent, MotionEvent.ACTION_UP)
         assertEquals(listOf("lift:20,20", "land:false"), grip.calls)
     }
+
+    /** A parent that remembers whether its child asked it to keep its hands off the gesture. */
+    private class Watching(context: android.content.Context) : android.widget.FrameLayout(context) {
+        var handsOff = false
+        override fun requestDisallowInterceptTouchEvent(disallow: Boolean) { handsOff = disallow; super.requestDisallowInterceptTouchEvent(disallow) }
+    }
+
+    private fun watched(view: android.view.View) = Watching(activity).apply {
+        addView(view)
+        val exactly = android.view.View.MeasureSpec.EXACTLY
+        measure(android.view.View.MeasureSpec.makeMeasureSpec(400, exactly), android.view.View.MeasureSpec.makeMeasureSpec(200, exactly))
+        layout(0, 0, 400, 200)
+    }
+
+    @Test
+    fun `a finger dragged up or down on a widget stays the widget's, so the page does not scroll`() {
+        val parent = watched(placedView(Recorder()))
+        touch(parent, MotionEvent.ACTION_DOWN)
+        touch(parent, MotionEvent.ACTION_MOVE, y = 120f)
+        assertTrue(parent.handsOff)
+    }
+
+    @Test
+    fun `a finger dragged sideways on a widget still turns the page`() {
+        val parent = watched(placedView(Recorder()))
+        touch(parent, MotionEvent.ACTION_DOWN)
+        touch(parent, MotionEvent.ACTION_MOVE, x = 200f)
+        assertFalse(parent.handsOff)
+    }
 }

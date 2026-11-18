@@ -66,7 +66,11 @@ class WidgetFrame(context: Context) : AppWidgetHostView(context) {
                 lastX = event.x; lastY = event.y
                 clock.postDelayed(press, ViewConfiguration.getLongPressTimeout().toLong())
             }
-            MotionEvent.ACTION_MOVE -> if (!held && (abs(event.x - downX) > slop || abs(event.y - downY) > slop)) clock.removeCallbacks(press)
+            MotionEvent.ACTION_MOVE -> if (!held && (abs(event.x - downX) > slop || abs(event.y - downY) > slop)) {
+                clock.removeCallbacks(press)
+                // Up or down is the widget's own (its list, its scroll), not the page's; sideways still turns the page.
+                if (abs(event.y - downY) > abs(event.x - downX)) parent?.requestDisallowInterceptTouchEvent(true)
+            }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> clock.removeCallbacks(press)
         }
         return super.dispatchTouchEvent(event) || event.actionMasked == MotionEvent.ACTION_DOWN

@@ -428,7 +428,8 @@ class LauncherAppTest {
         compose.runOnUiThread { launcher.showPage(1) }
         compose.waitForIdle()
         compose.onNodeWithText("LADERA 1").assertExists()
-        compose.onNodeWithText("Mantén pulsado un widget o una app para traerlos a esta ladera.").assertExists()
+        // The hint is for an empty ladera: under something, it would only add space to scroll into.
+        compose.onNodeWithText("Mantén pulsado un widget o una app para traerlos a esta ladera.").assertDoesNotExist()
         compose.onAllNodesWithText("Termux").assertCountEquals(2)
         compose.onNodeWithContentDescription("Ladera 1, página 2 de 2").assertExists()
     }
