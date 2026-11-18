@@ -6,6 +6,10 @@
     <!-- "Desinstalar" opens the system confirmation; Android requires this to send ACTION_DELETE. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
+    <!-- Optional, asked only when you turn on contact or calendar search in vivac's settings. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
     <!-- Android 15: the home app may show the private space (normal permission, granted at install). -->
     <uses-permission android:name="android.permission.ACCESS_HIDDEN_PROFILES" />
 

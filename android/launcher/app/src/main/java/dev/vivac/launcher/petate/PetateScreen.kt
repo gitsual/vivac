@@ -50,6 +50,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.produceState
+import dev.vivac.launcher.core.CalendarEvent
+import dev.vivac.launcher.core.Contact
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -103,6 +106,12 @@ fun PetateScreen(
     profiles: List<Profile> = emptyList(),
     onOpenInProfile: (String, Long) -> Unit = { _, _ -> },
     onLockProfile: (Profile) -> Unit = {},
+    findContacts: (String) -> List<Contact> = { emptyList() },
+    findEvents: (String) -> List<CalendarEvent> = { emptyList() },
+    onOpenContact: (Contact) -> Unit = {},
+    onOpenEvent: (CalendarEvent) -> Unit = {},
+    /** Where contacts and events are looked up: off the main thread. */
+    io: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
 ) {
     // Holding an app and moving lifts it out of the petate, to be carried onto the camp.
     val carry: @Composable (InstalledApp, Color) -> Modifier? = { app, tone ->
@@ -153,6 +162,10 @@ fun PetateScreen(
                 if (recent.isNotEmpty() && query.isBlank() && !showHidden && profile == null) LastPitch(recent, onOpenApp, onAppMenu, carry)
                 val answer = remember(query) { Calc.answer(query) }
                 if (answer != null) Answer(answer) { onCopy(answer) }
+                val people by produceState(emptyList<Contact>(), query) { value = kotlinx.coroutines.withContext(io) { findContacts(query) } }
+                val agenda by produceState(emptyList<CalendarEvent>(), query) { value = kotlinx.coroutines.withContext(io) { findEvents(query) } }
+                if (people.isNotEmpty()) Results("CONTACTOS", people.map { it.name to null }) { onOpenContact(people[it]) }
+                if (agenda.isNotEmpty()) Results("CALENDARIO", agenda.map { it.title to When.of(it.startMillis) }) { onOpenEvent(agenda[it]) }
                 val foundShortcuts = remember(query, shortcuts) { Pack.searchShortcuts(shortcuts, query).take(4) }
                 if (foundShortcuts.isNotEmpty()) ShortcutResults(foundShortcuts, onOpenShortcut)
                 if (query.isNotBlank()) {
@@ -233,6 +246,36 @@ private fun ProfileBar(profile: Profile, onToggle: () -> Unit) {
         Text(state, style = Type.small.copy(color = Ink.text), modifier = Modifier.weight(1f))
         Chip(action, true, onToggle)
     }
+}
+
+/** Contacts or events matching the search: a heading, then one row each (a second line when there is one). */
+@Composable
+private fun Results(title: String, rows: List<Pair<String, String?>>, onOpen: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(title, style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.semantics { heading() })
+        rows.forEachIndexed { i, (main, detail) ->
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Ink.surface)
+                    .clickable(role = Role.Button, onClick = { onOpen(i) })
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Text(main, style = Type.body)
+                if (detail != null) Text(detail, style = Type.small)
+            }
+        }
+    }
+}
+
+/** An event's start as the Petate shows it: "vie 21 nov · 20:30". */
+object When {
+    private val format = java.time.format.DateTimeFormatter.ofPattern("EEE d MMM · HH:mm", java.util.Locale.forLanguageTag("es-ES"))
+    fun of(millis: Long, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): String =
+        format.format(java.time.Instant.ofEpochMilli(millis).atZone(zone)).replace(".", "")
 }
 
 /** Shortcuts whose name matches the search: the app's glyph, what it does, and whose it is. */

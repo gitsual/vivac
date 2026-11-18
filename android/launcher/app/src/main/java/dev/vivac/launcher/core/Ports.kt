@@ -75,3 +75,24 @@ interface WidgetHost {
     /** The rows a widget fills at its own size, before you choose one. */
     fun defaultRows(id: Int): Int
 }
+
+/** A person from your contacts, as the Petate's search finds them. */
+data class Contact(val id: Long, val name: String, val lookup: String)
+
+/** An event from your calendars: when it starts (epoch millis) and its title. */
+data class CalendarEvent(val id: Long, val title: String, val startMillis: Long)
+
+/** Port: your contacts and calendars, read only when you allowed it (Android's own permissions). */
+interface Directory {
+    fun canReadContacts(): Boolean
+    fun canReadCalendar(): Boolean
+    fun contacts(query: String): List<Contact>
+    /** Events whose title matches, from now on. */
+    fun events(query: String): List<CalendarEvent>
+    fun openContact(contact: Contact)
+    fun openEvent(event: CalendarEvent)
+    /** Android's permission dialog, for contacts or for calendars. */
+    fun askContacts()
+    fun askCalendar()
+}
+

@@ -39,8 +39,8 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | D9 | Alphabet fast scroller | done (the altimeter: tap or slide) |
 | D10 | Rename an app (custom label) | done: "Cambiar el nombre" in the menu; search finds the new name; blank restores |
 | D11 | Calculator and unit conversion in the search field | done: sums, "10% de 150", length/mass/volume/time/speed/data/temperature; tap copies |
-| D12 | Search contacts (READ_CONTACTS, opt-in) and open/call/message them | todo |
-| D13 | Search calendar events (READ_CALENDAR, opt-in) | todo |
+| D12 | Search contacts (READ_CONTACTS, opt-in) and open/call/message them | done: opt-in in settings; opens the contact (call/message from there) |
+| D13 | Search calendar events (READ_CALENDAR, opt-in) | done: next six months, opens the event |
 
 ## App menu (long press)
 

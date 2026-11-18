@@ -76,6 +76,8 @@ class Launcher(
     private val widgets: WidgetHost,
     /** The widget id waiting for the bind dialog or its setup screen, restored after process death. */
     pendingWidget: Int = -1,
+    /** Your contacts and calendars; none in tests that do not need them. */
+    private val directory: Directory? = null,
 ) {
     var apps by mutableStateOf(emptyList<InstalledApp>()); private set
     var home by mutableStateOf(Home.decode(store.get(KEY_DOCK), store.get(KEY_PINNED), store.get(KEY_HIDDEN))); private set
@@ -159,6 +161,37 @@ class Launcher(
     }
 
     private fun gesture(key: String, default: Gesture) = Gesture.entries.firstOrNull { it.name == store.get(key) } ?: default
+
+    /** The Petate's search also looks through your contacts, and your calendars. Off until you choose. */
+    var searchContacts by mutableStateOf(store.get(KEY_CONTACTS) == "1"); private set
+    var searchCalendar by mutableStateOf(store.get(KEY_CALENDAR) == "1"); private set
+
+    fun toggleContacts() {
+        searchContacts = !searchContacts
+        store.put(mapOf(KEY_CONTACTS to if (searchContacts) "1" else "0"))
+        if (searchContacts && directory?.canReadContacts() == false) directory.askContacts()
+    }
+
+    fun toggleCalendar() {
+        searchCalendar = !searchCalendar
+        store.put(mapOf(KEY_CALENDAR to if (searchCalendar) "1" else "0"))
+        if (searchCalendar && directory?.canReadCalendar() == false) directory.askCalendar()
+    }
+
+    fun findContacts(query: String): List<Contact> {
+        val d = directory ?: return emptyList()
+        if (!searchContacts || query.isBlank() || !d.canReadContacts()) return emptyList()
+        return d.contacts(query.trim()).take(3)
+    }
+
+    fun findEvents(query: String): List<CalendarEvent> {
+        val d = directory ?: return emptyList()
+        if (!searchCalendar || query.isBlank() || !d.canReadCalendar()) return emptyList()
+        return d.events(query.trim()).take(3)
+    }
+
+    fun openContact(contact: Contact) { directory?.openContact(contact); screen = Screen.CAMPAMENTO }
+    fun openEvent(event: CalendarEvent) { directory?.openEvent(event); screen = Screen.CAMPAMENTO }
 
     fun openSettings() {
         campMenu = false
@@ -598,6 +631,8 @@ class Launcher(
         const val KEY_SWIPE_UP = "swipeUp"
         const val KEY_SWIPE_DOWN = "swipeDown"
         const val KEY_ICONS = "icons"
+        const val KEY_CONTACTS = "searchContacts"
+        const val KEY_CALENDAR = "searchCalendar"
         const val KEY_ICON_PACK = "iconPack"
 
         private fun encodeNames(names: Map<String, String>) =

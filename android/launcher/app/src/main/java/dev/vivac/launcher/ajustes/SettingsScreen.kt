@@ -54,6 +54,8 @@ data class SettingsState(
     val iconStyle: IconStyle = IconStyle.GLYPHS,
     val iconPack: String? = null,
     val packs: List<IconPackInfo> = emptyList(),
+    val contacts: Boolean = false,
+    val calendar: Boolean = false,
 )
 
 /** What each choice on the settings screen does. */
@@ -74,6 +76,8 @@ class SettingsActions(
     val close: () -> Unit = {},
     val chooseIcons: (IconStyle) -> Unit = {},
     val chooseIconPack: (String) -> Unit = {},
+    val toggleContacts: () -> Unit = {},
+    val toggleCalendar: () -> Unit = {},
 )
 
 /** vivac's settings: one screen, grouped as the camp is (home, petate, notices, gestures, copies). */
@@ -118,6 +122,8 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             if (state.iconStyle != IconStyle.GLYPHS) Text("Las apps sin icono en este estilo siguen con su glifo de vivac.", style = Type.small)
 
             Section("PETATE")
+            Toggle("Buscar en contactos", "El buscador del petate también encuentra personas. Android te pedirá permiso.", state.contacts, act.toggleContacts)
+            Toggle("Buscar en el calendario", "Y tus próximos eventos, hasta medio año.", state.calendar, act.toggleCalendar)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Columnas", style = Type.body, modifier = Modifier.weight(1f))
                 listOf(4, 5).forEach { n -> Choice("$n", state.columns == n) { act.setColumns(n) } }

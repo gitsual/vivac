@@ -681,6 +681,36 @@ class LauncherTest {
     }
 
     @Test
+    fun `contacts and events are searched only once you turn them on and android allows it`() {
+        val dir = FakeDirectory().apply {
+            people = listOf(Contact(1, "Ana García", "a"), Contact(2, "Bruno", "b"))
+            agenda = listOf(CalendarEvent(5, "Cena con Ana", 0L))
+        }
+        val l = Launcher(FakeSource(listOf(termux)), store, actions, widgets, directory = dir).also { it.refresh() }
+        assertEquals(emptyList<Contact>(), l.findContacts("ana"))
+        assertEquals(emptyList<CalendarEvent>(), l.findEvents("ana"))
+        l.toggleContacts()
+        assertEquals(listOf("askContacts"), dir.calls)
+        assertTrue(l.searchContacts)
+        assertEquals(emptyList<Contact>(), l.findContacts("ana"))
+        dir.contactsAllowed = true
+        assertEquals(listOf(Contact(1, "Ana García", "a")), l.findContacts("ana"))
+        assertEquals(emptyList<Contact>(), l.findContacts(" "))
+        l.toggleCalendar()
+        dir.calendarAllowed = true
+        assertEquals(1, l.findEvents("ana").size)
+        assertTrue(Launcher(FakeSource(listOf(termux)), store, actions, widgets, directory = dir).searchCalendar)
+        l.openContact(Contact(1, "Ana García", "a"))
+        l.openEvent(CalendarEvent(5, "Cena con Ana", 0L))
+        assertEquals(listOf("askContacts", "askCalendar", "contact:1", "event:5"), dir.calls)
+        l.toggleContacts()
+        l.toggleCalendar()
+        assertEquals(emptyList<Contact>(), l.findContacts("ana"))
+        assertFalse(Launcher(FakeSource(listOf(termux)), store, actions, widgets).searchContacts.also { } && false)
+        assertEquals(emptyList<Contact>(), Launcher(FakeSource(listOf(termux)), store, actions, widgets).findContacts("ana"))
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

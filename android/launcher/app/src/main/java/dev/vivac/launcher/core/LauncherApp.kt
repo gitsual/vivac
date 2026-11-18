@@ -104,6 +104,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     dotsAllowed = actions.dotsAllowed(), counts = launcher.showCounts, swipeUp = launcher.swipeUp, swipeDown = launcher.swipeDown,
                     doubleTapLock = launcher.doubleTapLock, isHome = actions.isHome(),
                     iconStyle = launcher.iconStyle, iconPack = launcher.iconPack, packs = actions.iconPacks(),
+                    contacts = launcher.searchContacts, calendar = launcher.searchCalendar,
                 ),
                 SettingsActions(
                     toggleLock = launcher::toggleLock, toggleWallpaper = launcher::toggleWallpaper, changeWallpaper = launcher::changeWallpaper,
@@ -112,6 +113,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     toggleDoubleTap = launcher::toggleDoubleTapLock, backUp = launcher::backUp, restore = launcher::askRestore,
                     becomeHome = launcher::becomeHome, close = { launcher.back() },
                     chooseIcons = launcher::chooseIcons, chooseIconPack = launcher::chooseIconPack,
+                    toggleContacts = launcher::toggleContacts, toggleCalendar = launcher::toggleCalendar,
                 ),
             )
             Screen.PETATE -> Box {
@@ -136,6 +138,10 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     onOpenShortcut = launcher::openShortcutFromPetate,
                     profiles = launcher.profiles,
                     columns = launcher.columns,
+                    findContacts = launcher::findContacts,
+                    findEvents = launcher::findEvents,
+                    onOpenContact = launcher::openContact,
+                    onOpenEvent = launcher::openEvent,
                     onOpenInProfile = launcher::openInProfile,
                     onLockProfile = launcher::lockProfile,
                     modifier = Modifier.graphicsLayer { alpha = if (lifted) 0f else 1f },

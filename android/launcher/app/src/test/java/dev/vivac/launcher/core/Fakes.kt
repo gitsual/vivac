@@ -81,3 +81,20 @@ class FakeWidgets : WidgetHost {
     /** What Android does when you accept the bind dialog. */
     fun accept(id: Int) { bound[id]?.let { bind(id, it) } }
 }
+
+class FakeDirectory : Directory {
+    val calls = mutableListOf<String>()
+    var contactsAllowed = false
+    var calendarAllowed = false
+    var people = listOf<Contact>()
+    var agenda = listOf<CalendarEvent>()
+    override fun canReadContacts() = contactsAllowed
+    override fun canReadCalendar() = calendarAllowed
+    override fun contacts(query: String) = people.filter { it.name.contains(query, ignoreCase = true) }
+    override fun events(query: String) = agenda.filter { it.title.contains(query, ignoreCase = true) }
+    override fun openContact(contact: Contact) { calls += "contact:${contact.id}" }
+    override fun openEvent(event: CalendarEvent) { calls += "event:${event.id}" }
+    override fun askContacts() { calls += "askContacts" }
+    override fun askCalendar() { calls += "askCalendar" }
+}
+

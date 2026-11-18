@@ -23,6 +23,8 @@ import dev.vivac.launcher.apps.InstalledApp
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import dev.vivac.launcher.core.CalendarEvent
+import dev.vivac.launcher.core.Contact
 import androidx.compose.ui.test.performScrollTo
 import dev.vivac.launcher.apps.Profile
 import org.junit.runner.RunWith
@@ -209,5 +211,29 @@ class PetateScreenTest {
         compose.onNodeWithText("Privado").performScrollTo().performClick()
         compose.onNodeWithText("Espacio privado abierto · 1 apps").assertExists()
         compose.onNodeWithText("Bloquear").assertExists()
+    }
+
+    @Test
+    fun `a search lists matching contacts and events, and a tap opens one`() {
+        val opened = mutableListOf<String>()
+        val ana = Contact(1, "Ana García", "a")
+        val dinner = CalendarEvent(5, "Cena con Ana", java.time.ZonedDateTime.of(2026, 11, 21, 20, 30, 0, 0, java.time.ZoneId.systemDefault()).toInstant().toEpochMilli())
+        compose.setContent {
+            PetateScreen(
+                listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {},
+                findContacts = { q -> if (q.isNotBlank()) listOf(ana) else emptyList() },
+                findEvents = { q -> if (q.isNotBlank()) listOf(dinner) else emptyList() },
+                onOpenContact = { opened += "contact:${it.id}" },
+                onOpenEvent = { opened += "event:${it.id}" },
+                io = kotlinx.coroutines.Dispatchers.Unconfined,
+            )
+        }
+        compose.onNodeWithText("CONTACTOS").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("ana")
+        compose.waitForIdle()
+        compose.onNodeWithText("Ana García").performClick()
+        compose.onNodeWithText("sáb 21 nov · 20:30").assertExists()
+        compose.onNodeWithText("Cena con Ana").performClick()
+        assertEquals(listOf("contact:1", "event:5"), opened)
     }
 }
