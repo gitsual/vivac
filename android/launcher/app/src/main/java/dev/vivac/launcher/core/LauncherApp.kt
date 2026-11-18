@@ -95,6 +95,7 @@ fun LauncherApp(
             onOpenFolder = launcher::openFolder,
             onSwipeUp = launcher::onSwipeUp,
             onSwipeDown = launcher::onSwipeDown,
+            onMoveItem = launcher::moveItem,
         )
     }
     CompositionLocalProvider(

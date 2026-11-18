@@ -40,6 +40,11 @@ data class Held(val app: InstalledApp, override val from: Zone, val tone: Color)
     override fun takes(zone: Zone) = zone != Zone.Ladera(0) && zone != Zone.Petate
 }
 
+/** A shortcut or a folder being carried: it lands only on a ladera. */
+data class HeldItem(val item: Item, override val from: Zone, val label: String) : Cargo {
+    override fun takes(zone: Zone) = zone is Zone.Ladera && zone.page >= 1
+}
+
 /** A widget being carried: it lands only among the things on a page. */
 data class HeldWidget(val id: Int, override val from: Zone, val label: String) : Cargo {
     override fun takes(zone: Zone) = zone is Zone.Ladera
@@ -124,6 +129,18 @@ fun Modifier.carriable(
     onMenu: () -> Unit,
     onDrop: (Held, Spot) -> Unit,
     onLand: () -> Unit = {},
+): Modifier = carrying(board, held, label, onOpen, onMenu, { c, s -> onDrop(c as Held, s) }, onLand)
+
+/** [carriable] for anything that can be carried: an app, a shortcut, a folder. */
+@Composable
+fun Modifier.carrying(
+    board: DragBoard,
+    held: Cargo,
+    label: String,
+    onOpen: () -> Unit,
+    onMenu: () -> Unit,
+    onDrop: (Cargo, Spot) -> Unit,
+    onLand: () -> Unit = {},
 ): Modifier {
     val haptics = LocalHapticFeedback.current
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -158,7 +175,7 @@ fun Modifier.carriable(
                     board.cancel()
                     onMenu()
                 } else if (board.held != null) {
-                    board.release()?.let { (h, s) -> onDrop(h as Held, s) }
+                    board.release()?.let { (h, s) -> onDrop(h, s) }
                     onLand()
                 }
             }

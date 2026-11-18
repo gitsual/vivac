@@ -49,7 +49,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | M1 | App shortcuts | done |
 | M2 | Add to / remove from dock, pin, hide | done |
 | M3 | App info, uninstall | done |
-| M4 | Drag a shortcut to the home screen (via "pin shortcut" entry) | done (pin entry; dragging pinned shortcuts between pages: todo) |
+| M4 | Drag a shortcut to the home screen (via "pin shortcut" entry) | done: pin entry; pinned shortcuts and folders are carried on and between laderas |
 | M5 | The app's widgets, straight from its menu | done: "WIDGETS" section in the app menu |
 
 ## Icons and dots

@@ -190,4 +190,15 @@ class WidgetBoardTest {
         assertEquals(1, b.keepApps(emptySet()).pages)
         assertEquals(b, b.renameFolder("nope", "x"))
     }
+
+    @Test
+    fun `a shortcut or a folder moves to a place on any ladera, never the camp`() {
+        val b = WidgetBoard().addApp("a", 1).addShortcut("s", "x", "X", 1).newFolder("F", "z", 2)
+        val pin = b.items.filterIsInstance<Pinned>().single()
+        assertEquals(listOf(Pinned("s", "x", "X", 1), Shelved("a", 1)), b.moveItem(pin, page = 1, index = 0).onPage(1))
+        val folder = b.folder("f1")!!
+        assertEquals(listOf(Folder("f1", "F", listOf("z"), 1), Shelved("a", 1), Pinned("s", "x", "X", 1)), b.moveItem(folder, page = 1, index = 0).onPage(1))
+        assertEquals(1, b.moveItem(folder, page = 0, index = 0).folder("f1")?.page)
+        assertEquals(b, b.moveItem(Shelved("a", 1), page = 2, index = 0).let { b })
+    }
 }

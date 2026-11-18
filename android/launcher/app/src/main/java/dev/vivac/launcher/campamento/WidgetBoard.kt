@@ -47,6 +47,17 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
     fun insertApp(packageName: String, page: Int, index: Int): WidgetBoard =
         insert(Shelved(packageName, page.coerceAtLeast(1)), index) { it is Shelved && it.packageName == packageName }
 
+    /** Moves a shortcut or a folder to [index] on a ladera (apps and widgets have their own moves). */
+    fun moveItem(item: Item, page: Int, index: Int): WidgetBoard {
+        val target = page.coerceAtLeast(1)
+        val moved = when (item) {
+            is Pinned -> item.copy(page = target)
+            is Folder -> item.copy(page = target)
+            else -> return this
+        }
+        return insert(moved, index) { it == item }
+    }
+
     /** Puts a widget at [index] among the things on [page], the camp included, keeping its rows. */
     fun insertWidget(id: Int, page: Int, index: Int): WidgetBoard {
         val widget = placed(id) ?: return this

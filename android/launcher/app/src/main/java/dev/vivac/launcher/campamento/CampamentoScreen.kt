@@ -40,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -130,6 +131,7 @@ fun CampamentoScreen(
     onOpenFolder: (String) -> Unit = {},
     onSwipeUp: () -> Unit = { onOpenPetate(false) },
     onSwipeDown: () -> Unit = onShowNotifications,
+    onMoveItem: (Item, Zone, Int) -> Unit = { _, _, _ -> },
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
@@ -206,7 +208,9 @@ fun CampamentoScreen(
                             board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
                             Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop)
                         } else {
-                            Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu, onOpenFolder)
+                            Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu, onOpenFolder) { c, spot ->
+                                if (c is HeldItem) onMoveItem(c.item, spot.zone, spot.index)
+                            }
                         }
                     }
                 }
@@ -216,7 +220,8 @@ fun CampamentoScreen(
             DockCard(apps, home, onOpenApp, onAppMenu, drag, drop) { onOpenPetate(false) }
         }
         // The carried app follows the finger, a little lifted.
-        (drag.held as? HeldWidget)?.let { w ->
+        val carriedLabel = when (val c = drag.held) { is HeldWidget -> c.label; is HeldItem -> c.label; else -> null }
+        carriedLabel?.let { label ->
             val half = with(LocalDensity.current) { Offset(WIDGET_GHOST_W.toPx() / 2, WIDGET_GHOST_H.toPx() / 2) }
             Box(
                 Modifier
@@ -227,7 +232,10 @@ fun CampamentoScreen(
                     .background(Ink.raised)
                     .border(1.5.dp, Ink.primary, RoundedCornerShape(20.dp)),
                 contentAlignment = Alignment.Center,
-            ) { Text(w.label, style = Type.small.copy(color = Ink.text), maxLines = 1) }
+            ) {
+                // Decorative: a copy of the tile under the finger; TalkBack keeps reading the tile itself.
+                Text(label, style = Type.small.copy(color = Ink.text), maxLines = 1, modifier = Modifier.clearAndSetSemantics {})
+            }
         }
         (drag.held as? Held)?.let { h ->
             val half = with(LocalDensity.current) { (TILE / 2).toPx() }
@@ -317,11 +325,13 @@ private fun Ladera(
     onOpenApp: (String) -> Unit,
     onAppMenu: (String) -> Unit,
     drag: DragBoard,
-    onDrop: (Held, Spot) -> Unit,
+    onDropApp: (Held, Spot) -> Unit,
     onShortcut: (Pinned) -> Unit,
     onShortcutMenu: (Pinned) -> Unit,
     onOpenFolder: (String) -> Unit,
+    onDropItem: (Cargo, Spot) -> Unit = { _, _ -> },
 ) {
+    val onDrop: (Cargo, Spot) -> Unit = { c, s -> if (c is Held) onDropApp(c, s) else onDropItem(c, s) }
     val byPackage = apps.associateBy { it.packageName }
     // Consecutive apps and shortcuts form one block, so they share rows; each widget is a block of its own.
     val blocks = mutableListOf<Any>()
@@ -352,25 +362,28 @@ private fun Ladera(
                                 val app = byPackage.getValue(item.packageName)
                                 CarriedTile(
                                     app, Zone.Ladera(page), items.indexOf(item), drag,
-                                    Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)], Ink.surface, onOpenApp, onAppMenu, onDrop,
+                                    Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)], Ink.surface, onOpenApp, onAppMenu, onDropApp,
                                     modifier = Modifier.weight(1f),
                                 )
                             }
                             is Pinned -> {
                                 val app = byPackage.getValue(item.packageName)
+                                val spot = Spot(Zone.Ladera(page), items.indexOf(item))
+                                val lifted = (drag.held as? HeldItem)?.item == item
                                 AppTile(
                                     label = item.label,
                                     background = Ink.surface,
-                                    border = Ink.field,
+                                    border = if (drag.target == spot && !lifted) Ink.primary else Ink.field,
                                     badge = "↗",
                                     onClick = { onShortcut(item) },
                                     onLongClick = { onShortcutMenu(item) },
-                                    modifier = Modifier.weight(1f).spot(drag, Spot(Zone.Ladera(page), items.indexOf(item))),
+                                    modifier = Modifier.weight(1f).spot(drag, spot).graphicsLayer { alpha = if (lifted) 0.3f else 1f },
+                                    gestures = Modifier.carrying(drag, HeldItem(item, Zone.Ladera(page), item.label), item.label, { onShortcut(item) }, { onShortcutMenu(item) }, onDrop),
                                 ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
                             }
                             is Folder -> FolderTile(
                                 item, item.apps.mapNotNull { byPackage[it] }, drag, onOpenFolder,
-                                Modifier.weight(1f),
+                                Modifier.weight(1f), page, items.indexOf(item), onDrop,
                             )
                             is Placed -> Unit
                         }
@@ -389,18 +402,26 @@ private fun Ladera(
 /** A folder: up to four of its apps' glyphs in a two-by-two tile; a carried app dropped on it goes in. */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun FolderTile(folder: Folder, apps: List<InstalledApp>, drag: DragBoard, onOpen: (String) -> Unit, modifier: Modifier) {
+private fun FolderTile(
+    folder: Folder,
+    apps: List<InstalledApp>,
+    drag: DragBoard,
+    onOpen: (String) -> Unit,
+    modifier: Modifier,
+    page: Int,
+    index: Int,
+    onDrop: (Cargo, Spot) -> Unit,
+) {
     val spot = Spot(Zone.Folder(folder.id), 0)
+    val lifted = (drag.held as? HeldItem)?.item == folder
     Column(
         modifier
             .spot(drag, spot)
+            // Its place on the ladera too, so something carried can land beside it.
+            .spot(drag, Spot(Zone.Ladera(page), index))
+            .graphicsLayer { alpha = if (lifted) 0.3f else 1f }
             .clip(RoundedCornerShape(18.dp))
-            .combinedClickable(
-                role = Role.Button,
-                onClickLabel = "Abrir la carpeta ${folder.name}",
-                onClick = { onOpen(folder.id) },
-                onLongClick = { onOpen(folder.id) },
-            )
+            .carrying(drag, HeldItem(folder, Zone.Ladera(page), folder.name), "la carpeta ${folder.name}", { onOpen(folder.id) }, { onOpen(folder.id) }, onDrop)
             .semantics(mergeDescendants = true) { contentDescription = "Carpeta ${folder.name}, ${apps.size} apps" },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),

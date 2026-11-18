@@ -289,7 +289,6 @@ class LauncherAppTest {
         val to = viewCentre("w1")
         compose.runOnUiThread { grips.getValue(2).lift(40f, 40f) }
         compose.waitForIdle()
-        compose.onNodeWithText("Tiempo").assertExists()
         compose.runOnUiThread { grips.getValue(2).move(0f, to.y - from.y); grips.getValue(2).land(moved = true) }
         compose.waitForIdle()
         assertEquals(listOf(2, 1), launcher.board.ids)
@@ -703,6 +702,27 @@ class LauncherAppTest {
         compose.onNodeWithText("CAMPAMENTO").performTouchInput { doubleClick() }
         compose.waitForIdle()
         assertEquals("lock", actions.calls.last())
+    }
+
+    @Test
+    fun `a pinned shortcut and a folder are carried to another place on their ladera`() {
+        store.values["widgets"] = "@com.android.settings:1,#app.organicmaps|home|Casa:1,%f1|Viaje|com.termux%3Bapp.organicmaps:1"
+        show()
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.waitForIdle()
+        carry("Casa", centre("Ajustes"))
+        assertTrue(launcher.board.onPage(1).first() is dev.vivac.launcher.campamento.Pinned)
+        val folder = compose.onNodeWithContentDescription("Carpeta Viaje, 2 apps").fetchSemanticsNode().boundsInRoot.center
+        val first = centre("Casa")
+        compose.onNodeWithContentDescription("Carpeta Viaje, 2 apps").performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.onNodeWithContentDescription("Carpeta Viaje, 2 apps").performTouchInput {
+            val by = first - folder
+            repeat(10) { moveBy(by / 10f) }
+            up()
+        }
+        compose.waitForIdle()
+        assertTrue(launcher.board.onPage(1).first() is dev.vivac.launcher.campamento.Folder)
     }
 
     @Test

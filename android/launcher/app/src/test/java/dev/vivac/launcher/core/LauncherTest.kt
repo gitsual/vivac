@@ -751,6 +751,20 @@ class LauncherTest {
     }
 
     @Test
+    fun `shortcuts and folders are carried between laderas, unless the camp is locked`() {
+        store.values["widgets"] = WidgetBoard().addApp("com.termux", 1).addShortcut("app.organicmaps", "home", "Casa", 1).encode()
+        val l = many()
+        val pin = l.board.items.filterIsInstance<Pinned>().single()
+        l.moveItem(pin, Zone.Ladera(1), 0)
+        assertEquals(pin, l.board.onPage(1).first())
+        l.moveItem(pin, Zone.Dock, 0)
+        assertEquals(pin, l.board.onPage(1).first())
+        l.toggleLock()
+        l.moveItem(l.board.onPage(1).first(), Zone.Ladera(1), 5)
+        assertEquals(pin, l.board.onPage(1).first())
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()
