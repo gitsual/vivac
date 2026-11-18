@@ -141,6 +141,7 @@ fun CampamentoScreen(
     onResizeWidget: (id: Int, delta: Int) -> Unit = { _, _ -> },
     onStopEditing: () -> Unit = {},
     onAddApps: () -> Unit = {},
+    tintWidgets: Boolean = true,
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
@@ -196,7 +197,7 @@ fun CampamentoScreen(
             val card: @Composable (Placed) -> Unit = { w ->
                 val spot = Spot(Zone.Ladera(w.page), board.onPage(w.page).indexOf(w))
                 val grip = remember(w.id, w.page) { CardGrip(drag, HeldWidget(w.id, Zone.Ladera(w.page), widgetLabel(w.id)), { onEditWidget(w.id) }, onWidgetDrop) }
-                WidgetCard(w.id, w.rows, widgetRows(w.id), widgetHeightDp(w.id, w.rows), widgetView, grip, drag, spot, w.id == editing) { onResizeWidget(w.id, it) }
+                WidgetCard(w.id, w.rows, widgetRows(w.id), widgetHeightDp(w.id, w.rows), widgetView, grip, drag, spot, w.id == editing, tintWidgets) { onResizeWidget(w.id, it) }
             }
             // While something is carried, every page stays composed: the page it came from holds the finger (a
             // widget's own view, a tile's gesture), and tearing it down when the page turns would drop it.
@@ -610,6 +611,7 @@ private fun WidgetCard(
     drag: DragBoard,
     spot: Spot,
     editing: Boolean,
+    tint: Boolean,
     onResize: (Int) -> Unit,
 ) {
     val lifted = (drag.held as? HeldWidget)?.id == id
@@ -635,6 +637,11 @@ private fun WidgetCard(
             AndroidView(
                 factory = { ctx -> widgetView(ctx, id, width, rows, grip) ?: android.widget.Space(ctx) },
                 modifier = Modifier.fillMaxSize(),
+                // The tint is drawn on the widget's own layer, so it costs one pass, not one per frame.
+                update = { v ->
+                    if (tint) v.setLayerType(View.LAYER_TYPE_HARDWARE, android.graphics.Paint().apply { colorFilter = android.graphics.ColorMatrixColorFilter(dev.vivac.launcher.widgets.WidgetColors.tint()) })
+                    else v.setLayerType(View.LAYER_TYPE_NONE, null)
+                },
             )
         }
         if (editing && !lifted) ResizeBar(shownRows, onResize, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp))

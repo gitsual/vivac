@@ -119,6 +119,7 @@ fun LauncherApp(
             onSwipeDown = launcher::onSwipeDown,
             onMoveItem = launcher::moveItem,
             onAddApps = launcher::openAdder,
+            tintWidgets = launcher.tintWidgets,
         )
     }
     CompositionLocalProvider(
@@ -132,7 +133,7 @@ fun LauncherApp(
             Screen.CAMPAMENTO -> camp()
             Screen.AJUSTES -> SettingsScreen(
                 SettingsState(
-                    locked = launcher.locked, wallpaper = launcher.showWallpaper, labels = launcher.labels, columns = launcher.columns,
+                    locked = launcher.locked, wallpaper = launcher.showWallpaper, labels = launcher.labels, tintWidgets = launcher.tintWidgets, columns = launcher.columns,
                     dotsAllowed = dotsAllowed, counts = launcher.showCounts, swipeUp = launcher.swipeUp, swipeDown = launcher.swipeDown,
                     doubleTapLock = launcher.doubleTapLock, isHome = actions.isHome(),
                     iconStyle = launcher.iconStyle, iconPack = launcher.iconPack, packs = actions.iconPacks(),
@@ -141,7 +142,7 @@ fun LauncherApp(
                 ),
                 SettingsActions(
                     toggleLock = launcher::toggleLock, toggleWallpaper = launcher::toggleWallpaper, changeWallpaper = launcher::changeWallpaper,
-                    toggleLabels = launcher::toggleLabels, setColumns = launcher::chooseColumns, allowDots = launcher::allowDots,
+                    toggleLabels = launcher::toggleLabels, toggleTintWidgets = launcher::toggleTintWidgets, setColumns = launcher::chooseColumns, allowDots = launcher::allowDots,
                     toggleCounts = launcher::toggleCounts, setSwipeUp = launcher::chooseSwipeUp, setSwipeDown = launcher::chooseSwipeDown,
                     toggleDoubleTap = launcher::toggleDoubleTapLock, backUp = launcher::backUp, restore = launcher::askRestore,
                     becomeHome = launcher::becomeHome, close = { launcher.back() },

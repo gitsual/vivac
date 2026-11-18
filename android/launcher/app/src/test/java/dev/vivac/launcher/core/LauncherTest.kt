@@ -985,4 +985,13 @@ class LauncherTest {
         store.values["widgets"] = "@com.termux:1,1:1:0"
         assertEquals(listOf(Shelved("com.termux", 1), Gap(1), Gap(1), Gap(1), Placed(1, page = 1)), launcher().board.onPage(1))
     }
+
+    @Test
+    fun `widgets are tinted to vivac's colours until you turn it off, and that is remembered`() {
+        val l = launcher()
+        assertTrue(l.tintWidgets)
+        l.toggleTintWidgets()
+        assertFalse(l.tintWidgets)
+        assertFalse(launcher().tintWidgets)
+    }
 }

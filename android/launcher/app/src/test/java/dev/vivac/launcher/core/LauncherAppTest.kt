@@ -976,4 +976,14 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertEquals(0, launcher.page)
     }
+
+    @Test
+    fun `vivac's settings switch the widgets' tint`() {
+        show()
+        compose.runOnUiThread { launcher.openSettings() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Widgets con los colores de vivac").performScrollTo().performClick()
+        compose.waitForIdle()
+        assertFalse(launcher.tintWidgets)
+    }
 }

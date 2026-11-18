@@ -164,6 +164,13 @@ class Launcher(
     var columns by mutableStateOf(store.get(KEY_COLUMNS)?.toIntOrNull()?.coerceIn(4, 5) ?: 4); private set
     /** Names under the tiles. */
     var labels by mutableStateOf(store.get(KEY_LABELS) != "0"); private set
+    /** Widgets drawn in vivac's colours (a tint over their own). */
+    var tintWidgets by mutableStateOf(store.get(KEY_TINT_WIDGETS) != "0"); private set
+
+    fun toggleTintWidgets() {
+        tintWidgets = !tintWidgets
+        store.put(mapOf(KEY_TINT_WIDGETS to if (tintWidgets) "1" else "0"))
+    }
     /** How many notifications, instead of a plain dot. */
     var showCounts by mutableStateOf(store.get(KEY_COUNTS) == "1"); private set
     var swipeUp by mutableStateOf(gesture(KEY_SWIPE_UP, Gesture.PETATE)); private set
@@ -824,6 +831,7 @@ class Launcher(
         const val KEY_WALLPAPER = "wallpaper"
         const val KEY_COLUMNS = "columns"
         const val KEY_LABELS = "labels"
+        const val KEY_TINT_WIDGETS = "tintWidgets"
         const val KEY_COUNTS = "counts"
         const val KEY_SWIPE_UP = "swipeUp"
         const val KEY_SWIPE_DOWN = "swipeDown"
