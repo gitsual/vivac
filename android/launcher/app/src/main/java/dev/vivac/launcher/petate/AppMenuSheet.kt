@@ -37,6 +37,7 @@ import dev.vivac.launcher.apps.AppFace
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.theme.Glyph
 import dev.vivac.launcher.theme.Ink
+import dev.vivac.launcher.widgets.WidgetOption
 import dev.vivac.launcher.theme.LineIcon
 import dev.vivac.launcher.theme.Type
 
@@ -48,6 +49,8 @@ fun AppMenuSheet(
     canReadShortcuts: Boolean,
     onPick: (MenuEntry) -> Unit,
     onDismiss: () -> Unit,
+    widgets: List<WidgetOption> = emptyList(),
+    onAddWidget: (WidgetOption) -> Unit = {},
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -86,6 +89,13 @@ fun AppMenuSheet(
                         }
                     }
                     if (!canReadShortcuts) Text("Los atajos de cada app aparecen cuando vivac es tu app de inicio.", style = Type.small)
+                }
+            }
+            if (widgets.isNotEmpty()) {
+                Section("WIDGETS") {
+                    widgets.forEach { w ->
+                        Entry(if (w.cells.isEmpty()) w.label else "${w.label} · ${w.cells}", Glyph.PLUS, Ink.accentText, Ink.text) { onAddWidget(w) }
+                    }
                 }
             }
             if (place.isNotEmpty()) {

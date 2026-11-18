@@ -498,6 +498,19 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `an app's widgets are offered in its menu and added from there`() {
+        widgets.offered = listOf(WidgetOption("app.organicmaps/.W", "Mapa", "Organic Maps", "app.organicmaps", "4 × 2"), WidgetOption("o/.W", "Otro", "Otra", "o", ""))
+        store.values["pinned"] = "app.organicmaps"
+        show()
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithText("Otro").assertDoesNotExist()
+        compose.onNodeWithText("Mapa · 4 × 2").tap()
+        compose.waitForIdle()
+        assertEquals(null, launcher.menu)
+        assertEquals(1, launcher.board.ids.size)
+    }
+
+    @Test
     fun `the camp menu locks and unlocks the layout`() {
         show()
         compose.runOnUiThread { launcher.openCampMenu() }

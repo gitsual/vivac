@@ -165,6 +165,8 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             canReadShortcuts = m.canReadShortcuts,
             onDismiss = launcher::dismissMenu,
             onPick = launcher::pick,
+            widgets = m.widgets,
+            onAddWidget = launcher::addWidgetFromMenu,
         )
     }
 }

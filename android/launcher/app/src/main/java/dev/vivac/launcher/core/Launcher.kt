@@ -33,7 +33,13 @@ sealed interface Zone {
 /** The two answers Android sends back while placing a widget. */
 enum class WidgetStep { BIND, CONFIGURE }
 
-data class OpenMenu(val app: InstalledApp, val entries: List<MenuEntry>, val canReadShortcuts: Boolean)
+data class OpenMenu(
+    val app: InstalledApp,
+    val entries: List<MenuEntry>,
+    val canReadShortcuts: Boolean,
+    /** The widgets this app offers, to add straight from its menu. */
+    val widgets: List<WidgetOption> = emptyList(),
+)
 
 data class PlacedLabel(val id: Int, val label: String)
 
@@ -203,10 +209,16 @@ class Launcher(
             hidden = packageName in home.hidden,
             onLadera = packageName in board.apps,
         )
-        menu = OpenMenu(app, entries, actions.canReadShortcuts())
+        menu = OpenMenu(app, entries, actions.canReadShortcuts(), widgets.options().filter { it.appPackage == packageName })
     }
 
     fun dismissMenu() { menu = null }
+
+    /** A widget picked from an app's menu: placed like one from the camp's picker. */
+    fun addWidgetFromMenu(option: WidgetOption) {
+        menu = null
+        addWidget(option)
+    }
 
     fun pick(entry: MenuEntry) {
         val app = menu?.app ?: return
