@@ -209,9 +209,33 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
         }
     }
 
-    /** Drops the empty cells that end each ladera, then renumbers pages so there are no empty laderas between the ones in use. */
+    /** This board with every ladera tidied, as after any change to it. */
+    fun tidied(): WidgetBoard = compact()
+
+    /** One page's things tidied as [compact] says: cells in blocks of four between widgets. */
+    private fun tidy(page: List<Item>): List<Item> {
+        val out = mutableListOf<Item>()
+        val block = mutableListOf<Item>()
+        fun close(beforeWidget: Boolean) {
+            if (block.any { it !is Gap }) {
+                out += block
+                if (beforeWidget) repeat((4 - block.size % 4) % 4) { out += Gap(block.first().page) }
+            }
+            block.clear()
+        }
+        page.forEach { item -> if (item is Placed) { close(beforeWidget = true); out += item } else block += item }
+        close(beforeWidget = false)
+        // The empty cells that end the page go.
+        return out.dropLastWhile { it is Gap }
+    }
+
+    /**
+     * Tidies each ladera's grid: a row of apps cut short by a widget goes on in empty cells up to it (so things can
+     * land there), a row with nothing in it is dropped, and so are the empty cells that end a ladera. Then renumbers
+     * pages so there are no empty laderas between the ones in use.
+     */
     private fun compact(): WidgetBoard {
-        val trimmed = items.filterIndexed { i, item -> item !is Gap || items.drop(i + 1).any { it.page == item.page && it !is Gap } }
+        val trimmed = (0..(items.maxOfOrNull { it.page } ?: 0)).flatMap { p -> tidy(items.filter { it.page == p }) }
         val used = trimmed.map { it.page }.filter { it > 0 }.distinct().sorted()
         val renumber = used.withIndex().associate { (i, p) -> p to i + 1 }
         return WidgetBoard(trimmed.map { item ->
@@ -263,23 +287,31 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
 
 /** How tall a widget is drawn, and how its size reads in the picker. */
 object WidgetSize {
-    /** Roughly the row height of a stock launcher grid on a Pixel. */
-    const val ROW_DP = 90
-    const val MIN_DP = 72
+    /** A row of apps on a ladera: the tile and its name. */
+    const val CELL_DP = 76
+    /** The space between two rows, as the ladera lays them out. */
+    const val GAP_DP = 16
+    /** From one row to the next: what a widget grows by per row, and what a drag on its size bar counts as one. */
+    const val ROW_DP = CELL_DP + GAP_DP
+    const val MIN_DP = CELL_DP
     const val MAX_ROWS = 6
-    const val MAX_DP = MAX_ROWS * ROW_DP
+    const val MAX_DP = MAX_ROWS * ROW_DP - GAP_DP
 
+    /** How tall [rows] rows are: the rows of apps they replace, with the gaps between them. */
+    fun heightOf(rows: Int): Int = rows * ROW_DP - GAP_DP
+
+    /** The rows you chose, else the widget's own, else its minimum height rounded to whole rows: always whole rows. */
     fun heightDp(minHeightDp: Int, targetRows: Int, chosenRows: Int = 0): Int {
-        val wanted = when {
-            chosenRows > 0 -> chosenRows * ROW_DP
-            targetRows > 0 -> targetRows * ROW_DP
-            else -> minHeightDp
+        val rows = when {
+            chosenRows > 0 -> chosenRows
+            targetRows > 0 -> targetRows
+            else -> rowsOf(minHeightDp)
         }
-        return wanted.coerceIn(MIN_DP, MAX_DP)
+        return heightOf(rows).coerceIn(MIN_DP, MAX_DP)
     }
 
-    /** The rows a height fills, for a widget whose size you have not chosen yet. */
-    fun rowsOf(heightDp: Int): Int = Math.round(heightDp / ROW_DP.toFloat()).coerceIn(1, MAX_ROWS)
+    /** The whole rows a height fills, at least one, at most [MAX_ROWS]. */
+    fun rowsOf(heightDp: Int): Int = Math.round((heightDp + GAP_DP) / ROW_DP.toFloat()).coerceIn(1, MAX_ROWS)
 
     fun cells(targetColumns: Int, targetRows: Int): String =
         if (targetColumns > 0 && targetRows > 0) "$targetColumns × $targetRows" else ""

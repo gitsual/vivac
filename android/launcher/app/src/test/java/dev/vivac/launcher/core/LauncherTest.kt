@@ -10,6 +10,7 @@ import dev.vivac.launcher.petate.AppShortcut
 import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
 import dev.vivac.launcher.avisos.Control
+import dev.vivac.launcher.campamento.Gap
 import dev.vivac.launcher.avisos.Quick
 import dev.vivac.launcher.avisos.QuickTiles
 import org.junit.Assert.assertEquals
@@ -976,5 +977,12 @@ class LauncherTest {
         assertEquals(0, l.page)
         assertFalse(l.canGoBack)
         assertFalse(l.back())
+    }
+
+    @Test
+    fun `a saved ladera with a short row before a widget gets its free cells when loaded`() {
+        widgets.placed[1] = "clock"
+        store.values["widgets"] = "@com.termux:1,1:1:0"
+        assertEquals(listOf(Shelved("com.termux", 1), Gap(1), Gap(1), Gap(1), Placed(1, page = 1)), launcher().board.onPage(1))
     }
 }

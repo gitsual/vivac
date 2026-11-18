@@ -96,20 +96,26 @@ class WidgetBoardTest {
     }
 
     @Test
-    fun `height follows the rows you chose, else the widget's target rows, else its minimum, within bounds`() {
-        assertEquals(270, WidgetSize.heightDp(minHeightDp = 40, targetRows = 2, chosenRows = 3))
-        assertEquals(180, WidgetSize.heightDp(minHeightDp = 40, targetRows = 2))
-        assertEquals(110, WidgetSize.heightDp(minHeightDp = 110, targetRows = 0))
+    fun `a widget is as tall as the rows of apps it takes, the gaps between them included`() {
+        // An app row is 76dp, with 16dp between rows: n rows of widget end where n rows of apps end.
+        assertEquals(76, WidgetSize.heightOf(1))
+        assertEquals(168, WidgetSize.heightOf(2))
+        assertEquals(536, WidgetSize.heightOf(6))
+        assertEquals(260, WidgetSize.heightDp(minHeightDp = 40, targetRows = 2, chosenRows = 3))
+        assertEquals(168, WidgetSize.heightDp(minHeightDp = 40, targetRows = 2))
+        // A widget that only gives a minimum height is snapped to whole rows.
+        assertEquals(76, WidgetSize.heightDp(minHeightDp = 110, targetRows = 0))
+        assertEquals(168, WidgetSize.heightDp(minHeightDp = 150, targetRows = 0))
         assertEquals(WidgetSize.MIN_DP, WidgetSize.heightDp(minHeightDp = 10, targetRows = 0))
         assertEquals(WidgetSize.MAX_DP, WidgetSize.heightDp(minHeightDp = 900, targetRows = 0))
     }
 
     @Test
     fun `a widget's rows, when you have not chosen, come from its height`() {
-        assertEquals(2, WidgetSize.rowsOf(heightDp = 180))
+        assertEquals(2, WidgetSize.rowsOf(heightDp = 168))
         assertEquals(1, WidgetSize.rowsOf(heightDp = 72))
         assertEquals(6, WidgetSize.MAX_ROWS)
-        assertEquals(WidgetSize.MAX_ROWS, WidgetSize.rowsOf(heightDp = 540))
+        assertEquals(WidgetSize.MAX_ROWS, WidgetSize.rowsOf(heightDp = 600))
     }
 
     @Test
@@ -121,7 +127,7 @@ class WidgetBoardTest {
     @Test
     fun `an app can be put at a given place among the things on a ladera`() {
         val b = board(Placed(1, page = 1)).addApp("a", 1).addApp("b", 1)
-        assertEquals(listOf(Shelved("b", 1), Placed(1, page = 1), Shelved("a", 1)), b.insertApp("b", page = 1, index = 0).onPage(1))
+        assertEquals(listOf(Shelved("b", 1), Gap(1), Gap(1), Gap(1), Placed(1, page = 1), Shelved("a", 1)), b.insertApp("b", page = 1, index = 0).onPage(1))
         assertEquals(listOf(Placed(1, page = 1), Shelved("b", 1), Shelved("a", 1)), b.insertApp("b", page = 1, index = 1).onPage(1))
         assertEquals(listOf(Placed(1, page = 1), Shelved("a", 1), Shelved("b", 1), Shelved("c", 1)), b.insertApp("c", page = 1, index = Int.MAX_VALUE).onPage(1))
     }
@@ -239,5 +245,20 @@ class WidgetBoardTest {
         assertEquals(listOf(Folder("f1", "F", listOf("z"), 1), Shelved("a", 1), Pinned("s", "x", "X", 1)), b.moveItem(folder, page = 1, index = 0).onPage(1))
         assertEquals(1, b.moveItem(folder, page = 0, index = 0).folder("f1")?.page)
         assertEquals(b, b.moveItem(Shelved("a", 1), page = 2, index = 0).let { b })
+    }
+
+    @Test
+    fun `a row of apps cut short by a widget keeps its free cells, so an app can land beside the others`() {
+        val b = WidgetBoard(listOf(Shelved("a", 1), Placed(1, page = 1), Shelved("z", 1)))
+        // The row of "a" goes on in three empty cells up to the widget.
+        assertEquals(listOf(Shelved("a", 1), Gap(1), Gap(1), Gap(1), Placed(1, page = 1), Shelved("z", 1)), b.addApp("q", 2).removeApp("q").onPage(1))
+        val placed = b.addApp("q", 2).removeApp("q").insertApp("t", page = 1, index = 2)
+        assertEquals(listOf(Shelved("a", 1), Gap(1), Shelved("t", 1), Gap(1), Placed(1, page = 1), Shelved("z", 1)), placed.onPage(1))
+    }
+
+    @Test
+    fun `a row with nothing in it before a widget is not kept`() {
+        val b = WidgetBoard(listOf(Shelved("a", 1), Placed(1, page = 1)))
+        assertEquals(listOf(Placed(1, page = 1)), b.vacate("a").onPage(1))
     }
 }

@@ -793,7 +793,8 @@ class Launcher(
         saveBoard(board.add(id))
     }
 
-    private fun loadBoard() = WidgetBoard.decode(store.get(KEY_WIDGETS)).let { b -> WidgetBoard(b.items.filter { it !is Placed || widgets.exists(it.id) }) }
+    /** The saved board, without widgets Android no longer has, its laderas tidied (rows before a widget keep their free cells). */
+    private fun loadBoard() = WidgetBoard.decode(store.get(KEY_WIDGETS)).let { b -> WidgetBoard(b.items.filter { it !is Placed || widgets.exists(it.id) }).tidied() }
 
     private fun saveBoard(next: WidgetBoard) {
         board = next

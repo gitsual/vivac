@@ -80,9 +80,9 @@ class WidgetsTest {
         assertTrue(widgets.exists(7))
         assertTrue(widgets.needsConfiguring(7))
         assertEquals("Reloj", widgets.label(7))
-        assertEquals(180, widgets.heightDp(7))
+        assertEquals(168, widgets.heightDp(7))
         assertEquals(2, widgets.defaultRows(7))
-        assertEquals(270, widgets.heightDp(7, rows = 3))
+        assertEquals(260, widgets.heightDp(7, rows = 3))
         assertNotNull(widgets.view(activity, 7, 360f, rows = 3, Recorder()))
         widgets.requestConfigure(7)
         widgets.delete(7)
@@ -95,7 +95,7 @@ class WidgetsTest {
         assertFalse(widgets.exists(99))
         assertFalse(widgets.needsConfiguring(99))
         assertEquals("widget", widgets.label(99))
-        assertEquals(72, widgets.heightDp(99))
+        assertEquals(76, widgets.heightDp(99))
         assertNull(widgets.view(activity, 99, 360f, rows = 0, Recorder()))
     }
 

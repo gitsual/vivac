@@ -401,8 +401,8 @@ private fun Ladera(
     }
     val density = LocalDensity.current
     var usedPx by remember { mutableIntStateOf(0) }
-    var cellPx by remember { mutableIntStateOf(0) }
-    val cellHeight = if (cellPx > 0) with(density) { cellPx.toDp() } else CELL_HEIGHT
+    // Every row of apps is one cell tall, so a widget of n rows ends where n rows of apps end.
+    val cellHeight = WidgetSize.CELL_DP.dp
     Column(Modifier.fillMaxWidth().onSizeChanged { usedPx = it.height }, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         blocks.forEachIndexed { b, block ->
             if (block is Placed) card(block)
@@ -410,8 +410,7 @@ private fun Ladera(
                 @Suppress("UNCHECKED_CAST")
                 val rows = (block as List<IndexedValue<Item>>).chunked(4)
                 rows.forEachIndexed { r, row ->
-                    val measured = if (row.any { it.value !is Gap }) Modifier.onSizeChanged { cellPx = it.height } else Modifier
-                    Row(Modifier.fillMaxWidth().then(measured)) {
+                    Row(Modifier.fillMaxWidth().heightIn(min = cellHeight)) {
                         row.forEach { (i, item) ->
                             when (item) {
                                 is Gap -> EmptyCell(Spot(zone, i), drag, cellHeight, Modifier.weight(1f))
@@ -459,7 +458,7 @@ private fun Ladera(
     // Free rows of cells down to the bottom of the page, numbered on from the last cell.
     @Suppress("UNCHECKED_CAST")
     val tail = (blocks.lastOrNull() as? List<Any>)?.let { (4 - it.size % 4) % 4 } ?: 0
-    val gap = 16.dp
+    val gap = WidgetSize.GAP_DP.dp
     val free = with(density) {
         val room = viewport.toPx() - usedPx - gap.toPx()
         (room / (cellHeight.toPx() + gap.toPx())).toInt().coerceAtLeast(0)
@@ -491,9 +490,6 @@ private fun EmptyCell(spot: Spot, drag: DragBoard, height: androidx.compose.ui.u
             ),
     )
 }
-
-/** A cell's height until a tile has been measured. */
-private val CELL_HEIGHT = 92.dp
 
 /** The empty ladera past the last one: a plus in the middle adds apps to it; anything carried here lands on it. */
 @Composable
