@@ -234,9 +234,20 @@ fun CampamentoScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         if (p == 0) {
-                            FactsStrip(facts, onOpenAbout)
-                            board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
-                            Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop)
+                            // The route sits in the middle of the room left under the facts and widgets, with as
+                            // much space above it as below, down to the dock.
+                            var abovePx by remember { mutableIntStateOf(0) }
+                            var routePx by remember { mutableIntStateOf(0) }
+                            Column(Modifier.fillMaxWidth().onSizeChanged { abovePx = it.height }, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                FactsStrip(facts, onOpenAbout)
+                                board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
+                            }
+                            val gaps = with(LocalDensity.current) { (2 * 16).dp.toPx() }
+                            val spare = with(LocalDensity.current) { viewport.toPx() } - abovePx - routePx - gaps
+                            if (spare > 0 && routePx > 0) Spacer(Modifier.height(with(LocalDensity.current) { (spare / 2).toDp() }))
+                            Box(Modifier.fillMaxWidth().onSizeChanged { routePx = it.height }.testTag("via")) {
+                                Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop)
+                            }
                         } else {
                             Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu, onOpenFolder, viewport) { c, spot ->
                                 if (c is HeldItem) onMoveItem(c.item, spot.zone, spot.index)

@@ -1053,4 +1053,18 @@ class LauncherAppTest {
             assertTrue("$hour runs under the date", node.boundsInRoot.left + layout.size.width <= date.left)
         }
     }
+
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "w411dp-h914dp-420dpi")
+    fun `the route sits in the middle of the room between the camp's facts and the dock`() {
+        store.values["pinned"] = "com.termux,app.organicmaps,com.android.settings"
+        show()
+        val facts = compose.onNodeWithText("LIBRE").fetchSemanticsNode().boundsInRoot
+        val route = compose.onNodeWithTag("via").fetchSemanticsNode().boundsInRoot
+        val dock = compose.onNodeWithContentDescription("Dock").fetchSemanticsNode().boundsInRoot
+        val above = route.top - facts.bottom
+        val below = dock.top - route.bottom
+        val dp = compose.activity.resources.displayMetrics.density
+        assertTrue("above $above below $below", above > 48 * dp && kotlin.math.abs(above - below) < 48 * dp)
+    }
 }
