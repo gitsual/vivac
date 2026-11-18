@@ -45,8 +45,18 @@ data class HeldItem(val item: Item, override val from: Zone, val label: String) 
     override fun takes(zone: Zone) = zone is Zone.Ladera && zone.page >= 1
 }
 
-/** A widget being carried: it lands only among the things on a page. */
-data class HeldWidget(val id: Int, override val from: Zone, val label: String) : Cargo {
+/**
+ * A widget being carried: it lands only among the things on a page. [look] is its picture, drawn under the finger at
+ * [grab] (where the finger took it) and [size], so it seems the widget itself lifted.
+ */
+data class HeldWidget(
+    val id: Int,
+    override val from: Zone,
+    val label: String,
+    val look: androidx.compose.ui.graphics.ImageBitmap? = null,
+    val grab: Offset = Offset.Zero,
+    val size: androidx.compose.ui.unit.IntSize = androidx.compose.ui.unit.IntSize.Zero,
+) : Cargo {
     override fun takes(zone: Zone) = zone is Zone.Ladera
 }
 

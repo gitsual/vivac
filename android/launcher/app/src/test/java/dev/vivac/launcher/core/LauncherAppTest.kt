@@ -31,6 +31,9 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
@@ -247,12 +250,14 @@ class LauncherAppTest {
     }
 
     @Test
-    fun `holding a widget only lets you change its size, up to six rows`() {
+    fun `holding a widget goes straight into moving and resizing it, up to six rows, until you tap away`() {
         widgets.placed = mutableMapOf(1 to "Reloj", 2 to "Música")
         store.values["widgets"] = "1,2"
         show()
-        compose.runOnUiThread { launcher.openWidgetMenu(2) }
-        compose.onNodeWithText("Música").assertExists()
+        compose.runOnUiThread { grips.getValue(2).lift(40f, 40f) }
+        assertEquals(2, launcher.editing)
+        compose.runOnUiThread { grips.getValue(2).land(moved = false) }
+        assertEquals(2, launcher.editing)
         compose.onNodeWithText("2 filas").assertExists()
         compose.onNodeWithContentDescription("Más alto").tap()
         compose.onNodeWithText("3 filas").assertExists()
@@ -260,6 +265,51 @@ class LauncherAppTest {
         compose.onNodeWithText("6 filas").assertExists()
         compose.onNodeWithContentDescription("Más alto").assertIsNotEnabled()
         listOf("Antes", "Después", "Ladera nueva", "Quitar del campamento").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        compose.onNodeWithContentDescription("Más bajo").tap()
+        compose.onNodeWithText("5 filas").assertExists()
+        compose.onNodeWithText("CAMPAMENTO").performTouchInput { click() }
+        // A tap is told from a double tap only once the double-tap time has passed.
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitForIdle()
+        assertEquals(null, launcher.editing)
+        compose.onNodeWithText("5 filas").assertDoesNotExist()
+    }
+
+    @Test
+    fun `dragging the size bar down makes the widget taller, up makes it shorter`() {
+        widgets.placed = mutableMapOf(1 to "Reloj")
+        store.values["widgets"] = "1"
+        show()
+        compose.runOnUiThread { launcher.editWidget(1) }
+        compose.onNodeWithText("2 filas").performTouchInput { swipe(center, center + androidx.compose.ui.geometry.Offset(0f, 100.dp.toPx())) }
+        compose.onNodeWithText("3 filas").assertExists()
+        compose.onNodeWithText("3 filas").performTouchInput { swipe(center, center - androidx.compose.ui.geometry.Offset(0f, 100.dp.toPx())) }
+        compose.onNodeWithText("2 filas").assertExists()
+    }
+
+    @Test
+    fun `back leaves a widget's resizing first`() {
+        widgets.placed = mutableMapOf(1 to "Reloj")
+        store.values["widgets"] = "1"
+        show()
+        compose.runOnUiThread { launcher.editWidget(1) }
+        compose.waitForIdle()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.waitForIdle()
+        assertEquals(null, launcher.editing)
+        assertEquals(Screen.CAMPAMENTO, launcher.screen)
+    }
+
+    @Test
+    fun `a lifted widget follows the finger as a picture of itself`() {
+        widgets.placed = mutableMapOf(1 to "Reloj", 2 to "Tiempo")
+        store.values["widgets"] = "1,2"
+        show()
+        compose.runOnUiThread { grips.getValue(2).lift(1f, 1f, Bitmap.createBitmap(20, 10, Bitmap.Config.ARGB_8888)) }
+        compose.onNodeWithTag("widget:ghost").assertExists()
+        compose.onNodeWithText("Tiempo").assertDoesNotExist()
+        compose.runOnUiThread { grips.getValue(2).cancel() }
+        compose.onNodeWithTag("widget:ghost").assertDoesNotExist()
     }
 
     @Test
@@ -272,7 +322,7 @@ class LauncherAppTest {
             val v = compose.activity.window.decorView.rootView.let { root -> find(root) { it is TextView && it.text == "w1" } }
             v!!.performLongClick()
         }
-        assertEquals(1, launcher.widgetMenu)
+        assertEquals(1, launcher.editing)
     }
 
     @Test
@@ -287,7 +337,7 @@ class LauncherAppTest {
         compose.runOnUiThread { grips.getValue(2).move(0f, to.y - from.y); grips.getValue(2).land(moved = true) }
         compose.waitForIdle()
         assertEquals(listOf(2, 1), launcher.board.ids)
-        assertEquals(null, launcher.widgetMenu)
+        assertEquals(2, launcher.editing)
     }
 
     @Test
@@ -300,7 +350,7 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertEquals(listOf(1, 2), launcher.board.ids)
         compose.runOnUiThread { grips.getValue(2).lift(1f, 1f); grips.getValue(2).land(moved = false) }
-        assertEquals(2, launcher.widgetMenu)
+        assertEquals(2, launcher.editing)
     }
 
     @Test

@@ -158,41 +158,9 @@ private fun Row52(label: String, glyph: String, glyphColor: Color, onClick: () -
     }
 }
 
-/** Where a page sits, in words: the Campamento, or the ladera's number. */
-fun pageName(page: Int) = if (page == 0) "Campamento" else "Ladera $page"
-
-/**
- * Long press on a widget: its size, and nothing else. Moving it is holding and dragging.
- */
-@Composable
-fun WidgetMenuSheet(
-    label: String,
-    rows: Int,
-    page: Int,
-    onResize: (Int) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    VivacSheet(onDismiss) {
-        Text("WIDGET · ${pageName(page).uppercase()}", style = Type.cota.copy(fontSize = 10.sp))
-        Text(label, style = Type.title.copy(fontSize = 26.sp, lineHeight = 30.sp), modifier = Modifier.padding(bottom = 10.dp).semantics { heading() })
-
-        Caption("ALTURA")
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Step(Glyph.MINUS, "Más bajo", enabled = rows > 1) { onResize(-1) }
-            Text(if (rows == 1) "1 fila" else "$rows filas", style = Type.figure.copy(fontSize = 20.sp), modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-            Step(Glyph.PLUS, "Más alto", enabled = rows < WidgetSize.MAX_ROWS) { onResize(+1) }
-        }
-    }
-}
-
-@Composable
-private fun Caption(text: String) {
-    Text(text, style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.padding(top = 12.dp, bottom = 6.dp).semantics { heading() })
-}
-
 /** A round 48dp step button, its glyph named for TalkBack. */
 @Composable
-private fun Step(glyph: String, name: String, enabled: Boolean, onClick: () -> Unit) {
+internal fun Step(glyph: String, name: String, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
             .size(48.dp)

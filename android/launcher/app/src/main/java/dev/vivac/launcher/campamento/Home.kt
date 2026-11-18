@@ -41,7 +41,7 @@ data class Home(
 
     companion object {
         const val DOCK_MAX = 5
-        const val PINNED_MAX = 8
+        const val PINNED_MAX = 12
         // Package names never contain a comma, so it is a safe separator.
         private const val SEP = ","
 

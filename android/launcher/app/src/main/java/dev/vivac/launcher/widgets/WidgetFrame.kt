@@ -2,6 +2,8 @@ package dev.vivac.launcher.widgets
 
 import android.appwidget.AppWidgetHostView
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
 import android.view.HapticFeedbackConstants
@@ -11,8 +13,8 @@ import kotlin.math.abs
 
 /** What vivac does with a finger held on a widget: lift it, follow the finger, and land it or open its card. */
 interface Grip {
-    /** The long press: the widget is lifted with the finger at ([x], [y]) inside it. */
-    fun lift(x: Float, y: Float)
+    /** The long press: the widget is lifted with the finger at ([x], [y]) inside it; [look] is a picture of it to carry. */
+    fun lift(x: Float, y: Float, look: Bitmap? = null)
     fun move(dx: Float, dy: Float)
     /** Let go: [moved] tells a carry from a plain hold, which opens the widget's card. */
     fun land(moved: Boolean)
@@ -43,8 +45,13 @@ class WidgetFrame(context: Context) : AppWidgetHostView(context) {
         // Children stop treating this as their press (no click on release), and no parent scrolls it away.
         cancelLongPress()
         parent?.requestDisallowInterceptTouchEvent(true)
-        grip?.lift(lastX, lastY)
+        grip?.lift(lastX, lastY, picture())
     }
+
+    /** The widget as it looks now, or null before it has a size. */
+    private fun picture(): Bitmap? =
+        if (width <= 0 || height <= 0) null
+        else Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { draw(Canvas(it)) }
 
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {

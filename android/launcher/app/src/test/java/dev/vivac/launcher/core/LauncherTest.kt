@@ -264,11 +264,14 @@ class LauncherTest {
     fun `a long press on a widget opens its card, with its rows and where it sits`() {
         val l = withWidgets(1, 2)
         widgets.rows[2] = 3
-        l.openWidgetMenu(2)
-        assertEquals(2, l.widgetMenu)
+        l.editWidget(2)
+        assertEquals(2, l.editing)
         assertEquals(3, l.widgetRows(2))
-        l.dismissWidgetMenu()
-        assertNull(l.widgetMenu)
+        l.stopEditing()
+        assertNull(l.editing)
+        l.editWidget(1)
+        assertTrue(l.back())
+        assertNull(l.editing)
     }
 
     @Test
@@ -287,7 +290,7 @@ class LauncherTest {
         l.moveWidget(2, page = l.board.pages)
         assertEquals(2, l.board.pages)
         assertEquals(1, l.page)
-        assertNull(l.widgetMenu)
+        assertNull(l.editing)
         l.onHomePressed()
         assertEquals(0, l.page)
         l.showPage(5)
@@ -304,9 +307,9 @@ class LauncherTest {
     @Test
     fun `removing a widget from its card closes the card`() {
         val l = withWidgets(1)
-        l.openWidgetMenu(1)
+        l.editWidget(1)
         l.removeWidget(1)
-        assertNull(l.widgetMenu)
+        assertNull(l.editing)
         assertEquals(emptyList<Int>(), l.board.ids)
     }
 

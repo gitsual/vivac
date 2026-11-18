@@ -104,7 +104,8 @@ class WidgetsTest {
 
     private class Recorder : Grip {
         val calls = mutableListOf<String>()
-        override fun lift(x: Float, y: Float) { calls += "lift:${x.toInt()},${y.toInt()}" }
+        var look: android.graphics.Bitmap? = null
+        override fun lift(x: Float, y: Float, look: android.graphics.Bitmap?) { calls += "lift:${x.toInt()},${y.toInt()}"; this.look = look }
         override fun move(dx: Float, dy: Float) { calls += "move:${dx.toInt()},${dy.toInt()}" }
         override fun land(moved: Boolean) { calls += "land:$moved" }
         override fun cancel() { calls += "cancel" }
@@ -124,6 +125,8 @@ class WidgetsTest {
         touch(view, MotionEvent.ACTION_DOWN)
         hold()
         assertEquals(listOf("lift:20,20"), grip.calls)
+        // A picture of the widget as it was, to carry under the finger.
+        assertEquals(400, grip.look?.width)
         // The rest of that gesture is vivac's, not the widget's.
         assertTrue(touch(view, MotionEvent.ACTION_UP))
         assertEquals(listOf("lift:20,20", "land:false"), grip.calls)

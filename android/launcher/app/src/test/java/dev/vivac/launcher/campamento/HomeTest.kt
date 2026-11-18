@@ -21,10 +21,11 @@ class HomeTest {
     }
 
     @Test
-    fun `the campamento pins up to eight apps`() {
-        val full = Home(pinned = (1..8).map { "p$it" })
-        assertEquals("El campamento ya tiene 8 apps a mano: quita una primero.", full.togglePin("x").refusal)
-        assertEquals((2..8).map { "p$it" }, full.togglePin("p1").home!!.pinned)
+    fun `the campamento pins up to twelve apps`() {
+        assertEquals(listOf("p1", "x"), Home(pinned = listOf("p1")).togglePin("x").home!!.pinned)
+        val full = Home(pinned = (1..12).map { "p$it" })
+        assertEquals("El campamento ya tiene 12 apps a mano: quita una primero.", full.togglePin("x").refusal)
+        assertEquals((2..12).map { "p$it" }, full.togglePin("p1").home!!.pinned)
     }
 
     @Test

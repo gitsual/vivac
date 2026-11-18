@@ -31,7 +31,6 @@ import dev.vivac.launcher.widgets.CampMenuSheet
 import dev.vivac.launcher.widgets.Grip
 import dev.vivac.launcher.widgets.PlacedWidget
 import dev.vivac.launcher.widgets.WidgetPickerSheet
-import dev.vivac.launcher.widgets.WidgetMenuSheet
 
 /** How placed widgets are drawn: their height and their live view (Android's AppWidgetHostView in production). */
 interface WidgetViews {
@@ -52,7 +51,7 @@ fun LauncherApp(
     /** Shared with the activity, which answers Android's swipe-home animation with a tile's place. */
     drag: DragBoard = remember { DragBoard() },
 ) {
-    BackHandler(enabled = launcher.screen != Screen.CAMPAMENTO) { launcher.back() }
+    BackHandler(enabled = launcher.screen != Screen.CAMPAMENTO || launcher.editing != null) { launcher.back() }
     // Android draws the wallpaper behind a window that asks for it; vivac's camp then lets it show through.
     val window = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.window
     androidx.compose.runtime.LaunchedEffect(launcher.showWallpaper) {
@@ -81,7 +80,11 @@ fun LauncherApp(
             onPage = launcher::showPage,
             widgetHeightDp = widgetViews::heightDp,
             widgetView = widgetViews::view,
-            onWidgetMenu = launcher::openWidgetMenu,
+            onEditWidget = launcher::editWidget,
+            editing = launcher.editing,
+            widgetRows = launcher::widgetRows,
+            onResizeWidget = launcher::resizeWidget,
+            onStopEditing = launcher::stopEditing,
             onDrop = launcher::drop,
             onCampMenu = launcher::openCampMenu,
             drag = drag,
@@ -184,16 +187,6 @@ fun LauncherApp(
     }
     launcher.picker?.let { options ->
         WidgetPickerSheet(options, onPick = launcher::addWidget, onDismiss = launcher::dismissPicker)
-    }
-    launcher.widgetMenu?.let { id ->
-        val placed = launcher.board.placed(id) ?: return@let
-        WidgetMenuSheet(
-            label = launcher.placedWidgets().firstOrNull { it.id == id }?.label ?: "widget",
-            rows = launcher.widgetRows(id),
-            page = placed.page,
-            onResize = { launcher.resizeWidget(id, it) },
-            onDismiss = launcher::dismissWidgetMenu,
-        )
     }
     launcher.folderPicker?.let { app ->
         FolderPickSheet(

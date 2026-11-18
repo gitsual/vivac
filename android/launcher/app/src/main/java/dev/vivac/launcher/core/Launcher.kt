@@ -107,7 +107,7 @@ class Launcher(
     /** The home page in view: 0 is the Campamento, 1 onwards the laderas. */
     var page by mutableStateOf(0); private set
     /** The widget whose card is open (after a long press on it). */
-    var widgetMenu by mutableStateOf<Int?>(null); private set
+    var editing by mutableStateOf<Int?>(null); private set
     var screen by mutableStateOf(Screen.CAMPAMENTO); private set
     var focusSearch by mutableStateOf(false); private set
     var menu by mutableStateOf<OpenMenu?>(null); private set
@@ -354,6 +354,7 @@ class Launcher(
 
     /** Back: from the Petate to the camp. False when there was nowhere to go back to. */
     fun back(): Boolean {
+        if (editing != null) { editing = null; return true }
         if (screen == Screen.CAMPAMENTO) return false
         screen = Screen.CAMPAMENTO
         return true
@@ -364,7 +365,7 @@ class Launcher(
         menu = null
         campMenu = false
         picker = null
-        widgetMenu = null
+        editing = null
         page = 0
         screen = Screen.CAMPAMENTO
     }
@@ -540,8 +541,8 @@ class Launcher(
 
     fun showPage(page: Int) { this.page = page.coerceIn(0, board.pages - 1) }
 
-    fun openWidgetMenu(id: Int) { widgetMenu = id }
-    fun dismissWidgetMenu() { widgetMenu = null }
+    fun editWidget(id: Int) { editing = id }
+    fun stopEditing() { editing = null }
 
     /** The rows a widget is drawn at: the ones you chose, else its own. */
     fun widgetRows(id: Int): Int = board.placed(id)?.rows?.takeIf { it > 0 } ?: widgets.defaultRows(id)
@@ -552,7 +553,7 @@ class Launcher(
 
     /** Sends a widget to [page] (one past the last opens a new ladera) and shows you where it went. */
     fun moveWidget(id: Int, page: Int) {
-        widgetMenu = null
+        editing = null
         saveBoard(board.moveTo(id, page))
         showPage(board.placed(id)?.page ?: 0)
     }
@@ -644,7 +645,7 @@ class Launcher(
     }
 
     fun removeWidget(id: Int) {
-        widgetMenu = null
+        editing = null
         campMenu = false
         widgets.delete(id)
         saveBoard(board.remove(id))

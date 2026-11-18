@@ -97,6 +97,9 @@ import dev.vivac.launcher.theme.Contours
 import dev.vivac.launcher.theme.Glyph
 import dev.vivac.launcher.theme.Ink
 import dev.vivac.launcher.widgets.Grip
+import dev.vivac.launcher.widgets.Step
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.testTag
 import dev.vivac.launcher.theme.LineIcon
 import dev.vivac.launcher.theme.Type
 
@@ -117,7 +120,7 @@ fun CampamentoScreen(
     onPage: (Int) -> Unit,
     widgetHeightDp: (id: Int, rows: Int) -> Int,
     widgetView: (Context, id: Int, widthDp: Float, rows: Int, grip: Grip) -> View?,
-    onWidgetMenu: (Int) -> Unit,
+    onEditWidget: (Int) -> Unit,
     onCampMenu: () -> Unit,
     onDrop: (packageName: String, from: Zone, to: Zone, index: Int) -> Unit = { _, _, _, _ -> },
     drag: DragBoard = remember { DragBoard() },
@@ -132,6 +135,10 @@ fun CampamentoScreen(
     onSwipeUp: () -> Unit = { onOpenPetate(false) },
     onSwipeDown: () -> Unit = onShowNotifications,
     onMoveItem: (Item, Zone, Int) -> Unit = { _, _, _ -> },
+    editing: Int? = null,
+    widgetRows: (Int) -> Int = { 0 },
+    onResizeWidget: (id: Int, delta: Int) -> Unit = { _, _ -> },
+    onStopEditing: () -> Unit = {},
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
@@ -170,7 +177,7 @@ fun CampamentoScreen(
             .background(if (wallpaper) Ink.deep.copy(alpha = 0.62f) else Ink.deep)
             .onGloballyPositioned { drag.screen = it.boundsInRoot(); rootOrigin = it.positionInRoot() }
             .swipes(onSwipe)
-            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onDoubleTap() }, onLongPress = { onCampMenu() }) },
+            .pointerInput(Unit) { detectTapGestures(onTap = { onStopEditing() }, onDoubleTap = { onDoubleTap() }, onLongPress = { onCampMenu() }) },
     ) {
         Contours(Modifier.fillMaxSize(), color = Ink.surface)
         Beam(Modifier.fillMaxSize())
@@ -188,8 +195,8 @@ fun CampamentoScreen(
             LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect(onPage) }
             val card: @Composable (Placed) -> Unit = { w ->
                 val spot = Spot(Zone.Ladera(w.page), board.onPage(w.page).indexOf(w))
-                val grip = remember(w.id, w.page) { CardGrip(drag, HeldWidget(w.id, Zone.Ladera(w.page), widgetLabel(w.id)), { onWidgetMenu(w.id) }, onWidgetDrop) }
-                WidgetCard(w.id, w.rows, widgetHeightDp(w.id, w.rows), widgetView, grip, drag, spot)
+                val grip = remember(w.id, w.page) { CardGrip(drag, HeldWidget(w.id, Zone.Ladera(w.page), widgetLabel(w.id)), { onEditWidget(w.id) }, onWidgetDrop) }
+                WidgetCard(w.id, w.rows, widgetRows(w.id), widgetHeightDp(w.id, w.rows), widgetView, grip, drag, spot, w.id == editing) { onResizeWidget(w.id, it) }
             }
             HorizontalPager(pager, Modifier.weight(1f), pageSpacing = 24.dp, verticalAlignment = Alignment.Top) { p ->
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -219,8 +226,23 @@ fun CampamentoScreen(
             SearchPill { onOpenPetate(true) }
             DockCard(apps, home, onOpenApp, onAppMenu, drag, drop)
         }
-        // The carried app follows the finger, a little lifted.
-        val carriedLabel = when (val c = drag.held) { is HeldWidget -> c.label; is HeldItem -> c.label; else -> null }
+        // A carried widget follows the finger as a picture of itself, just where the finger took it.
+        (drag.held as? HeldWidget)?.takeIf { it.look != null }?.let { w ->
+            val size = with(LocalDensity.current) { androidx.compose.ui.unit.DpSize(w.size.width.toDp(), w.size.height.toDp()) }
+            androidx.compose.foundation.Image(
+                w.look!!,
+                contentDescription = null,
+                modifier = Modifier
+                    .offset { (drag.finger - rootOrigin - w.grab).round() }
+                    .size(size)
+                    .graphicsLayer { scaleX = 1.03f; scaleY = 1.03f; alpha = 0.92f }
+                    .clip(RoundedCornerShape(24.dp))
+                    .border(2.dp, Ink.primary, RoundedCornerShape(24.dp))
+                    .testTag("widget:ghost"),
+            )
+        }
+        // Anything else carried that is not an app: a card with its name.
+        val carriedLabel = when (val c = drag.held) { is HeldWidget -> c.label.takeIf { c.look == null }; is HeldItem -> c.label; else -> null }
         carriedLabel?.let { label ->
             val half = with(LocalDensity.current) { Offset(WIDGET_GHOST_W.toPx() / 2, WIDGET_GHOST_H.toPx() / 2) }
             Box(
@@ -257,20 +279,27 @@ private const val EDGE_WAIT_MS = 500L
 private val WIDGET_GHOST_W = 168.dp
 private val WIDGET_GHOST_H = 72.dp
 
-/** A widget's hold, as the camp handles it: lift onto the board, follow the finger, then land or open its card. */
+/**
+ * A widget's hold, as the camp handles it: the long press itself puts the widget into moving and resizing, lifts a
+ * picture of it onto the board and lets it follow the finger; letting go lands it, or leaves it where it was to resize.
+ */
 private class CardGrip(
     private val drag: DragBoard,
     private val cargo: HeldWidget,
-    private val onMenu: () -> Unit,
+    private val onEdit: () -> Unit,
     private val onDrop: (Int, Zone, Int) -> Unit,
 ) : Grip {
     var origin = Offset.Zero
+    var size = androidx.compose.ui.unit.IntSize.Zero
 
-    override fun lift(x: Float, y: Float) = drag.pick(cargo, origin + Offset(x, y))
+    override fun lift(x: Float, y: Float, look: android.graphics.Bitmap?) {
+        onEdit()
+        drag.pick(cargo.copy(look = look?.asImageBitmap(), grab = Offset(x, y), size = size), origin + Offset(x, y))
+    }
     override fun move(dx: Float, dy: Float) = drag.move(Offset(dx, dy))
     override fun cancel() = drag.cancel()
     override fun land(moved: Boolean) {
-        if (!moved) { drag.cancel(); onMenu(); return }
+        if (!moved) { drag.cancel(); return }
         if (drag.held == null) return
         drag.release()?.let { (_, spot) -> onDrop(cargo.id, spot.zone, spot.index) }
     }
@@ -474,30 +503,40 @@ private fun PageDots(pages: Int, current: Int) {
 }
 
 /**
- * A placed widget, drawn by its app inside a vivac card shape. Holding it and letting go opens its card; holding and
- * moving carries it. It is also a spot: something carried onto it lands in its place.
+ * A placed widget, drawn by its app inside a vivac card shape. Holding it puts it into moving and resizing: moving
+ * the finger carries it, and while [editing] a bar on it changes its height (its buttons, or dragging the bar).
+ * It is also a spot: something carried onto it lands in its place.
  */
 @Composable
 private fun WidgetCard(
     id: Int,
     rows: Int,
+    /** The rows it shows at: the ones you chose, else its own. */
+    shownRows: Int,
     heightDp: Int,
     widgetView: (Context, Int, Float, Int, Grip) -> View?,
     grip: CardGrip,
     drag: DragBoard,
     spot: Spot,
+    editing: Boolean,
+    onResize: (Int) -> Unit,
 ) {
     val lifted = (drag.held as? HeldWidget)?.id == id
+    val edge = when {
+        editing && !lifted -> Ink.primary
+        drag.target == spot && !lifted -> Ink.primary
+        else -> Ink.field
+    }
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
             .height(heightDp.dp)
             .spot(drag, spot)
-            .onGloballyPositioned { grip.origin = it.positionInRoot() }
+            .onGloballyPositioned { grip.origin = it.positionInRoot(); grip.size = it.size }
             .graphicsLayer { alpha = if (lifted) 0.3f else 1f }
             .clip(RoundedCornerShape(24.dp))
             .background(Ink.surface)
-            .border(if (drag.target == spot && !lifted) 1.5.dp else 1.dp, if (drag.target == spot && !lifted) Ink.primary else Ink.field, RoundedCornerShape(24.dp)),
+            .border(if (edge == Ink.primary) 2.dp else 1.dp, edge, RoundedCornerShape(24.dp)),
     ) {
         val width = maxWidth.value
         // key(id, rows): a new widget, or a new size, gets a fresh host view laid out for it.
@@ -507,6 +546,39 @@ private fun WidgetCard(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        if (editing && !lifted) ResizeBar(shownRows, onResize, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp))
+    }
+}
+
+/**
+ * The height of a widget being resized: shorter, its rows, taller. Dragging the bar up or down changes it a row
+ * at a time, as the finger passes half a row, so the widget's edge keeps up with the finger.
+ */
+@Composable
+private fun ResizeBar(rows: Int, onResize: (Int) -> Unit, modifier: Modifier) {
+    val resize by rememberUpdatedState(onResize)
+    Row(
+        modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Ink.raised)
+            .border(1.5.dp, Ink.primary, RoundedCornerShape(999.dp))
+            .pointerInput(Unit) {
+                val row = WidgetSize.ROW_DP.dp.toPx()
+                var pull = 0f
+                detectVerticalDragGestures(onDragStart = { pull = 0f }) { change, dy ->
+                    change.consume()
+                    pull += dy
+                    while (pull >= row / 2) { resize(+1); pull -= row }
+                    while (pull <= -row / 2) { resize(-1); pull += row }
+                }
+            }
+            .padding(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Step(Glyph.MINUS, "Más bajo", enabled = rows > 1) { onResize(-1) }
+        Text(if (rows == 1) "1 fila" else "$rows filas", style = Type.figure.copy(fontSize = 16.sp), modifier = Modifier.width(64.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Step(Glyph.PLUS, "Más alto", enabled = rows < WidgetSize.MAX_ROWS) { onResize(+1) }
     }
 }
 
