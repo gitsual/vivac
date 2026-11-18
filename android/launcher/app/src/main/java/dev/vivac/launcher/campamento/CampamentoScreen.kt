@@ -202,7 +202,15 @@ fun CampamentoScreen(
                 val grip = remember(w.id, w.page) { CardGrip(drag, HeldWidget(w.id, Zone.Ladera(w.page), widgetLabel(w.id)), { onEditWidget(w.id) }, onWidgetDrop) }
                 WidgetCard(w.id, w.rows, widgetRows(w.id), widgetHeightDp(w.id, w.rows), widgetView, grip, drag, spot, w.id == editing) { onResizeWidget(w.id, it) }
             }
-            HorizontalPager(pager, Modifier.weight(1f), pageSpacing = 24.dp, verticalAlignment = Alignment.Top) { p ->
+            // While something is carried, every page stays composed: the page it came from holds the finger (a
+            // widget's own view, a tile's gesture), and tearing it down when the page turns would drop it.
+            HorizontalPager(
+                pager,
+                Modifier.weight(1f),
+                pageSpacing = 24.dp,
+                verticalAlignment = Alignment.Top,
+                beyondViewportPageCount = if (drag.held != null) shownPages else 0,
+            ) { p ->
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (p == 0) Clock(stamp)
                     if (p >= 1 && board.onPage(p).isEmpty()) NewLadera(p, drag, onAddApps, Modifier.weight(1f))

@@ -941,4 +941,20 @@ class LauncherAppTest {
         assertEquals(listOf("dismiss:a"), notices.calls)
         compose.onNodeWithText("texto de Bea").assertIsDisplayed()
     }
+
+    @Test
+    fun `while something is carried to another page, the page it came from stays alive under the finger`() {
+        store.values["widgets"] = "@com.termux:1"
+        val drag = dev.vivac.launcher.campamento.DragBoard()
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets).also { it.refresh() }
+        compose.setContent { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views, drag) }
+        compose.runOnUiThread { drag.pick(dev.vivac.launcher.campamento.HeldWidget(1, Zone.Ladera(0), "Reloj"), androidx.compose.ui.geometry.Offset(10f, 10f)) }
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.mainClock.advanceTimeBy(3_000)
+        compose.waitForIdle()
+        // The ladera has turned into view...
+        compose.onNodeWithTag("cell:1:1").assertIsDisplayed()
+        // ...and the camp, where the widget's own view still holds the finger, is not torn down.
+        compose.onNodeWithText("2026111301").assertExists()
+    }
 }
