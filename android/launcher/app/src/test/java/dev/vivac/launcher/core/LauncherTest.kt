@@ -617,6 +617,57 @@ class LauncherTest {
     }
 
     @Test
+    fun `vivac's settings open from the camp menu, persist, and back closes them`() {
+        val l = many()
+        l.openCampMenu()
+        l.openSettings()
+        assertEquals(Screen.AJUSTES, l.screen)
+        assertFalse(l.campMenu)
+        assertEquals(4, l.columns)
+        l.chooseColumns(5)
+        l.chooseColumns(9)
+        assertEquals(5, many().columns)
+        assertTrue(l.labels)
+        l.toggleLabels()
+        assertFalse(many().labels)
+        assertFalse(l.showCounts)
+        l.toggleCounts()
+        assertTrue(many().showCounts)
+        assertTrue(l.back())
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+    }
+
+    @Test
+    fun `swipes do what you chose for them`() {
+        val l = many()
+        assertEquals(Gesture.PETATE, l.swipeUp)
+        assertEquals(Gesture.NOTIFICATIONS, l.swipeDown)
+        l.onSwipeUp()
+        assertEquals(Screen.PETATE, l.screen)
+        l.back()
+        l.onSwipeDown()
+        assertEquals("notifications", actions.calls.last())
+        l.chooseSwipeUp(Gesture.SEARCH)
+        l.chooseSwipeDown(Gesture.LOCK)
+        assertEquals(Gesture.SEARCH, many().swipeUp)
+        assertEquals(Gesture.LOCK, many().swipeDown)
+        l.onSwipeUp()
+        assertTrue(l.focusSearch)
+        l.back()
+        l.onSwipeDown()
+        assertEquals("accessibility", actions.calls.last())
+        actions.lockService = true
+        l.onSwipeDown()
+        assertEquals("lock", actions.calls.last())
+        l.chooseSwipeDown(Gesture.NOTHING)
+        val before = actions.calls.size
+        l.onSwipeDown()
+        assertEquals(before, actions.calls.size)
+        store.values["swipeUp"] = "BOGUS"
+        assertEquals(Gesture.PETATE, many().swipeUp)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

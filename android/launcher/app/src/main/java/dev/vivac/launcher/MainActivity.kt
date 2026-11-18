@@ -62,7 +62,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val dots by Dots.live.collectAsState()
-            CompositionLocalProvider(LocalDots provides dots) {
+            val counts by Dots.liveCounts.collectAsState()
+            CompositionLocalProvider(LocalDots provides dots, dev.vivac.launcher.apps.LocalCounts provides counts) {
                 facts?.let { LauncherApp(launcher, stamp, it, actions, views) }
             }
         }

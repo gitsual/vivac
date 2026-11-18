@@ -18,7 +18,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | H6 | Pin app shortcuts (deep shortcuts) to the home screen | done: pin beside each shortcut in the app menu; on a ladera, tap opens, hold to take off |
 | H7 | Accept "add to home screen" requests from apps (PinItemRequest: shortcuts and widgets) | done: PinActivity, to the last ladera |
 | H8 | Resize widgets (height in rows) | done (widget card: 1–5 rows) |
-| H9 | Configurable grid: columns for pins and drawer, labels on/off | todo |
+| H9 | Configurable grid: columns for pins and drawer, labels on/off | done: petate 4 or 5 columns; names on/off everywhere (TalkBack keeps them) |
 | H10 | Lock the layout so nothing moves by accident | done: camp menu; apps and widgets cannot be carried while locked |
 | H11 | Wallpaper: show the system wallpaper behind vivac, or keep the solid camp | done: camp menu toggle, night veil over it |
 | H12 | Set wallpaper from the camp menu | done: system picker |
@@ -61,7 +61,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | I3 | Icon packs (ADW / Nova standard appfilter.xml) | todo |
 | I4 | Custom icon per app (from a pack) | todo |
 | I5 | Notification dots | done |
-| I6 | Notification count instead of a dot (optional) | todo |
+| I6 | Notification count instead of a dot (optional) | done: settings toggle; 99+ cap |
 
 ## Gestures
 
@@ -69,7 +69,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 |---|---------|--------|
 | G1 | Swipe up: Petate; swipe down: notifications | done |
 | G2 | Double tap to lock the screen (accessibility service, opt-in) | done: camp menu toggle; LockService reads nothing |
-| G3 | Configurable gestures (swipe up/down, double tap → any action or app) | todo |
+| G3 | Configurable gestures (swipe up/down, double tap → any action or app) | done: swipe up/down → petate, search, notices, lock, nothing; double tap → lock (opening a chosen app: todo) |
 | G4 | Home pressed on the camp: back to the top / close sheets | done: closes the petate, menus and sheets, back to page 0 |
 | G5 | Swipe-home animation into the icon (GestureNavContract, Android 11+, undocumented) | todo |
 
@@ -77,7 +77,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 
 | # | Feature | Status |
 |---|---------|--------|
-| S1 | vivac settings screen (everything configurable above, in one place) | todo |
+| S1 | vivac settings screen (everything configurable above, in one place) | done: «Ajustes de vivac» from the camp menu |
 | S2 | Back up and restore the layout to a file (Storage Access Framework) | done: camp menu; text file; widgets stay out (their ids are per phone) |
 | S3 | Survive uninstalled apps, reboot, process death | done |
 | S4 | Set vivac as the default home from inside the app | done: camp menu, RoleManager dialog (default-apps page as fallback) |

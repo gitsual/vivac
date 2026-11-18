@@ -33,6 +33,7 @@ class DotsListenerTest {
         shadow.addActiveNotification("com.mail", 4, notice())
         service.onNotificationPosted(null)
         assertEquals(setOf("org.signal", "com.mail"), Dots.live.value)
+        assertEquals(setOf("org.signal", "com.mail"), Dots.liveCounts.value.keys)
         service.onNotificationRemoved(null)
         service.onListenerDisconnected()
         assertEquals(emptySet<String>(), Dots.live.value)

@@ -19,7 +19,16 @@ import dev.vivac.launcher.petate.FoundShortcut
 import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
 
-enum class Screen { CAMPAMENTO, PETATE }
+enum class Screen { CAMPAMENTO, PETATE, AJUSTES }
+
+/** What a swipe on the camp does, as you choose it in vivac's settings. */
+enum class Gesture(val title: String) {
+    PETATE("Abrir el petate"),
+    SEARCH("Buscar"),
+    NOTIFICATIONS("Ver los avisos"),
+    LOCK("Apagar la pantalla"),
+    NOTHING("Nada"),
+}
 
 /** Where an app sits on the home screen, as a drag sees it: picked up from one zone, dropped in another. */
 sealed interface Zone {
@@ -112,6 +121,53 @@ class Launcher(
     fun changeWallpaper() {
         campMenu = false
         actions.pickWallpaper()
+    }
+
+    /** Columns in the Petate's grid: 4 or 5. */
+    var columns by mutableStateOf(store.get(KEY_COLUMNS)?.toIntOrNull()?.coerceIn(4, 5) ?: 4); private set
+    /** Names under the tiles. */
+    var labels by mutableStateOf(store.get(KEY_LABELS) != "0"); private set
+    /** How many notifications, instead of a plain dot. */
+    var showCounts by mutableStateOf(store.get(KEY_COUNTS) == "1"); private set
+    var swipeUp by mutableStateOf(gesture(KEY_SWIPE_UP, Gesture.PETATE)); private set
+    var swipeDown by mutableStateOf(gesture(KEY_SWIPE_DOWN, Gesture.NOTIFICATIONS)); private set
+
+    private fun gesture(key: String, default: Gesture) = Gesture.entries.firstOrNull { it.name == store.get(key) } ?: default
+
+    fun openSettings() {
+        campMenu = false
+        screen = Screen.AJUSTES
+    }
+
+    fun chooseColumns(n: Int) {
+        columns = n.coerceIn(4, 5)
+        store.put(mapOf(KEY_COLUMNS to columns.toString()))
+    }
+
+    fun toggleLabels() {
+        labels = !labels
+        store.put(mapOf(KEY_LABELS to if (labels) "1" else "0"))
+    }
+
+    fun toggleCounts() {
+        showCounts = !showCounts
+        store.put(mapOf(KEY_COUNTS to if (showCounts) "1" else "0"))
+    }
+
+    fun chooseSwipeUp(g: Gesture) { swipeUp = g; store.put(mapOf(KEY_SWIPE_UP to g.name)) }
+    fun chooseSwipeDown(g: Gesture) { swipeDown = g; store.put(mapOf(KEY_SWIPE_DOWN to g.name)) }
+
+    fun onSwipeUp() = perform(swipeUp)
+    fun onSwipeDown() = perform(swipeDown)
+
+    private fun perform(g: Gesture) {
+        when (g) {
+            Gesture.PETATE -> openPetate(false)
+            Gesture.SEARCH -> openPetate(true)
+            Gesture.NOTIFICATIONS -> actions.showNotifications()
+            Gesture.LOCK -> if (!actions.lockScreen()) askForLockService()
+            Gesture.NOTHING -> Unit
+        }
     }
 
     fun toggleLock() {
@@ -281,6 +337,11 @@ class Launcher(
         locked = store.get(KEY_LOCKED) == "1"
         doubleTapLock = store.get(KEY_DOUBLE_TAP) == "1"
         showWallpaper = store.get(KEY_WALLPAPER) == "1"
+        columns = store.get(KEY_COLUMNS)?.toIntOrNull()?.coerceIn(4, 5) ?: 4
+        labels = store.get(KEY_LABELS) != "0"
+        showCounts = store.get(KEY_COUNTS) == "1"
+        swipeUp = gesture(KEY_SWIPE_UP, Gesture.PETATE)
+        swipeDown = gesture(KEY_SWIPE_DOWN, Gesture.NOTIFICATIONS)
         refresh()
         actions.say("Campamento restaurado.")
     }
@@ -503,6 +564,11 @@ class Launcher(
         const val KEY_LOCKED = "locked"
         const val KEY_DOUBLE_TAP = "doubleTapLock"
         const val KEY_WALLPAPER = "wallpaper"
+        const val KEY_COLUMNS = "columns"
+        const val KEY_LABELS = "labels"
+        const val KEY_COUNTS = "counts"
+        const val KEY_SWIPE_UP = "swipeUp"
+        const val KEY_SWIPE_DOWN = "swipeDown"
 
         private fun encodeNames(names: Map<String, String>) =
             names.entries.joinToString(",") { (pkg, name) -> pkg + "=" + java.net.URLEncoder.encode(name, "UTF-8") }

@@ -27,4 +27,9 @@ class DotsTest {
         assertEquals(emptySet<String>(), Dots.of(listOf(n("com.google.android.gm", summary = true))))
         assertEquals(setOf("com.google.android.gm"), Dots.of(listOf(n("com.google.android.gm", summary = true), n("com.google.android.gm"))))
     }
+
+    @Test
+    fun `counts are per app, over the same notices that earn a dot`() {
+        assertEquals(mapOf("com.whatsapp" to 2, "org.telegram.messenger" to 1), Dots.counts(listOf(n("com.whatsapp"), n("org.telegram.messenger"), n("com.whatsapp"), n("x", ongoing = true))))
+    }
 }

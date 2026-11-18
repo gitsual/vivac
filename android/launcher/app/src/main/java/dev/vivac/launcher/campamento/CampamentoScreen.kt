@@ -86,6 +86,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.vivac.launcher.apps.AppFace
+import dev.vivac.launcher.apps.LocalCounts
 import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.petate.Pack
@@ -127,6 +128,8 @@ fun CampamentoScreen(
     onDoubleTap: () -> Unit = {},
     wallpaper: Boolean = false,
     onOpenFolder: (String) -> Unit = {},
+    onSwipeUp: () -> Unit = { onOpenPetate(false) },
+    onSwipeDown: () -> Unit = onShowNotifications,
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
@@ -150,8 +153,8 @@ fun CampamentoScreen(
     }
     val onSwipe: (Swipe) -> Unit = { s ->
         when (s) {
-            Swipe.DOWN -> onShowNotifications()
-            Swipe.UP -> onOpenPetate(false)
+            Swipe.DOWN -> onSwipeDown()
+            Swipe.UP -> onSwipeUp()
             Swipe.NONE -> Unit
         }
     }
@@ -293,6 +296,7 @@ private fun CarriedTile(
         labelColor = labelColor,
         onClick = { onOpenApp(app.packageName) },
         dot = app.packageName in LocalDots.current,
+        count = LocalCounts.current[app.packageName] ?: 0,
         modifier = modifier.spot(drag, spot).graphicsLayer { alpha = if (lifted) 0.3f else 1f },
         gestures = Modifier.carriable(drag, Held(app, zone, tone), app.label, { onOpenApp(app.packageName) }, { onAppMenu(app.packageName) }, onDrop),
     ) { AppFace(app, tone) }

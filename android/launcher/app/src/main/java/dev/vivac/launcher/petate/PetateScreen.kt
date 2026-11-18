@@ -65,6 +65,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.vivac.launcher.apps.AppFace
+import dev.vivac.launcher.apps.LocalCounts
 import dev.vivac.launcher.apps.LocalDots
 import dev.vivac.launcher.apps.InstalledApp
 import dev.vivac.launcher.apps.Profile
@@ -98,6 +99,7 @@ fun PetateScreen(
     onStoreSearch: (String) -> Unit = {},
     shortcuts: List<FoundShortcut> = emptyList(),
     onOpenShortcut: (FoundShortcut) -> Unit = {},
+    columns: Int = 4,
     profiles: List<Profile> = emptyList(),
     onOpenInProfile: (String, Long) -> Unit = { _, _ -> },
     onLockProfile: (Profile) -> Unit = {},
@@ -165,7 +167,7 @@ fun PetateScreen(
             }
             Row(Modifier.weight(1f)) {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
+                    columns = GridCells.Fixed(columns),
                     state = grid,
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -183,6 +185,7 @@ fun PetateScreen(
                                 onClick = { if (profile != null) onOpenInProfile(app.packageName, profile.id) else onOpenApp(app.packageName) },
                                 onLongClick = { if (profile == null) onAppMenu(app.packageName) },
                                 dot = profile == null && app.packageName in LocalDots.current,
+                                count = if (profile == null) LocalCounts.current[app.packageName] ?: 0 else 0,
                                 badge = profile?.let { if (it.kind == Profile.Kind.WORK) "TRAB" else "PRIV" },
                                 gestures = if (profile == null) carry(app, tone) else null,
                             ) {

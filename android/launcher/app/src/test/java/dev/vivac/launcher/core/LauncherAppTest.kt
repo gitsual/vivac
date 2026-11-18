@@ -23,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
@@ -561,6 +562,70 @@ class LauncherAppTest {
         compose.onAllNodesWithText("Organic Maps").onLast().tap()
         assertEquals("open:app.organicmaps", actions.calls.last())
         assertEquals(null, launcher.openFolder)
+    }
+
+    @Test
+    fun `the settings screen changes every choice, and back closes it`() {
+        show()
+        compose.runOnUiThread { launcher.openCampMenu() }
+        compose.onNodeWithText("Ajustes de vivac").tap()
+        compose.waitForIdle()
+        assertEquals(Screen.AJUSTES, launcher.screen)
+        compose.onNodeWithText("Bloquear el campamento").performClick()
+        compose.onNodeWithText("Fondo del teléfono").performClick()
+        compose.onNodeWithText("Cambiar el fondo de pantalla").performClick()
+        compose.onNodeWithText("Nombres bajo las apps").performClick()
+        compose.onNodeWithText("5").performClick()
+        compose.onNodeWithText("Activar los puntos de aviso").performScrollTo().performClick()
+        compose.onNodeWithText("Número de avisos").performScrollTo().performClick()
+        compose.onAllNodesWithText("Buscar")[0].performScrollTo().performClick()
+        compose.onAllNodesWithText("Nada")[1].performScrollTo().performClick()
+        compose.onNodeWithText("Doble toque apaga la pantalla").performScrollTo().performClick()
+        compose.onNodeWithText("Guardar una copia del campamento").performScrollTo().performClick()
+        compose.onNodeWithText("Restaurar una copia").performScrollTo().performClick()
+        compose.waitForIdle()
+        assertTrue(launcher.locked)
+        assertTrue(launcher.showWallpaper)
+        assertEquals(false, launcher.labels)
+        assertEquals(5, launcher.columns)
+        assertTrue(launcher.showCounts)
+        assertEquals(Gesture.SEARCH, launcher.swipeUp)
+        assertEquals(Gesture.NOTHING, launcher.swipeDown)
+        assertTrue(launcher.doubleTapLock)
+        assertTrue(actions.calls.containsAll(listOf("wallpaper", "notificationAccess", "backup", "restore")))
+        compose.onNodeWithText("Cerrar").performScrollTo().performClick()
+        compose.waitForIdle()
+        assertEquals(Screen.CAMPAMENTO, launcher.screen)
+    }
+
+    @Test
+    fun `settings offer to make vivac the home app while it is not`() {
+        actions.home = false
+        show()
+        compose.runOnUiThread { launcher.openSettings() }
+        compose.waitForIdle()
+        compose.onNodeWithText("vivac como app de inicio").performClick()
+        assertEquals("askHome", actions.calls.last())
+    }
+
+    @Test
+    fun `tiles show how many notifications when you chose counts, and hide names when you chose so`() {
+        store.values["pinned"] = "app.organicmaps"
+        store.values["counts"] = "1"
+        store.values["labels"] = "0"
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets).also { it.refresh() }
+        compose.setContent {
+            CompositionLocalProvider(LocalDots provides setOf("app.organicmaps", "com.termux"), dev.vivac.launcher.apps.LocalCounts provides mapOf("app.organicmaps" to 3, "com.termux" to 120)) {
+                LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views)
+            }
+        }
+        compose.onNodeWithText("3").assertExists()
+        compose.onNodeWithText("99+").assertExists()
+        compose.onNodeWithText("Organic Maps").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Organic Maps").assertExists()
+        compose.runOnUiThread { launcher.onSwipeUp() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Ajustes").assertDoesNotExist()
     }
 
     @Test

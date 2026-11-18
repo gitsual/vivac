@@ -29,7 +29,7 @@ class DotsListener : NotificationListenerService() {
                 isGroupSummary = sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0,
             )
         }
-        Dots.publish(Dots.of(notices))
+        Dots.publish(Dots.of(notices), Dots.counts(notices))
     }
 
     companion object {

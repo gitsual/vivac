@@ -88,11 +88,13 @@ fun CampMenuSheet(
     showWallpaper: Boolean = false,
     onToggleWallpaper: () -> Unit = {},
     onChangeWallpaper: () -> Unit = {},
+    onSettings: () -> Unit = {},
 ) {
     VivacSheet(onDismiss) {
         Text("Campamento", style = Type.section, modifier = Modifier.padding(bottom = 8.dp).semantics { heading() })
         if (!isHome) Row52("Hacer de vivac tu app de inicio", Glyph.TENT, Ink.accentText, onBecomeHome)
         Row52("Añadir widget", Glyph.PLUS, Ink.accentText, onAdd)
+        Row52("Ajustes de vivac", Glyph.SLIDERS, Ink.text, onSettings)
         Row52(if (locked) "Desbloquear el campamento" else "Bloquear el campamento", Glyph.LOCK, Ink.text, onToggleLock)
         Row52(if (doubleTapLock) "Doble toque: no apagar la pantalla" else "Doble toque: apagar la pantalla", Glyph.DOT, Ink.text, onToggleDoubleTap)
         Row52(if (showWallpaper) "Fondo: noche de vivac" else "Fondo: el del teléfono", Glyph.SQUARE, Ink.text, onToggleWallpaper)

@@ -9,6 +9,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import dev.vivac.launcher.ajustes.SettingsActions
+import dev.vivac.launcher.ajustes.SettingsScreen
+import dev.vivac.launcher.ajustes.SettingsState
+import dev.vivac.launcher.theme.LocalLabels
+import dev.vivac.launcher.theme.LocalShowCounts
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -38,7 +44,7 @@ interface WidgetViews {
 /** The whole launcher on screen, driven by [launcher]. */
 @Composable
 fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: Actions, widgetViews: WidgetViews) {
-    BackHandler(enabled = launcher.screen == Screen.PETATE) { launcher.back() }
+    BackHandler(enabled = launcher.screen != Screen.CAMPAMENTO) { launcher.back() }
     val drag = remember { DragBoard() }
     // Android draws the wallpaper behind a window that asks for it; vivac's camp then lets it show through.
     val window = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.window
@@ -80,11 +86,28 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onDoubleTap = launcher::onDoubleTap,
             wallpaper = launcher.showWallpaper,
             onOpenFolder = launcher::openFolder,
+            onSwipeUp = launcher::onSwipeUp,
+            onSwipeDown = launcher::onSwipeDown,
         )
     }
+    CompositionLocalProvider(LocalLabels provides launcher.labels, LocalShowCounts provides launcher.showCounts) {
     AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
         when (current) {
             Screen.CAMPAMENTO -> camp()
+            Screen.AJUSTES -> SettingsScreen(
+                SettingsState(
+                    locked = launcher.locked, wallpaper = launcher.showWallpaper, labels = launcher.labels, columns = launcher.columns,
+                    dotsAllowed = actions.dotsAllowed(), counts = launcher.showCounts, swipeUp = launcher.swipeUp, swipeDown = launcher.swipeDown,
+                    doubleTapLock = launcher.doubleTapLock, isHome = actions.isHome(),
+                ),
+                SettingsActions(
+                    toggleLock = launcher::toggleLock, toggleWallpaper = launcher::toggleWallpaper, changeWallpaper = launcher::changeWallpaper,
+                    toggleLabels = launcher::toggleLabels, setColumns = launcher::chooseColumns, allowDots = launcher::allowDots,
+                    toggleCounts = launcher::toggleCounts, setSwipeUp = launcher::chooseSwipeUp, setSwipeDown = launcher::chooseSwipeDown,
+                    toggleDoubleTap = launcher::toggleDoubleTapLock, backUp = launcher::backUp, restore = launcher::askRestore,
+                    becomeHome = launcher::becomeHome, close = { launcher.back() },
+                ),
+            )
             Screen.PETATE -> Box {
                 // An app lifted out of the petate is carried over the camp: the camp comes up underneath and the
                 // petate goes see-through, staying in place so the finger keeps its hold on the tile.
@@ -106,12 +129,14 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     shortcuts = launcher.petateShortcuts,
                     onOpenShortcut = launcher::openShortcutFromPetate,
                     profiles = launcher.profiles,
+                    columns = launcher.columns,
                     onOpenInProfile = launcher::openInProfile,
                     onLockProfile = launcher::lockProfile,
                     modifier = Modifier.graphicsLayer { alpha = if (lifted) 0f else 1f },
                 )
             }
         }
+    }
     }
     if (launcher.campMenu) {
         CampMenuSheet(
@@ -127,6 +152,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             isHome = actions.isHome(),
             onBecomeHome = launcher::becomeHome,
             onBackUp = launcher::backUp,
+            onSettings = launcher::openSettings,
             onRestore = launcher::askRestore,
             showWallpaper = launcher.showWallpaper,
             onToggleWallpaper = launcher::toggleWallpaper,

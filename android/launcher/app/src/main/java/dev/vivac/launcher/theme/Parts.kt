@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,6 +68,10 @@ fun LineIcon(path: String, color: Color, size: Dp = 24.dp, modifier: Modifier = 
     }
 }
 
+/** Your settings for every tile: names under them, and notification counts instead of dots. */
+val LocalLabels = androidx.compose.runtime.compositionLocalOf { true }
+val LocalShowCounts = androidx.compose.runtime.compositionLocalOf { false }
+
 /**
  * The tile used everywhere: a monogram or icon over a toned square, label below. On the Campamento's route
  * it carries its pitch ([badge], "L1"); [border] outlines it on the night ground.
@@ -86,15 +91,23 @@ fun AppTile(
     tile: Dp = 56.dp,
     /** Replaces the tile's own tap and long press, for tiles that can also be dragged (see the Campamento). */
     gestures: Modifier? = null,
+    /** Notifications waiting; drawn as a number instead of the dot when you chose counts. */
+    count: Int = 0,
     content: @Composable () -> Unit,
 ) {
+    val number = if (LocalShowCounts.current && count > 0) count else 0
+    val showLabel = LocalLabels.current
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .then(
                 gestures ?: Modifier.combinedClickable(role = Role.Button, onClickLabel = "Abrir $label", onLongClickLabel = onLongClick?.let { "Opciones de $label" }, onLongClick = onLongClick, onClick = onClick),
             )
-            .semantics { if (dot) stateDescription = "con avisos" },
+            .semantics {
+                if (number > 0) stateDescription = "$number avisos" else if (dot) stateDescription = "con avisos"
+                // With names hidden, TalkBack still reads them.
+                if (!showLabel) contentDescription = label
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -122,8 +135,23 @@ fun AppTile(
                         .padding(horizontal = 4.dp, vertical = 1.dp),
                 )
             }
+            // Notification count: the number on a coral pill, ringed like the dot.
+            if (number > 0) {
+                Text(
+                    if (number > 99) "99+" else number.toString(),
+                    style = Type.mono.copy(fontSize = 10.sp, lineHeight = 12.sp, color = Ink.deep, textAlign = TextAlign.Center),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 5.dp, y = (-4).dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(Ink.deep)
+                        .padding(2.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(Ink.primary)
+                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                )
+            } else if (dot) {
             // Notification dot: coral with a ring of the page colour so it reads on any icon.
-            if (dot) {
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)
@@ -137,14 +165,16 @@ fun AppTile(
                 )
             }
         }
-        Text(
-            label,
-            style = Type.label.copy(color = labelColor),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (showLabel) {
+            Text(
+                label,
+                style = Type.label.copy(color = labelColor),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
