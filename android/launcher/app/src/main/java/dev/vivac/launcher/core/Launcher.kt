@@ -506,7 +506,8 @@ class Launcher(
         when (from) {
             Zone.Dock -> dock.remove(packageName)
             Zone.Via -> pinned.remove(packageName)
-            is Zone.Ladera -> if (to !is Zone.Ladera) next = next.removeApp(packageName)
+            // Off a ladera, its cell stays empty so the others keep their places.
+            is Zone.Ladera -> if (to !is Zone.Ladera) next = next.vacate(packageName)
             // Out of the petate: an app already where it lands moves rather than appearing twice.
             Zone.Petate -> if (to == Zone.Dock) dock.remove(packageName) else if (to == Zone.Via) pinned.remove(packageName)
             is Zone.Folder -> Unit

@@ -798,4 +798,16 @@ class LauncherAppTest {
         // And one more past it.
         compose.onNodeWithContentDescription("Ladera 1, página 2 de 3").assertExists()
     }
+
+    @Test
+    fun `an app carried over a free cell of a ladera lands in that cell, empty cells before it`() {
+        store.values["dock"] = "com.android.settings"
+        store.values["widgets"] = "@com.termux:1"
+        show()
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.waitForIdle()
+        val cell = compose.onNodeWithTag("cell:1:6").fetchSemanticsNode().boundsInRoot.center
+        carry("Termux", cell)
+        assertEquals(List(6) { dev.vivac.launcher.campamento.Gap(1) } + dev.vivac.launcher.campamento.Shelved("com.termux", 1), launcher.board.onPage(1))
+    }
 }

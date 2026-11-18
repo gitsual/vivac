@@ -17,6 +17,9 @@ data class Shelved(val packageName: String, override val page: Int) : Item
 /** An app's shortcut (e.g. a chat) put on a ladera; [label] is what the app called it when it was pinned. */
 data class Pinned(val packageName: String, val id: String, val label: String, override val page: Int) : Item
 
+/** An empty cell on a ladera's grid, kept so the things after it stay in the cells you put them in. */
+data class Gap(override val page: Int) : Item
+
 /** A folder on a ladera: a name and the apps in it, in order. */
 data class Folder(val id: String, val name: String, val apps: List<String>, override val page: Int) : Item
 
@@ -45,7 +48,11 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
 
     /** Puts an app at [index] among the things on a ladera (moving it if it was elsewhere); past the end appends. */
     fun insertApp(packageName: String, page: Int, index: Int): WidgetBoard =
-        insert(Shelved(packageName, page.coerceAtLeast(1)), index) { it is Shelved && it.packageName == packageName }
+        place(Shelved(packageName, page.coerceAtLeast(1)), index) { it is Shelved && it.packageName == packageName }
+
+    /** Takes an app off its ladera, leaving its cell empty so the ones after it stay put. */
+    fun vacate(packageName: String): WidgetBoard =
+        WidgetBoard(items.map { if (it is Shelved && it.packageName == packageName) Gap(it.page) else it }).compact()
 
     /** Moves a shortcut or a folder to [index] on a ladera (apps and widgets have their own moves). */
     fun moveItem(item: Item, page: Int, index: Int): WidgetBoard {
@@ -55,7 +62,40 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
             is Folder -> item.copy(page = target)
             else -> return this
         }
-        return insert(moved, index) { it == item }
+        return place(moved, index) { it == item }
+    }
+
+    /**
+     * Puts an app, a shortcut or a folder in cell [index] of a ladera's grid, leaving its old cell empty. An empty
+     * cell takes it; past the end, the cells before it stay empty ([Int.MAX_VALUE] is just the end); a taken cell
+     * makes room by pushing things along to the nearest empty cell among the same apps, else everything after it.
+     */
+    private fun place(item: Item, index: Int, same: (Item) -> Boolean): WidgetBoard {
+        val rest = items.map { if (same(it)) Gap(it.page) else it }
+        val onTarget = rest.filter { it.page == item.page }.toMutableList()
+        when {
+            index == Int.MAX_VALUE -> onTarget.add(item)
+            index >= onTarget.size -> { repeat(index - onTarget.size) { onTarget.add(Gap(item.page)) }; onTarget.add(item) }
+            onTarget[index] is Gap -> onTarget[index] = item
+            else -> {
+                nearestGap(onTarget, index)?.let { onTarget.removeAt(it) }
+                onTarget.add(index.coerceAtMost(onTarget.size), item)
+            }
+        }
+        val last = maxOf(item.page, rest.maxOfOrNull { it.page } ?: 0)
+        return WidgetBoard((0..last).flatMap { p -> if (p == item.page) onTarget else rest.filter { it.page == p } }).compact()
+    }
+
+    /** The empty cell nearest [index] with no widget between them (after it on a tie), or null. */
+    private fun nearestGap(cells: List<Item>, index: Int): Int? {
+        if (cells[index] is Placed) return null
+        val after = (index + 1 until cells.size).takeWhile { cells[it] !is Placed }.firstOrNull { cells[it] is Gap }
+        val before = (index - 1 downTo 0).takeWhile { cells[it] !is Placed }.firstOrNull { cells[it] is Gap }
+        return when {
+            after == null -> before
+            before == null -> after
+            else -> if (after - index <= index - before) after else before
+        }
     }
 
     /** Puts a widget at [index] among the things on [page], the camp included, keeping its rows. */
@@ -163,22 +203,25 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
         when (it) {
             is Placed -> "${it.id}:${it.page}:${it.rows}"
             is Shelved -> "@${it.packageName}:${it.page}"
+            is Gap -> "_:${it.page}"
             is Pinned -> "#" + listOf(it.packageName, it.id, it.label).joinToString("|") { f -> URLEncoder.encode(f, "UTF-8") } + ":${it.page}"
             is Folder -> "%" + listOf(it.id, it.name, it.apps.joinToString(";")).joinToString("|") { f -> URLEncoder.encode(f, "UTF-8") } + ":${it.page}"
         }
     }
 
-    /** Renumbers pages so there are no empty laderas between the ones in use. */
+    /** Drops the empty cells that end each ladera, then renumbers pages so there are no empty laderas between the ones in use. */
     private fun compact(): WidgetBoard {
-        val used = items.map { it.page }.filter { it > 0 }.distinct().sorted()
+        val trimmed = items.filterIndexed { i, item -> item !is Gap || items.drop(i + 1).any { it.page == item.page && it !is Gap } }
+        val used = trimmed.map { it.page }.filter { it > 0 }.distinct().sorted()
         val renumber = used.withIndex().associate { (i, p) -> p to i + 1 }
-        return WidgetBoard(items.map { item ->
+        return WidgetBoard(trimmed.map { item ->
             val page = renumber[item.page] ?: 0
             when (item) {
                 is Placed -> item.copy(page = page)
                 is Shelved -> item.copy(page = page)
                 is Pinned -> item.copy(page = page)
                 is Folder -> item.copy(page = page)
+                is Gap -> item.copy(page = page)
             }
         })
     }
@@ -196,6 +239,8 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
                     val parts = fields[0].drop(1).split("|").map { URLDecoder.decode(it, "UTF-8") }
                     if (parts.size != 3 || parts[0].isBlank()) return@mapNotNull null
                     Pinned(parts[0], parts[1], parts[2], fields.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(1) ?: 1)
+                } else if (fields[0] == "_") {
+                    Gap(fields.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(1) ?: 1)
                 } else if (fields[0].startsWith("@")) {
                     val pkg = fields[0].drop(1).takeIf { it.isNotBlank() } ?: return@mapNotNull null
                     Shelved(pkg, fields.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(1) ?: 1)
@@ -203,14 +248,15 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
                     val id = fields[0].toIntOrNull() ?: return@mapNotNull null
                     Placed(id, fields.getOrNull(1)?.toIntOrNull() ?: 0, fields.getOrNull(2)?.toIntOrNull() ?: 0)
                 }
-            }.distinctBy {
+            }.withIndex().distinctBy { (i, it) ->
                 when (it) {
+                    is Gap -> "g$i"
                     is Placed -> "w${it.id}"
                     is Shelved -> "a${it.packageName}"
                     is Pinned -> "s${it.packageName}/${it.id}"
                     is Folder -> "f${it.id}"
                 }
-            },
+            }.map { it.value },
         )
     }
 }

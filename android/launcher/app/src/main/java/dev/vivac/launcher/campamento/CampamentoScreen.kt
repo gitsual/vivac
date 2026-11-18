@@ -40,6 +40,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.draw.clip
@@ -204,9 +206,12 @@ fun CampamentoScreen(
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (p == 0) Clock(stamp)
                     if (p >= 1 && board.onPage(p).isEmpty()) NewLadera(p, drag, onAddApps, Modifier.weight(1f))
-                    else Column(
+                    else BoxWithConstraints(Modifier.weight(1f)) {
+                    // How tall the page is: a ladera's grid of empty cells reaches down to its bottom.
+                    val viewport = maxHeight
+                    Column(
                         Modifier
-                            .weight(1f)
+                            .fillMaxSize()
                             // The camp takes a carried widget anywhere over it, after its other widgets.
                             .then(if (p == 0) Modifier.spot(drag, Spot(Zone.Ladera(0), Spot.END)) else Modifier)
                             .nestedScroll(leftovers)
@@ -218,10 +223,11 @@ fun CampamentoScreen(
                             board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
                             Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop)
                         } else {
-                            Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu, onOpenFolder) { c, spot ->
+                            Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu, onOpenFolder, viewport) { c, spot ->
                                 if (c is HeldItem) onMoveItem(c.item, spot.zone, spot.index)
                             }
                         }
+                    }
                     }
                 }
             }
@@ -346,7 +352,9 @@ private fun CarriedTile(
 }
 
 /**
- * A ladera: what you put there, in order. Widgets as cards, apps in rows of four between them.
+ * A ladera: a grid four cells wide, what you put there in order. Widgets take whole rows as cards; apps, shortcuts
+ * and folders sit in cells between them, and empty cells (kept, and the free ones down to the bottom of the page)
+ * take whatever is let go over them, right there.
  */
 @Composable
 private fun Ladera(
@@ -361,74 +369,127 @@ private fun Ladera(
     onShortcut: (Pinned) -> Unit,
     onShortcutMenu: (Pinned) -> Unit,
     onOpenFolder: (String) -> Unit,
+    viewport: androidx.compose.ui.unit.Dp,
     onDropItem: (Cargo, Spot) -> Unit = { _, _ -> },
 ) {
     val onDrop: (Cargo, Spot) -> Unit = { c, s -> if (c is Held) onDropApp(c, s) else onDropItem(c, s) }
     val byPackage = apps.associateBy { it.packageName }
-    // Consecutive apps and shortcuts form one block, so they share rows; each widget is a block of its own.
+    val zone = Zone.Ladera(page)
+    // Consecutive cells form one block, so they share rows; each widget is a block of its own. Each cell keeps its
+    // place in the ladera's order, which is where something let go over it lands.
     val blocks = mutableListOf<Any>()
-    items.forEach { item ->
+    items.forEachIndexed { i, item ->
         when (item) {
             is Placed -> blocks += item
-            is Shelved, is Pinned, is Folder -> {
+            is Gap, is Shelved, is Pinned, is Folder -> {
                 val known = when (item) {
                     is Shelved -> item.packageName in byPackage
                     is Pinned -> item.packageName in byPackage
-                    else -> (item as Folder).apps.any { it in byPackage }
+                    is Folder -> item.apps.any { it in byPackage }
+                    else -> true
                 }
-                if (!known) return@forEach
+                // Something whose app is gone shows as an empty cell, so the others keep their cells.
+                val cell = IndexedValue(i, if (known) item else Gap(page))
                 @Suppress("UNCHECKED_CAST")
-                (blocks.lastOrNull() as? MutableList<Item>)?.add(item) ?: blocks.add(mutableListOf(item))
+                (blocks.lastOrNull() as? MutableList<IndexedValue<Item>>)?.add(cell) ?: blocks.add(mutableListOf(cell))
             }
         }
     }
-    blocks.forEach { block ->
-        if (block is Placed) card(block)
-        else {
-            @Suppress("UNCHECKED_CAST")
-            (block as List<Item>).chunked(4).forEach { row ->
-                Row(Modifier.fillMaxWidth()) {
-                    row.forEach { item ->
-                        when (item) {
-                            is Shelved -> {
-                                val app = byPackage.getValue(item.packageName)
-                                CarriedTile(
-                                    app, Zone.Ladera(page), items.indexOf(item), drag,
-                                    Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)], Ink.surface, onOpenApp, onAppMenu, onDropApp,
-                                    modifier = Modifier.weight(1f),
+    val density = LocalDensity.current
+    var usedPx by remember { mutableIntStateOf(0) }
+    var cellPx by remember { mutableIntStateOf(0) }
+    val cellHeight = if (cellPx > 0) with(density) { cellPx.toDp() } else CELL_HEIGHT
+    Column(Modifier.fillMaxWidth().onSizeChanged { usedPx = it.height }, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        blocks.forEachIndexed { b, block ->
+            if (block is Placed) card(block)
+            else {
+                @Suppress("UNCHECKED_CAST")
+                val rows = (block as List<IndexedValue<Item>>).chunked(4)
+                rows.forEachIndexed { r, row ->
+                    val measured = if (row.any { it.value !is Gap }) Modifier.onSizeChanged { cellPx = it.height } else Modifier
+                    Row(Modifier.fillMaxWidth().then(measured)) {
+                        row.forEach { (i, item) ->
+                            when (item) {
+                                is Gap -> EmptyCell(Spot(zone, i), drag, cellHeight, Modifier.weight(1f))
+                                is Shelved -> {
+                                    val app = byPackage.getValue(item.packageName)
+                                    CarriedTile(
+                                        app, zone, i, drag,
+                                        Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)], Ink.surface, onOpenApp, onAppMenu, onDropApp,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                }
+                                is Pinned -> {
+                                    val app = byPackage.getValue(item.packageName)
+                                    val spot = Spot(zone, i)
+                                    val lifted = (drag.held as? HeldItem)?.item == item
+                                    AppTile(
+                                        label = item.label,
+                                        background = Ink.surface,
+                                        border = if (drag.target == spot && !lifted) Ink.primary else Ink.field,
+                                        badge = "↗",
+                                        onClick = { onShortcut(item) },
+                                        onLongClick = { onShortcutMenu(item) },
+                                        modifier = Modifier.weight(1f).spot(drag, spot).graphicsLayer { alpha = if (lifted) 0.3f else 1f },
+                                        gestures = Modifier.carrying(drag, HeldItem(item, zone, item.label), item.label, { onShortcut(item) }, { onShortcutMenu(item) }, onDrop),
+                                    ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                                }
+                                is Folder -> FolderTile(
+                                    item, item.apps.mapNotNull { byPackage[it] }, drag, onOpenFolder,
+                                    Modifier.weight(1f), page, i, onDrop,
                                 )
+                                is Placed -> Unit
                             }
-                            is Pinned -> {
-                                val app = byPackage.getValue(item.packageName)
-                                val spot = Spot(Zone.Ladera(page), items.indexOf(item))
-                                val lifted = (drag.held as? HeldItem)?.item == item
-                                AppTile(
-                                    label = item.label,
-                                    background = Ink.surface,
-                                    border = if (drag.target == spot && !lifted) Ink.primary else Ink.field,
-                                    badge = "↗",
-                                    onClick = { onShortcut(item) },
-                                    onLongClick = { onShortcutMenu(item) },
-                                    modifier = Modifier.weight(1f).spot(drag, spot).graphicsLayer { alpha = if (lifted) 0.3f else 1f },
-                                    gestures = Modifier.carrying(drag, HeldItem(item, Zone.Ladera(page), item.label), item.label, { onShortcut(item) }, { onShortcutMenu(item) }, onDrop),
-                                ) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
-                            }
-                            is Folder -> FolderTile(
-                                item, item.apps.mapNotNull { byPackage[it] }, drag, onOpenFolder,
-                                Modifier.weight(1f), page, items.indexOf(item), onDrop,
-                            )
-                            is Placed -> Unit
+                        }
+                        // The last row of the ladera goes on in free cells; a row before a widget just ends.
+                        val last = b == blocks.lastIndex && r == rows.lastIndex
+                        repeat(4 - row.size) { k ->
+                            if (last) EmptyCell(Spot(zone, items.size + k), drag, cellHeight, Modifier.weight(1f))
+                            else Spacer(Modifier.weight(1f))
                         }
                     }
-                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
+        }
+    }
+    // Free rows of cells down to the bottom of the page, numbered on from the last cell.
+    @Suppress("UNCHECKED_CAST")
+    val tail = (blocks.lastOrNull() as? List<Any>)?.let { (4 - it.size % 4) % 4 } ?: 0
+    val gap = 16.dp
+    val free = with(density) {
+        val room = viewport.toPx() - usedPx - gap.toPx()
+        (room / (cellHeight.toPx() + gap.toPx())).toInt().coerceAtLeast(0)
+    }
+    repeat(free) { r ->
+        Row(Modifier.fillMaxWidth()) {
+            repeat(4) { c -> EmptyCell(Spot(zone, items.size + tail + r * 4 + c), drag, cellHeight, Modifier.weight(1f)) }
         }
     }
     // The rest of the ladera takes a carried thing at its end. It only takes room while something is carried,
     // so a full ladera has no blank space under it to scroll into.
-    Box(Modifier.fillMaxWidth().height(if (drag.held != null) 96.dp else 0.dp).spot(drag, Spot(Zone.Ladera(page), Spot.END)))
+    Box(Modifier.fillMaxWidth().height(if (drag.held != null) 96.dp else 0.dp).spot(drag, Spot(zone, Spot.END)))
 }
+
+/** A ladera's empty cell: nothing to see, but outlined while something is carried, coral when it would land here. */
+@Composable
+private fun EmptyCell(spot: Spot, drag: DragBoard, height: androidx.compose.ui.unit.Dp, modifier: Modifier) {
+    val carrying = drag.held != null
+    val target = drag.target == spot
+    Box(
+        modifier
+            .height(height)
+            .spot(drag, spot)
+            .testTag("cell:${(spot.zone as Zone.Ladera).page}:${spot.index}")
+            .padding(6.dp)
+            .then(
+                if (!carrying) Modifier
+                else Modifier.border(if (target) 2.dp else 1.dp, if (target) Ink.primary else Ink.field, RoundedCornerShape(18.dp)),
+            ),
+    )
+}
+
+/** A cell's height until a tile has been measured. */
+private val CELL_HEIGHT = 92.dp
 
 /** The empty ladera past the last one: a plus in the middle adds apps to it; anything carried here lands on it. */
 @Composable

@@ -123,7 +123,45 @@ class WidgetBoardTest {
         val b = board(Placed(1, page = 1)).addApp("a", 1).addApp("b", 1)
         assertEquals(listOf(Shelved("b", 1), Placed(1, page = 1), Shelved("a", 1)), b.insertApp("b", page = 1, index = 0).onPage(1))
         assertEquals(listOf(Placed(1, page = 1), Shelved("b", 1), Shelved("a", 1)), b.insertApp("b", page = 1, index = 1).onPage(1))
-        assertEquals(listOf(Placed(1, page = 1), Shelved("a", 1), Shelved("b", 1), Shelved("c", 1)), b.insertApp("c", page = 1, index = 99).onPage(1))
+        assertEquals(listOf(Placed(1, page = 1), Shelved("a", 1), Shelved("b", 1), Shelved("c", 1)), b.insertApp("c", page = 1, index = Int.MAX_VALUE).onPage(1))
+    }
+
+    private fun gaps(n: Int, page: Int = 1) = List(n) { Gap(page) }
+
+    @Test
+    fun `an app let go over an empty cell past the others lands in that cell, empty cells before it`() {
+        val b = WidgetBoard().addApp("a", 1)
+        assertEquals(listOf(Shelved("a", 1)) + gaps(4) + Shelved("b", 1), b.insertApp("b", page = 1, index = 5).onPage(1))
+    }
+
+    @Test
+    fun `an app let go over an empty cell between others fills it, and nothing else moves`() {
+        val b = WidgetBoard(listOf(Shelved("a", 1)) + gaps(2) + Shelved("b", 1))
+        assertEquals(listOf(Shelved("a", 1), Shelved("c", 1), Gap(1), Shelved("b", 1)), b.insertApp("c", page = 1, index = 1).onPage(1))
+    }
+
+    @Test
+    fun `an app let go over a taken cell pushes the ones after it into the nearest empty cell`() {
+        val b = WidgetBoard(listOf(Shelved("a", 1), Shelved("b", 1), Gap(1), Shelved("c", 1)))
+        assertEquals(listOf(Shelved("d", 1), Shelved("a", 1), Shelved("b", 1), Shelved("c", 1)), b.insertApp("d", page = 1, index = 0).onPage(1))
+    }
+
+    @Test
+    fun `an app moved away leaves its cell empty, and empty cells at the end of a ladera are dropped`() {
+        val b = WidgetBoard().addApp("a", 1).addApp("b", 1).addApp("c", 1)
+        assertEquals(listOf(Gap(1), Shelved("b", 1), Shelved("c", 1), Shelved("a", 1)), b.insertApp("a", page = 1, index = 3).onPage(1))
+        val spread = WidgetBoard(listOf(Shelved("a", 1), Gap(1), Shelved("b", 1)))
+        assertEquals(listOf(Shelved("a", 1)), spread.insertApp("b", page = 2, index = 0).onPage(1))
+        assertEquals(listOf(Shelved("a", 1)), spread.vacate("b").onPage(1))
+        assertEquals(listOf(Gap(1), Gap(1), Shelved("b", 1)), spread.vacate("a").onPage(1))
+        // A ladera with only empty cells left closes.
+        assertEquals(1, WidgetBoard(listOf(Gap(1), Shelved("b", 1))).vacate("b").pages)
+    }
+
+    @Test
+    fun `empty cells are kept when the board is saved and read back`() {
+        val b = WidgetBoard(listOf(Shelved("a", 1), Gap(1), Gap(1), Shelved("b", 1)))
+        assertEquals(b, WidgetBoard.decode(b.encode()))
     }
 
     @Test
