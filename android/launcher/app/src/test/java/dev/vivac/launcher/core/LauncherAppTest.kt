@@ -870,4 +870,18 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertEquals(Screen.AJUSTES, launcher.screen)
     }
+
+    @Test
+    fun `coming back from Android after allowing notification access, vivac's settings no longer offer it`() {
+        show()
+        compose.runOnUiThread { launcher.openSettings() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Activar los puntos de aviso").assertExists()
+        // You go to Android's page, allow it, and come back.
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+        actions.dotsOn = true
+        compose.activityRule.scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        compose.waitForIdle()
+        compose.onNodeWithText("Activar los puntos de aviso").assertDoesNotExist()
+    }
 }

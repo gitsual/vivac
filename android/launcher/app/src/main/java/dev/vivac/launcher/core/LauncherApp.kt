@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.CompositionLocalProvider
@@ -54,6 +55,11 @@ fun LauncherApp(
     drag: DragBoard = remember { DragBoard() },
 ) {
     BackHandler(enabled = launcher.screen != Screen.CAMPAMENTO || launcher.editing != null) { launcher.back() }
+    // Notification access is granted in Android's settings: read it again each time vivac comes back to the front.
+    // A count, not the lifecycle state: no frame is drawn while vivac is away, so the state would come back unchanged.
+    var resumes by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) { resumes++ }
+    val dotsAllowed = remember(resumes) { actions.dotsAllowed() }
     // Android draws the wallpaper behind a window that asks for it; vivac's camp then lets it show through.
     val window = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.window
     androidx.compose.runtime.LaunchedEffect(launcher.showWallpaper) {
@@ -116,7 +122,7 @@ fun LauncherApp(
             Screen.AJUSTES -> SettingsScreen(
                 SettingsState(
                     locked = launcher.locked, wallpaper = launcher.showWallpaper, labels = launcher.labels, columns = launcher.columns,
-                    dotsAllowed = actions.dotsAllowed(), counts = launcher.showCounts, swipeUp = launcher.swipeUp, swipeDown = launcher.swipeDown,
+                    dotsAllowed = dotsAllowed, counts = launcher.showCounts, swipeUp = launcher.swipeUp, swipeDown = launcher.swipeDown,
                     doubleTapLock = launcher.doubleTapLock, isHome = actions.isHome(),
                     iconStyle = launcher.iconStyle, iconPack = launcher.iconPack, packs = actions.iconPacks(),
                     contacts = launcher.searchContacts, calendar = launcher.searchCalendar,
@@ -190,7 +196,7 @@ fun LauncherApp(
     if (launcher.campMenu) {
         CampMenuSheet(
             placed = launcher.placedWidgets().map { PlacedWidget(it.id, it.label) },
-            dotsAllowed = actions.dotsAllowed(),
+            dotsAllowed = dotsAllowed,
             onAdd = launcher::showPicker,
             onRemove = launcher::removeWidget,
             onAllowDots = launcher::allowDots,
