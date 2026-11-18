@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -109,7 +110,13 @@ fun AvisosScreen(
                 Pill("Cerrar", act.close)
             }
             Text("Avisos", style = Type.title.copy(fontSize = 44.sp, lineHeight = 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
-            LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Pulling up past the end of the list (or anywhere, when it is short) closes the shade, as Android's does.
+            val density = androidx.compose.ui.platform.LocalDensity.current.density
+            val closing = remember(act) { PullToClose(threshold = 80f * density, onClose = act.close) }
+            LazyColumn(
+                Modifier.fillMaxWidth().weight(1f).nestedScroll(closing).testTag("avisos:list"),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 item(key = "quick") { QuickSection(quick, byPackage, isOn, editing, act) }
                 if (shelf.isEmpty()) {
                     item(key = "calm") {
@@ -401,4 +408,26 @@ private fun Pill(text: String, onClick: () -> Unit) {
             .border(1.dp, Ink.borderControl, RoundedCornerShape(999.dp))
             .padding(horizontal = 16.dp, vertical = 10.dp),
     )
+}
+
+/** Closes the shade when the finger keeps pulling up after the list has reached its end. */
+private class PullToClose(private val threshold: Float, private val onClose: () -> Unit) :
+    androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+    private var pull = 0f
+
+    override fun onPostScroll(
+        consumed: androidx.compose.ui.geometry.Offset,
+        available: androidx.compose.ui.geometry.Offset,
+        source: androidx.compose.ui.input.nestedscroll.NestedScrollSource,
+    ): androidx.compose.ui.geometry.Offset {
+        if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput) pull = (pull + available.y).coerceAtMost(0f)
+        return androidx.compose.ui.geometry.Offset.Zero
+    }
+
+    override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+        val close = pull < -threshold
+        pull = 0f
+        if (close) onClose()
+        return androidx.compose.ui.unit.Velocity.Zero
+    }
 }

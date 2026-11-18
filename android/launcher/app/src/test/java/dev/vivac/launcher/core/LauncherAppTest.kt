@@ -986,4 +986,20 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertFalse(launcher.tintWidgets)
     }
+
+    @Test
+    fun `pulling up past the end of the notices closes the shade back to the camp`() {
+        withNotices(aviso("a", "Ana"))
+        compose.onNodeWithTag("avisos:list").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        assertEquals(Screen.CAMPAMENTO, launcher.screen)
+    }
+
+    @Test
+    fun `a short pull down in the shade does not close it`() {
+        withNotices(aviso("a", "Ana"))
+        compose.onNodeWithTag("avisos:list").performTouchInput { swipeDown() }
+        compose.waitForIdle()
+        assertEquals(Screen.AVISOS, launcher.screen)
+    }
 }

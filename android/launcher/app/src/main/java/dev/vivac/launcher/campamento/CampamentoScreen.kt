@@ -615,11 +615,9 @@ private fun WidgetCard(
     onResize: (Int) -> Unit,
 ) {
     val lifted = (drag.held as? HeldWidget)?.id == id
-    val edge = when {
-        editing && !lifted -> Ink.primary
-        drag.target == spot && !lifted -> Ink.primary
-        else -> Ink.field
-    }
+    // The widget is drawn as it is, with vivac's corners and no frame of its own; coral marks it only while it is
+    // being resized, or as the place something carried would land.
+    val marked = !lifted && (editing || drag.target == spot)
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
@@ -628,8 +626,7 @@ private fun WidgetCard(
             .onGloballyPositioned { grip.origin = it.positionInRoot(); grip.size = it.size }
             .graphicsLayer { alpha = if (lifted) 0.3f else 1f }
             .clip(RoundedCornerShape(24.dp))
-            .background(Ink.surface)
-            .border(if (edge == Ink.primary) 2.dp else 1.dp, edge, RoundedCornerShape(24.dp)),
+            .then(if (marked) Modifier.border(2.dp, Ink.primary, RoundedCornerShape(24.dp)) else Modifier),
     ) {
         val width = maxWidth.value
         // key(id, rows): a new widget, or a new size, gets a fresh host view laid out for it.

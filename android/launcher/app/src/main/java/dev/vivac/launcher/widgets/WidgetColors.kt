@@ -21,11 +21,12 @@ object WidgetColors {
         android.R.color::class.java.getField("system_${ramp}_$step").getInt(null)
 
     /**
-     * A tint for widgets with colours of their own: black becomes vivac's card (#2D1F2D), white its paper
-     * (#E8D5AB), everything between them in proportion. Alpha is left alone.
+     * A tint for widgets with colours of their own: black becomes vivac's night (#18131B), so a widget's own dark
+     * grey lands near vivac's card, and white becomes its paper (#E8D5AB), everything between in proportion.
+     * Alpha is left alone.
      */
     fun tint(): android.graphics.ColorMatrix {
-        val dark = intArrayOf(0x2D, 0x1F, 0x2D)
+        val dark = intArrayOf(0x18, 0x13, 0x1B)
         val light = intArrayOf(0xE8, 0xD5, 0xAB)
         fun row(c: Int) = FloatArray(5).also { r -> r[c] = (light[c] - dark[c]) / 255f; r[4] = dark[c].toFloat() }
         return android.graphics.ColorMatrix(row(0) + row(1) + row(2) + floatArrayOf(0f, 0f, 0f, 1f, 0f))
