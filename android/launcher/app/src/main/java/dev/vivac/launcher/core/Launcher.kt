@@ -539,7 +539,24 @@ class Launcher(
     /** The ladera an app goes to: the one in view, else the last one, else a new one. */
     private fun ladera(): Int = page.takeIf { it > 0 } ?: (board.pages - 1).takeIf { it > 0 } ?: 1
 
-    fun showPage(page: Int) { this.page = page.coerceIn(0, board.pages - 1) }
+    /** Shows [page]: the camp, a ladera, or the empty one past the last, where a new ladera starts. */
+    fun showPage(page: Int) { this.page = page.coerceIn(0, board.pages) }
+
+    /** The ladera the app picker is adding to, while it is open. */
+    var addingTo by mutableStateOf<Int?>(null); private set
+
+    /** Opens the app picker for the ladera in view; the camp has its own route and dock. */
+    fun openAdder() { addingTo = page.takeIf { it > 0 } }
+
+    fun closeAdder() { addingTo = null }
+
+    /** Puts an app on the ladera being added to, or takes it off if it is there already. */
+    fun toggleOnLadera(packageName: String) {
+        val at = addingTo ?: return
+        saveBoard(if (Shelved(packageName, at) in board.items) board.removeApp(packageName) else board.addApp(packageName, at))
+        // Emptied, the ladera is gone: the picker stays on the empty one at the end.
+        addingTo = at.coerceAtMost(board.pages)
+    }
 
     fun editWidget(id: Int) { editing = id }
     fun stopEditing() { editing = null }

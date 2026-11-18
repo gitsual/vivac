@@ -99,6 +99,7 @@ fun LauncherApp(
             onSwipeUp = launcher::onSwipeUp,
             onSwipeDown = launcher::onSwipeDown,
             onMoveItem = launcher::moveItem,
+            onAddApps = launcher::openAdder,
         )
     }
     CompositionLocalProvider(
@@ -187,6 +188,15 @@ fun LauncherApp(
     }
     launcher.picker?.let { options ->
         WidgetPickerSheet(options, onPick = launcher::addWidget, onDismiss = launcher::dismissPicker)
+    }
+    launcher.addingTo?.let { at ->
+        dev.vivac.launcher.campamento.AddToLaderaSheet(
+            page = at,
+            apps = launcher.visibleApps(),
+            here = launcher.board.onPage(at).filterIsInstance<dev.vivac.launcher.campamento.Shelved>().map { it.packageName }.toSet(),
+            onToggle = launcher::toggleOnLadera,
+            onDismiss = launcher::closeAdder,
+        )
     }
     launcher.folderPicker?.let { app ->
         FolderPickSheet(

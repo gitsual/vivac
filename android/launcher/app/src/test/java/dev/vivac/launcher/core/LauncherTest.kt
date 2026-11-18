@@ -293,8 +293,37 @@ class LauncherTest {
         assertNull(l.editing)
         l.onHomePressed()
         assertEquals(0, l.page)
+        // Past the last ladera there is always one more, empty, to start.
         l.showPage(5)
+        assertEquals(2, l.page)
+    }
+
+    @Test
+    fun `the empty ladera past the last one takes apps you pick, and gives them back when picked again`() {
+        val l = launcher()
+        l.showPage(l.board.pages)
         assertEquals(1, l.page)
+        l.openAdder()
+        assertEquals(1, l.addingTo)
+        l.toggleOnLadera("com.termux")
+        l.toggleOnLadera("app.organicmaps")
+        assertEquals(listOf(Shelved("com.termux", 1), Shelved("app.organicmaps", 1)), l.board.onPage(1))
+        assertEquals(2, l.board.pages)
+        l.toggleOnLadera("com.termux")
+        assertEquals(listOf(Shelved("app.organicmaps", 1)), l.board.onPage(1))
+        // Taking the last one out empties the ladera; the picker stays on it, now the empty one at the end.
+        l.toggleOnLadera("app.organicmaps")
+        assertEquals(1, l.board.pages)
+        assertEquals(1, l.addingTo)
+        l.closeAdder()
+        assertNull(l.addingTo)
+    }
+
+    @Test
+    fun `the camp takes no apps from the ladera picker`() {
+        val l = launcher()
+        l.openAdder()
+        assertNull(l.addingTo)
     }
 
     @Test

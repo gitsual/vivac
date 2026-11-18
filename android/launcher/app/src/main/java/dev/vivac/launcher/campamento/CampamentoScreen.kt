@@ -138,13 +138,16 @@ fun CampamentoScreen(
     widgetRows: (Int) -> Int = { 0 },
     onResizeWidget: (id: Int, delta: Int) -> Unit = { _, _ -> },
     onStopEditing: () -> Unit = {},
+    onAddApps: () -> Unit = {},
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
     val drop: (Held, Spot) -> Unit = { h, spot -> onDrop(h.app.packageName, h.from, spot.zone, spot.index) }
     var rootOrigin by remember { mutableStateOf(Offset.Zero) }
     val currentPage by rememberUpdatedState(page)
-    val pageCount by rememberUpdatedState(board.pages)
+    // Every ladera in use, and one more past the last, empty, to start a new one.
+    val shownPages = board.pages + 1
+    val pageCount by rememberUpdatedState(shownPages)
     // Holding a carried app at the left or right edge for a moment turns the page.
     LaunchedEffect(drag.held) {
         if (drag.held == null) return@LaunchedEffect
@@ -188,7 +191,7 @@ fun CampamentoScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Header(if (page == 0) "CAMPAMENTO" else "LADERA $page", onOpenSettings)
-            val pager = rememberPagerState(initialPage = page) { board.pages }
+            val pager = rememberPagerState(initialPage = page) { shownPages }
             // The launcher decides the page (home, a widget sent elsewhere); a swipe tells it where you went.
             LaunchedEffect(page) { if (pager.currentPage != page) pager.animateScrollToPage(page) }
             LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect(onPage) }
@@ -200,7 +203,8 @@ fun CampamentoScreen(
             HorizontalPager(pager, Modifier.weight(1f), pageSpacing = 24.dp, verticalAlignment = Alignment.Top) { p ->
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (p == 0) Clock(stamp)
-                    Column(
+                    if (p >= 1 && board.onPage(p).isEmpty()) NewLadera(p, drag, onAddApps, Modifier.weight(1f))
+                    else Column(
                         Modifier
                             .weight(1f)
                             // The camp takes a carried widget anywhere over it, after its other widgets.
@@ -221,7 +225,7 @@ fun CampamentoScreen(
                     }
                 }
             }
-            if (board.pages > 1) PageDots(board.pages, page)
+            PageDots(shownPages, page)
             SearchPill { onOpenPetate(true) }
             DockCard(apps, home, onOpenApp, onAppMenu, drag, drop)
         }
@@ -421,11 +425,36 @@ private fun Ladera(
             }
         }
     }
-    // The rest of the ladera takes a carried thing at its end. It only takes room when the ladera is empty or
-    // something is being carried, so a full ladera has no blank space under it to scroll into.
-    val open = items.isEmpty() || drag.held != null
-    Box(Modifier.fillMaxWidth().heightIn(min = if (open) 96.dp else 0.dp).spot(drag, Spot(Zone.Ladera(page), Spot.END))) {
-        if (items.isEmpty()) Text("Mantén pulsado un widget o una app para traerlos a esta ladera.", style = Type.small)
+    // The rest of the ladera takes a carried thing at its end. It only takes room while something is carried,
+    // so a full ladera has no blank space under it to scroll into.
+    Box(Modifier.fillMaxWidth().height(if (drag.held != null) 96.dp else 0.dp).spot(drag, Spot(Zone.Ladera(page), Spot.END)))
+}
+
+/** The empty ladera past the last one: a plus in the middle adds apps to it; anything carried here lands on it. */
+@Composable
+private fun NewLadera(page: Int, drag: DragBoard, onAdd: () -> Unit, modifier: Modifier) {
+    Column(
+        modifier.fillMaxWidth().spot(drag, Spot(Zone.Ladera(page), Spot.END)),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier
+                .size(88.dp)
+                .clip(CircleShape)
+                .background(Ink.raised)
+                .border(1.5.dp, Ink.primary, CircleShape)
+                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onAdd)
+                .semantics { contentDescription = "Añadir apps a esta ladera" },
+            contentAlignment = Alignment.Center,
+        ) { LineIcon(Glyph.PLUS, Ink.primary, 36.dp) }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "Toca + para añadir apps, o mantén pulsado un widget o una app para traerlos aquí.",
+            style = Type.small,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 24.dp),
+        )
     }
 }
 

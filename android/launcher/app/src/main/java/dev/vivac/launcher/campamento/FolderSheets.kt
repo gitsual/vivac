@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -34,6 +36,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -133,5 +136,57 @@ fun FolderSheet(
             }
         }
         Text("Mantén pulsada una app para sacarla de la carpeta.", style = Type.small)
+    }
+}
+
+/** Picks the apps on a ladera: each tap puts an app there, or takes it off again; a search narrows the list. */
+@Composable
+fun AddToLaderaSheet(page: Int, apps: List<InstalledApp>, here: Set<String>, onToggle: (String) -> Unit, onDismiss: () -> Unit) {
+    var query by remember { mutableStateOf("") }
+    Sheet(onDismiss) {
+        Text("AÑADIR A LA LADERA $page", style = Type.cota.copy(fontSize = 10.sp))
+        Text("Toca las apps que quieres aquí", style = Type.title.copy(fontSize = 24.sp, lineHeight = 28.sp), modifier = Modifier.semantics { heading() })
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .border(1.dp, Ink.field, RoundedCornerShape(14.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            LineIcon(Glyph.SEARCH, Ink.text, 18.dp)
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                textStyle = Type.body.copy(color = Ink.text),
+                cursorBrush = SolidColor(Ink.primary),
+                modifier = Modifier.weight(1f).semantics { contentDescription = "Buscar app" },
+            )
+        }
+        val shown = apps.filter { query.isBlank() || it.label.contains(query.trim(), ignoreCase = true) }
+        LazyColumn(Modifier.heightIn(max = 440.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(shown, key = { it.packageName }) { app ->
+                val on = app.packageName in here
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Ink.raised)
+                        .border(if (on) 1.5.dp else 0.dp, if (on) Ink.primary else Ink.raised, RoundedCornerShape(16.dp))
+                        .clickable(role = Role.Checkbox) { onToggle(app.packageName) }
+                        .semantics(mergeDescendants = true) { contentDescription = if (on) "${app.label}, en esta ladera" else app.label }
+                        .testTag("adder:${app.packageName}")
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { AppFace(app, if (on) Ink.primary else Ink.text) }
+                    Text(app.label, style = Type.body, modifier = Modifier.weight(1f), maxLines = 1)
+                    if (on) LineIcon(Glyph.CHECK, Ink.primary, 20.dp)
+                }
+            }
+        }
     }
 }

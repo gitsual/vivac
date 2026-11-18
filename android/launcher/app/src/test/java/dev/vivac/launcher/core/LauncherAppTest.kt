@@ -431,7 +431,7 @@ class LauncherAppTest {
         // The hint is for an empty ladera: under something, it would only add space to scroll into.
         compose.onNodeWithText("Mantén pulsado un widget o una app para traerlos a esta ladera.").assertDoesNotExist()
         compose.onAllNodesWithText("Termux").assertCountEquals(2)
-        compose.onNodeWithContentDescription("Ladera 1, página 2 de 2").assertExists()
+        compose.onNodeWithContentDescription("Ladera 1, página 2 de 3").assertExists()
     }
 
     private fun centre(text: String) = compose.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center
@@ -777,5 +777,25 @@ class LauncherAppTest {
         show()
         carry("Organic Maps", centre("CAMPAMENTO"))
         assertEquals(listOf("app.organicmaps"), launcher.home.pinned)
+    }
+
+    @Test
+    fun `past the last ladera an empty one has a plus in the middle that adds apps to it`() {
+        show()
+        compose.runOnUiThread { launcher.showPage(launcher.board.pages) }
+        compose.waitForIdle()
+        compose.onNodeWithText("LADERA 1").assertExists()
+        compose.onNodeWithContentDescription("Añadir apps a esta ladera").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("AÑADIR A LA LADERA 1").assertExists()
+        compose.onNodeWithTag("adder:com.termux").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Termux, en esta ladera").assertExists()
+        compose.runOnUiThread { launcher.closeAdder() }
+        compose.waitForIdle()
+        compose.onAllNodesWithText("Termux").assertCountEquals(2)
+        compose.onNodeWithContentDescription("Añadir apps a esta ladera").assertDoesNotExist()
+        // And one more past it.
+        compose.onNodeWithContentDescription("Ladera 1, página 2 de 3").assertExists()
     }
 }
