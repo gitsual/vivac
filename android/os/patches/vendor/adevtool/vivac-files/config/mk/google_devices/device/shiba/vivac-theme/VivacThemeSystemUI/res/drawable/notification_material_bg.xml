@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- vivac-os theme overlay. Notification row background: card colour, state layer and vivac's 1dp
+     #43363F border. NotificationBackgroundView tints layer 0, drives layer 1 and rounds every
+     layer as a GradientDrawable, so the order stays and the border goes last. Upstream's keyboard
+     focus ring layer is left out: a layer id declared here would not be the one SystemUI looks up,
+     and the code skips the ring when it is missing. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
+        android:color="?android:attr/colorControlHighlight">
+    <item>
+        <shape>
+            <solid android:color="#2D1F2D" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <solid android:color="@color/vivac_notification_state" />
+        </shape>
+    </item>
+    <item>
+        <shape>
+            <stroke android:width="1dp" android:color="#43363F" />
+        </shape>
+    </item>
+</layer-list>

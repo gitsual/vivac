@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- vivac-os theme overlay. Static RRO: always on, never user-selectable. -->
+<resources>
+    <!-- Shade, scrim and lock screen backdrop: #18131B instead of the coral-tinted dynamic ramps. -->
+    <color name="notification_scrim_base">#18131B</color>
+    <color name="notification_scrim_fallback">#18131B</color>
+    <color name="shade_panel_fallback">#18131B</color>
+</resources>

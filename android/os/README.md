@@ -54,19 +54,63 @@ Static overlays (`isStatic`, priority 900, `/product/overlay`, always on):
   (`config_bodyFontFamily` Space Grotesk, headline and lock clock Unbounded ExtraBold);
   dialog and button radii (24dp, pill).
 - `VivacThemeSystemUI` (`com.android.systemui`): shade, quick settings tiles,
-  power menu, bottom sheets, notification scrim radii.
+  power menu, bottom sheets, scrim radii, and the notification rows (see below).
 - `VivacThemeSettings` (`com.android.settings`): panel and card radii.
+
+### Notifications (heads-up, shade, lock screen)
+
+All three surfaces draw the same `ExpandableNotificationRow`, so one set of resources
+covers them. `ThemeOverlayController` replaces `system_*` colours at runtime with a
+fabricated overlay that wins over any static RRO, but notifications read the
+`materialColor*` tokens, which that overlay does not touch, so static literals stick:
+
+| What | Override | Value |
+|---|---|---|
+| Card background | `materialColorSurfaceContainerHigh`, `customColorSurfaceEffect1` (translucent-row path) | `#2D1F2D` |
+| Raised surface | `materialColorSurfaceContainerHighest` | `#362836` |
+| Shade / scrim | `materialColorSurface`/`Background`/`SurfaceDim`, SystemUI `notification_scrim_*`, `shade_panel_fallback` | `#18131B` |
+| Title and text | `materialColorOnSurface`, `notification_*_text_color_dark` | `#E8D5AB` |
+| Secondary | `materialColorOnSurfaceVariant` | `#C0AD95` |
+| Action text | `materialColorPrimary` | `#F0A3A6` |
+| Border | SystemUI `drawable/notification_material_bg` gets a last 1dp stroke layer | `#43363F` |
+| Corners | `notification_corner_radius` / `_small` (rows next to each other) | 24dp / 16dp |
+| Fonts | framework `TextAppearance.DeviceDefault.Notification[.Title/.Reply]` Space Grotesk; `.Info/.Time/.Label` JetBrains Mono uppercase (app name, time); shade section header and footer Space Grotesk | |
+
+These are `values-night` only (dark), so light mode stays Material You. They also
+retint everything that reads those tokens (Settings, shade, dialogs), on purpose: the
+neutrals stop being coral-tinted there. Neither target declares `<overlayable>`, so
+idmap2 lets a static RRO override any of these resources.
+
+What does not match:
+
+- Title and body share one colour: the framework paints every notification text with
+  `Colors.getTextColor()`. It is cream (`#E8D5AB`); the tan `#C0AD95` for body and app
+  name needs a `Notification.java` patch.
+- Anything built from `system_*` or `system_neutral/accent*` (Compose `dynamicColorScheme`,
+  QS tiles via `customColorShade*`, `?attr/colorSurface`) still comes from the seed and
+  keeps the coral tint. No static RRO can beat the fabricated overlay; the cure would be a
+  `ThemeOverlayController` patch, or `MONOCHROMATIC` in `theming_defaults` (kills the coral accents).
+- Notification text families are Google's `variable-*`, absent from this tree's font
+  config, so the text appearances are replaced (a later Pixel font addition would not apply).
+- The keyboard focus ring layer of the row background is dropped (a layer id from an RRO is
+  not SystemUI's id; the code skips the ring when missing). Grouped children keep upstream's
+  background; they only follow the 16dp radius.
+- `overlay_qs_layout_brightness_rounded_corner`, `rect_button_radius` and
+  `overlay_button_corner_radius` in `VivacThemeSystemUI/res/values/dimens.xml` do not exist
+  in the built SystemUI (ignored, harmless). `notification_divider_color` and
+  `notification_section_clear_all_btn_color` are stripped from the build, so not overridden.
 
 System fonts added: `space-grotesk`, `unbounded` (alias `unbounded-extrabold`),
 `jetbrains-mono`, all variable (`wght`). `jetbrains-mono` is installed for apps and
 labels; the framework has no config key to make it a system default.
 
-Limits: the runtime palette is generated from the seed, so neutrals are
-coral-tinted, not exactly `#18131B`; the static ramps only show where the
-dynamic one is not applied. Code that hard-codes `sans-serif` keeps Roboto.
-Nothing here is compiled or visually checked yet (needs the full soong analysis,
-~38 GB, so swap first): `m VivacThemeFramework VivacThemeSystemUI VivacThemeSettings`.
-`tests/cases/test_os_theme.sh` checks the sources are consistent.
+Limits: the runtime palette is generated from the seed, so `system_*` neutrals are
+coral-tinted; the static ramps only show where the dynamic one is not applied. Code that
+hard-codes `sans-serif` keeps Roboto. Not visually checked yet, and not built by soong
+(needs ~38 GB, so swap first): `m VivacThemeFramework VivacThemeSystemUI VivacThemeSettings`.
+Checked: patches apply to the real tree, `aapt2 compile` + `link` against the built
+`framework-res.apk`, and every overridden name and type exists in the built
+`framework-res.apk` / `SystemUI.apk`. `tests/cases/test_os_theme.sh` checks the sources.
 
 ## Shade redirect (system UI code patch)
 

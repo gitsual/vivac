@@ -3,7 +3,8 @@
 <resources>
     <!-- Notification shade, quick settings, power menu, volume, lock screen. -->
     <dimen name="qs_corner_radius">20dp</dimen>
-    <dimen name="notification_corner_radius">20dp</dimen>
+    <dimen name="notification_corner_radius">24dp</dimen>
+    <dimen name="notification_corner_radius_small">16dp</dimen>
     <dimen name="notification_scrim_corner_radius">24dp</dimen>
     <dimen name="overlay_shade_panel_shape_radius">24dp</dimen>
     <dimen name="common_tile_default_active_tile_corner_radius">20dp</dimen>

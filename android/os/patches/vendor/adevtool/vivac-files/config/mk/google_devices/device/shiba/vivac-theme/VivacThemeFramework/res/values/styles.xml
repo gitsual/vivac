@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- vivac-os theme overlay. Static RRO: always on, never user-selectable. -->
+<resources>
+    <!--
+      Notification templates hard-code Google's variable-* families, which the font config does
+      not define here, so the text appearances are replaced: Space Grotesk for title and body,
+      JetBrains Mono uppercase for the app name / time line.
+    -->
+    <style name="TextAppearance.DeviceDefault.Notification" parent="@*android:style/TextAppearance.Material.Notification">
+        <item name="android:fontFamily">@string/config_bodyFontFamily</item>
+    </style>
+    <style name="TextAppearance.DeviceDefault.Notification.Title" parent="@*android:style/TextAppearance.Material.Notification.Title">
+        <item name="android:fontFamily">@string/config_bodyFontFamilyMedium</item>
+    </style>
+    <style name="TextAppearance.DeviceDefault.Notification.Reply" parent="@*android:style/TextAppearance.Material.Notification.Reply">
+        <item name="android:fontFamily">@string/config_bodyFontFamily</item>
+    </style>
+    <style name="TextAppearance.DeviceDefault.Notification.Info" parent="@*android:style/TextAppearance.Material.Notification.Info">
+        <item name="android:fontFamily">jetbrains-mono</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+    <style name="TextAppearance.DeviceDefault.Notification.Time" parent="@*android:style/TextAppearance.Material.Notification.Time">
+        <item name="android:fontFamily">jetbrains-mono</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+    <style name="TextAppearance.DeviceDefault.Notification.Label">
+        <item name="android:fontFamily">jetbrains-mono</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:lineHeight">16sp</item>
+    </style>
+</resources>

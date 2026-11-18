@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- vivac-os theme overlay. Static RRO: always on, never user-selectable. -->
+<resources>
+    <!--
+      The semantic tokens notifications, the shade and the lock screen read
+      (Notification.Colors, NotificationBackgroundView, ShadeColors). They are NOT in the
+      runtime (fabricated) overlay that ThemeOverlayController applies, which only replaces
+      the system_* values, so a static literal here wins and is not coral-tinted. Dark only:
+      the light variants stay Material You.
+    -->
+    <!-- Surfaces: shade/scrim #18131B, container ramp up to the card (#2D1F2D) and raised rows (#362836). -->
+    <color name="materialColorBackground">#18131B</color>
+    <color name="materialColorSurface">#18131B</color>
+    <color name="materialColorSurfaceDim">#18131B</color>
+    <color name="materialColorSurfaceBright">#43363F</color>
+    <color name="materialColorSurfaceContainerLowest">#18131B</color>
+    <color name="materialColorSurfaceContainerLow">#1F1722</color>
+    <color name="materialColorSurfaceContainer">#261C27</color>
+    <color name="materialColorSurfaceContainerHigh">#2D1F2D</color>
+    <color name="materialColorSurfaceContainerHighest">#362836</color>
+    <color name="materialColorSurfaceVariant">#362836</color>
+    <color name="materialColorSurfaceTint">#E1777D</color>
+    <color name="materialColorInverseSurface">#E8D5AB</color>
+    <color name="materialColorInverseOnSurface">#2D1F2D</color>
+
+    <!-- Text and lines: cream text, tan secondary, plum borders. -->
+    <color name="materialColorOnBackground">#E8D5AB</color>
+    <color name="materialColorOnSurface">#E8D5AB</color>
+    <color name="materialColorOnSurfaceVariant">#C0AD95</color>
+    <color name="materialColorOutline">#6E5A66</color>
+    <color name="materialColorOutlineVariant">#43363F</color>
+
+    <!-- Accent: action text (notification buttons) is the light coral. -->
+    <color name="materialColorPrimary">#F0A3A6</color>
+    <color name="materialColorOnPrimary">#40181B</color>
+    <color name="materialColorPrimaryContainer">#752E34</color>
+    <color name="materialColorOnPrimaryContainer">#F8D1D2</color>
+    <color name="materialColorInversePrimary">#E1777D</color>
+
+    <!-- Notification row background when the shade uses translucent rows. -->
+    <color name="customColorSurfaceEffect1">#2D1F2D</color>
+</resources>

@@ -67,4 +67,9 @@
     <color name="system_neutral2_800">#2D1F2D</color>
     <color name="system_neutral2_900">#1F1722</color>
     <color name="system_neutral2_1000">#000000</color>
+
+    <!-- Notification text on the dark theme. The framework colours title, body, app name and
+         time with one colour, so the title cream wins over the tan secondary. -->
+    <color name="notification_primary_text_color_dark">#E8D5AB</color>
+    <color name="notification_secondary_text_color_dark">#E8D5AB</color>
 </resources>

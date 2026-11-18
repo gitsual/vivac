@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- vivac-os theme overlay. Static RRO: always on, never user-selectable. -->
+<resources>
+    <!-- Shade section header and "Clear all" footer: Space Grotesk instead of variable-* families. -->
+    <style name="TextAppearance.NotificationSectionHeaderLabel" parent="@android:style/Widget.DeviceDefault.Button.Borderless">
+        <item name="android:textColor">@*android:color/materialColorOnSurface</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:fontFamily">space-grotesk-medium</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:minWidth">0dp</item>
+    </style>
+    <style name="TextAppearance.NotificationFooterButton" parent="@android:style/Widget.DeviceDefault.Button.Borderless">
+        <item name="android:fontFamily">space-grotesk-medium</item>
+        <item name="android:textColor">@*android:color/materialColorOnSurface</item>
+        <item name="android:drawableTint">@*android:color/materialColorOnSurface</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:minWidth">0dp</item>
+    </style>
+</resources>

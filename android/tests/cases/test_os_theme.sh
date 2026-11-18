@@ -73,6 +73,39 @@ for k, v in {"system_accent1_200": "#E1777D", "system_neutral1_900": "#18131B", 
     if cols.get(k) != v:
         err.append("%s is %s, want %s" % (k, cols.get(k), v))
 
+# notifications: vivac card colours, radii, border layer and fonts
+night = {c.get("name"): c.text for c in ET.parse(os.path.join(fwk, "..", "values-night", "colors.xml")).getroot()}
+for k, v in {"materialColorSurfaceContainerHigh": "#2D1F2D", "materialColorSurfaceContainerHighest": "#362836", "materialColorSurface": "#18131B",
+             "materialColorOnSurface": "#E8D5AB", "materialColorOnSurfaceVariant": "#C0AD95", "materialColorOutlineVariant": "#43363F",
+             "materialColorPrimary": "#F0A3A6", "customColorSurfaceEffect1": "#2D1F2D"}.items():
+    if night.get(k) != v:
+        err.append("values-night %s is %s, want %s" % (k, night.get(k), v))
+for k in ("notification_primary_text_color_dark", "notification_secondary_text_color_dark"):
+    if cols.get(k) != "#E8D5AB":
+        err.append("%s is %s, want #E8D5AB" % (k, cols.get(k)))
+sui = os.path.join(theme, "VivacThemeSystemUI", "res")
+dim = {d.get("name"): d.text for d in ET.parse(os.path.join(sui, "values", "dimens.xml")).getroot()}
+if dim.get("notification_corner_radius") != "24dp" or dim.get("notification_corner_radius_small") != "16dp":
+    err.append("notification radii are not 24dp / 16dp")
+bg = ET.parse(os.path.join(sui, "drawable", "notification_material_bg.xml")).getroot()
+layers = [i.find("shape") for i in bg.findall("item")]
+if len(layers) != 3 or layers[0].find("solid") is None or layers[1].find("solid") is None:
+    err.append("notification_material_bg must keep tint layer 0 and state layer 1")
+elif layers[2].find("stroke") is None or layers[2].find("stroke").get(A + "color") != "#43363F" or layers[2].find("stroke").get(A + "width") != "1dp":
+    err.append("notification_material_bg has no last 1dp #43363F border layer")
+if any(i.get(A + "id") for i in bg.findall("item")):
+    err.append("notification_material_bg declares a layer id (would not match SystemUI's)")
+sty = {s.get("name"): s for s in ET.parse(os.path.join(fwk, "styles.xml")).getroot()}
+want_styles = ("TextAppearance.DeviceDefault.Notification", "TextAppearance.DeviceDefault.Notification.Title", "TextAppearance.DeviceDefault.Notification.Info")
+for n in want_styles:
+    if n not in sty:
+        err.append("missing style %s" % n)
+if all(n in sty for n in want_styles):
+    fam = {n: sty[n].find("item[@name='android:fontFamily']").text for n in sty}
+    for n, want in {"TextAppearance.DeviceDefault.Notification.Info": "jetbrains-mono", "TextAppearance.DeviceDefault.Notification": "@string/config_bodyFontFamily"}.items():
+        if fam.get(n) != want:
+            err.append("%s font is %s, want %s" % (n, fam.get(n), want))
+
 if err:
     print("\n".join(err), file=sys.stderr)
     sys.exit(1)
