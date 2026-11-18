@@ -150,17 +150,13 @@ fun CampamentoScreen(
     // Every ladera in use, and one more past the last, empty, to start a new one.
     val shownPages = board.pages + 1
     val pageCount by rememberUpdatedState(shownPages)
-    // Holding a carried app at the left or right edge for a moment turns the page.
+    // Holding a carried thing at the left or right edge for a moment turns the page, once per visit to the edge.
     LaunchedEffect(drag.held) {
         if (drag.held == null) return@LaunchedEffect
+        val turn = EdgeTurn()
         while (true) {
             delay(EDGE_WAIT_MS)
-            val edge = 28f * dp
-            val dir = when {
-                drag.finger.x < drag.screen.left + edge -> -1
-                drag.finger.x > drag.screen.right - edge -> 1
-                else -> 0
-            }
+            val dir = turn.check(drag.finger.x, drag.screen.left, drag.screen.right, edge = 28f * dp)
             if (dir != 0) onPage((currentPage + dir).coerceIn(0, pageCount - 1))
         }
     }

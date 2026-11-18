@@ -29,6 +29,7 @@ import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.swipeLeft
@@ -956,5 +957,23 @@ class LauncherAppTest {
         compose.onNodeWithTag("cell:1:1").assertIsDisplayed()
         // ...and the camp, where the widget's own view still holds the finger, is not torn down.
         compose.onNodeWithText("2026111301").assertExists()
+    }
+
+    @Test
+    fun `two quick swipes back in a row land two pages back, the first never pulls you forward again`() {
+        store.values["widgets"] = "@com.termux:1,@app.organicmaps:2"
+        show()
+        compose.runOnUiThread { launcher.showPage(2) }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        // The second swipe starts while the first is still settling.
+        compose.onRoot().performTouchInput { swipeRight(startX = width * 0.2f, endX = width * 0.9f, durationMillis = 120) }
+        compose.mainClock.advanceTimeBy(250)
+        compose.onRoot().performTouchInput { swipeRight(startX = width * 0.2f, endX = width * 0.9f, durationMillis = 120) }
+        compose.mainClock.autoAdvance = true
+        compose.mainClock.advanceTimeBy(3_000)
+        compose.waitForIdle()
+        assertEquals(0, launcher.page)
     }
 }
