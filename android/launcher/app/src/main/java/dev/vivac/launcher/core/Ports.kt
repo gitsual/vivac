@@ -38,6 +38,10 @@ interface Actions {
     fun autoRotate(): Boolean
     /** Turns auto-rotation on or off; false when you have not let vivac change system settings. */
     fun setAutoRotate(on: Boolean): Boolean
+    /** The screen's brightness, 0 (darkest) to 1, as the eye sees it. */
+    fun brightness(): Float
+    /** Sets the brightness (and turns automatic brightness off); false when you have not let vivac change system settings. */
+    fun setBrightness(level: Float): Boolean
     /** Android's page for one app's notifications. */
     fun notificationSettings(packageName: String)
     fun securityUpdates()

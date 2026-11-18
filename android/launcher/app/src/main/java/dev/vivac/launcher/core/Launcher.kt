@@ -286,6 +286,18 @@ class Launcher(
     var pickingQuickApps by mutableStateOf(false); private set
     var quiet by mutableStateOf(notices?.quiet() ?: false); private set
     var rotation by mutableStateOf(actions.autoRotate()); private set
+    var brightness by mutableStateOf(actions.brightness()); private set
+    // Asked for the permission once already: a drag of the bar does not open the page over and over.
+    private var askedToWrite = false
+
+    /** Moves the screen's brightness; without permission to change settings, asks for it once. */
+    fun changeBrightness(level: Float) {
+        if (actions.setBrightness(level)) { brightness = level; return }
+        if (askedToWrite) return
+        askedToWrite = true
+        actions.say("Para cambiar el brillo desde aquí, deja que vivac cambie ajustes del sistema.")
+        actions.systemPage(SystemPage.PERMISO_AJUSTES)
+    }
 
     /** What a quick switch does: switches the torch, quiet or rotation itself; anything else opens Android's page for it, or the app. */
     fun runQuick(q: dev.vivac.launcher.avisos.Quick) {

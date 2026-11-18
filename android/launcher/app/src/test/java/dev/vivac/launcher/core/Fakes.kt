@@ -54,6 +54,9 @@ class FakeActions : Actions {
     override fun autoRotate() = rotationOn
     override fun setAutoRotate(on: Boolean): Boolean { calls += "rotate:$on"; if (canWriteSettings) rotationOn = on; return canWriteSettings }
     override fun notificationSettings(packageName: String) { calls += "noticeSettings:$packageName" }
+    var level = 0.5f
+    override fun brightness() = level
+    override fun setBrightness(level: Float): Boolean { calls += "bright:$level"; if (canWriteSettings) this.level = level; return canWriteSettings }
     override fun securityUpdates() { calls += "about" }
     override fun say(text: String) { calls += "say:$text" }
     override fun copy(text: String) { calls += "copy:$text" }

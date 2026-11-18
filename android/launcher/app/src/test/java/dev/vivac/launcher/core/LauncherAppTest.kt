@@ -1081,4 +1081,12 @@ class LauncherAppTest {
         // From the bottom of a row's name to the top of the next row's tile, well past the old 10dp.
         assertTrue("rows ${(second.top - first.bottom) / dp}dp apart", second.top - first.bottom > 40 * dp)
     }
+
+    @Test
+    fun `under the switches, a brightness bar sets the screen's brightness`() {
+        withNotices()
+        compose.onNodeWithContentDescription("Brillo").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(0.9f) }
+        compose.waitForIdle()
+        assertEquals(0.9f, launcher.brightness, 0.01f)
+    }
 }

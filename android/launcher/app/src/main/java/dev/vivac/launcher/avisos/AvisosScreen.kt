@@ -70,6 +70,8 @@ data class AvisosActions(
     val move: (Quick, Int) -> Unit = { _, _ -> },
     /** Choose apps to have as switches. */
     val pickApps: () -> Unit = {},
+    /** The brightness bar moved, 0..1. */
+    val brightness: (Float) -> Unit = {},
     /** Clears all of an app's notices. */
     val dismissApp: (String) -> Unit = {},
     /** Android's page for an app's notifications. */
@@ -96,6 +98,7 @@ fun AvisosScreen(
     isOn: (Quick) -> Boolean,
     editing: Boolean,
     act: AvisosActions,
+    brightness: Float = 0.5f,
 ) {
     val shelf = Avisos.shelf(avisos)
     val byPackage = apps.associateBy { it.packageName }
@@ -118,6 +121,7 @@ fun AvisosScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 item(key = "quick") { QuickSection(quick, byPackage, isOn, editing, act) }
+                if (!editing) item(key = "brightness") { Brightness(brightness, act.brightness) }
                 if (shelf.isEmpty()) {
                     item(key = "calm") {
                         Text(
@@ -202,6 +206,38 @@ private fun QuickSection(quick: List<Quick>, byPackage: Map<String, InstalledApp
         }
     }
 }
+
+/** The screen's brightness: a sun dim at one end, bright at the other, and a coral bar between. */
+@Composable
+private fun Brightness(level: Float, onChange: (Float) -> Unit) {
+    var shown by remember { mutableStateOf(level) }
+    androidx.compose.runtime.LaunchedEffect(level) { shown = level }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(999.dp))
+            .background(Ink.raised)
+            .border(1.dp, Ink.field, RoundedCornerShape(999.dp))
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        LineIcon(SUN, Ink.textMuted, 16.dp)
+        androidx.compose.material3.Slider(
+            value = shown,
+            onValueChange = { shown = it; onChange(it) },
+            modifier = Modifier.weight(1f).semantics { contentDescription = "Brillo" },
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = Ink.primary,
+                activeTrackColor = Ink.primary,
+                inactiveTrackColor = Ink.field,
+            ),
+        )
+        LineIcon(SUN, Ink.text, 22.dp)
+    }
+}
+
+private const val SUN = "M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z M12 2v2 M12 20v2 M4 12H2 M22 12h-2 M5 5l1.5 1.5 M17.5 17.5L19 19 M5 19l1.5-1.5 M17.5 6.5L19 5"
 
 /** A quick switch: a round button, coral when on (or chosen to edit), its name under it. */
 @Composable

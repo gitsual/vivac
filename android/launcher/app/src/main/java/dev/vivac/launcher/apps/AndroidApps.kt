@@ -212,6 +212,20 @@ class AppActions(private val context: Context) : Actions {
         return Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, if (on) 1 else 0)
     }
 
+    /** Android keeps brightness as 0..255; the bar works on a curve closer to how bright it looks. */
+    override fun brightness(): Float {
+        val raw = Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
+        return Math.sqrt(raw.coerceIn(0, 255) / 255.0).toFloat()
+    }
+
+    override fun setBrightness(level: Float): Boolean {
+        if (!Settings.System.canWrite(context)) return false
+        val resolver = context.contentResolver
+        Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS_MODE, Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL)
+        val l = level.coerceIn(0f, 1f)
+        return Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS, (l * l * 255).toInt().coerceIn(1, 255))
+    }
+
     override fun notificationSettings(packageName: String) {
         start(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

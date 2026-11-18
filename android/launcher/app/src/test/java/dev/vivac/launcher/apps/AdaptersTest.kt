@@ -267,6 +267,8 @@ class AdaptersTest {
         val allowed = Settings.System.canWrite(app)
         assertEquals(allowed, actions.setAutoRotate(true))
         assertEquals(allowed, actions.autoRotate())
+        assertEquals(allowed, actions.setBrightness(1f))
+        if (allowed) assertEquals(1f, actions.brightness(), 0.01f)
         actions.notificationSettings("com.termux")
         nextIntent()!!.let {
             assertEquals(Settings.ACTION_APP_NOTIFICATION_SETTINGS, it.action)

@@ -994,4 +994,20 @@ class LauncherTest {
         assertFalse(l.tintWidgets)
         assertFalse(launcher().tintWidgets)
     }
+
+    @Test
+    fun `the shade's brightness follows the phone's and moves it, asking once for permission when it may not`() {
+        actions.level = 0.3f
+        val l = launcher()
+        assertEquals(0.3f, l.brightness)
+        l.changeBrightness(0.8f)
+        assertEquals(0.8f, l.brightness)
+        actions.canWriteSettings = false
+        actions.calls.clear()
+        l.changeBrightness(0.2f)
+        l.changeBrightness(0.1f)
+        assertEquals(0.8f, l.brightness)
+        assertEquals(1, actions.calls.count { it == "page:PERMISO_AJUSTES" })
+        assertEquals("say:Para cambiar el brillo desde aquí, deja que vivac cambie ajustes del sistema.", actions.calls.first { it.startsWith("say:") })
+    }
 }
