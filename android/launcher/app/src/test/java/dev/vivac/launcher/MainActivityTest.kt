@@ -187,7 +187,7 @@ class MainActivityTest {
     @Test
     fun `a widget waits for the bind dialog and is placed when it is accepted`() {
         val activity = start()
-        compose.onNodeWithText("LA CORDADA").performTouchInput { longClick() }
+        compose.onNodeWithText("LIBRE").performTouchInput { longClick() }
         compose.onNodeWithText("Añadir widget").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithText("Reloj").performSemanticsAction(SemanticsActions.OnClick)
         val asked = shadowOf(activity).nextStartedActivityForResult
@@ -208,7 +208,7 @@ class MainActivityTest {
             setAllowedToBindAppWidgets(true)
         }
         start()
-        compose.onNodeWithText("LA CORDADA").performTouchInput { longClick() }
+        compose.onNodeWithText("LIBRE").performTouchInput { longClick() }
         compose.onNodeWithText("Añadir widget").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithText("Reloj").performSemanticsAction(SemanticsActions.OnClick)
         // Robolectric does not record the settings screen (Android opens it through an IntentSender),
@@ -216,7 +216,7 @@ class MainActivityTest {
         assertEquals(null, prefs.getString("widgets", null))
         result(Widgets.REQ_CONFIGURE, Activity.RESULT_OK)
         assertEquals(1, prefs.getString("widgets", null).orEmpty().split(",").filter { it.isNotBlank() }.size)
-        compose.onNodeWithText("LA CORDADA").assertExists()
+        compose.onNodeWithText("LIBRE").assertExists()
     }
 
     @Test

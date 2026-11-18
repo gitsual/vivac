@@ -194,7 +194,7 @@ class LauncherAppTest {
     fun `long press on the camp opens its menu, which adds a widget through the picker`() {
         widgets.offered = listOf(clock)
         show()
-        compose.onNodeWithText("LA CORDADA").performTouchInput { longClick() }
+        compose.onNodeWithText("LIBRE").performTouchInput { longClick() }
         compose.onNodeWithText("Activar puntos de aviso").assertExists()
         compose.onNodeWithText("Añadir widget").tap()
         compose.onNodeWithText("1 widgets de tus apps").assertExists()
