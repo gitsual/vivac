@@ -113,6 +113,7 @@ fun LauncherApp(
                     doubleTapLock = launcher.doubleTapLock, isHome = actions.isHome(),
                     iconStyle = launcher.iconStyle, iconPack = launcher.iconPack, packs = actions.iconPacks(),
                     contacts = launcher.searchContacts, calendar = launcher.searchCalendar,
+                    apps = launcher.visibleApps(), swipeUpApp = launcher.swipeUpApp, swipeDownApp = launcher.swipeDownApp,
                 ),
                 SettingsActions(
                     toggleLock = launcher::toggleLock, toggleWallpaper = launcher::toggleWallpaper, changeWallpaper = launcher::changeWallpaper,

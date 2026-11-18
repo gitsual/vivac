@@ -14,7 +14,7 @@ object Backup {
     private val KEYS = listOf(
         Launcher.KEY_DOCK, Launcher.KEY_PINNED, Launcher.KEY_HIDDEN, Launcher.KEY_WIDGETS, Launcher.KEY_RECENT,
         Launcher.KEY_NAMES, Launcher.KEY_LOCKED, Launcher.KEY_DOUBLE_TAP, Launcher.KEY_WALLPAPER,
-        Launcher.KEY_COLUMNS, Launcher.KEY_LABELS, Launcher.KEY_COUNTS, Launcher.KEY_SWIPE_UP, Launcher.KEY_SWIPE_DOWN,
+        Launcher.KEY_COLUMNS, Launcher.KEY_LABELS, Launcher.KEY_COUNTS, Launcher.KEY_SWIPE_UP, Launcher.KEY_SWIPE_DOWN, Launcher.KEY_SWIPE_UP_APP, Launcher.KEY_SWIPE_DOWN_APP,
         Launcher.KEY_ICONS, Launcher.KEY_ICON_PACK, Launcher.KEY_ICON_FOR,
     )
 

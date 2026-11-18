@@ -21,10 +21,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -55,6 +60,10 @@ data class SettingsState(
     val iconPack: String? = null,
     val packs: List<IconPackInfo> = emptyList(),
     val contacts: Boolean = false,
+    /** Apps a gesture can open, with the ones chosen for each swipe. */
+    val apps: List<dev.vivac.launcher.apps.InstalledApp> = emptyList(),
+    val swipeUpApp: String? = null,
+    val swipeDownApp: String? = null,
     val calendar: Boolean = false,
 )
 
@@ -67,8 +76,8 @@ class SettingsActions(
     val setColumns: (Int) -> Unit = {},
     val allowDots: () -> Unit = {},
     val toggleCounts: () -> Unit = {},
-    val setSwipeUp: (Gesture) -> Unit = {},
-    val setSwipeDown: (Gesture) -> Unit = {},
+    val setSwipeUp: (Gesture, String?) -> Unit = { _, _ -> },
+    val setSwipeDown: (Gesture, String?) -> Unit = { _, _ -> },
     val toggleDoubleTap: () -> Unit = {},
     val backUp: () -> Unit = {},
     val restore: () -> Unit = {},
@@ -134,8 +143,8 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             Toggle("Número de avisos", "En vez del punto, cuántos tiene cada app.", state.counts, act.toggleCounts)
 
             Section("GESTOS")
-            GestureRow("Deslizar hacia arriba", state.swipeUp, act.setSwipeUp)
-            GestureRow("Deslizar hacia abajo", state.swipeDown, act.setSwipeDown)
+            GestureRow("Deslizar hacia arriba", state.swipeUp, state.swipeUpApp, state.apps, act.setSwipeUp)
+            GestureRow("Deslizar hacia abajo", state.swipeDown, state.swipeDownApp, state.apps, act.setSwipeDown)
             Toggle("Doble toque apaga la pantalla", "Usa el servicio de accesibilidad de vivac, que no lee nada.", state.doubleTapLock, act.toggleDoubleTap)
 
             Section("COPIA")
@@ -195,12 +204,35 @@ private fun Action(title: String, onClick: () -> Unit) {
     ) { Text(title, style = Type.body.copy(color = Ink.accentText)) }
 }
 
+/** A swipe's action; "Abrir una app" adds a search over your apps to choose which. */
 @Composable
-private fun GestureRow(title: String, current: Gesture, onPick: (Gesture) -> Unit) {
+private fun GestureRow(title: String, current: Gesture, app: String?, apps: List<dev.vivac.launcher.apps.InstalledApp>, onPick: (Gesture, String?) -> Unit) {
+    var query by rememberSaveable(title) { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = Type.body)
+        val chosen = apps.firstOrNull { it.packageName == app }?.label
+        Text(if (current == Gesture.APP && chosen != null) "$title: $chosen" else title, style = Type.body)
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Gesture.entries.forEach { g -> Choice(g.title, current == g) { onPick(g) } }
+            Gesture.entries.forEach { g -> Choice(g.title, current == g) { onPick(g, app) } }
+        }
+        if (current == Gesture.APP) {
+            androidx.compose.foundation.text.BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                textStyle = Type.body,
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.primary),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Ink.surface)
+                    .border(1.5.dp, Ink.primary, RoundedCornerShape(14.dp))
+                    .padding(horizontal = 12.dp, vertical = 11.dp)
+                    .semantics { contentDescription = "Qué app abre: $title" },
+            )
+            dev.vivac.launcher.petate.Pack.search(apps, query).take(5).forEach { a ->
+                Choice(a.label, a.packageName == app) { onPick(Gesture.APP, a.packageName) }
+            }
         }
     }
 }

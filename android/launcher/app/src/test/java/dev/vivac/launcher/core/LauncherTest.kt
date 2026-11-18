@@ -733,6 +733,24 @@ class LauncherTest {
     }
 
     @Test
+    fun `a swipe can open an app you chose, and does nothing if that app is gone`() {
+        val l = many()
+        l.chooseSwipeUp(Gesture.APP, "app.organicmaps")
+        assertEquals(Gesture.APP, many().swipeUp)
+        assertEquals("app.organicmaps", many().swipeUpApp)
+        l.onSwipeUp()
+        assertEquals("open:app.organicmaps", actions.calls.last())
+        l.chooseSwipeDown(Gesture.APP, "com.termux")
+        l.onSwipeDown()
+        assertEquals("open:com.termux", actions.calls.last())
+        assertEquals("com.termux", many().swipeDownApp)
+        l.chooseSwipeDown(Gesture.APP, "gone.app")
+        val before = actions.calls.size
+        l.onSwipeDown()
+        assertEquals(before, actions.calls.size)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

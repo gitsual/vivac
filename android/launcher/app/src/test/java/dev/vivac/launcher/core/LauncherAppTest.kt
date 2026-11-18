@@ -641,6 +641,20 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `a swipe is set to open an app chosen in the settings`() {
+        show()
+        compose.runOnUiThread { launcher.openSettings() }
+        compose.onAllNodesWithText("Abrir una app")[0].tap()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Qué app abre: Deslizar hacia arriba").performTextInput("org")
+        compose.onNodeWithText("Organic Maps").tap()
+        compose.waitForIdle()
+        assertEquals(Gesture.APP, launcher.swipeUp)
+        assertEquals("app.organicmaps", launcher.swipeUpApp)
+        compose.onNodeWithText("Deslizar hacia arriba: Organic Maps").assertExists()
+    }
+
+    @Test
     fun `settings offer to make vivac the home app while it is not`() {
         actions.home = false
         show()

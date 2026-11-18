@@ -60,6 +60,7 @@ enum class Gesture(val title: String) {
     SEARCH("Buscar"),
     NOTIFICATIONS("Ver los avisos"),
     LOCK("Apagar la pantalla"),
+    APP("Abrir una app"),
     NOTHING("Nada"),
 }
 
@@ -254,18 +255,30 @@ class Launcher(
         store.put(mapOf(KEY_COUNTS to if (showCounts) "1" else "0"))
     }
 
-    fun chooseSwipeUp(g: Gesture) { swipeUp = g; store.put(mapOf(KEY_SWIPE_UP to g.name)) }
-    fun chooseSwipeDown(g: Gesture) { swipeDown = g; store.put(mapOf(KEY_SWIPE_DOWN to g.name)) }
+    /** The app a swipe opens when its gesture is [Gesture.APP]. */
+    var swipeUpApp by mutableStateOf(store.get(KEY_SWIPE_UP_APP)); private set
+    var swipeDownApp by mutableStateOf(store.get(KEY_SWIPE_DOWN_APP)); private set
 
-    fun onSwipeUp() = perform(swipeUp)
-    fun onSwipeDown() = perform(swipeDown)
+    fun chooseSwipeUp(g: Gesture, app: String? = swipeUpApp) {
+        swipeUp = g; swipeUpApp = app
+        store.put(mapOf(KEY_SWIPE_UP to g.name, KEY_SWIPE_UP_APP to app.orEmpty()))
+    }
 
-    private fun perform(g: Gesture) {
+    fun chooseSwipeDown(g: Gesture, app: String? = swipeDownApp) {
+        swipeDown = g; swipeDownApp = app
+        store.put(mapOf(KEY_SWIPE_DOWN to g.name, KEY_SWIPE_DOWN_APP to app.orEmpty()))
+    }
+
+    fun onSwipeUp() = perform(swipeUp, swipeUpApp)
+    fun onSwipeDown() = perform(swipeDown, swipeDownApp)
+
+    private fun perform(g: Gesture, app: String? = null) {
         when (g) {
             Gesture.PETATE -> openPetate(false)
             Gesture.SEARCH -> openPetate(true)
             Gesture.NOTIFICATIONS -> actions.showNotifications()
             Gesture.LOCK -> if (!actions.lockScreen()) askForLockService()
+            Gesture.APP -> app?.takeIf { pkg -> apps.any { it.packageName == pkg } }?.let(::openApp)
             Gesture.NOTHING -> Unit
         }
     }
@@ -443,6 +456,8 @@ class Launcher(
         showCounts = store.get(KEY_COUNTS) == "1"
         swipeUp = gesture(KEY_SWIPE_UP, Gesture.PETATE)
         swipeDown = gesture(KEY_SWIPE_DOWN, Gesture.NOTIFICATIONS)
+        swipeUpApp = store.get(KEY_SWIPE_UP_APP)
+        swipeDownApp = store.get(KEY_SWIPE_DOWN_APP)
         iconStyle = IconStyle.entries.firstOrNull { it.name == store.get(KEY_ICONS) } ?: IconStyle.GLYPHS
         iconPack = store.get(KEY_ICON_PACK)?.takeIf { it.isNotBlank() }
         iconFor = decodeIcons(store.get(KEY_ICON_FOR))
@@ -673,6 +688,8 @@ class Launcher(
         const val KEY_COUNTS = "counts"
         const val KEY_SWIPE_UP = "swipeUp"
         const val KEY_SWIPE_DOWN = "swipeDown"
+        const val KEY_SWIPE_UP_APP = "swipeUpApp"
+        const val KEY_SWIPE_DOWN_APP = "swipeDownApp"
         const val KEY_ICONS = "icons"
         const val KEY_CONTACTS = "searchContacts"
         const val KEY_CALENDAR = "searchCalendar"
