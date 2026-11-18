@@ -90,7 +90,11 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onSwipeDown = launcher::onSwipeDown,
         )
     }
-    CompositionLocalProvider(LocalLabels provides launcher.labels, LocalShowCounts provides launcher.showCounts) {
+    CompositionLocalProvider(
+        LocalLabels provides launcher.labels,
+        LocalShowCounts provides launcher.showCounts,
+        dev.vivac.launcher.apps.LocalIconChoice provides dev.vivac.launcher.apps.IconChoice(launcher.iconStyle, launcher.iconPack),
+    ) {
     AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
         when (current) {
             Screen.CAMPAMENTO -> camp()
@@ -99,6 +103,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     locked = launcher.locked, wallpaper = launcher.showWallpaper, labels = launcher.labels, columns = launcher.columns,
                     dotsAllowed = actions.dotsAllowed(), counts = launcher.showCounts, swipeUp = launcher.swipeUp, swipeDown = launcher.swipeDown,
                     doubleTapLock = launcher.doubleTapLock, isHome = actions.isHome(),
+                    iconStyle = launcher.iconStyle, iconPack = launcher.iconPack, packs = actions.iconPacks(),
                 ),
                 SettingsActions(
                     toggleLock = launcher::toggleLock, toggleWallpaper = launcher::toggleWallpaper, changeWallpaper = launcher::changeWallpaper,
@@ -106,6 +111,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
                     toggleCounts = launcher::toggleCounts, setSwipeUp = launcher::chooseSwipeUp, setSwipeDown = launcher::chooseSwipeDown,
                     toggleDoubleTap = launcher::toggleDoubleTapLock, backUp = launcher::backUp, restore = launcher::askRestore,
                     becomeHome = launcher::becomeHome, close = { launcher.back() },
+                    chooseIcons = launcher::chooseIcons, chooseIconPack = launcher::chooseIconPack,
                 ),
             )
             Screen.PETATE -> Box {

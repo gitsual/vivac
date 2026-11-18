@@ -668,6 +668,19 @@ class LauncherTest {
     }
 
     @Test
+    fun `icons are glyphs until you choose another style or a pack, which persists`() {
+        val l = many()
+        assertEquals(IconStyle.GLYPHS, l.iconStyle)
+        l.chooseIcons(IconStyle.ORIGINAL)
+        assertEquals(IconStyle.ORIGINAL, many().iconStyle)
+        l.chooseIconPack("a.pack")
+        assertEquals(IconStyle.PACK, many().iconStyle)
+        assertEquals("a.pack", many().iconPack)
+        store.values["icons"] = "WHATEVER"
+        assertEquals(IconStyle.GLYPHS, many().iconStyle)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

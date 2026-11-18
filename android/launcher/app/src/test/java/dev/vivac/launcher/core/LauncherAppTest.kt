@@ -578,9 +578,12 @@ class LauncherAppTest {
         compose.onNodeWithText("5").performClick()
         compose.onNodeWithText("Activar los puntos de aviso").performScrollTo().performClick()
         compose.onNodeWithText("Número de avisos").performScrollTo().performClick()
-        compose.onAllNodesWithText("Buscar")[0].performScrollTo().performClick()
-        compose.onAllNodesWithText("Nada")[1].performScrollTo().performClick()
+        compose.onAllNodesWithText("Buscar")[0].tap()
+        compose.onAllNodesWithText("Nada")[1].tap()
         compose.onNodeWithText("Doble toque apaga la pantalla").performScrollTo().performClick()
+        compose.onNodeWithText("Pack de iconos").tap()
+        compose.onNodeWithText("No hay ningún pack de iconos instalado. Busca «icon pack» en tu tienda de apps.").assertExists()
+        compose.onNodeWithText("Los de cada app").tap()
         compose.onNodeWithText("Guardar una copia del campamento").performScrollTo().performClick()
         compose.onNodeWithText("Restaurar una copia").performScrollTo().performClick()
         compose.waitForIdle()
@@ -592,10 +595,23 @@ class LauncherAppTest {
         assertEquals(Gesture.SEARCH, launcher.swipeUp)
         assertEquals(Gesture.NOTHING, launcher.swipeDown)
         assertTrue(launcher.doubleTapLock)
+        assertEquals(IconStyle.ORIGINAL, launcher.iconStyle)
         assertTrue(actions.calls.containsAll(listOf("wallpaper", "notificationAccess", "backup", "restore")))
         compose.onNodeWithText("Cerrar").performScrollTo().performClick()
         compose.waitForIdle()
         assertEquals(Screen.CAMPAMENTO, launcher.screen)
+    }
+
+    @Test
+    fun `an installed icon pack is chosen from the settings`() {
+        actions.packs = listOf(IconPackInfo("a.pack", "Arcticons"))
+        store.values["icons"] = "PACK"
+        show()
+        compose.runOnUiThread { launcher.openSettings() }
+        compose.onNodeWithText("Arcticons").tap()
+        compose.waitForIdle()
+        assertEquals("a.pack", launcher.iconPack)
+        compose.onNodeWithText("Las apps sin icono en este estilo siguen con su glifo de vivac.").assertExists()
     }
 
     @Test

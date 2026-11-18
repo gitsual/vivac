@@ -21,6 +21,17 @@ import dev.vivac.launcher.widgets.WidgetOption
 
 enum class Screen { CAMPAMENTO, PETATE, AJUSTES }
 
+/** How apps are drawn: vivac's glyphs (the default), the system's themed icons, the apps' own, or a pack's. */
+enum class IconStyle(val title: String) {
+    GLYPHS("Glifos de vivac"),
+    THEMED("Iconos temáticos"),
+    ORIGINAL("Los de cada app"),
+    PACK("Pack de iconos"),
+}
+
+/** An installed icon pack (ADW/Nova convention). */
+data class IconPackInfo(val packageName: String, val label: String)
+
 /** What a swipe on the camp does, as you choose it in vivac's settings. */
 enum class Gesture(val title: String) {
     PETATE("Abrir el petate"),
@@ -131,6 +142,21 @@ class Launcher(
     var showCounts by mutableStateOf(store.get(KEY_COUNTS) == "1"); private set
     var swipeUp by mutableStateOf(gesture(KEY_SWIPE_UP, Gesture.PETATE)); private set
     var swipeDown by mutableStateOf(gesture(KEY_SWIPE_DOWN, Gesture.NOTIFICATIONS)); private set
+
+    var iconStyle by mutableStateOf(IconStyle.entries.firstOrNull { it.name == store.get(KEY_ICONS) } ?: IconStyle.GLYPHS); private set
+    /** The pack used when [iconStyle] is [IconStyle.PACK]. */
+    var iconPack by mutableStateOf(store.get(KEY_ICON_PACK)?.takeIf { it.isNotBlank() }); private set
+
+    fun chooseIcons(style: IconStyle) {
+        iconStyle = style
+        store.put(mapOf(KEY_ICONS to style.name))
+    }
+
+    fun chooseIconPack(packageName: String) {
+        iconPack = packageName
+        iconStyle = IconStyle.PACK
+        store.put(mapOf(KEY_ICON_PACK to packageName, KEY_ICONS to IconStyle.PACK.name))
+    }
 
     private fun gesture(key: String, default: Gesture) = Gesture.entries.firstOrNull { it.name == store.get(key) } ?: default
 
@@ -342,6 +368,8 @@ class Launcher(
         showCounts = store.get(KEY_COUNTS) == "1"
         swipeUp = gesture(KEY_SWIPE_UP, Gesture.PETATE)
         swipeDown = gesture(KEY_SWIPE_DOWN, Gesture.NOTIFICATIONS)
+        iconStyle = IconStyle.entries.firstOrNull { it.name == store.get(KEY_ICONS) } ?: IconStyle.GLYPHS
+        iconPack = store.get(KEY_ICON_PACK)?.takeIf { it.isNotBlank() }
         refresh()
         actions.say("Campamento restaurado.")
     }
@@ -569,6 +597,8 @@ class Launcher(
         const val KEY_COUNTS = "counts"
         const val KEY_SWIPE_UP = "swipeUp"
         const val KEY_SWIPE_DOWN = "swipeDown"
+        const val KEY_ICONS = "icons"
+        const val KEY_ICON_PACK = "iconPack"
 
         private fun encodeNames(names: Map<String, String>) =
             names.entries.joinToString(",") { (pkg, name) -> pkg + "=" + java.net.URLEncoder.encode(name, "UTF-8") }

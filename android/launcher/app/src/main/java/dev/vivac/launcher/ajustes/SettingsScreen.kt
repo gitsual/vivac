@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.vivac.launcher.core.Gesture
+import dev.vivac.launcher.core.IconPackInfo
+import dev.vivac.launcher.core.IconStyle
 import dev.vivac.launcher.theme.Brand
 import dev.vivac.launcher.theme.Contours
 import dev.vivac.launcher.theme.Ink
@@ -49,6 +51,9 @@ data class SettingsState(
     val swipeDown: Gesture,
     val doubleTapLock: Boolean,
     val isHome: Boolean,
+    val iconStyle: IconStyle = IconStyle.GLYPHS,
+    val iconPack: String? = null,
+    val packs: List<IconPackInfo> = emptyList(),
 )
 
 /** What each choice on the settings screen does. */
@@ -67,6 +72,8 @@ class SettingsActions(
     val restore: () -> Unit = {},
     val becomeHome: () -> Unit = {},
     val close: () -> Unit = {},
+    val chooseIcons: (IconStyle) -> Unit = {},
+    val chooseIconPack: (String) -> Unit = {},
 )
 
 /** vivac's settings: one screen, grouped as the camp is (home, petate, notices, gestures, copies). */
@@ -94,6 +101,21 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             Toggle("Fondo del teléfono", "Tu fondo de pantalla detrás, con el velo de la noche encima.", state.wallpaper, act.toggleWallpaper)
             if (state.wallpaper) Action("Cambiar el fondo de pantalla", act.changeWallpaper)
             Toggle("Nombres bajo las apps", "Sin nombres, TalkBack los sigue leyendo.", state.labels, act.toggleLabels)
+
+            Section("ICONOS")
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconStyle.entries.forEach { st -> Choice(st.title, state.iconStyle == st) { act.chooseIcons(st) } }
+            }
+            if (state.iconStyle == IconStyle.PACK) {
+                if (state.packs.isEmpty()) {
+                    Text("No hay ningún pack de iconos instalado. Busca «icon pack» en tu tienda de apps.", style = Type.small)
+                } else {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        state.packs.forEach { p -> Choice(p.label, state.iconPack == p.packageName) { act.chooseIconPack(p.packageName) } }
+                    }
+                }
+            }
+            if (state.iconStyle != IconStyle.GLYPHS) Text("Las apps sin icono en este estilo siguen con su glifo de vivac.", style = Type.small)
 
             Section("PETATE")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

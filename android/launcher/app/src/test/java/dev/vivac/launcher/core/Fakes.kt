@@ -43,6 +43,8 @@ class FakeActions : Actions {
     override fun askToBeHome() { calls += "askHome" }
     override fun backUp() { calls += "backup" }
     override fun pickWallpaper() { calls += "wallpaper" }
+    var packs = listOf<IconPackInfo>()
+    override fun iconPacks() = packs
     override fun openInProfile(packageName: String, profile: Long) { calls += "openIn:$profile:$packageName" }
     override fun lockProfile(profile: Long, locked: Boolean) { calls += "lockProfile:$profile:$locked" }
     var allShortcuts = listOf<Pair<String, AppShortcut>>()

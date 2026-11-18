@@ -48,6 +48,8 @@ interface Actions {
     fun backUp()
     /** Android's wallpaper picker. */
     fun pickWallpaper()
+    /** Icon packs installed on the phone. */
+    fun iconPacks(): List<IconPackInfo>
     /** Android's file picker for a copy to restore. */
     fun pickBackup()
     /** The web search app you use (or the browser), for [query]. */
