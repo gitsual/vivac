@@ -1,0 +1,29 @@
+[
+    {
+        "name": "space-grotesk",
+        "fonts": [
+            {
+                "file": "SpaceGrotesk-VF.ttf",
+                "supportedAxes": "wght"
+            }
+        ]
+    },
+    {
+        "name": "unbounded",
+        "fonts": [
+            {
+                "file": "Unbounded-VF.ttf",
+                "supportedAxes": "wght"
+            }
+        ]
+    },
+    {
+        "name": "jetbrains-mono",
+        "fonts": [
+            {
+                "file": "JetBrainsMono-VF.ttf",
+                "supportedAxes": "wght"
+            }
+        ]
+    }
+]

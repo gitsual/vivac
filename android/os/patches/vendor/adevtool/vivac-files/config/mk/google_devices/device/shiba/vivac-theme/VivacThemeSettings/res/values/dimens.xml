@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- vivac-os theme overlay. Static RRO: always on, never user-selectable. -->
+<resources>
+    <dimen name="settings_panel_corner_radius">24dp</dimen>
+    <dimen name="keyboard_picker_radius">24dp</dimen>
+    <dimen name="dream_item_corner_radius">24dp</dimen>
+    <dimen name="battery_tips_card_corner_radius_normal">20dp</dimen>
+    <dimen name="rect_button_radius">100dp</dimen>
+</resources>

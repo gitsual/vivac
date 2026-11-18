@@ -35,6 +35,39 @@ upstream on its own; the phone is only wiped once, when we decide to switch.
 5. `vivac-os-publish` to `testing`; after a check, promote to `stable`.
 6. Notify through Hermes (WhatsApp) on success or failure.
 
+## The vivac theme (system UI)
+
+The phone's system UI is themed with resources, not code patches. `vivac-os-customize`
+applies two projects (`patches/<project>/`; `vivac-files/` inside a project is copied
+in as new files, symlinks followed):
+
+| Project | What |
+|---|---|
+| `vendor/adevtool` | patch adds three modules and three fonts to shiba's `device.mk`; `vivac-files/.../shiba/vivac-theme/` holds the static RROs |
+| `frameworks/base` | patch adds the `VivacFonts` filegroup and two aliases to the font config; `vivac-files/data/fonts/vivac/` holds the families (symlinks to the launcher's fonts) |
+
+Static overlays (`isStatic`, priority 900, `/product/overlay`, always on):
+
+- `VivacThemeFramework` (`android`): dark by default (`config_defaultNightMode=2`);
+  Material You seed pinned to coral `#E1777D` via `theming_defaults` (`TONAL_SPOT`,
+  no wallpaper colors); static `system_*` ramps from the vivac palette; fonts
+  (`config_bodyFontFamily` Space Grotesk, headline and lock clock Unbounded ExtraBold);
+  dialog and button radii (24dp, pill).
+- `VivacThemeSystemUI` (`com.android.systemui`): shade, quick settings tiles,
+  power menu, bottom sheets, notification scrim radii.
+- `VivacThemeSettings` (`com.android.settings`): panel and card radii.
+
+System fonts added: `space-grotesk`, `unbounded` (alias `unbounded-extrabold`),
+`jetbrains-mono`, all variable (`wght`). `jetbrains-mono` is installed for apps and
+labels; the framework has no config key to make it a system default.
+
+Limits: the runtime palette is generated from the seed, so neutrals are
+coral-tinted, not exactly `#18131B`; the static ramps only show where the
+dynamic one is not applied. Code that hard-codes `sans-serif` keeps Roboto.
+Nothing here is compiled or visually checked yet (needs the full soong analysis,
+~38 GB, so swap first): `m VivacThemeFramework VivacThemeSystemUI VivacThemeSettings`.
+`tests/cases/test_os_theme.sh` checks the sources are consistent.
+
 ## Switching the phone (manual, wipes it, NOT done yet)
 
 1. `vivac-os-backup ~/m2/vivac-os/backups/$(date +%F)` and every box in its

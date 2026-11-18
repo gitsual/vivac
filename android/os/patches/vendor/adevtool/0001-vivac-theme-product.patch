@@ -1,0 +1,17 @@
+diff --git a/config/mk/google_devices/device/shiba/device.mk b/config/mk/google_devices/device/shiba/device.mk
+index bb5a555c1..4c8239e42 100644
+--- a/config/mk/google_devices/device/shiba/device.mk
++++ b/config/mk/google_devices/device/shiba/device.mk
+@@ -4,3 +4,12 @@ TARGET_KERNEL_DIR ?= $(RELEASE_KERNEL_SHIBA_DIR)
+ TARGET_BOARD_KERNEL_HEADERS ?= $(RELEASE_KERNEL_SHIBA_DIR)/kernel-headers
+ 
+ include vendor/adevtool/config/mk/google_devices/platform/zuma/device.mk
++
++# vivac theme: static overlays + system fonts (see android/os/README.md)
++PRODUCT_PACKAGES += \
++    VivacThemeFramework \
++    VivacThemeSystemUI \
++    VivacThemeSettings \
++    SpaceGrotesk-VF.ttf \
++    Unbounded-VF.ttf \
++    JetBrainsMono-VF.ttf

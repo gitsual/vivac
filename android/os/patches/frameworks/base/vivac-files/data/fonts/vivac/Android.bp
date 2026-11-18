@@ -1,0 +1,39 @@
+package {
+    default_applicable_licenses: ["vivac_fonts_license"],
+}
+
+license {
+    name: "vivac_fonts_license",
+    visibility: [":__subpackages__"],
+    license_kinds: [
+        "SPDX-license-identifier-OFL",
+    ],
+    license_text: [
+        "LICENSE",
+    ],
+}
+
+prebuilt_font {
+    name: "SpaceGrotesk-VF.ttf",
+    src: "SpaceGrotesk-VF.ttf",
+}
+
+prebuilt_font {
+    name: "Unbounded-VF.ttf",
+    src: "Unbounded-VF.ttf",
+}
+
+prebuilt_font {
+    name: "JetBrainsMono-VF.ttf",
+    src: "JetBrainsMono-VF.ttf",
+}
+
+filegroup {
+    name: "VivacFonts",
+    srcs: ["font_config.json"],
+    required: [
+        "SpaceGrotesk-VF.ttf",
+        "Unbounded-VF.ttf",
+        "JetBrainsMono-VF.ttf",
+    ],
+}

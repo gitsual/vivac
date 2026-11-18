@@ -44,3 +44,23 @@ if run >/dev/null 2>&1; then fail "accepted a patch that no longer applies"; fi
 if bash "$tool" "$src" "$sandbox/nope" >/dev/null 2>&1; then fail "accepted a missing patch folder"; fi
 mkdir -p "$patches/../badpatches/not/a/project" && printf 'x\n' >"$patches/../badpatches/not/a/project/1.patch"
 if bash "$tool" "$src" "$patches/../badpatches" >/dev/null 2>&1; then fail "accepted a patch for a project that is not in the tree"; fi
+
+# vivac-files: whole new files are copied into the project (symlinks followed),
+# on a project that has no patch at all, and never overwrite an existing file.
+files_src="$sandbox/fsrc" files_patches="$sandbox/fpatches"
+fproj="$files_src/vendor/x"
+mkdir -p "$fproj" "$files_patches/vendor/x/vivac-files/new/dir"
+git -C "$fproj" init -q
+printf 'base\n' >"$fproj/base.txt"
+git -C "$fproj" -c user.name=t -c user.email=t@t add -A
+git -C "$fproj" -c user.name=t -c user.email=t@t commit -qm base
+printf 'hello\n' >"$sandbox/real.txt"
+ln -s "$sandbox/real.txt" "$files_patches/vendor/x/vivac-files/new/dir/link.txt"
+printf 'plain\n' >"$files_patches/vendor/x/vivac-files/new/plain.txt"
+bash "$tool" "$files_src" "$files_patches" >/dev/null || fail "vivac-files only project failed"
+[[ "$(<"$fproj/new/dir/link.txt")" == hello && ! -L "$fproj/new/dir/link.txt" ]] || fail "symlink not copied as a file"
+[[ "$(<"$fproj/new/plain.txt")" == plain ]] || fail "plain file not copied"
+bash "$tool" "$files_src" "$files_patches" >/dev/null || fail "vivac-files rerun failed (not idempotent)"
+printf 'base\n' >"$files_patches/vendor/x/vivac-files/base.txt"
+if bash "$tool" "$files_src" "$files_patches" >/dev/null 2>&1; then fail "vivac-files overwrote a tracked file"; fi
+[[ -z "$(git -C "$fproj" status --porcelain)" ]] || fail "overwrite refusal left the project dirty"

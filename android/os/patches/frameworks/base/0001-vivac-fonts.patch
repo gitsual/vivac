@@ -1,0 +1,27 @@
+diff --git a/data/fonts/Android.bp b/data/fonts/Android.bp
+index 0380beb6e..afcf4f488 100644
+--- a/data/fonts/Android.bp
++++ b/data/fonts/Android.bp
+@@ -92,6 +92,7 @@ genrule {
+         ":Roboto",
+         ":RobotoFlex",
+         ":SourceSansPro",
++        ":VivacFonts",
+         ":noto-fonts",
+     ] + select(release_flag("RELEASE_USE_ROBOTO_MONO_FONT"), {
+         true: [
+diff --git a/data/fonts/alias.json b/data/fonts/alias.json
+index b5b867a49..c19b75168 100644
+--- a/data/fonts/alias.json
++++ b/data/fonts/alias.json
+@@ -33,5 +33,9 @@
+   { "name": "courier", "to": "serif-monospace" },
+ 
+   // source-sans-pro aliases
+-  { "name": "source-sans-pro-semi-bold", "to": "source-sans-pro", "weight": "600" }
++  { "name": "source-sans-pro-semi-bold", "to": "source-sans-pro", "weight": "600" },
++
++  // vivac aliases
++  { "name": "space-grotesk-medium", "to": "space-grotesk", "weight": "500" },
++  { "name": "unbounded-extrabold", "to": "unbounded", "weight": "800" }
+ ]

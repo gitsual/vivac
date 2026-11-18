@@ -2,6 +2,9 @@
 # Apply the vivac patches to a synced GrapheneOS tree.
 # Usage: vivac-os-customize SRC_DIR PATCH_DIR
 # PATCH_DIR/<project path>/*.patch are applied in name order to SRC_DIR/<project path>.
+# PATCH_DIR/<project path>/vivac-files/ (optional) is copied into the project after
+# its patches, to add whole new files (overlays, fonts); symlinks are followed and
+# a file that already exists in the project is an error, never a silent overwrite.
 # Each touched project is first reset to its committed state (reruns give the
 # same tree); a patch that no longer applies fails the run and leaves that
 # project clean, never half-patched.
@@ -12,7 +15,10 @@ src="$(cd -- "$1" && pwd -P)"
 [[ -d "$2" ]] || { printf 'no patch folder: %s\n' "$2" >&2; exit 1; }
 patches="$(cd -- "$2" && pwd -P)"
 
-mapfile -t projects < <(find "$patches" -type f -name '*.patch' -printf '%h\n' | sed "s|^$patches/||" | LC_ALL=C sort -u)
+mapfile -t projects < <({
+	find "$patches" -type f -name '*.patch' -not -path '*/vivac-files/*' -printf '%h\n'
+	find "$patches" -type d -name vivac-files -printf '%h\n'
+} | sed "s|^$patches/||" | LC_ALL=C sort -u)
 ((${#projects[@]})) || { printf 'no patches in %s\n' "$patches"; exit 0; }
 
 for p in "${projects[@]}"; do
@@ -25,6 +31,7 @@ for p in "${projects[@]}"; do
 	dir="$src/$p"
 	git -C "$dir" reset -q --hard
 	git -C "$dir" clean -qfd
+	files=()
 	mapfile -t files < <(find "$patches/$p" -maxdepth 1 -type f -name '*.patch' | LC_ALL=C sort)
 	for f in "${files[@]}"; do
 		if ! git -C "$dir" apply --whitespace=nowarn "$f"; then
@@ -35,4 +42,18 @@ for p in "${projects[@]}"; do
 		fi
 		printf 'applied %s/%s\n' "$p" "${f##*/}"
 	done
+	if [[ -d "$patches/$p/vivac-files" ]]; then
+		while IFS= read -r -d '' f; do
+			rel="${f#"$patches/$p/vivac-files/"}"
+			if [[ -e "$dir/$rel" || -L "$dir/$rel" ]]; then
+				git -C "$dir" reset -q --hard
+				git -C "$dir" clean -qfd
+				printf 'vivac-files would overwrite: %s/%s\n' "$p" "$rel" >&2
+				exit 1
+			fi
+			mkdir -p -- "$dir/${rel%/*}"
+			cp -L -- "$f" "$dir/$rel"
+		done < <(find "$patches/$p/vivac-files" \( -type f -o -type l \) -print0 | LC_ALL=C sort -z)
+		printf 'copied %s/vivac-files\n' "$p"
+	fi
 done

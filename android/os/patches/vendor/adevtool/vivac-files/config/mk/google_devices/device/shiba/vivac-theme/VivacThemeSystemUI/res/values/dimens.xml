@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- vivac-os theme overlay. Static RRO: always on, never user-selectable. -->
+<resources>
+    <!-- Notification shade, quick settings, power menu, volume, lock screen. -->
+    <dimen name="qs_corner_radius">20dp</dimen>
+    <dimen name="notification_corner_radius">20dp</dimen>
+    <dimen name="notification_scrim_corner_radius">24dp</dimen>
+    <dimen name="overlay_shade_panel_shape_radius">24dp</dimen>
+    <dimen name="common_tile_default_active_tile_corner_radius">20dp</dimen>
+    <dimen name="common_tile_default_inactive_tile_corner_radius">20dp</dimen>
+    <dimen name="common_tile_default_inactive_icon_corner_radius">50dp</dimen>
+    <dimen name="overlay_qs_layout_brightness_rounded_corner">20dp</dimen>
+    <dimen name="global_actions_corner_radius">24dp</dimen>
+    <dimen name="bottom_sheet_corner_radius">24dp</dimen>
+    <dimen name="rect_button_radius">100dp</dimen>
+    <dimen name="overlay_button_corner_radius">100dp</dimen>
+</resources>

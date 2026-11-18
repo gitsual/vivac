@@ -1,0 +1,4 @@
+runtime_resource_overlay {
+    name: "VivacThemeFramework",
+    product_specific: true,
+}

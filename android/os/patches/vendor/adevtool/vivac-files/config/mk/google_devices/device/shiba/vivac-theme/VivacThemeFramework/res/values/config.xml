@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- vivac-os theme overlay. Static RRO: always on, never user-selectable. -->
+<resources>
+    <!-- Dark only. 1 = no, 2 = yes (UiModeManager). -->
+    <integer name="config_defaultNightMode">2</integer>
+
+    <!-- Seed of the Material You palette: vivac coral, fixed (no wallpaper). -->
+    <string-array name="theming_defaults" translatable="false">
+        <item>*|TONAL_SPOT|#E1777D</item>
+    </string-array>
+
+    <!-- Fonts: Space Grotesk body, Unbounded titles (families in data/fonts/vivac). -->
+    <string name="config_bodyFontFamily" translatable="false">space-grotesk</string>
+    <string name="config_bodyFontFamilyMedium" translatable="false">space-grotesk-medium</string>
+    <string name="config_headlineFontFamily" translatable="false">unbounded</string>
+    <string name="config_headlineFontFamilyMedium" translatable="false">unbounded-extrabold</string>
+    <string name="config_clockFontFamily" translatable="false">unbounded-extrabold</string>
+
+    <!-- Shapes: 24dp cards and dialogs, pill buttons. -->
+    <dimen name="config_dialogCornerRadius">24dp</dimen>
+    <dimen name="config_buttonCornerRadius">100dp</dimen>
+    <dimen name="dialog_corner_radius">24dp</dimen>
+    <dimen name="chooser_corner_radius">24dp</dimen>
+</resources>
