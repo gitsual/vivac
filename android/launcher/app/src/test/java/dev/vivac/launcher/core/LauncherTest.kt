@@ -11,6 +11,7 @@ import dev.vivac.launcher.petate.MenuEntry
 import dev.vivac.launcher.widgets.WidgetOption
 import dev.vivac.launcher.avisos.Control
 import dev.vivac.launcher.campamento.Gap
+import dev.vivac.launcher.campamento.VivacWidget
 import dev.vivac.launcher.avisos.Quick
 import dev.vivac.launcher.avisos.QuickTiles
 import org.junit.Assert.assertEquals
@@ -134,7 +135,7 @@ class LauncherTest {
         l.openCampMenu()
         l.showPicker()
         assertFalse(l.campMenu)
-        assertEquals(listOf(clock), l.picker)
+        assertEquals(listOf(clock), l.picker!!.filterNot { it.key.startsWith("vivac:") })
         l.addWidget(clock)
         assertNull(l.picker)
         assertEquals(listOf(1), l.board.ids)
@@ -1009,5 +1010,33 @@ class LauncherTest {
         assertEquals(0.8f, l.brightness)
         assertEquals(1, actions.calls.count { it == "page:PERMISO_AJUSTES" })
         assertEquals("say:Para cambiar el brillo desde aquí, deja que vivac cambie ajustes del sistema.", actions.calls.first { it.startsWith("say:") })
+    }
+
+    @Test
+    fun `the widget picker offers vivac's own, chats of a chat app, and the shortcuts of apps that have them`() {
+        actions.shortcuts = mapOf("com.termux" to listOf(dev.vivac.launcher.petate.AppShortcut("s", "Nueva sesión")))
+        val l = launcher()
+        l.showPicker()
+        val keys = l.picker!!.map { it.key }
+        assertTrue("vivac:chats:org.thoughtcrime.securesms" in keys)
+        assertTrue("vivac:atajos:com.termux" in keys)
+        assertFalse("vivac:atajos:app.organicmaps" in keys)
+    }
+
+    @Test
+    fun `a vivac widget is placed, labelled, sized and kept like any other, and goes when removed`() {
+        val l = launcher()
+        l.showPicker()
+        l.addWidget(l.picker!!.first { it.key == "vivac:chats:org.thoughtcrime.securesms" })
+        val id = l.board.ids.single()
+        assertTrue(id < 0)
+        assertEquals(VivacWidget.Chats("org.thoughtcrime.securesms"), l.vivacWidget(id))
+        assertEquals("Chats de Signal", l.placedWidgets().single().label)
+        assertEquals(3, l.widgetRows(id))
+        assertEquals(listOf(id), launcher().board.ids)
+        l.removeWidget(id)
+        assertTrue(l.board.ids.isEmpty())
+        assertEquals(null, launcher().vivacWidget(id))
+        assertTrue(widgets.calls.none { it.startsWith("delete") })
     }
 }

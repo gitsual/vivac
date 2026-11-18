@@ -151,6 +151,12 @@ fun CampamentoScreen(
     onStopEditing: () -> Unit = {},
     onAddApps: () -> Unit = {},
     tintWidgets: Boolean = true,
+    /** vivac's own widgets (negative ids), drawn by vivac at the rows given. */
+    vivacWidget: @Composable (id: Int, rows: Int) -> Unit = { _, _ -> },
+    /** Apps with notices, newest first: their glyphs sit top left. */
+    noticeApps: List<InstalledApp> = emptyList(),
+    /** vivac's shade (Android's when vivac may not read notifications). */
+    onOpenAvisos: () -> Unit = onShowNotifications,
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
@@ -200,7 +206,7 @@ fun CampamentoScreen(
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Header(onOpenSettings) { lamp = it }
+            Header(onOpenSettings, noticeApps, onOpenAvisos) { lamp = it }
             val pager = rememberPagerState(initialPage = page) { shownPages }
             // The launcher decides the page (home, a widget sent elsewhere); a swipe tells it where you went.
             LaunchedEffect(page) { if (pager.currentPage != page) pager.animateScrollToPage(page) }
@@ -208,7 +214,12 @@ fun CampamentoScreen(
             val card: @Composable (Placed) -> Unit = { w ->
                 val spot = Spot(Zone.Ladera(w.page), board.onPage(w.page).indexOf(w))
                 val grip = remember(w.id, w.page) { CardGrip(drag, HeldWidget(w.id, Zone.Ladera(w.page), widgetLabel(w.id)), { onEditWidget(w.id) }, onWidgetDrop) }
-                WidgetCard(w.id, w.rows, widgetRows(w.id), widgetHeightDp(w.id, w.rows), widgetView, grip, drag, spot, w.id == editing, tintWidgets) { onResizeWidget(w.id, it) }
+                val vivac = w.id < 0
+                val height = if (vivac) WidgetSize.heightOf(widgetRows(w.id)) else widgetHeightDp(w.id, w.rows)
+                WidgetCard(
+                    w.id, w.rows, widgetRows(w.id), height, widgetView, grip, drag, spot, w.id == editing, tintWidgets,
+                    own = if (vivac) ({ vivacWidget(w.id, widgetRows(w.id)) }) else null,
+                ) { onResizeWidget(w.id, it) }
             }
             // While something is carried, every page stays composed: the page it came from holds the finger (a
             // widget's own view, a tile's gesture), and tearing it down when the page turns would drop it.
@@ -336,9 +347,9 @@ private val WIDGET_GHOST_H = 72.dp
  */
 private class CardGrip(
     private val drag: DragBoard,
-    private val cargo: HeldWidget,
-    private val onEdit: () -> Unit,
-    private val onDrop: (Int, Zone, Int) -> Unit,
+    val cargo: HeldWidget,
+    val onEdit: () -> Unit,
+    val onDrop: (Int, Zone, Int) -> Unit,
 ) : Grip {
     var origin = Offset.Zero
     var size = androidx.compose.ui.unit.IntSize.Zero
@@ -649,6 +660,8 @@ private fun WidgetCard(
     spot: Spot,
     editing: Boolean,
     tint: Boolean,
+    /** A widget vivac draws itself: carried with a hold like a tile, and not a view holding the finger. */
+    own: (@Composable () -> Unit)? = null,
     onResize: (Int) -> Unit,
 ) {
     androidx.compose.runtime.DisposableEffect(drag, id) { onDispose { drag.forgetWidget(id) } }
@@ -661,15 +674,21 @@ private fun WidgetCard(
             .fillMaxWidth()
             .height(heightDp.dp)
             .spot(drag, spot)
-            .onGloballyPositioned { grip.origin = it.positionInRoot(); grip.size = it.size; drag.placeWidget(id, it.boundsInRoot()) }
+            // Only an app's widget keeps vertical drags for its own list; vivac's own let the page have them.
+            .onGloballyPositioned { grip.origin = it.positionInRoot(); grip.size = it.size; if (own == null) drag.placeWidget(id, it.boundsInRoot()) }
+            .then(
+                if (own != null) Modifier.carrying(drag, grip.cargo, grip.cargo.label, onOpen = {}, onMenu = grip.onEdit, onDrop = { _, s -> grip.onDrop(id, s.zone, s.index) })
+                else Modifier,
+            )
             .testTag("widget:$id")
             .graphicsLayer { alpha = if (lifted) 0.3f else 1f }
             .clip(RoundedCornerShape(24.dp))
             .then(if (marked) Modifier.border(2.dp, Ink.primary, RoundedCornerShape(24.dp)) else Modifier),
     ) {
         val width = maxWidth.value
+        if (own != null) own()
         // key(id, rows): a new widget, or a new size, gets a fresh host view laid out for it.
-        key(id, rows) {
+        else key(id, rows) {
             AndroidView(
                 factory = { ctx -> widgetView(ctx, id, width, rows, grip) ?: android.widget.Space(ctx) },
                 modifier = Modifier.fillMaxSize(),
@@ -822,10 +841,10 @@ private fun Beam(modifier: Modifier, origin: Offset?) {
 }
 
 @Composable
-private fun Header(onOpenSettings: () -> Unit, onPlaced: (Offset) -> Unit = {}) {
-    // No page name: the dots below say where you are, and TalkBack reads them.
+private fun Header(onOpenSettings: () -> Unit, noticeApps: List<InstalledApp> = emptyList(), onNotices: () -> Unit = {}, onPlaced: (Offset) -> Unit = {}) {
+    // No page name: the dots below say where you are. Top left, the apps with notices, as a status bar would.
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Spacer(Modifier.weight(1f))
+        Box(Modifier.weight(1f)) { if (noticeApps.isNotEmpty()) NoticeGlyphs(noticeApps, onNotices) }
         // The headlamp itself: the beam starts here.
         Box(
             Modifier
@@ -855,6 +874,32 @@ private fun Clock(stamp: String) {
                 Text(day[2], style = Type.mono)
             }
         }
+    }
+}
+
+/** The glyphs of the apps with notices, newest first: six at most, then how many more. A tap opens the shade. */
+@Composable
+private fun NoticeGlyphs(apps: List<InstalledApp>, onClick: () -> Unit) {
+    val names = apps.map { it.label }
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .clickable(role = Role.Button, onClickLabel = "Ver los avisos", onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = "Avisos de " + if (names.size == 1) names.single() else names.dropLast(1).joinToString(", ") + " y " + names.last()
+            }
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        apps.take(6).forEach { app ->
+            Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                androidx.compose.runtime.CompositionLocalProvider(dev.vivac.launcher.apps.LocalIconChoice provides dev.vivac.launcher.apps.IconChoice(dev.vivac.launcher.core.IconStyle.GLYPHS, null)) {
+                    Box(Modifier.graphicsLayer { scaleX = 0.66f; scaleY = 0.66f }) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
+                }
+            }
+        }
+        if (apps.size > 6) Text("+${apps.size - 6}", style = Type.cota.copy(fontSize = 11.sp))
     }
 }
 

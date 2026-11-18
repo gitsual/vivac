@@ -55,6 +55,9 @@ fun LauncherApp(
     drag: DragBoard = remember { DragBoard() },
 ) {
     BackHandler(enabled = launcher.canGoBack) { launcher.back() }
+    // The phone's notices, for the shade and for vivac's chats widgets.
+    val noNoticesHere = remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<dev.vivac.launcher.avisos.Aviso>()) }
+    val allAvisos by (launcher.notices?.live ?: noNoticesHere).collectAsState()
     // Notification access is granted in Android's settings: read it again each time vivac comes back to the front.
     // A count, not the lifecycle state: no frame is drawn while vivac is away, so the state would come back unchanged.
     var resumes by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -120,6 +123,31 @@ fun LauncherApp(
             onMoveItem = launcher::moveItem,
             onAddApps = launcher::openAdder,
             tintWidgets = launcher.tintWidgets,
+            onOpenAvisos = launcher::openAvisos,
+            noticeApps = allAvisos.filter { !it.ongoing && !it.summary }.sortedByDescending { it.postedAt }.map { it.packageName }.distinct()
+                .mapNotNull { pkg -> launcher.apps.find { it.packageName == pkg } },
+            vivacWidget = { id, _ ->
+                when (val w = launcher.vivacWidget(id)) {
+                    is dev.vivac.launcher.campamento.VivacWidget.Chats -> dev.vivac.launcher.widgets.ChatsWidget(
+                        app = launcher.apps.find { it.packageName == w.packageName },
+                        packageName = w.packageName,
+                        avisos = allAvisos,
+                        now = System.currentTimeMillis(),
+                        onOpen = launcher::openAviso,
+                        onOpenApp = { launcher.openApp(w.packageName) },
+                    )
+                    is dev.vivac.launcher.campamento.VivacWidget.Atajos -> {
+                        val shortcuts = remember(w.packageName) { launcher.shortcutsOf(w.packageName) }
+                        dev.vivac.launcher.widgets.AtajosWidget(
+                            app = launcher.apps.find { it.packageName == w.packageName },
+                            shortcuts = shortcuts,
+                            onShortcut = { s -> launcher.openPinned(w.packageName, s) },
+                            onOpenApp = { launcher.openApp(w.packageName) },
+                        )
+                    }
+                    null -> Unit
+                }
+            },
         )
     }
     CompositionLocalProvider(
@@ -151,10 +179,8 @@ fun LauncherApp(
                 ),
             )
             Screen.AVISOS -> {
-                val noNotices = remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList<dev.vivac.launcher.avisos.Aviso>()) }
-                val avisos by (launcher.notices?.live ?: noNotices).collectAsState()
                 dev.vivac.launcher.avisos.AvisosScreen(
-                    avisos = avisos,
+                    avisos = allAvisos,
                     apps = launcher.apps,
                     now = System.currentTimeMillis(),
                     quick = launcher.quick,

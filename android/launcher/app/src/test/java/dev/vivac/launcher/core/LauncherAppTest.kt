@@ -1097,4 +1097,35 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertEquals(listOf("dismiss:c"), notices.calls)
     }
+
+    @Test
+    fun `vivac's chats and shortcuts widgets show the app's chats and shortcuts in vivac's own look, and open them`() {
+        actions.dotsOn = true
+        actions.shortcuts = mapOf("com.termux" to listOf(AppShortcut("s", "Chat de voz")))
+        store.values["vivacWidgets"] = "-1=vivac:chats:com.termux,-2=vivac:atajos:com.termux"
+        store.values["widgets"] = "-1,-2"
+        val notices = FakeNotices(listOf(aviso("a", "Ana")))
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets, notices = notices).also { it.refresh() }
+        compose.setContent { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views) }
+        compose.waitForIdle()
+        compose.onNodeWithText("1 NUEVOS").assertExists()
+        compose.onNodeWithText("texto de Ana").performClick()
+        assertEquals(listOf("open:a"), notices.calls)
+        compose.onNodeWithContentDescription("Chat de voz").performClick()
+        assertEquals("shortcut:com.termux/s", actions.calls.last())
+        // Never drawn as an app's widget view.
+        assertTrue(drawn.isEmpty())
+    }
+
+    @Test
+    fun `top left, the camp shows which apps have notices, and a tap opens the shade`() {
+        actions.dotsOn = true
+        val notices = FakeNotices(listOf(aviso("a", "Ana"), aviso("c", "Ruta", pkg = "app.organicmaps", minutesAgo = 5)))
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets, notices = notices).also { it.refresh() }
+        compose.setContent { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views) }
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Avisos de Termux y Organic Maps").performClick()
+        compose.waitForIdle()
+        assertEquals(Screen.AVISOS, launcher.screen)
+    }
 }

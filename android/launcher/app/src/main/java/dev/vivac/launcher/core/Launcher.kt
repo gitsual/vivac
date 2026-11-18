@@ -554,12 +554,56 @@ class Launcher(
     fun openCampMenu() { campMenu = true }
     fun dismissCampMenu() { campMenu = false }
 
-    fun placedWidgets(): List<PlacedLabel> = board.ids.map { PlacedLabel(it, widgets.label(it)) }
+    fun placedWidgets(): List<PlacedLabel> = board.ids.map { PlacedLabel(it, widgetLabel(it)) }
+
+    /** vivac's own widgets on the board, by their (negative) id. */
+    var vivacWidgets by mutableStateOf(dev.vivac.launcher.campamento.VivacWidget.decode(store.get(KEY_VIVAC_WIDGETS))); private set
+
+    fun vivacWidget(id: Int): dev.vivac.launcher.campamento.VivacWidget? = vivacWidgets[id]
+
+    /** A widget's name: vivac's say what they show and whose; the apps' own, what Android calls them. */
+    fun widgetLabel(id: Int): String = vivacWidgets[id]?.let { w ->
+        val app = labelOf(w.packageName)
+        when (w) {
+            is dev.vivac.launcher.campamento.VivacWidget.Chats -> "Chats de $app"
+            is dev.vivac.launcher.campamento.VivacWidget.Atajos -> "Atajos de $app"
+        }
+    } ?: widgets.label(id)
+
+    private fun labelOf(packageName: String) = apps.find { it.packageName == packageName }?.label ?: packageName
 
     fun showPicker() {
         campMenu = false
-        picker = widgets.options()
+        picker = vivacOptions() + widgets.options()
     }
+
+    /** vivac's own widgets the picker offers: chats for each chat app you have, shortcuts for each app that shares some. */
+    private fun vivacOptions(): List<WidgetOption> {
+        val visible = visibleApps()
+        val chats = visible.filter { it.packageName in CHAT_APPS }.map { app ->
+            val w = dev.vivac.launcher.campamento.VivacWidget.Chats(app.packageName)
+            WidgetOption(w.key, "Chats · vivac", app.label, app.packageName, "4 × ${w.rows}")
+        }
+        val atajos = if (!actions.canReadShortcuts()) emptyList() else visible.filter { actions.shortcuts(it.packageName).isNotEmpty() }.map { app ->
+            val w = dev.vivac.launcher.campamento.VivacWidget.Atajos(app.packageName)
+            WidgetOption(w.key, "Atajos · vivac", app.label, app.packageName, "4 × ${w.rows}")
+        }
+        return chats + atajos
+    }
+
+    private fun addVivacWidget(w: dev.vivac.launcher.campamento.VivacWidget) {
+        val id = (vivacWidgets.keys.minOrNull() ?: 0) - 1
+        saveVivacWidgets(vivacWidgets + (id to w))
+        saveBoard(board.add(id))
+    }
+
+    private fun saveVivacWidgets(next: Map<Int, dev.vivac.launcher.campamento.VivacWidget>) {
+        vivacWidgets = next
+        store.put(mapOf(KEY_VIVAC_WIDGETS to dev.vivac.launcher.campamento.VivacWidget.encode(next)))
+    }
+
+    /** The shortcuts a vivac shortcuts widget shows. */
+    fun shortcutsOf(packageName: String): List<dev.vivac.launcher.petate.AppShortcut> = actions.shortcuts(packageName)
 
     fun dismissPicker() { picker = null }
 
@@ -612,6 +656,7 @@ class Launcher(
     /** Placing a widget: allocate an id, get the bind permission if needed, then its configuration if it has one. */
     fun addWidget(option: WidgetOption) {
         picker = null
+        dev.vivac.launcher.campamento.VivacWidget.fromKey(option.key)?.let { return addVivacWidget(it) }
         val id = widgets.allocate()
         pendingWidget = id
         if (widgets.bindIfAllowed(id, option)) afterBind(id) else widgets.requestBind(id, option)
@@ -697,7 +742,7 @@ class Launcher(
     fun stopEditing() { editing = null }
 
     /** The rows a widget is drawn at: the ones you chose, else its own. */
-    fun widgetRows(id: Int): Int = board.placed(id)?.rows?.takeIf { it > 0 } ?: widgets.defaultRows(id)
+    fun widgetRows(id: Int): Int = board.placed(id)?.rows?.takeIf { it > 0 } ?: vivacWidgets[id]?.rows ?: widgets.defaultRows(id)
 
     fun resizeWidget(id: Int, delta: Int) = saveBoard(board.resize(id, widgetRows(id) + delta))
 
@@ -799,7 +844,7 @@ class Launcher(
     fun removeWidget(id: Int) {
         editing = null
         campMenu = false
-        widgets.delete(id)
+        if (id < 0) saveVivacWidgets(vivacWidgets - id) else widgets.delete(id)
         saveBoard(board.remove(id))
     }
 
@@ -813,7 +858,10 @@ class Launcher(
     }
 
     /** The saved board, without widgets Android no longer has, its laderas tidied (rows before a widget keep their free cells). */
-    private fun loadBoard() = WidgetBoard.decode(store.get(KEY_WIDGETS)).let { b -> WidgetBoard(b.items.filter { it !is Placed || widgets.exists(it.id) }).tidied() }
+    private fun loadBoard() = WidgetBoard.decode(store.get(KEY_WIDGETS)).let { b ->
+        val ours = dev.vivac.launcher.campamento.VivacWidget.decode(store.get(KEY_VIVAC_WIDGETS))
+        WidgetBoard(b.items.filter { it !is Placed || (if (it.id < 0) it.id in ours else widgets.exists(it.id)) }).tidied()
+    }
 
     private fun saveBoard(next: WidgetBoard) {
         board = next
@@ -850,6 +898,13 @@ class Launcher(
         const val KEY_SWIPE_UP_APP = "swipeUpApp"
         const val KEY_SWIPE_DOWN_APP = "swipeDownApp"
         const val KEY_QUICK = "quick"
+        const val KEY_VIVAC_WIDGETS = "vivacWidgets"
+
+        /** Chat apps whose notifications make a vivac chats widget. */
+        private val CHAT_APPS = setOf(
+            "com.whatsapp", "com.whatsapp.w4b", "org.thoughtcrime.securesms", "im.molly.app", "org.telegram.messenger",
+            "com.google.android.apps.messaging", "com.android.messaging", "org.fossify.messages", "chat.simplex.app",
+        )
 
         /** The Android page each quick switch opens, for the ones vivac cannot switch itself. */
         private val PAGE_OF = mapOf(
