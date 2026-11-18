@@ -261,4 +261,14 @@ class WidgetBoardTest {
         val b = WidgetBoard(listOf(Shelved("a", 1), Placed(1, page = 1)))
         assertEquals(listOf(Placed(1, page = 1)), b.vacate("a").onPage(1))
     }
+
+    @Test
+    fun `a widget let go in the middle of a row takes the whole row, never splitting the apps in it`() {
+        val apps = listOf("a", "b", "c", "d", "e", "f").map { Shelved(it, 1) }
+        val b = WidgetBoard(apps + Placed(1, page = 1))
+        // Over "b" (second cell of the first row): the widget goes above that row.
+        assertEquals(listOf(Placed(1, page = 1)) + apps, b.insertWidget(1, page = 1, index = 1).onPage(1))
+        // Over "f" (second cell of the second row): above the second row, the first row untouched.
+        assertEquals(apps.take(4) + Placed(1, page = 1) + apps.drop(4), b.insertWidget(1, page = 1, index = 5).onPage(1))
+    }
 }

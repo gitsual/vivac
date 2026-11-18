@@ -98,6 +98,15 @@ class DragBoard {
     }
     fun forget(spot: Spot) { spots.remove(spot) }
 
+    /** Where each widget sits on screen: a vertical drag that starts on one is the widget's own (its list scrolls). */
+    private val widgets = mutableMapOf<Int, Rect>()
+
+    fun placeWidget(id: Int, bounds: Rect) { widgets[id] = bounds }
+    fun forgetWidget(id: Int) { widgets.remove(id) }
+
+    /** Whether [at] (in root coordinates) is over a widget on screen. */
+    fun overWidget(at: Offset): Boolean = widgets.values.any { it.contains(at) && (screen == Rect.Zero || it.overlaps(screen)) }
+
     fun pick(held: Cargo, at: Offset) {
         if (locked) return
         this.held = held; finger = at

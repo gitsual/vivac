@@ -40,6 +40,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.animateDecay
+import kotlinx.coroutines.launch
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.verticalDrag
+import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -168,16 +175,14 @@ fun CampamentoScreen(
             Swipe.NONE -> Unit
         }
     }
-    val density = LocalDensity.current.density
-    // Drags the middle area could not scroll (already at its top or bottom) still count as swipes.
-    val leftovers = remember { SwipeLeftovers(density, onSwipe) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     Box(
         Modifier
             .fillMaxSize()
             // Over the phone's wallpaper, a night veil keeps the camp readable.
             .background(if (wallpaper) Ink.deep.copy(alpha = 0.62f) else Ink.deep)
             .onGloballyPositioned { drag.screen = it.boundsInRoot(); rootOrigin = it.positionInRoot() }
-            .swipes(onSwipe)
+            .swipes({ at -> drag.overWidget(at + rootOrigin) }, onSwipe)
             .pointerInput(Unit) { detectTapGestures(onTap = { onStopEditing() }, onDoubleTap = { onDoubleTap() }, onLongPress = { onCampMenu() }) },
     ) {
         Contours(Modifier.fillMaxSize(), color = Ink.surface)
@@ -214,13 +219,17 @@ fun CampamentoScreen(
                     else BoxWithConstraints(Modifier.weight(1f)) {
                     // How tall the page is: a ladera's grid of empty cells reaches down to its bottom.
                     val viewport = maxHeight
+                    val scroll = rememberScrollState()
+                    var columnOrigin by remember { mutableStateOf(Offset.Zero) }
                     Column(
                         Modifier
                             .fillMaxSize()
                             // The camp takes a carried widget anywhere over it, after its other widgets.
                             .then(if (p == 0) Modifier.spot(drag, Spot(Zone.Ladera(0), Spot.END)) else Modifier)
-                            .nestedScroll(leftovers)
-                            .verticalScroll(rememberScrollState()),
+                            .onGloballyPositioned { columnOrigin = it.positionInRoot() }
+                            // Scrolled by vivac's own drag, which leaves a drag that starts on a widget to the widget.
+                            .pageDrags(scroll, scope, { at -> drag.overWidget(at + columnOrigin) }, onSwipe)
+                            .verticalScroll(scroll, enabled = false),
                         verticalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
                         if (p == 0) {
@@ -614,6 +623,7 @@ private fun WidgetCard(
     tint: Boolean,
     onResize: (Int) -> Unit,
 ) {
+    androidx.compose.runtime.DisposableEffect(drag, id) { onDispose { drag.forgetWidget(id) } }
     val lifted = (drag.held as? HeldWidget)?.id == id
     // The widget is drawn as it is, with vivac's corners and no frame of its own; coral marks it only while it is
     // being resized, or as the place something carried would land.
@@ -623,7 +633,8 @@ private fun WidgetCard(
             .fillMaxWidth()
             .height(heightDp.dp)
             .spot(drag, spot)
-            .onGloballyPositioned { grip.origin = it.positionInRoot(); grip.size = it.size }
+            .onGloballyPositioned { grip.origin = it.positionInRoot(); grip.size = it.size; drag.placeWidget(id, it.boundsInRoot()) }
+            .testTag("widget:$id")
             .graphicsLayer { alpha = if (lifted) 0.3f else 1f }
             .clip(RoundedCornerShape(24.dp))
             .then(if (marked) Modifier.border(2.dp, Ink.primary, RoundedCornerShape(24.dp)) else Modifier),
@@ -677,40 +688,63 @@ private fun ResizeBar(rows: Int, onResize: (Int) -> Unit, modifier: Modifier) {
     }
 }
 
-/** Feeds the scroll area's unconsumed drag into the same swipe rules as the rest of the screen. */
-private class SwipeLeftovers(private val density: Float, private val onSwipe: (Swipe) -> Unit) : NestedScrollConnection {
-    private var pull = 0f
-
-    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-        if (source == NestedScrollSource.UserInput) pull += available.y
-        return Offset.Zero
-    }
-
-    override suspend fun onPreFling(available: Velocity): Velocity {
-        val swipe = Swipe.classify(dyDp = pull / density, velocityDp = available.y / density)
-        pull = 0f
-        onSwipe(swipe)
-        return Velocity.Zero
+/**
+ * A page's vertical drags: they scroll it, and what it cannot scroll (already at its top or bottom) counts as a
+ * swipe, as anywhere else on the camp. A drag that starts on a widget ([onWidget]) is left alone, so the widget's
+ * own list scrolls.
+ */
+private fun Modifier.pageDrags(
+    scroll: androidx.compose.foundation.ScrollState,
+    scope: kotlinx.coroutines.CoroutineScope,
+    onWidget: (Offset) -> Boolean,
+    onSwipe: (Swipe) -> Unit,
+): Modifier = pointerInput(scroll) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (onWidget(down.position)) return@awaitEachGesture
+        val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, down.position) }
+        var leftover = 0f
+        val move = { dy: Float -> leftover += dy + scroll.dispatchRawDelta(-dy) }
+        val start = awaitVerticalTouchSlopOrCancellation(down.id) { change, over -> change.consume(); move(over) } ?: return@awaitEachGesture
+        tracker.addPosition(start.uptimeMillis, start.position)
+        verticalDrag(start.id) { change ->
+            move(change.positionChange().y)
+            tracker.addPosition(change.uptimeMillis, change.position)
+            change.consume()
+        }
+        val velocity = tracker.calculateVelocity().y
+        onSwipe(Swipe.classify(dyDp = leftover / density, velocityDp = velocity / density))
+        // The page goes on scrolling for a moment, slowing down, as a flung list does.
+        scope.launch {
+            var last = 0f
+            androidx.compose.animation.core.AnimationState(0f, -velocity).animateDecay(androidx.compose.animation.core.exponentialDecay<Float>()) {
+                val step = value - last
+                last = value
+                if (kotlin.math.abs(scroll.dispatchRawDelta(step) - step) > 0.5f) cancelAnimation()
+            }
+        }
     }
 }
 
-/** Vertical swipes anywhere on the Campamento; taps on cards and tiles still go through. */
-private fun Modifier.swipes(onSwipe: (Swipe) -> Unit): Modifier = pointerInput(Unit) {
-    val tracker = VelocityTracker()
-    var dy = 0f
-    detectVerticalDragGestures(
-        onDragStart = {
-            dy = 0f
-            tracker.resetTracking()
-        },
-        onVerticalDrag = { change, amount ->
-            dy += amount
+/**
+ * Vertical swipes anywhere on the Campamento; taps on cards and tiles still go through, and a drag that starts on
+ * a widget ([onWidget]) is the widget's.
+ */
+private fun Modifier.swipes(onWidget: (Offset) -> Boolean, onSwipe: (Swipe) -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        if (onWidget(down.position)) return@awaitEachGesture
+        val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, down.position) }
+        var dy = 0f
+        val start = awaitVerticalTouchSlopOrCancellation(down.id) { change, over -> change.consume(); dy += over } ?: return@awaitEachGesture
+        tracker.addPosition(start.uptimeMillis, start.position)
+        verticalDrag(start.id) { change ->
+            dy += change.positionChange().y
             tracker.addPosition(change.uptimeMillis, change.position)
-        },
-        onDragEnd = {
-            onSwipe(Swipe.classify(dyDp = dy / density, velocityDp = tracker.calculateVelocity().y / density))
-        },
-    )
+            change.consume()
+        }
+        onSwipe(Swipe.classify(dyDp = dy / density, velocityDp = tracker.calculateVelocity().y / density))
+    }
 }
 
 /** Motif 2, la frontal: the headlamp's beam falling across the camp from the settings corner, swaying gently. */

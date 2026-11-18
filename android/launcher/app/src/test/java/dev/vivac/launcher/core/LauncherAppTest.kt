@@ -1002,4 +1002,30 @@ class LauncherAppTest {
         compose.waitForIdle()
         assertEquals(Screen.AVISOS, launcher.screen)
     }
+
+    @Test
+    fun `scrolling inside a widget on the camp scrolls the widget, it does not open the petate`() {
+        widgets.placed[1] = "chat"
+        store.values["widgets"] = "1"
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets).also { it.refresh() }
+        val real = object : WidgetViews {
+            override fun heightDp(id: Int, rows: Int) = 300
+            override fun view(context: Context, id: Int, widthDp: Float, rows: Int, grip: Grip): View =
+                dev.vivac.launcher.widgets.WidgetFrame(context).apply {
+                    // A list inside the widget that takes the finger, as a chat widget's does.
+                    addView(android.widget.ScrollView(context).apply {
+                        addView(android.widget.LinearLayout(context).apply {
+                            orientation = android.widget.LinearLayout.VERTICAL
+                            repeat(40) { n -> addView(TextView(context).apply { text = "chat $n"; minHeight = 120 }) }
+                        })
+                    })
+                    contentDescription = "widget-chat"
+                }
+        }
+        compose.setContent { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, real) }
+        compose.waitForIdle()
+        compose.onNodeWithTag("widget:1").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        assertEquals(Screen.CAMPAMENTO, launcher.screen)
+    }
 }

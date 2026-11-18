@@ -101,7 +101,23 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
     /** Puts a widget at [index] among the things on [page], the camp included, keeping its rows. */
     fun insertWidget(id: Int, page: Int, index: Int): WidgetBoard {
         val widget = placed(id) ?: return this
-        return insert(widget.copy(page = page.coerceIn(0, pages)), index) { it == widget }
+        val target = page.coerceIn(0, pages)
+        // The cells as they are on screen, so [index] means the same cell once the widget has left its place.
+        val cells = onPage(target)
+        val from = cells.indexOf(widget)
+        val rest = cells - widget
+        val at = if (from in 0 until index) index - 1 else index
+        return insert(widget.copy(page = target), rowStart(rest, at)) { it == widget }
+    }
+
+    /**
+     * Where a widget let go over cell [index] goes: the start of that cell's row, since a widget is a whole row of
+     * four cells and never splits the apps sharing a row. Past the end, or over another widget, it stays as given.
+     */
+    private fun rowStart(cells: List<Item>, index: Int): Int {
+        if (index !in cells.indices || cells[index] is Placed) return index
+        val blockStart = (index downTo 0).firstOrNull { cells[it] is Placed }?.plus(1) ?: 0
+        return blockStart + (index - blockStart) / 4 * 4
     }
 
     private fun insert(item: Item, index: Int, same: (Item) -> Boolean): WidgetBoard {
