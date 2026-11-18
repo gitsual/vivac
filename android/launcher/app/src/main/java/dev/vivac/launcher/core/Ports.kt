@@ -46,6 +46,8 @@ interface Actions {
     fun askToBeHome()
     /** Android's "save as" screen for a copy of the camp; the activity writes it when you choose the place. */
     fun backUp()
+    /** Android's wallpaper picker. */
+    fun pickWallpaper()
     /** Android's file picker for a copy to restore. */
     fun pickBackup()
     /** The web search app you use (or the browser), for [query]. */

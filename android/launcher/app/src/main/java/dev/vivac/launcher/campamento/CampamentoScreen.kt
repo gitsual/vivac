@@ -124,6 +124,7 @@ fun CampamentoScreen(
     onShortcutMenu: (Pinned) -> Unit = {},
     locked: Boolean = false,
     onDoubleTap: () -> Unit = {},
+    wallpaper: Boolean = false,
 ) {
     drag.locked = locked
     val dp = LocalDensity.current.density
@@ -158,7 +159,8 @@ fun CampamentoScreen(
     Box(
         Modifier
             .fillMaxSize()
-            .background(Ink.deep)
+            // Over the phone's wallpaper, a night veil keeps the camp readable.
+            .background(if (wallpaper) Ink.deep.copy(alpha = 0.62f) else Ink.deep)
             .onGloballyPositioned { drag.screen = it.boundsInRoot(); rootOrigin = it.positionInRoot() }
             .swipes(onSwipe)
             .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onDoubleTap() }, onLongPress = { onCampMenu() }) },

@@ -175,6 +175,8 @@ class AdaptersTest {
         val search = nextIntent()
         assertEquals(Intent.ACTION_WEB_SEARCH, search?.action)
         assertEquals("mapas", search?.getStringExtra(android.app.SearchManager.QUERY))
+        actions.pickWallpaper()
+        assertEquals(Intent.ACTION_CHOOSER, nextIntent()?.action)
         actions.storeSearch("mapas")
         assertEquals("market://search?q=mapas", nextIntent()?.data.toString())
     }

@@ -569,6 +569,21 @@ class LauncherTest {
     }
 
     @Test
+    fun `the phone's wallpaper can show behind the camp, and be changed from its menu`() {
+        val l = many()
+        assertFalse(l.showWallpaper)
+        l.openCampMenu()
+        l.toggleWallpaper()
+        assertTrue(l.showWallpaper)
+        assertFalse(l.campMenu)
+        assertTrue(many().showWallpaper)
+        l.openCampMenu()
+        l.changeWallpaper()
+        assertEquals("wallpaper", actions.calls.last())
+        assertFalse(l.campMenu)
+    }
+
+    @Test
     fun `dropping where it already is changes nothing`() {
         store.values["pinned"] = "com.termux"
         val l = many()

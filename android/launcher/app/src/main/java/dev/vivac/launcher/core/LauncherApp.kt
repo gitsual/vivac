@@ -37,6 +37,17 @@ interface WidgetViews {
 fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: Actions, widgetViews: WidgetViews) {
     BackHandler(enabled = launcher.screen == Screen.PETATE) { launcher.back() }
     val drag = remember { DragBoard() }
+    // Android draws the wallpaper behind a window that asks for it; vivac's camp then lets it show through.
+    val window = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.window
+    androidx.compose.runtime.LaunchedEffect(launcher.showWallpaper) {
+        if (launcher.showWallpaper) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        } else {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+            window?.setBackgroundDrawableResource(dev.vivac.launcher.R.color.noche_900)
+        }
+    }
     val camp: @Composable () -> Unit = {
         CampamentoScreen(
             stamp = stamp,
@@ -64,6 +75,7 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onShortcutMenu = { launcher.openShortcutMenu(it.packageName, it.id, it.label) },
             locked = launcher.locked,
             onDoubleTap = launcher::onDoubleTap,
+            wallpaper = launcher.showWallpaper,
         )
     }
     AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
@@ -112,6 +124,9 @@ fun LauncherApp(launcher: Launcher, stamp: String, facts: PhoneFacts, actions: A
             onBecomeHome = launcher::becomeHome,
             onBackUp = launcher::backUp,
             onRestore = launcher::askRestore,
+            showWallpaper = launcher.showWallpaper,
+            onToggleWallpaper = launcher::toggleWallpaper,
+            onChangeWallpaper = launcher::changeWallpaper,
             onDismiss = launcher::dismissCampMenu,
         )
     }

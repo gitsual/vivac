@@ -481,6 +481,23 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `the camp menu shows the phone's wallpaper, which the window then draws`() {
+        show()
+        compose.runOnUiThread { launcher.openCampMenu() }
+        compose.onNodeWithText("Fondo: el del teléfono").tap()
+        compose.waitForIdle()
+        assertTrue(launcher.showWallpaper)
+        compose.runOnUiThread { launcher.openCampMenu() }
+        compose.onNodeWithText("Cambiar el fondo de pantalla").tap()
+        compose.waitForIdle()
+        assertEquals("wallpaper", actions.calls.last())
+        compose.runOnUiThread { launcher.openCampMenu() }
+        compose.onNodeWithText("Fondo: noche de vivac").tap()
+        compose.waitForIdle()
+        assertEquals(false, launcher.showWallpaper)
+    }
+
+    @Test
     fun `the camp menu locks and unlocks the layout`() {
         show()
         compose.runOnUiThread { launcher.openCampMenu() }

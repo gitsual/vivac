@@ -13,10 +13,10 @@ object Backup {
     private const val HEADER = "vivac-campamento 1"
     private val KEYS = listOf(
         Launcher.KEY_DOCK, Launcher.KEY_PINNED, Launcher.KEY_HIDDEN, Launcher.KEY_WIDGETS, Launcher.KEY_RECENT,
-        Launcher.KEY_NAMES, Launcher.KEY_LOCKED, Launcher.KEY_DOUBLE_TAP,
+        Launcher.KEY_NAMES, Launcher.KEY_LOCKED, Launcher.KEY_DOUBLE_TAP, Launcher.KEY_WALLPAPER,
     )
 
-    private val DEFAULTS = mapOf(Launcher.KEY_NAMES to "", Launcher.KEY_LOCKED to "0", Launcher.KEY_DOUBLE_TAP to "0")
+    private val DEFAULTS = mapOf(Launcher.KEY_NAMES to "", Launcher.KEY_LOCKED to "0", Launcher.KEY_DOUBLE_TAP to "0", Launcher.KEY_WALLPAPER to "0")
 
     fun export(store: Store): String = buildString {
         append(HEADER).append('\n')

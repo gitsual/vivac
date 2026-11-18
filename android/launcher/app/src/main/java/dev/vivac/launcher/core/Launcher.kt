@@ -92,6 +92,20 @@ class Launcher(
         actions.accessibilitySettings()
     }
 
+    /** The phone's wallpaper behind the camp (under vivac's night veil), or the plain night ground. */
+    var showWallpaper by mutableStateOf(store.get(KEY_WALLPAPER) == "1"); private set
+
+    fun toggleWallpaper() {
+        campMenu = false
+        showWallpaper = !showWallpaper
+        store.put(mapOf(KEY_WALLPAPER to if (showWallpaper) "1" else "0"))
+    }
+
+    fun changeWallpaper() {
+        campMenu = false
+        actions.pickWallpaper()
+    }
+
     fun toggleLock() {
         campMenu = false
         locked = !locked
@@ -251,6 +265,7 @@ class Launcher(
         names = decodeNames(store.get(KEY_NAMES))
         locked = store.get(KEY_LOCKED) == "1"
         doubleTapLock = store.get(KEY_DOUBLE_TAP) == "1"
+        showWallpaper = store.get(KEY_WALLPAPER) == "1"
         refresh()
         actions.say("Campamento restaurado.")
     }
@@ -430,6 +445,7 @@ class Launcher(
         const val KEY_NAMES = "names"
         const val KEY_LOCKED = "locked"
         const val KEY_DOUBLE_TAP = "doubleTapLock"
+        const val KEY_WALLPAPER = "wallpaper"
 
         private fun encodeNames(names: Map<String, String>) =
             names.entries.joinToString(",") { (pkg, name) -> pkg + "=" + java.net.URLEncoder.encode(name, "UTF-8") }

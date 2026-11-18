@@ -85,6 +85,9 @@ fun CampMenuSheet(
     onBecomeHome: () -> Unit = {},
     onBackUp: () -> Unit = {},
     onRestore: () -> Unit = {},
+    showWallpaper: Boolean = false,
+    onToggleWallpaper: () -> Unit = {},
+    onChangeWallpaper: () -> Unit = {},
 ) {
     VivacSheet(onDismiss) {
         Text("Campamento", style = Type.section, modifier = Modifier.padding(bottom = 8.dp).semantics { heading() })
@@ -92,6 +95,8 @@ fun CampMenuSheet(
         Row52("Añadir widget", Glyph.PLUS, Ink.accentText, onAdd)
         Row52(if (locked) "Desbloquear el campamento" else "Bloquear el campamento", Glyph.LOCK, Ink.text, onToggleLock)
         Row52(if (doubleTapLock) "Doble toque: no apagar la pantalla" else "Doble toque: apagar la pantalla", Glyph.DOT, Ink.text, onToggleDoubleTap)
+        Row52(if (showWallpaper) "Fondo: noche de vivac" else "Fondo: el del teléfono", Glyph.SQUARE, Ink.text, onToggleWallpaper)
+        if (showWallpaper) Row52("Cambiar el fondo de pantalla", Glyph.SQUARE, Ink.text, onChangeWallpaper)
         Row52("Guardar una copia del campamento", Glyph.ARROW, Ink.text, onBackUp)
         Row52("Restaurar una copia", Glyph.PETATE, Ink.text, onRestore)
         placed.forEach { w -> Row52("Quitar «${w.label}»", Glyph.SQUARE, Color(0xFFBD6161)) { onRemove(w.id) } }

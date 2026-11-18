@@ -190,6 +190,10 @@ class AppActions(private val context: Context) : Actions {
         forResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain").putExtra(Intent.EXTRA_TITLE, name), REQ_BACKUP)
     }
 
+    override fun pickWallpaper() {
+        start(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Fondo de pantalla").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     override fun pickBackup() {
         forResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain"), REQ_RESTORE)
     }
