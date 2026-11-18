@@ -247,7 +247,6 @@ fun CampamentoScreen(
                 }
             }
             PageDots(shownPages, page)
-            SearchPill { onOpenPetate(true) }
             DockCard(apps, home, onOpenApp, onAppMenu, drag, drop)
         }
         // A carried widget follows the finger as a picture of itself, just where the finger took it.
@@ -1028,26 +1027,6 @@ private fun Via(
     }
 }
 
-@Composable
-private fun SearchPill(onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(Ink.surface)
-            .border(1.dp, Ink.borderControl, RoundedCornerShape(999.dp))
-            .clickable(role = Role.Button, onClickLabel = "Buscar en el petate", onClick = onClick)
-            .padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        LineIcon(Glyph.SEARCH, Ink.text, 18.dp)
-        Text("buscar en el petate…", style = Type.body.copy(fontSize = 15.sp, color = Ink.textMuted), modifier = Modifier.weight(1f))
-        Text("DESLIZA ↑", style = Type.cota.copy(fontSize = 10.sp))
-    }
-}
-
 /** Motif 4, la cordada: the apps you always carry, five abreast. */
 @Composable
 private fun DockCard(
@@ -1063,12 +1042,13 @@ private fun DockCard(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(bottom = 12.dp)
+            // Room around the home apps, now that the camp has no search bar above them.
+            .padding(top = 6.dp, bottom = 16.dp)
             .clip(RoundedCornerShape(28.dp))
             .background(Ink.surface)
             .border(1.dp, Ink.field, RoundedCornerShape(28.dp))
-            .padding(start = 8.dp, end = 8.dp, top = 10.dp, bottom = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(start = 8.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("LA CORDADA", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.padding(start = 10.dp))
         // Five equal columns: on a 412dp Pixel five fixed tiles do not fit and labels got clipped.

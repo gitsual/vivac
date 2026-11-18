@@ -123,7 +123,9 @@ class LauncherAppTest {
         compose.onNodeWithContentDescription("Buscar en el petate").assertExists()
         assertEquals(false, launcher.focusSearch)
         compose.runOnUiThread { launcher.back() }
-        compose.onNodeWithText("buscar en el petate…").performClick()
+        // No search bar on the camp: the petate opens with a swipe up, its search inside.
+        compose.onNodeWithText("buscar en el petate…").assertDoesNotExist()
+        compose.runOnUiThread { launcher.openPetate(true) }
         assertEquals(true, launcher.focusSearch)
         compose.onNodeWithText("Organic Maps").performClick()
         assertEquals(Screen.CAMPAMENTO, launcher.screen)
