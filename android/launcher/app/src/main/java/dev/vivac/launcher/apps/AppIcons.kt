@@ -36,6 +36,8 @@ class AppIcons(
     /** A pack's appfilter, and one of its drawables by name. */
     private val filterOf: (String) -> Map<String, String>,
     private val packDrawable: (pack: String, name: String) -> Drawable?,
+    /** Where icons are decoded: off the main thread. */
+    private val io: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
 ) {
     constructor(context: Context) : this(
         context,
@@ -53,7 +55,7 @@ class AppIcons(
         if (choice.style == IconStyle.GLYPHS) return null
         val key = "${choice.style}|${choice.pack}|$packageName"
         cache.get(key)?.let { return it }
-        return withContext(Dispatchers.IO) { render(packageName, choice) }?.also { cache.put(key, it) }
+        return withContext(io) { render(packageName, choice) }?.also { cache.put(key, it) }
     }
 
     private fun render(packageName: String, choice: IconChoice): ImageBitmap? = when (choice.style) {

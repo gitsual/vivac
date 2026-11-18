@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import dev.vivac.launcher.core.IconStyle
 import dev.vivac.launcher.petate.Pack
@@ -30,8 +31,8 @@ fun AppFace(app: InstalledApp, tone: Color) {
     val icon = image
     when {
         icon == null -> Glyph(app, tone)
-        choice.style == IconStyle.THEMED -> Image(icon, null, Modifier.size(40.dp), colorFilter = ColorFilter.tint(tone))
-        else -> Image(icon, null, Modifier.size(44.dp))
+        choice.style == IconStyle.THEMED -> Image(icon, null, Modifier.size(40.dp).testTag("icon:themed"), colorFilter = ColorFilter.tint(tone))
+        else -> Image(icon, null, Modifier.size(44.dp).testTag("icon:image"))
     }
 }
 

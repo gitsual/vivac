@@ -17,11 +17,39 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Test
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onNodeWithTag
 import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 
 @RunWith(AndroidJUnit4::class)
 class AppIconsTest {
+    @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createComposeRule()
+
+    private fun show(style: IconStyle, appIcon: android.graphics.drawable.Drawable) {
+        val i = icons(appIcon = appIcon)
+        compose.setContent {
+            androidx.compose.runtime.CompositionLocalProvider(LocalAppIcons provides i, LocalIconChoice provides IconChoice(style)) {
+                AppFace(InstalledApp("Signal", "org.signal", false), androidx.compose.ui.graphics.Color.Green)
+            }
+        }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `a tile draws the app's own icon, and a themed one tinted, instead of the glyph`() {
+        show(IconStyle.ORIGINAL, ColorDrawable(Color.RED))
+        compose.onNodeWithTag("icon:image", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun `a themed icon is drawn as a tinted mask`() {
+        show(IconStyle.THEMED, AdaptiveIconDrawable(ColorDrawable(Color.WHITE), ColorDrawable(Color.BLACK), ColorDrawable(Color.BLACK)))
+        compose.onNodeWithTag("icon:themed", useUnmergedTree = true).assertExists()
+    }
+
     private val app = ApplicationProvider.getApplicationContext<android.app.Application>()
     private val asked = mutableListOf<String>()
 
@@ -34,6 +62,7 @@ class AppIconsTest {
         component = { pkg -> if (pkg == "org.signal") "org.signal/org.signal.Main" else null },
         filterOf = { pack -> asked += "filter:$pack"; filter },
         packDrawable = { pack, name -> asked += "draw:$pack/$name"; ColorDrawable(Color.BLUE) },
+        io = kotlinx.coroutines.Dispatchers.Unconfined,
     )
 
     @Test
