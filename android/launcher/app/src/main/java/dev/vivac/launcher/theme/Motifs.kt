@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.unit.dp
 
 /** Motif 1, curvas de nivel: the contour rings drawn behind the Campamento, from the design's SVG. */
 private val contourPaths = listOf(
@@ -67,7 +68,32 @@ object Motion {
 }
 
 /** The summit the rings circle, in the paths' own units. */
-private val SUMMIT = Offset(262f, 130f)
+private val SUMMIT = Rings.SUMMIT
+
+/** Where the contour rings are centred and how big the smallest is, in the design's units. */
+object Rings {
+    val SUMMIT = Offset(262f, 130f)
+    /** The smallest ring's radius around the summit. */
+    const val INNER_RADIUS = 35f
+}
+
+/**
+ * The rings' scale and offset so the summit falls on [centre] and the smallest ring has [innerRadius] (both in
+ * pixels): around the camp's settings button.
+ */
+fun ringsAround(centre: Offset, innerRadius: Float): Triple<Float, Float, Float> {
+    val s = innerRadius / Rings.INNER_RADIUS
+    return Triple(s, centre.x - Rings.SUMMIT.x * s, centre.y - Rings.SUMMIT.y * s)
+}
+
+/** The headlamp's beam: its two edges, as a narrow cone from [origin] down and to the left across the screen. */
+fun beamEdges(origin: Offset, width: Float, height: Float): Pair<Offset, Offset> {
+    val reach = kotlin.math.hypot(width, height) * 1.2f
+    val centre = Math.toRadians(122.0)
+    val half = Math.toRadians(11.0)
+    fun edge(a: Double) = Offset(origin.x + reach * kotlin.math.cos(a).toFloat(), origin.y + reach * kotlin.math.sin(a).toFloat())
+    return edge(centre - half) to edge(centre + half)
+}
 
 /**
  * Where the 390-wide board's rings land on a canvas [width] px wide: a 560x520 box at right -230, top -120,
@@ -87,7 +113,13 @@ private fun placement(width: Float): Triple<Float, Float, Float> {
  * applied by the render thread, so the rings breathe without redrawing anything or touching the UI thread.
  */
 @Composable
-fun Contours(modifier: Modifier = Modifier, color: Color = Ink.contour) {
+fun Contours(
+    modifier: Modifier = Modifier,
+    color: Color = Ink.contour,
+    /** Where to centre the rings, in this box's pixels, with the smallest one [innerRadius] around it; else the design's place. */
+    centre: Offset? = null,
+    innerRadius: androidx.compose.ui.unit.Dp = 30.dp,
+) {
     val paths = remember { contourPaths.map { PathParser().parsePathString(it).toPath() } }
     val moving = Motion.allowed(LocalContext.current)
     val phase = if (moving) {
@@ -105,7 +137,7 @@ fun Contours(modifier: Modifier = Modifier, color: Color = Ink.contour) {
                     .matchParentSize()
                     .graphicsLayer {
                         if (phase != null) {
-                            val (s, x, y) = placement(size.width)
+                            val (s, x, y) = centre?.let { ringsAround(it, innerRadius.toPx()) } ?: placement(size.width)
                             val g = Motion.swell(phase.value, i, paths.size)
                             scaleX = g
                             scaleY = g
@@ -113,7 +145,7 @@ fun Contours(modifier: Modifier = Modifier, color: Color = Ink.contour) {
                         }
                     },
             ) {
-                val (s, x, y) = placement(size.width)
+                val (s, x, y) = centre?.let { ringsAround(it, innerRadius.toPx()) } ?: placement(size.width)
                 withTransform({
                     translate(left = x, top = y)
                     scale(s, s, pivot = Offset.Zero)

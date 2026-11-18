@@ -156,6 +156,8 @@ fun CampamentoScreen(
     val dp = LocalDensity.current.density
     val drop: (Held, Spot) -> Unit = { h, spot -> onDrop(h.app.packageName, h.from, spot.zone, spot.index) }
     var rootOrigin by remember { mutableStateOf(Offset.Zero) }
+    // The settings button's centre on screen: the summit of the rings and the source of the beam.
+    var lamp by remember { mutableStateOf<Offset?>(null) }
     val currentPage by rememberUpdatedState(page)
     // Every ladera in use, and one more past the last, empty, to start a new one.
     val shownPages = board.pages + 1
@@ -187,8 +189,10 @@ fun CampamentoScreen(
             .swipes({ at -> drag.overWidget(at + rootOrigin) }, onSwipe)
             .pointerInput(Unit) { detectTapGestures(onTap = { onStopEditing() }, onDoubleTap = { onDoubleTap() }, onLongPress = { onCampMenu() }) },
     ) {
-        Contours(Modifier.fillMaxSize(), color = Ink.surface)
-        Beam(Modifier.fillMaxSize())
+        // The rings and the headlamp's beam are centred on the settings button, wherever it is laid out.
+        val lampHere = lamp?.minus(rootOrigin)
+        Contours(Modifier.fillMaxSize(), color = Ink.surface, centre = lampHere)
+        Beam(Modifier.fillMaxSize(), lampHere)
         Column(
             Modifier
                 .fillMaxSize()
@@ -196,7 +200,7 @@ fun CampamentoScreen(
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Header(onOpenSettings)
+            Header(onOpenSettings) { lamp = it }
             val pager = rememberPagerState(initialPage = page) { shownPages }
             // The launcher decides the page (home, a widget sent elsewhere); a swipe tells it where you went.
             LaunchedEffect(page) { if (pager.currentPage != page) pager.animateScrollToPage(page) }
@@ -773,7 +777,8 @@ private fun Modifier.swipes(onWidget: (Offset) -> Boolean, onSwipe: (Swipe) -> U
 
 /** Motif 2, la frontal: the headlamp's beam falling across the camp from the settings corner, swaying gently. */
 @Composable
-private fun Beam(modifier: Modifier) {
+private fun Beam(modifier: Modifier, origin: Offset?) {
+    if (origin == null) return
     val moving = Motion.allowed(LocalContext.current)
     // The beam is drawn once; the sway and the glow are its layer's rotation and alpha, applied by the render thread.
     val phase = if (moving) {
@@ -789,33 +794,35 @@ private fun Beam(modifier: Modifier) {
             val t = phase?.value ?: 0f
             rotationZ = Motion.sway(t)
             alpha = Motion.glow(t) / Motion.GLOW_MAX
-            transformOrigin = androidx.compose.ui.graphics.TransformOrigin((size.width - 46.dp.toPx()) / size.width, 66.dp.toPx() / size.height)
+            // It sways about the lamp itself, the centre of the smallest ring.
+            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(origin.x / size.width, origin.y / size.height)
             // One path: no offscreen buffer needed to fade it.
             compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
         },
     ) {
-        val origin = Offset(size.width - 46.dp.toPx(), 66.dp.toPx())
+        val (a, b) = dev.vivac.launcher.theme.beamEdges(origin, size.width, size.height)
         val beam = Path().apply {
             moveTo(origin.x, origin.y)
-            lineTo(-60.dp.toPx(), size.height * 0.5f)
-            lineTo(70.dp.toPx(), size.height * 0.66f)
+            lineTo(a.x, a.y)
+            lineTo(b.x, b.y)
             close()
         }
+        val far = Offset((a.x + b.x) / 2, (a.y + b.y) / 2)
         drawPath(
             beam,
             Brush.linearGradient(
                 0f to Ink.primary.copy(alpha = Motion.GLOW_MAX),
-                0.55f to Ink.primary.copy(alpha = 0.06f),
-                1f to Color.Transparent,
+                0.35f to Ink.primary.copy(alpha = 0.06f),
+                0.6f to Color.Transparent,
                 start = origin,
-                end = Offset(0f, size.height * 0.62f),
+                end = far,
             ),
         )
     }
 }
 
 @Composable
-private fun Header(onOpenSettings: () -> Unit) {
+private fun Header(onOpenSettings: () -> Unit, onPlaced: (Offset) -> Unit = {}) {
     // No page name: the dots below say where you are, and TalkBack reads them.
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.weight(1f))
@@ -823,6 +830,7 @@ private fun Header(onOpenSettings: () -> Unit) {
         Box(
             Modifier
                 .size(44.dp)
+                .onGloballyPositioned { onPlaced(it.boundsInRoot().center) }
                 .clip(CircleShape)
                 .background(Ink.surface)
                 .border(1.5.dp, Ink.accentText, CircleShape)
