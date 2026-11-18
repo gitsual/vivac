@@ -1158,4 +1158,21 @@ class LauncherAppTest {
         // Drawn for real: the bars, the arcs, Tailscale's dots, the rings and the beam.
         drawWindow()
     }
+
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "w411dp-h914dp-420dpi")
+    fun `a ladera's things sit in the middle of the page, as much room above as below`() {
+        store.values["widgets"] = "@com.termux:1,@app.organicmaps:1,@com.android.settings:1"
+        show()
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        val gear = compose.onNodeWithContentDescription("Ajustes del sistema").fetchSemanticsNode().boundsInRoot
+        val dots = compose.onNode(androidx.compose.ui.test.hasContentDescription("Ladera 1, página 2", substring = true)).fetchSemanticsNode().boundsInRoot
+        val tile = compose.onAllNodesWithText("Organic Maps").fetchSemanticsNodes().map { it.boundsInRoot }.first { it.left > 0 && it.top > gear.bottom }
+        val above = tile.top - gear.bottom
+        val below = dots.top - tile.bottom
+        val dp = compose.activity.resources.displayMetrics.density
+        assertTrue("above ${above / dp}dp below ${below / dp}dp", kotlin.math.abs(above - below) < 64 * dp)
+    }
 }
