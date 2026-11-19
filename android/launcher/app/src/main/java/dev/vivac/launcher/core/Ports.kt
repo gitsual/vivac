@@ -54,6 +54,8 @@ interface Actions {
     /** Android's accessibility page, where vivac's lock service is switched on. */
     fun accessibilitySettings()
     fun lockScreenReady(): Boolean
+    /** One of Android's global actions through the same accessibility service; false while it is off. */
+    fun global(action: GlobalAction): Boolean
     /** Whether vivac is the phone's home app (Android's home role). */
     fun isHome(): Boolean
     /** Android's own dialog to make vivac the home app. */
@@ -90,6 +92,9 @@ interface Notices {
     /** Turns Do Not Disturb on (priority only) or off; false without notification access. */
     fun setQuiet(on: Boolean): Boolean
 }
+
+/** What the accessibility service can do for a gesture, besides turning the screen off. */
+enum class GlobalAction { RECENTS, QUICK_SETTINGS, POWER, SCREENSHOT }
 
 /** Android's settings pages vivac's settings hub opens, with how the hub names them. */
 enum class SystemPage(val title: String, val detail: String) {

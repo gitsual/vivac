@@ -197,6 +197,11 @@ class AdaptersTest {
         val actions = AppActions(app)
         assertFalse(actions.lockScreenReady())
         assertFalse(actions.lockScreen())
+        dev.vivac.launcher.core.GlobalAction.entries.forEach { assertFalse(actions.global(it)) }
+        assertEquals(
+            listOf(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_POWER_DIALOG, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT),
+            dev.vivac.launcher.core.GlobalAction.entries.map(LockService::code),
+        )
         actions.accessibilitySettings()
         assertEquals(Settings.ACTION_ACCESSIBILITY_SETTINGS, nextIntent()?.action)
         val service = org.robolectric.Robolectric.setupService(LockService::class.java)

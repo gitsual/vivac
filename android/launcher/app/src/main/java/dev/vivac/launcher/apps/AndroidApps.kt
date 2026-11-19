@@ -310,6 +310,8 @@ class AppActions(private val context: Context) : Actions {
 
     override fun lockScreenReady(): Boolean = LockService.running
 
+    override fun global(action: dev.vivac.launcher.core.GlobalAction): Boolean = LockService.perform(action)
+
     override fun accessibilitySettings() {
         start(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

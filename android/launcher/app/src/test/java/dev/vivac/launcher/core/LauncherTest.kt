@@ -643,6 +643,26 @@ class LauncherTest {
     }
 
     @Test
+    fun `a swipe can open recent apps, quick settings, the power menu or take a screenshot, once accessibility allows it`() {
+        val l = many()
+        val wanted = mapOf(
+            Gesture.RECENTS to GlobalAction.RECENTS, Gesture.QUICK_SETTINGS to GlobalAction.QUICK_SETTINGS,
+            Gesture.POWER to GlobalAction.POWER, Gesture.SCREENSHOT to GlobalAction.SCREENSHOT,
+        )
+        wanted.forEach { (gesture, action) ->
+            l.chooseSwipeUp(gesture)
+            actions.lockService = false
+            l.onSwipeUp()
+            assertEquals("accessibility", actions.calls.last())
+            assertTrue(actions.calls.dropLast(1).last().startsWith("say:Para eso, activa"))
+            actions.lockService = true
+            l.onSwipeUp()
+            assertEquals("global:$action", actions.calls.last())
+        }
+        assertEquals(Gesture.SCREENSHOT, many().swipeUp)
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

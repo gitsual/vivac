@@ -59,6 +59,10 @@ enum class Gesture(val title: String) {
     SEARCH("Buscar"),
     NOTIFICATIONS("Ver los avisos"),
     LOCK("Apagar la pantalla"),
+    RECENTS("Ver las apps abiertas"),
+    QUICK_SETTINGS("Ajustes rápidos"),
+    POWER("Menú de apagado"),
+    SCREENSHOT("Hacer una captura"),
     APP("Abrir una app"),
     NOTHING("Nada"),
 }
@@ -139,6 +143,12 @@ class Launcher(
 
     fun onDoubleTap() {
         if (doubleTapLock && !actions.lockScreen()) askForLockService()
+    }
+
+    private fun global(action: GlobalAction) {
+        if (actions.global(action)) return
+        actions.say("Para eso, activa «vivac» en Accesibilidad. Solo hace lo que le pides con un gesto; no lee nada.")
+        actions.accessibilitySettings()
     }
 
     private fun askForLockService() {
@@ -420,6 +430,10 @@ class Launcher(
             // vivac's own shade needs notification access; without it, Android's.
             Gesture.NOTIFICATIONS -> openAvisos()
             Gesture.LOCK -> if (!actions.lockScreen()) askForLockService()
+            Gesture.RECENTS -> global(GlobalAction.RECENTS)
+            Gesture.QUICK_SETTINGS -> global(GlobalAction.QUICK_SETTINGS)
+            Gesture.POWER -> global(GlobalAction.POWER)
+            Gesture.SCREENSHOT -> global(GlobalAction.SCREENSHOT)
             Gesture.APP -> app?.takeIf { pkg -> apps.any { it.packageName == pkg } }?.let(::openApp)
             Gesture.NOTHING -> Unit
         }
