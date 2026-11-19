@@ -67,6 +67,7 @@ data class SettingsState(
     val swipeDownApp: String? = null,
     val calendar: Boolean = false,
     val protectHidden: Boolean = false,
+    val veil: dev.vivac.launcher.core.Veil = dev.vivac.launcher.core.Veil.MEDIO,
 )
 
 /** What each choice on the settings screen does. */
@@ -76,6 +77,7 @@ class SettingsActions(
     val changeWallpaper: () -> Unit = {},
     val paintLock: () -> Unit = {},
     val toggleProtectHidden: () -> Unit = {},
+    val chooseVeil: (dev.vivac.launcher.core.Veil) -> Unit = {},
     val restoreLock: () -> Unit = {},
     val toggleLabels: () -> Unit = {},
     val toggleTintWidgets: () -> Unit = {},
@@ -118,7 +120,13 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             if (!state.isHome) Toggle("vivac como app de inicio", "Ahora usas otra; los atajos y «Añadir a inicio» solo llegan a la app de inicio.", false, act.becomeHome)
             Toggle("Bloquear el campamento", "Nada se arrastra mientras esté bloqueado.", state.locked, act.toggleLock)
             Toggle("Fondo del teléfono", "Tu fondo de pantalla detrás, con el velo de la noche encima.", state.wallpaper, act.toggleWallpaper)
-            if (state.wallpaper) Action("Cambiar el fondo de pantalla", act.changeWallpaper)
+            if (state.wallpaper) {
+                Action("Cambiar el fondo de pantalla", act.changeWallpaper)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Velo de la noche", style = Type.body, modifier = Modifier.weight(1f))
+                    dev.vivac.launcher.core.Veil.entries.forEach { v -> Choice(v.title, state.veil == v) { act.chooseVeil(v) } }
+                }
+            }
             Toggle("Nombres bajo las apps", "Sin nombres, TalkBack los sigue leyendo.", state.labels, act.toggleLabels)
             Toggle("Widgets con los colores de vivac", "Tiñe cada widget: su negro pasa a ser el de las tarjetas y su blanco, el papel.", state.tintWidgets, act.toggleTintWidgets)
 

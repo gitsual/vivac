@@ -54,6 +54,13 @@ sealed interface IconOverride {
 data class IconPackInfo(val packageName: String, val label: String)
 
 /** What a swipe on the camp does, as you choose it in vivac's settings. */
+/** How dark the night lies over your wallpaper: light shows more of it, dark keeps the camp quieter. */
+enum class Veil(val title: String, val alpha: Float) {
+    CLARO("Claro", 0.38f),
+    MEDIO("Medio", 0.62f),
+    OSCURO("Oscuro", 0.82f),
+}
+
 enum class Gesture(val title: String) {
     PETATE("Abrir el petate"),
     SEARCH("Buscar"),
@@ -164,6 +171,15 @@ class Launcher(
         showWallpaper = !showWallpaper
         store.put(mapOf(KEY_WALLPAPER to if (showWallpaper) "1" else "0"))
     }
+
+    var veil by mutableStateOf(readVeil()); private set
+
+    fun chooseVeil(v: Veil) {
+        veil = v
+        store.put(mapOf(KEY_VEIL to v.name))
+    }
+
+    private fun readVeil() = Veil.entries.firstOrNull { it.name == store.get(KEY_VEIL) } ?: Veil.MEDIO
 
     fun changeWallpaper() {
         campMenu = false
@@ -676,6 +692,7 @@ class Launcher(
         locked = store.get(KEY_LOCKED) == "1"
         doubleTapLock = store.get(KEY_DOUBLE_TAP) == "1"
         showWallpaper = store.get(KEY_WALLPAPER) == "1"
+        veil = readVeil()
         columns = store.get(KEY_COLUMNS)?.toIntOrNull()?.coerceIn(4, 5) ?: 4
         labels = store.get(KEY_LABELS) != "0"
         showCounts = store.get(KEY_COUNTS) == "1"
@@ -936,6 +953,7 @@ class Launcher(
         const val KEY_LOCKED = "locked"
         const val KEY_DOUBLE_TAP = "doubleTapLock"
         const val KEY_WALLPAPER = "wallpaper"
+        const val KEY_VEIL = "veil"
         private const val LOCK_REFUSED = "Android no dejó cambiar la pantalla de bloqueo."
         const val KEY_COLUMNS = "columns"
         const val KEY_LABELS = "labels"

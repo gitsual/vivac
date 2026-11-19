@@ -141,6 +141,8 @@ fun CampamentoScreen(
     locked: Boolean = false,
     onDoubleTap: () -> Unit = {},
     wallpaper: Boolean = false,
+    /** The night veil over the wallpaper, 0..1. */
+    veil: Float = 0.62f,
     onOpenFolder: (String) -> Unit = {},
     onSwipeUp: () -> Unit = { onOpenPetate(false) },
     onSwipeDown: () -> Unit = onShowNotifications,
@@ -191,7 +193,7 @@ fun CampamentoScreen(
         Modifier
             .fillMaxSize()
             // Over the phone's wallpaper, a night veil keeps the camp readable.
-            .background(if (wallpaper) Ink.deep.copy(alpha = 0.62f) else Ink.deep)
+            .background(if (wallpaper) Ink.deep.copy(alpha = veil) else Ink.deep)
             .onGloballyPositioned { drag.screen = it.boundsInRoot(); rootOrigin = it.positionInRoot() }
             .swipes({ at -> drag.overWidget(at + rootOrigin) }, onSwipe)
             .pointerInput(Unit) { detectTapGestures(onTap = { onStopEditing() }, onDoubleTap = { onDoubleTap() }, onLongPress = { onCampMenu() }) },

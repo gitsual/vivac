@@ -694,6 +694,19 @@ class LauncherTest {
     }
 
     @Test
+    fun `the night veil over your wallpaper can be lighter or darker, kept and carried in a copy`() {
+        val l = many()
+        assertEquals(Veil.MEDIO, l.veil)
+        l.chooseVeil(Veil.OSCURO)
+        assertEquals(Veil.OSCURO, many().veil)
+        val copy = Backup.export(store)
+        l.chooseVeil(Veil.CLARO)
+        l.restoreLayout(copy)
+        assertEquals(Veil.OSCURO, l.veil)
+        assertTrue(Veil.CLARO.alpha < Veil.MEDIO.alpha && Veil.MEDIO.alpha < Veil.OSCURO.alpha)
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()
