@@ -823,6 +823,7 @@ class Launcher(
 
     fun showPicker() {
         campMenu = false
+        stackingOn = null
         picker = vivacOptions() + widgets.options()
     }
 
@@ -851,7 +852,7 @@ class Launcher(
     private fun addVivacWidget(w: dev.vivac.launcher.campamento.VivacWidget) {
         val id = (vivacWidgets.keys.minOrNull() ?: 0) - 1
         saveVivacWidgets(vivacWidgets + (id to w))
-        saveBoard(board.add(id))
+        land(id)
     }
 
     private fun saveVivacWidgets(next: Map<Int, dev.vivac.launcher.campamento.VivacWidget>) {
@@ -862,7 +863,39 @@ class Launcher(
     /** The shortcuts a vivac shortcuts widget shows. */
     fun shortcutsOf(packageName: String): List<dev.vivac.launcher.petate.AppShortcut> = actions.shortcuts(packageName)
 
-    fun dismissPicker() { picker = null }
+    fun dismissPicker() { picker = null; stackingOn = null }
+
+    /** Widgets stacked under another, by the id of the one on top; the board holds only the top one. */
+    private var stacks by mutableStateOf(decodeStacks(store.get(KEY_STACKS)))
+    /** The stack the picker is adding to, if it was opened from a widget's "Apilar otro". */
+    private var stackingOn: Int? = null
+
+    fun stackOf(id: Int): List<Int> = listOf(id) + stacks[id].orEmpty().filter { if (it < 0) it in vivacWidgets else widgets.exists(it) }
+
+    fun stackOn(id: Int) {
+        editing = null
+        showPicker()
+        stackingOn = id
+    }
+
+    /** Takes [id] out of [top]'s stack onto the camp, as a widget of its own. */
+    fun unstack(top: Int, id: Int) {
+        editing = null
+        saveStacks(stacks + (top to stacks[top].orEmpty().minus(id)))
+        saveBoard(board.add(id))
+    }
+
+    private fun saveStacks(next: Map<Int, List<Int>>) {
+        stacks = next.filterValues { it.isNotEmpty() }
+        store.put(mapOf(KEY_STACKS to stacks.entries.joinToString(",") { (top, under) -> "$top=" + under.joinToString("|") }))
+    }
+
+    /** A new widget lands in the stack it was asked for, else at the end of the camp. */
+    private fun land(id: Int) {
+        val top = stackingOn
+        stackingOn = null
+        if (top != null && board.placed(top) != null) saveStacks(stacks + (top to stacks[top].orEmpty() + id)) else saveBoard(board.add(id))
+    }
 
     fun backUp() {
         campMenu = false
@@ -1163,7 +1196,18 @@ class Launcher(
         editing = null
         campMenu = false
         if (id < 0) saveVivacWidgets(vivacWidgets - id) else widgets.delete(id)
-        saveBoard(board.remove(id))
+        val under = stacks[id].orEmpty()
+        when {
+            // The top of a stack goes: the next one takes its place, with the rest under it.
+            under.isNotEmpty() -> {
+                saveBoard(board.replace(id, under.first()))
+                saveStacks(stacks - id + (under.first() to under.drop(1)))
+            }
+            else -> {
+                stacks.entries.firstOrNull { id in it.value }?.let { (top, list) -> saveStacks(stacks + (top to list - id)) }
+                saveBoard(board.remove(id))
+            }
+        }
     }
 
     private fun afterBind(id: Int) {
@@ -1172,7 +1216,7 @@ class Launcher(
 
     private fun placeWidget(id: Int) {
         pendingWidget = -1
-        saveBoard(board.add(id))
+        land(id)
     }
 
     /** The saved board, without widgets Android no longer has, its laderas tidied (rows before a widget keep their free cells). */
@@ -1255,6 +1299,12 @@ class Launcher(
         const val KEY_CATEGORY_FOR = "categoryFor"
         const val KEY_PAUSE_FOR = "pauseFor"
         const val KEY_FLICK_FOR = "flickFor"
+        const val KEY_STACKS = "stacks"
+
+        private fun decodeStacks(raw: String?): Map<Int, List<Int>> = raw.orEmpty().split(",").mapNotNull { part ->
+            val top = part.substringBefore("=").toIntOrNull() ?: return@mapNotNull null
+            top to part.substringAfter("=", "").split("|").mapNotNull { it.toIntOrNull() }
+        }.toMap().filterValues { it.isNotEmpty() }
         const val KEY_PROFILE_NOW = "profileNow"
         const val KEY_CALENDAR = "searchCalendar"
         const val KEY_ICON_PACK = "iconPack"

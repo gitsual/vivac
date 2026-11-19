@@ -158,6 +158,10 @@ fun CampamentoScreen(
     tintWidgets: Boolean = true,
     /** vivac's own widgets (negative ids), drawn by vivac at the rows given. */
     vivacWidget: @Composable (id: Int, rows: Int) -> Unit = { _, _ -> },
+    /** A widget and the ones stacked under it, top first. */
+    stackOf: (Int) -> List<Int> = { listOf(it) },
+    onStack: (Int) -> Unit = {},
+    onUnstack: (top: Int, id: Int) -> Unit = { _, _ -> },
     /** Apps with notices, newest first: their glyphs sit top left. */
     noticeApps: List<InstalledApp> = emptyList(),
     /** vivac's shade (Android's when vivac may not read notifications). */
@@ -227,6 +231,10 @@ fun CampamentoScreen(
                 WidgetCard(
                     w.id, w.rows, widgetRows(w.id), height, widgetView, grip, drag, spot, w.id == editing, tintWidgets,
                     own = if (vivac) ({ vivacWidget(w.id, widgetRows(w.id)) }) else null,
+                    stack = stackOf(w.id),
+                    ownOf = { sid -> if (sid < 0) ({ vivacWidget(sid, widgetRows(w.id)) }) else null },
+                    onStack = { onStack(w.id) },
+                    onUnstack = { sid -> onUnstack(w.id, sid) },
                 ) { onResizeWidget(w.id, it) }
             }
             // While something is carried, every page stays composed: the page it came from holds the finger (a
@@ -673,6 +681,11 @@ private fun WidgetCard(
     tint: Boolean,
     /** A widget vivac draws itself: carried with a hold like a tile, and not a view holding the finger. */
     own: (@Composable () -> Unit)? = null,
+    /** This widget and the ones stacked under it; more than one makes a stack, swiped through. */
+    stack: List<Int> = listOf(id),
+    ownOf: (Int) -> (@Composable () -> Unit)? = { null },
+    onStack: () -> Unit = {},
+    onUnstack: (Int) -> Unit = {},
     onResize: (Int) -> Unit,
 ) {
     androidx.compose.runtime.DisposableEffect(drag, id) { onDispose { drag.forgetWidget(id) } }
@@ -697,11 +710,13 @@ private fun WidgetCard(
             .then(if (marked) Modifier.border(2.dp, Ink.primary, RoundedCornerShape(24.dp)) else Modifier),
     ) {
         val width = maxWidth.value
-        if (own != null) own()
-        // key(id, rows): a new widget, or a new size, gets a fresh host view laid out for it.
-        else key(id, rows) {
+        val body: @Composable (Int) -> Unit = { sid ->
+            val drawn = if (sid == id) own else ownOf(sid)
+            if (drawn != null) drawn()
+            // key(id, rows): a new widget, or a new size, gets a fresh host view laid out for it.
+            else key(sid, rows) {
             AndroidView(
-                factory = { ctx -> widgetView(ctx, id, width, rows, grip) ?: android.widget.Space(ctx) },
+                factory = { ctx -> widgetView(ctx, sid, width, rows, grip) ?: android.widget.Space(ctx) },
                 modifier = Modifier.fillMaxSize(),
                 // The tint is drawn on the widget's own layer, so it costs one pass, not one per frame.
                 update = { v ->
@@ -709,9 +724,41 @@ private fun WidgetCard(
                     else v.setLayerType(View.LAYER_TYPE_NONE, null)
                 },
             )
+            }
         }
-        if (editing && !lifted) ResizeBar(shownRows, onResize, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp))
+        var current by remember(stack) { mutableStateOf(id) }
+        if (stack.size > 1) {
+            val pages = androidx.compose.foundation.pager.rememberPagerState { stack.size }
+            LaunchedEffect(pages, stack) { snapshotFlow { pages.currentPage }.collect { current = stack[it.coerceIn(0, stack.lastIndex)] } }
+            HorizontalPager(pages, Modifier.fillMaxSize().testTag("stack:$id")) { p -> body(stack[p]) }
+            Row(Modifier.align(Alignment.TopCenter).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                stack.indices.forEach { i ->
+                    Box(Modifier.size(5.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (i == pages.currentPage) Ink.text else Ink.borderControl))
+                }
+            }
+        } else body(id)
+        if (editing && !lifted) {
+            Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (current != id) StackChip("Sacar de la pila") { onUnstack(current) }
+                StackChip("Apilar otro", onStack)
+            }
+            ResizeBar(shownRows, onResize, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp))
+        }
     }
+}
+
+@Composable
+private fun StackChip(text: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Ink.raised)
+            .border(1.dp, Ink.primary, RoundedCornerShape(16.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(text, style = Type.small.copy(color = Ink.text)) }
 }
 
 /**

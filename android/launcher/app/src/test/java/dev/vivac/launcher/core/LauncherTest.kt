@@ -927,6 +927,46 @@ class LauncherTest {
     }
 
     @Test
+    fun `widgets stack in one slot, come out of the stack, and the next one takes the slot when the top goes`() {
+        widgets.offered = listOf(clock)
+        val l = many()
+        l.showPicker(); l.addWidget(clock)
+        val top = l.board.ids.single()
+        assertEquals(listOf(top), l.stackOf(top))
+        l.editWidget(top)
+        l.stackOn(top)
+        assertEquals(null, l.editing)
+        assertTrue(l.picker != null)
+        l.addWidget(l.picker!!.first { it.label == "De un vistazo · vivac" })
+        val glance = l.stackOf(top).last()
+        assertEquals(listOf(top, glance), l.stackOf(top))
+        assertEquals(listOf(top), l.board.ids)
+        assertEquals(listOf(top, glance), many().stackOf(top))
+        l.stackOn(top)
+        l.addWidget(clock)
+        val second = l.stackOf(top).last()
+        assertEquals(3, l.stackOf(top).size)
+        // A picker closed without choosing leaves the stack as it was.
+        l.stackOn(top)
+        l.dismissPicker()
+        l.showPicker(); l.addWidget(clock)
+        assertEquals(3, l.stackOf(top).size)
+        assertEquals(2, l.board.ids.size)
+        l.unstack(top, second)
+        assertEquals(listOf(top, glance), l.stackOf(top))
+        assertTrue(second in l.board.ids)
+        // A stacked widget whose app is gone drops out of its stack.
+        l.stackOn(top); l.addWidget(clock)
+        val gone = l.stackOf(top).last()
+        widgets.placed.remove(gone)
+        assertEquals(listOf(top, glance), l.stackOf(top))
+        l.removeWidget(top)
+        assertTrue(glance in l.board.ids)
+        assertFalse(top in l.board.ids)
+        assertEquals(listOf(glance), l.stackOf(glance))
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

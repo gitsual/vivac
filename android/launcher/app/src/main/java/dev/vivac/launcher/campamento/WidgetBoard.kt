@@ -42,6 +42,9 @@ data class WidgetBoard(val items: List<Item> = emptyList()) {
 
     fun remove(id: Int) = WidgetBoard(items.filterNot { it is Placed && it.id == id }).compact()
 
+    /** Puts widget [with] in [id]'s place, page and height. */
+    fun replace(id: Int, with: Int) = WidgetBoard(items.map { if (it is Placed && it.id == id) it.copy(id = with) else it })
+
     /** Puts an app at the end of a ladera (never the Campamento), moving it there if it was on another. */
     fun addApp(packageName: String, page: Int): WidgetBoard =
         if (Shelved(packageName, page.coerceAtLeast(1)) in items) this else WidgetBoard(items.filterNot { it is Shelved && it.packageName == packageName } + Shelved(packageName, page.coerceAtLeast(1))).compact()

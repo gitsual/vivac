@@ -1309,6 +1309,29 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `a stack shows one widget at a time, swiped through, and its edit bar stacks or takes one out`() {
+        store.values["vivacWidgets"] = "-1=vivac:glance:dev.vivac.launcher,-2=vivac:chats:com.termux"
+        store.values["widgets"] = "-1"
+        store.values["stacks"] = "-1=-2"
+        show()
+        compose.onNodeWithText("DE UN VISTAZO").assertIsDisplayed()
+        compose.onNodeWithTag("stack:-1").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithText("TERMUX").assertIsDisplayed()
+        compose.runOnUiThread { launcher.editWidget(-1) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Sacar de la pila").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(-1), launcher.stackOf(-1))
+        assertTrue(-2 in launcher.board.ids)
+        compose.runOnUiThread { launcher.editWidget(-1) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Apilar otro").performClick()
+        compose.waitForIdle()
+        assertTrue(launcher.picker != null)
+    }
+
+    @Test
     fun `vivac's chats and shortcuts widgets show the app's chats and shortcuts in vivac's own look, and open them`() {
         actions.dotsOn = true
         actions.shortcuts = mapOf("com.termux" to listOf(AppShortcut("s", "Chat de voz")))
