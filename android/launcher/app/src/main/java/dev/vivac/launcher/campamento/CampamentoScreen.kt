@@ -144,6 +144,8 @@ fun CampamentoScreen(
     /** The night veil over the wallpaper, 0..1. */
     veil: Float = 0.62f,
     onTwoFinger: (dev.vivac.launcher.core.TwoFinger) -> Unit = {},
+    /** Shared with the tiles' flicks, so one gesture is never two. */
+    twoFingerState: TwoFingerState = remember { TwoFingerState() },
     onOpenFolder: (String) -> Unit = {},
     onSwipeUp: () -> Unit = { onOpenPetate(false) },
     onSwipeDown: () -> Unit = onShowNotifications,
@@ -182,7 +184,6 @@ fun CampamentoScreen(
             if (dir != 0) onPage((currentPage + dir).coerceIn(0, pageCount - 1))
         }
     }
-    val twoFingerState = remember { TwoFingerState() }
     val onSwipe: (Swipe) -> Unit = { s ->
         // A two-finger gesture is reported on its own; its fingers do not swipe as well.
         if (!twoFingerState.active) when (s) {

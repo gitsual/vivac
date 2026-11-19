@@ -31,6 +31,8 @@ sealed interface MenuEntry {
     data object ChangeIcon : MenuEntry
     /** "Cambiar la categoría": offered by the sheet, like [Rename]. */
     data object Category : MenuEntry
+    /** "Al deslizar sobre ella": offered by the sheet, like [Rename]. */
+    data object Flick : MenuEntry
     data object Info : MenuEntry
     data object Uninstall : MenuEntry
 }

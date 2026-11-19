@@ -158,7 +158,16 @@ fun Modifier.carriable(
     onMenu: () -> Unit,
     onDrop: (Held, Spot) -> Unit,
     onLand: () -> Unit = {},
-): Modifier = carrying(board, held, label, onOpen, onMenu, { c, s -> onDrop(c as Held, s) }, onLand)
+): Modifier {
+    // An app with a flick action of its own (set from its menu) takes the flick; the camp is told through the claim.
+    val flicks = LocalFlicks.current
+    val pkg = held.app.packageName
+    val onFlick = if (pkg in flicks.apps) ({ flicks.run(pkg) }) else null
+    return carrying(board, held, label, onOpen, onMenu, { c, s -> onDrop(c as Held, s) }, onLand, onFlick, flicks.claim)
+}
+
+/** How far a finger must travel on a tile, up or down, to flick it. */
+private const val FLICK_DP = 48f
 
 /** [carriable] for anything that can be carried: an app, a shortcut, a folder. */
 @Composable
@@ -170,6 +179,9 @@ fun Modifier.carrying(
     onMenu: () -> Unit,
     onDrop: (Cargo, Spot) -> Unit,
     onLand: () -> Unit = {},
+    /** A vertical flick on the tile, when it has its own action; else the camp swipes. */
+    onFlick: (() -> Unit)? = null,
+    claim: TwoFingerState? = null,
 ): Modifier {
     val haptics = LocalHapticFeedback.current
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -186,9 +198,27 @@ fun Modifier.carrying(
                 val down = awaitFirstDown().also { it.consume() }
                 val press = awaitLongPressOrCancellation(down.id)
                 if (press == null) {
-                    // Let go before the long-press time without moving away: a tap.
-                    val up = currentEvent.changes.firstOrNull { it.id == down.id }
-                    if (up != null && !up.pressed && !up.isConsumed) onOpen()
+                    // Let go before the long-press time: a tap if the finger stayed put. A drag elsewhere (the camp's
+                    // swipe) also ends the wait while the finger is still down; with a flick action, follow it to its lift.
+                    var last = currentEvent.changes.firstOrNull { it.id == down.id }
+                    if (last != null && last.pressed && onFlick != null) {
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                            last = change
+                            if (!change.pressed) break
+                        }
+                    }
+                    if (last != null && !last.pressed) {
+                        val d = last.position - down.position
+                        val vertical = kotlin.math.abs(d.y) > kotlin.math.abs(d.x)
+                        when {
+                            d.getDistance() < viewConfiguration.touchSlop -> if (!last.isConsumed) onOpen()
+                            onFlick != null && vertical && kotlin.math.abs(d.y) / density >= FLICK_DP -> {
+                                claim?.active = true
+                                onFlick()
+                            }
+                        }
+                    }
                     return@awaitEachGesture
                 }
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)

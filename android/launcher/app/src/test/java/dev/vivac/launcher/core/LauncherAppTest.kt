@@ -529,6 +529,47 @@ class LauncherAppTest {
         assertEquals("open:app.organicmaps", actions.calls.last())
     }
 
+    @Test
+    fun `a flick on a pinned app runs its own action, and the camp does not swipe as well`() {
+        store.values["pinned"] = "app.organicmaps"
+        store.values[Launcher.KEY_FLICK_FOR] = "app.organicmaps=" + java.net.URLEncoder.encode(Flick.App("com.termux").encode(), "UTF-8")
+        show()
+        compose.onNodeWithText("Organic Maps").performTouchInput { swipe(center, center - Offset(0f, 300f)) }
+        compose.waitForIdle()
+        assertEquals("open:com.termux", actions.calls.last())
+        assertEquals(Screen.CAMPAMENTO, launcher.screen)
+        // An app without one: the swipe is the camp's.
+        compose.onNodeWithText("Termux").performTouchInput { swipe(center, center - Offset(0f, 300f)) }
+        compose.waitForIdle()
+        assertEquals(Screen.PETATE, launcher.screen)
+        // And a swipe that starts on a tile never opens that app as well.
+        assertEquals(1, actions.calls.count { it == "open:com.termux" })
+    }
+
+    @Test
+    fun `the flick sheet offers the app's shortcuts, any other app, or nothing`() {
+        store.values["pinned"] = "app.organicmaps"
+        actions.shortcuts = mapOf("app.organicmaps" to listOf(AppShortcut("home", "Ir a casa")))
+        show()
+        val open = {
+            compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+            compose.onNodeWithText("Al deslizar sobre ella").tap()
+            compose.waitForIdle()
+        }
+        open()
+        compose.onNodeWithText("Ir a casa").tap()
+        compose.waitForIdle()
+        assertEquals(Flick.Shortcut("home", "Ir a casa"), launcher.flickOf("app.organicmaps"))
+        open()
+        compose.onAllNodesWithText("Termux").onLast().performScrollTo().performClick()
+        compose.waitForIdle()
+        assertEquals(Flick.App("com.termux"), launcher.flickOf("app.organicmaps"))
+        open()
+        compose.onNodeWithText("Nada").tap()
+        compose.waitForIdle()
+        assertEquals(null, launcher.flickOf("app.organicmaps"))
+    }
+
     private fun find(v: View, match: (View) -> Boolean): View? {
         if (match(v)) return v
         if (v is android.view.ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i), match)?.let { return it }

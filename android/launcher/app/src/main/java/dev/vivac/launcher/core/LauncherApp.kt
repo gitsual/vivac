@@ -92,7 +92,8 @@ fun LauncherApp(
             window?.setBackgroundDrawableResource(dev.vivac.launcher.R.color.noche_900)
         }
     }
-    val camp: @Composable () -> Unit = {
+    val claim = androidx.compose.runtime.remember { dev.vivac.launcher.campamento.TwoFingerState() }
+    val campScreen: @Composable (dev.vivac.launcher.campamento.TwoFingerState) -> Unit = { claimed ->
         CampamentoScreen(
             stamp = stamp,
             facts = facts,
@@ -126,6 +127,7 @@ fun LauncherApp(
             wallpaper = launcher.showWallpaper,
             veil = launcher.veil.alpha,
             onTwoFinger = launcher::onTwoFinger,
+            twoFingerState = claimed,
             onOpenFolder = launcher::openFolder,
             onSwipeUp = launcher::onSwipeUp,
             onSwipeDown = launcher::onSwipeDown,
@@ -160,6 +162,11 @@ fun LauncherApp(
                 }
             },
         )
+    }
+    val camp: @Composable () -> Unit = {
+        androidx.compose.runtime.CompositionLocalProvider(
+            dev.vivac.launcher.campamento.LocalFlicks provides dev.vivac.launcher.campamento.Flicks(launcher.flickApps, launcher::onFlick, claim),
+        ) { campScreen(claim) }
     }
     CompositionLocalProvider(
         LocalLabels provides launcher.labels,
@@ -325,6 +332,14 @@ fun LauncherApp(
             packs = actions.iconPacks(),
             onPick = { launcher.setIcon(app.packageName, it) },
             onDismiss = launcher::cancelIconPicker,
+        )
+    }
+    launcher.flicking?.let { ask ->
+        dev.vivac.launcher.petate.FlickSheet(
+            ask = ask,
+            apps = launcher.visibleApps().filter { it.packageName != ask.app.packageName },
+            onChoose = { launcher.chooseFlick(ask.app.packageName, it) },
+            onDismiss = launcher::cancelFlick,
         )
     }
     launcher.pausing?.let { ask ->

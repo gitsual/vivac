@@ -118,6 +118,7 @@ fun AppMenuSheet(
                 Entry("Cambiar el nombre", Glyph.PROMPT, Ink.text, Ink.text) { onPick(MenuEntry.Rename) }
                 Entry("Cambiar el icono", Glyph.SQUARE, Ink.text, Ink.text) { onPick(MenuEntry.ChangeIcon) }
                 Entry("Cambiar la categoría", Glyph.GRID, Ink.text, Ink.text) { onPick(MenuEntry.Category) }
+                Entry("Al deslizar sobre ella", Glyph.PROMPT, Ink.text, Ink.text) { onPick(MenuEntry.Flick) }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (MenuEntry.Info in entries) Pill("Información de la app", Ink.borderControl, Ink.text, Modifier.weight(1f)) { onPick(MenuEntry.Info) }

@@ -99,6 +99,31 @@ sealed interface Zone {
 /** The two answers Android sends back while placing a widget. */
 enum class WidgetStep { BIND, CONFIGURE }
 
+/** What a flick on an app does: one of its shortcuts, or another app. */
+sealed interface Flick {
+    data class App(val packageName: String) : Flick
+    data class Shortcut(val id: String, val label: String) : Flick
+
+    fun encode(): String = when (this) {
+        is App -> "app:$packageName"
+        is Shortcut -> "shortcut:" + java.net.URLEncoder.encode(id, "UTF-8") + ":" + java.net.URLEncoder.encode(label, "UTF-8")
+    }
+
+    companion object {
+        fun decode(raw: String): Flick? {
+            val parts = raw.split(":")
+            return when {
+                parts.size == 2 && parts[0] == "app" -> App(parts[1])
+                parts.size == 3 && parts[0] == "shortcut" -> Shortcut(java.net.URLDecoder.decode(parts[1], "UTF-8"), java.net.URLDecoder.decode(parts[2], "UTF-8"))
+                else -> null
+            }
+        }
+    }
+}
+
+/** The app whose flick you are choosing, with its shortcuts to offer. */
+data class FlickAsk(val app: InstalledApp, val shortcuts: List<AppShortcut>)
+
 /** An app asked to be opened with a pause first, and how long it was used today (null: unknown). */
 data class PauseAsk(val app: InstalledApp, val todayMs: Long?) {
     companion object {
@@ -224,7 +249,7 @@ class Launcher(
     /** Any menu or sheet is open over the screen. */
     val sheetOpen: Boolean
         get() = campMenu || menu != null || picker != null || renaming != null || iconPicker != null ||
-            pickingQuickApps || addingTo != null || folderPicker != null || openFolder != null || categorizing != null || pausing != null
+            pickingQuickApps || addingTo != null || folderPicker != null || openFolder != null || categorizing != null || pausing != null || flicking != null
 
     fun chooseVeil(v: Veil) {
         veil = v
@@ -613,6 +638,31 @@ class Launcher(
         screen = Screen.PETATE
     }
 
+    /** Flick actions you set, by package (encoded [Flick]s). */
+    private var flickFor by mutableStateOf(decodeNames(store.get(KEY_FLICK_FOR)))
+    /** Apps that have a flick action. */
+    val flickApps: Set<String> get() = flickFor.keys
+    var flicking by mutableStateOf<FlickAsk?>(null); private set
+
+    fun flickOf(packageName: String): Flick? = flickFor[packageName]?.let(Flick::decode)
+
+    /** Null takes the flick away: the swipe is the camp's again. */
+    fun chooseFlick(packageName: String, flick: Flick?) {
+        flicking = null
+        flickFor = if (flick == null) flickFor - packageName else flickFor + (packageName to flick.encode())
+        store.put(mapOf(KEY_FLICK_FOR to encodeNames(flickFor)))
+    }
+
+    fun cancelFlick() { flicking = null }
+
+    fun onFlick(packageName: String) {
+        when (val f = flickOf(packageName)) {
+            is Flick.App -> openApp(f.packageName)
+            is Flick.Shortcut -> actions.openShortcut(packageName, f.id)
+            null -> Unit
+        }
+    }
+
     /** Apps that open only after a pause, by package. */
     var pauseFor by mutableStateOf(store.get(KEY_PAUSE_FOR).orEmpty().split(",").filter { it.isNotBlank() }.toSet()); private set
     /** The pause on screen, before an app in [pauseFor] opens. */
@@ -724,6 +774,7 @@ class Launcher(
             MenuEntry.ToFolder -> folderPicker = app
             MenuEntry.ChangeIcon -> iconPicker = app
             MenuEntry.Category -> categorizing = app
+            MenuEntry.Flick -> flicking = FlickAsk(app, actions.shortcuts(pkg).filter { it.label.isNotBlank() })
             MenuEntry.Info -> actions.info(pkg)
             MenuEntry.Uninstall -> actions.uninstall(pkg)
         }
@@ -805,6 +856,7 @@ class Launcher(
         recent = store.get(KEY_RECENT).orEmpty().split(",").filter { it.isNotBlank() }
         names = decodeNames(store.get(KEY_NAMES))
         categoryFor = decodeNames(store.get(KEY_CATEGORY_FOR))
+        flickFor = decodeNames(store.get(KEY_FLICK_FOR))
         pauseFor = store.get(KEY_PAUSE_FOR).orEmpty().split(",").filter { it.isNotBlank() }.toSet()
         locked = store.get(KEY_LOCKED) == "1"
         doubleTapLock = store.get(KEY_DOUBLE_TAP) == "1"
@@ -1173,6 +1225,7 @@ class Launcher(
         const val KEY_PROFILES = "profiles"
         const val KEY_CATEGORY_FOR = "categoryFor"
         const val KEY_PAUSE_FOR = "pauseFor"
+        const val KEY_FLICK_FOR = "flickFor"
         const val KEY_PROFILE_NOW = "profileNow"
         const val KEY_CALENDAR = "searchCalendar"
         const val KEY_ICON_PACK = "iconPack"

@@ -855,6 +855,39 @@ class LauncherTest {
     }
 
     @Test
+    fun `a flick on an app can open one of its shortcuts or another app, set from its menu`() {
+        val l = many()
+        val pkg = "com.termux"
+        actions.shortcuts = mapOf(pkg to listOf(AppShortcut("s", "Sesión")))
+        l.openMenu(pkg)
+        l.pick(MenuEntry.Flick)
+        assertEquals(pkg, l.flicking?.app?.packageName)
+        assertEquals(listOf(AppShortcut("s", "Sesión")), l.flicking?.shortcuts)
+        assertTrue(l.sheetOpen)
+        l.chooseFlick(pkg, Flick.Shortcut("s", "Sesión"))
+        assertEquals(null, l.flicking)
+        assertEquals(setOf(pkg), many().flickApps)
+        l.onFlick(pkg)
+        assertEquals("shortcut:$pkg/s", actions.calls.last())
+        l.chooseFlick(pkg, Flick.App("app.organicmaps"))
+        l.onFlick(pkg)
+        assertEquals("open:app.organicmaps", actions.calls.last())
+        val copy = Backup.export(store)
+        l.chooseFlick(pkg, null)
+        assertEquals(emptySet<String>(), l.flickApps)
+        val size = actions.calls.size
+        l.onFlick(pkg)
+        assertEquals(size, actions.calls.size)
+        l.restoreLayout(copy)
+        assertEquals(Flick.App("app.organicmaps"), l.flickOf(pkg))
+        l.openMenu(pkg)
+        l.pick(MenuEntry.Flick)
+        l.cancelFlick()
+        assertEquals(null, l.flicking)
+        assertEquals(null, Flick.decode("rubbish"))
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

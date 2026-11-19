@@ -57,3 +57,10 @@ fun Modifier.twoFingers(state: TwoFingerState, onGesture: (TwoFinger) -> Unit): 
         if (state.active) TwoFingers.classify(startDistance, endDistance, (endY - startY) / density)?.let(onGesture)
     }
 }
+
+/** Apps on the camp with a flick action, what runs it, and the claim that keeps the camp from swiping as well. */
+class Flicks(val apps: Set<String>, val run: (String) -> Unit, val claim: TwoFingerState?) {
+    companion object { val NONE = Flicks(emptySet(), {}, null) }
+}
+
+val LocalFlicks = androidx.compose.runtime.staticCompositionLocalOf { Flicks.NONE }
