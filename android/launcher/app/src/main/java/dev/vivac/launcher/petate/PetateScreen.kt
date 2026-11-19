@@ -214,7 +214,7 @@ fun PetateScreen(
                         Chip("Buscar en la tienda", false) { storeSearch(query.trim()) }
                     }
                 }
-                if (shelves.isEmpty() && answer == null) {
+                if (shelves.isEmpty() && answer == null && pages.isEmpty() && foundShortcuts.isEmpty() && people.isEmpty() && agenda.isEmpty() && found.isEmpty()) {
                     Text("Nada en el petate con «$query».", style = Type.body.copy(color = Ink.textMuted))
                 }
             }

@@ -187,6 +187,8 @@ class PetateScreenTest {
         compose.onNodeWithText("AJUSTES DE ANDROID").assertDoesNotExist()
         compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("brillo")
         compose.onNodeWithText("AJUSTES DE ANDROID").assertExists()
+        // Something was found, just not an app: no "nothing here".
+        compose.onNodeWithText("Nada en el petate con «brillo».").assertDoesNotExist()
         compose.onNodeWithText("Pantalla").performClick()
         assertEquals(listOf(dev.vivac.launcher.core.SystemPage.PANTALLA), pages)
     }
