@@ -19,6 +19,8 @@ sealed interface MenuEntry {
     /** On a ladera (a home page right of the Campamento), or not yet. */
     data class Ladera(val onLadera: Boolean) : Place
     data class Hide(val hidden: Boolean) : Place
+    /** "Pausa antes de abrir" or "Quitar la pausa", depending on [paused]. */
+    data class Pause(val paused: Boolean) : Place
     /** On a shortcut's own menu: take it off its ladera. */
     data class UnpinShortcut(val shortcut: AppShortcut) : Place
     /** "Cambiar el nombre": offered by the sheet for any app, not built into the list. */
@@ -45,9 +47,10 @@ object AppMenu {
         pinned: Boolean? = null,
         hidden: Boolean? = null,
         onLadera: Boolean? = null,
+        paused: Boolean? = null,
     ): List<MenuEntry> =
         shortcuts.filter { it.label.isNotBlank() }.take(MAX_SHORTCUTS).map { MenuEntry.Shortcut(it) } +
-            listOfNotNull(inDock?.let { MenuEntry.Dock(it) }, pinned?.let { MenuEntry.Pin(it) }, onLadera?.let { MenuEntry.Ladera(it) }, hidden?.let { MenuEntry.Hide(it) }) +
+            listOfNotNull(inDock?.let { MenuEntry.Dock(it) }, pinned?.let { MenuEntry.Pin(it) }, onLadera?.let { MenuEntry.Ladera(it) }, hidden?.let { MenuEntry.Hide(it) }, paused?.let { MenuEntry.Pause(it) }) +
             MenuEntry.Info +
             (if (isSystem) emptyList() else listOf(MenuEntry.Uninstall))
 }

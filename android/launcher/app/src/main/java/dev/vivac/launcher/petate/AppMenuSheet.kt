@@ -106,6 +106,7 @@ fun AppMenuSheet(
                             is MenuEntry.Pin -> Entry(if (entry.pinned) "Quitar del campamento" else "Fijar en el campamento", Glyph.TENT, Ink.text, Ink.text) { onPick(entry) }
                             is MenuEntry.Ladera -> Entry(if (entry.onLadera) "Quitar de la ladera" else "Poner en una ladera", Glyph.LADERA, Ink.text, Ink.text) { onPick(entry) }
                             is MenuEntry.UnpinShortcut -> Entry("Quitar «${entry.shortcut.label}» de la ladera", Glyph.MINUS, Ink.text, Ink.text) { onPick(entry) }
+                            is MenuEntry.Pause -> Entry(if (entry.paused) "Quitar la pausa" else "Pausa antes de abrir", Glyph.MINUS, Ink.text, Ink.text) { onPick(entry) }
                             is MenuEntry.Hide -> Entry(if (entry.hidden) "Mostrar en el petate" else "Ocultar del petate", if (entry.hidden) Glyph.EYE else Glyph.EYE_OFF, Ink.text, Ink.text) { onPick(entry) }
                         }
                     }

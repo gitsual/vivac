@@ -263,6 +263,20 @@ class AppActions(private val context: Context) : Actions {
     /** The accessibility service first (the fingerprint keeps working); else the device admin, if you made vivac one. */
     override fun lockScreen(): Boolean = LockService.lock() || (adminActive() && runCatching { policies!!.lockNow(); true }.getOrDefault(false))
 
+    /** Foreground time since midnight, as Android's usage stats aggregate it; null until you allow usage access. */
+    override fun usageToday(packageName: String): Long? {
+        val ops = context.getSystemService(android.app.AppOpsManager::class.java) ?: return null
+        val mode = ops.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+        if (mode != android.app.AppOpsManager.MODE_ALLOWED) return null
+        val stats = context.getSystemService(android.app.usage.UsageStatsManager::class.java) ?: return null
+        val midnight = java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        return stats.queryAndAggregateUsageStats(midnight, System.currentTimeMillis())[packageName]?.totalTimeInForeground ?: 0L
+    }
+
+    override fun askUsageAccess() {
+        start(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
     override fun askLockAdmin() {
         start(
             Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)

@@ -67,7 +67,7 @@ class LauncherTest {
         val menu = l.menu!!
         assertEquals(termux, menu.app)
         assertEquals(
-            listOf(MenuEntry.Shortcut(AppShortcut("s", "Sesión")), MenuEntry.Dock(true), MenuEntry.Pin(false), MenuEntry.Ladera(false), MenuEntry.Hide(false), MenuEntry.Info, MenuEntry.Uninstall),
+            listOf(MenuEntry.Shortcut(AppShortcut("s", "Sesión")), MenuEntry.Dock(true), MenuEntry.Pin(false), MenuEntry.Ladera(false), MenuEntry.Hide(false), MenuEntry.Pause(false), MenuEntry.Info, MenuEntry.Uninstall),
             menu.entries,
         )
     }
@@ -797,6 +797,39 @@ class LauncherTest {
         l.pick(MenuEntry.Category)
         l.cancelCategory()
         assertEquals(null, l.categorizing)
+    }
+
+    @Test
+    fun `chosen apps open after a pause that shows today's use, and you can still say no`() {
+        val l = many()
+        val pkg = l.apps.first().packageName
+        l.openMenu(pkg)
+        assertTrue(MenuEntry.Pause(false) in l.menu!!.entries)
+        l.pick(MenuEntry.Pause(false))
+        assertTrue(pkg in many().pauseFor)
+        actions.usage[pkg] = 42 * 60_000L
+        l.openApp(pkg)
+        assertEquals(PauseAsk(l.apps.first(), 42 * 60_000L), l.pausing)
+        assertTrue(l.sheetOpen)
+        assertFalse("open:$pkg" in actions.calls)
+        l.cancelPause()
+        assertEquals(null, l.pausing)
+        assertFalse("open:$pkg" in actions.calls)
+        l.openApp(pkg)
+        l.confirmPause()
+        assertEquals("open:$pkg", actions.calls.last())
+        assertEquals(pkg, l.visibleRecent().first())
+        l.confirmPause()
+        l.askUsageAccess()
+        assertEquals("usageAccess", actions.calls.last())
+        val copy = Backup.export(store)
+        l.openMenu(pkg)
+        assertTrue(MenuEntry.Pause(true) in l.menu!!.entries)
+        l.pick(MenuEntry.Pause(true))
+        l.openApp(pkg)
+        assertEquals(null, l.pausing)
+        l.restoreLayout(copy)
+        assertTrue(pkg in l.pauseFor)
     }
 
     @Test

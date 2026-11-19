@@ -209,6 +209,19 @@ class AdaptersTest {
     }
 
     @Test
+    fun `today's use of an app is read only once usage access is given`() {
+        val actions = AppActions(app)
+        val ops = shadowOf(app.getSystemService(android.app.AppOpsManager::class.java))
+        ops.setMode(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), app.packageName, android.app.AppOpsManager.MODE_IGNORED)
+        assertEquals(null, actions.usageToday("com.termux"))
+        actions.askUsageAccess()
+        assertEquals(Settings.ACTION_USAGE_ACCESS_SETTINGS, nextIntent()?.action)
+        shadowOf(app.getSystemService(android.app.AppOpsManager::class.java))
+            .setMode(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), app.packageName, android.app.AppOpsManager.MODE_ALLOWED)
+        assertEquals(0L, actions.usageToday("com.termux"))
+    }
+
+    @Test
     fun `the lock service turns the screen off only while it is switched on`() {
         val actions = AppActions(app)
         assertFalse(actions.lockScreenReady())

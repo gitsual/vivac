@@ -326,6 +326,9 @@ fun LauncherApp(
             onDismiss = launcher::cancelIconPicker,
         )
     }
+    launcher.pausing?.let { ask ->
+        dev.vivac.launcher.campamento.PauseSheet(ask, onOpen = launcher::confirmPause, onAskUsage = launcher::askUsageAccess, onDismiss = launcher::cancelPause)
+    }
     launcher.categorizing?.let { app ->
         dev.vivac.launcher.petate.CategorySheet(
             app = app.label,

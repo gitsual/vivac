@@ -100,7 +100,7 @@ third-party app can do; the API is noted.
 | X8 | Petate auto-categories from `ApplicationInfo.category` (chips), plus your own tabs | Smart Launcher, Nova | done: a chip row with the categories present; «Cambiar la categoría» in the app menu (existing, new, or Android's again); kept in backups |
 | X9 | Search history and favourite results | Lawnchair, Kvaesitso | done: «BÚSQUEDAS», the last five that opened something, a tap searches again, «Borrar»; private (not in backups). Favourites are the dock, route and pins |
 | X10 | File search: recent photos, downloads and documents (`MediaStore`, opt-in permission) | Lawnchair, Kvaesitso | todo |
-| X11 | Mindful opening: a pause before chosen apps, and today's screen time (`UsageStatsManager`, opt-in) | Niagara, Olauncher | todo |
+| X11 | Mindful opening: a pause before chosen apps, and today's screen time (`UsageStatsManager`, opt-in) | Niagara, Olauncher | done: «Pausa antes de abrir» in the app menu; a 5 s countdown sheet with today's use once usage access is given; every way of opening goes through it |
 | X12 | Layout profiles: save and switch whole camps | Hyperion | done: settings «PERFILES»: save under a name, switch, delete; this phone's widgets stay |
 | X13 | Wallpaper veil strength (how dark the night over your wallpaper is) | Hyperion | done: «Velo de la noche» claro/medio/oscuro in settings, kept in backups |
 | X14 | Blur behind the Petate and sheets (`RenderEffect`, API 31+) | Hyperion, Smart Launcher | done: the camp blurs behind any open menu (on by default); «Desenfocar tu fondo» blurs the wallpaper (`setBackgroundBlurRadius`); check on device |

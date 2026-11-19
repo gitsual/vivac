@@ -88,6 +88,20 @@ sealed interface Zone {
 /** The two answers Android sends back while placing a widget. */
 enum class WidgetStep { BIND, CONFIGURE }
 
+/** An app asked to be opened with a pause first, and how long it was used today (null: unknown). */
+data class PauseAsk(val app: InstalledApp, val todayMs: Long?) {
+    companion object {
+        fun describe(ms: Long): String {
+            val minutes = ms / 60_000
+            return when {
+                minutes < 1 -> "menos de un minuto"
+                minutes < 60 -> "$minutes min"
+                else -> "${minutes / 60} h ${"%02d".format(minutes % 60)} min"
+            }
+        }
+    }
+}
+
 data class OpenMenu(
     val app: InstalledApp,
     val entries: List<MenuEntry>,
@@ -199,7 +213,7 @@ class Launcher(
     /** Any menu or sheet is open over the screen. */
     val sheetOpen: Boolean
         get() = campMenu || menu != null || picker != null || renaming != null || iconPicker != null ||
-            pickingQuickApps || addingTo != null || folderPicker != null || openFolder != null || categorizing != null
+            pickingQuickApps || addingTo != null || folderPicker != null || openFolder != null || categorizing != null || pausing != null
 
     fun chooseVeil(v: Veil) {
         veil = v
@@ -572,7 +586,36 @@ class Launcher(
         screen = Screen.PETATE
     }
 
+    /** Apps that open only after a pause, by package. */
+    var pauseFor by mutableStateOf(store.get(KEY_PAUSE_FOR).orEmpty().split(",").filter { it.isNotBlank() }.toSet()); private set
+    /** The pause on screen, before an app in [pauseFor] opens. */
+    var pausing by mutableStateOf<PauseAsk?>(null); private set
+
+    private fun savePauseFor(set: Set<String>) {
+        pauseFor = set
+        store.put(mapOf(KEY_PAUSE_FOR to set.joinToString(",")))
+    }
+
+    /** Opens it after all: the pause was taken. */
+    fun confirmPause() {
+        val ask = pausing ?: return
+        pausing = null
+        launch(ask.app.packageName)
+    }
+
+    fun cancelPause() { pausing = null }
+
+    fun askUsageAccess() = actions.askUsageAccess()
+
     fun openApp(packageName: String) {
+        if (packageName in pauseFor) {
+            val app = apps.find { it.packageName == packageName }
+            if (app != null) return run { pausing = PauseAsk(app, actions.usageToday(packageName)) }
+        }
+        launch(packageName)
+    }
+
+    private fun launch(packageName: String) {
         actions.open(packageName)
         saveRecent((listOf(packageName) + (recent - packageName)).take(RECENT_MAX))
     }
@@ -618,6 +661,7 @@ class Launcher(
             pinned = packageName in home.pinned,
             hidden = packageName in home.hidden,
             onLadera = packageName in board.apps,
+            paused = packageName in pauseFor,
         )
         menu = OpenMenu(app, entries, actions.canReadShortcuts(), widgets.options().filter { it.appPackage == packageName })
     }
@@ -648,6 +692,7 @@ class Launcher(
                 apply(HomeChange(home.toggleHidden(pkg)))
                 if (pkg in home.hidden) saveBoard(board.removeApp(pkg))
             }
+            is MenuEntry.Pause -> savePauseFor(if (entry.paused) pauseFor - pkg else pauseFor + pkg)
             MenuEntry.Rename -> renaming = app
             MenuEntry.ToFolder -> folderPicker = app
             MenuEntry.ChangeIcon -> iconPicker = app
@@ -733,6 +778,7 @@ class Launcher(
         recent = store.get(KEY_RECENT).orEmpty().split(",").filter { it.isNotBlank() }
         names = decodeNames(store.get(KEY_NAMES))
         categoryFor = decodeNames(store.get(KEY_CATEGORY_FOR))
+        pauseFor = store.get(KEY_PAUSE_FOR).orEmpty().split(",").filter { it.isNotBlank() }.toSet()
         locked = store.get(KEY_LOCKED) == "1"
         doubleTapLock = store.get(KEY_DOUBLE_TAP) == "1"
         showWallpaper = store.get(KEY_WALLPAPER) == "1"
@@ -1098,6 +1144,7 @@ class Launcher(
         const val KEY_SEARCHES = "searches"
         const val KEY_PROFILES = "profiles"
         const val KEY_CATEGORY_FOR = "categoryFor"
+        const val KEY_PAUSE_FOR = "pauseFor"
         const val KEY_PROFILE_NOW = "profileNow"
         const val KEY_CALENDAR = "searchCalendar"
         const val KEY_ICON_PACK = "iconPack"

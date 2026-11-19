@@ -58,6 +58,10 @@ interface Actions {
     fun global(action: GlobalAction): Boolean
     /** Android's dialog to make vivac a device admin that can only turn the screen off. */
     fun askLockAdmin()
+    /** Milliseconds [packageName] was on screen today; null without usage access. */
+    fun usageToday(packageName: String): Long?
+    /** Android's usage-access page, where you let vivac read how long apps were used. */
+    fun askUsageAccess()
     /** Android's fingerprint-or-PIN dialog; [onOk] runs only when you pass it. */
     fun authenticate(reason: String, onOk: () -> Unit)
     /** Whether vivac is the phone's home app (Android's home role). */

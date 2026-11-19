@@ -172,4 +172,11 @@ class PackTest {
         val apps = listOf(maps.copy(category = "Mapas"), termux, gmail.copy(category = "Productividad"), whatsapp.copy(category = "Social"), tailscale.copy(category = "mapas"))
         assertEquals(listOf("Mapas", "Productividad", "Social"), Pack.categories(apps))
     }
+
+    @Test
+    fun `today's use reads in minutes, or hours and minutes`() {
+        assertEquals("menos de un minuto", dev.vivac.launcher.core.PauseAsk.describe(30_000))
+        assertEquals("42 min", dev.vivac.launcher.core.PauseAsk.describe(42 * 60_000L))
+        assertEquals("1 h 05 min", dev.vivac.launcher.core.PauseAsk.describe(65 * 60_000L))
+    }
 }

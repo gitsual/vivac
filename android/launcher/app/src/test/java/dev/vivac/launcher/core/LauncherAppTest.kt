@@ -469,6 +469,36 @@ class LauncherAppTest {
         assertEquals(null, launcher.categorizing)
     }
 
+    @Test
+    fun `an app with a pause asks first, counts down, and opens only when you say so`() {
+        store.values["pinned"] = "app.organicmaps"
+        show()
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithText("Pausa antes de abrir").tap()
+        compose.waitForIdle()
+        // Without usage access: a breath, and a way to allow it.
+        compose.runOnUiThread { launcher.openApp("app.organicmaps") }
+        compose.waitForIdle()
+        compose.onNodeWithText("UN MOMENTO").assertExists()
+        compose.onNodeWithText("Ver cuánto la usas hoy").tap()
+        assertEquals("usageAccess", actions.calls.last())
+        compose.onNodeWithText("Ahora no").tap()
+        compose.waitForIdle()
+        assertEquals(null, launcher.pausing)
+        // With it: today's use, and the open button wakes after the countdown.
+        actions.usage["app.organicmaps"] = 42 * 60_000L
+        compose.runOnUiThread { launcher.openApp("app.organicmaps") }
+        compose.waitForIdle()
+        compose.onNodeWithText("Hoy: 42 min").assertExists()
+        compose.onNodeWithText("Abrir en 5").performClick()
+        assertFalse("open:app.organicmaps" in actions.calls)
+        compose.mainClock.advanceTimeBy(6_000)
+        compose.waitForIdle()
+        compose.onNodeWithText("Abrir").performClick()
+        compose.waitForIdle()
+        assertEquals("open:app.organicmaps", actions.calls.last())
+    }
+
     private fun find(v: View, match: (View) -> Boolean): View? {
         if (match(v)) return v
         if (v is android.view.ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i), match)?.let { return it }

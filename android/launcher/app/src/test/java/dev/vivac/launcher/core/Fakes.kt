@@ -65,6 +65,9 @@ class FakeActions : Actions {
     override fun accessibilitySettings() { calls += "accessibility" }
     override fun lockScreenReady() = lockService
     override fun askLockAdmin() { calls += "lockAdmin" }
+    val usage = mutableMapOf<String, Long>()
+    override fun usageToday(packageName: String): Long? = usage[packageName]
+    override fun askUsageAccess() { calls += "usageAccess" }
     var authOk = true
     override fun authenticate(reason: String, onOk: () -> Unit) { calls += "auth:$reason"; if (authOk) onOk() }
     override fun global(action: GlobalAction): Boolean { if (lockService) calls += "global:$action"; return lockService }
