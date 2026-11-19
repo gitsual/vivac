@@ -176,6 +176,11 @@ data class Contact(val id: Long, val name: String, val lookup: String)
 data class CalendarEvent(val id: Long, val title: String, val startMillis: Long)
 
 /** Port: your contacts and calendars, read only when you allowed it (Android's own permissions). */
+/** A photo, video or song on the phone, as MediaStore lists it. */
+data class FoundFile(val id: Long, val name: String, val kind: Kind) {
+    enum class Kind(val title: String) { FOTO("Foto"), VIDEO("Vídeo"), AUDIO("Música") }
+}
+
 interface Directory {
     fun canReadContacts(): Boolean
     fun canReadCalendar(): Boolean
@@ -187,5 +192,11 @@ interface Directory {
     /** Android's permission dialog, for contacts or for calendars. */
     fun askContacts()
     fun askCalendar()
+    /** Photos, videos and music: Android's media permissions (documents are out of an app's reach). */
+    fun canReadFiles(): Boolean
+    /** The newest first, by name. */
+    fun files(query: String): List<FoundFile>
+    fun openFile(file: FoundFile)
+    fun askFiles()
 }
 

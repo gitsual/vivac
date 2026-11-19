@@ -134,6 +134,12 @@ class FakeDirectory : Directory {
     override fun openContact(contact: Contact) { calls += "contact:${contact.id}" }
     override fun openEvent(event: CalendarEvent) { calls += "event:${event.id}" }
     override fun askContacts() { calls += "askContacts" }
+    var filesAllowed = false
+    var stored = listOf<FoundFile>()
+    override fun canReadFiles() = filesAllowed
+    override fun files(query: String) = stored.filter { it.name.contains(query, ignoreCase = true) }
+    override fun openFile(file: FoundFile) { calls += "file:${file.id}" }
+    override fun askFiles() { calls += "askFiles" }
     override fun askCalendar() { calls += "askCalendar" }
 }
 

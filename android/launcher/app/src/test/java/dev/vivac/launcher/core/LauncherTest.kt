@@ -906,6 +906,27 @@ class LauncherTest {
     }
 
     @Test
+    fun `photos, videos and music are searched once you switch it on and android allows it`() {
+        val dir = FakeDirectory().apply { stored = (1..6).map { FoundFile(it.toLong(), "playa $it.jpg", FoundFile.Kind.FOTO) } }
+        val l = Launcher(FakeSource(listOf(termux)), store, actions, widgets, directory = dir)
+        assertEquals(emptyList<FoundFile>(), l.findFiles("playa"))
+        l.toggleFiles()
+        assertEquals("askFiles", dir.calls.last())
+        assertEquals(emptyList<FoundFile>(), l.findFiles("playa"))
+        dir.filesAllowed = true
+        assertEquals(4, l.findFiles(" playa ").size)
+        assertEquals(emptyList<FoundFile>(), l.findFiles(" "))
+        assertTrue(Launcher(FakeSource(listOf(termux)), store, actions, widgets, directory = dir).searchFiles)
+        l.openPetate(search = true)
+        l.openFile(FoundFile(2, "playa 2.jpg", FoundFile.Kind.FOTO))
+        assertEquals("file:2", dir.calls.last())
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+        l.toggleFiles()
+        assertEquals(emptyList<FoundFile>(), l.findFiles("playa"))
+        assertEquals(emptyList<FoundFile>(), Launcher(FakeSource(listOf(termux)), store, actions, widgets).findFiles("playa"))
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

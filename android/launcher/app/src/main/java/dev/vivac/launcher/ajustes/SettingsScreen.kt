@@ -67,6 +67,7 @@ data class SettingsState(
     val swipeUpApp: String? = null,
     val swipeDownApp: String? = null,
     val calendar: Boolean = false,
+    val files: Boolean = false,
     val protectHidden: Boolean = false,
     val blurSheets: Boolean = true,
     val blurWallpaper: Boolean = false,
@@ -83,6 +84,7 @@ class SettingsActions(
     val changeWallpaper: () -> Unit = {},
     val paintLock: () -> Unit = {},
     val toggleProtectHidden: () -> Unit = {},
+    val toggleFiles: () -> Unit = {},
     val chooseVeil: (dev.vivac.launcher.core.Veil) -> Unit = {},
     val useLockAdmin: () -> Unit = {},
     val toggleBlurSheets: () -> Unit = {},
@@ -167,6 +169,7 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             Section("PETATE")
             Toggle("Buscar en contactos", "El buscador del petate también encuentra personas. Android te pedirá permiso.", state.contacts, act.toggleContacts)
             Toggle("Buscar en el calendario", "Y tus próximos eventos, hasta medio año.", state.calendar, act.toggleCalendar)
+            Toggle("Buscar en fotos, vídeos y música", "Por su nombre. Android te pedirá permiso; los documentos quedan fuera del alcance de una app.", state.files, act.toggleFiles)
             Toggle("Pedir huella para ver las ocultas", "El chip «Ocultas» pide tu huella o tu PIN. Quitarlo también.", state.protectHidden, act.toggleProtectHidden)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Columnas", style = Type.body, modifier = Modifier.weight(1f))

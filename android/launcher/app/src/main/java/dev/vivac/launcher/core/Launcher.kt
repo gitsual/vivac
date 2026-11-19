@@ -370,6 +370,22 @@ class Launcher(
         if (searchContacts && directory?.canReadContacts() == false) directory.askContacts()
     }
 
+    var searchFiles by mutableStateOf(store.get(KEY_FILES) == "1"); private set
+
+    fun toggleFiles() {
+        searchFiles = !searchFiles
+        store.put(mapOf(KEY_FILES to if (searchFiles) "1" else "0"))
+        if (searchFiles && directory?.canReadFiles() == false) directory.askFiles()
+    }
+
+    fun findFiles(query: String): List<FoundFile> {
+        val d = directory ?: return emptyList()
+        if (!searchFiles || query.isBlank() || !d.canReadFiles()) return emptyList()
+        return d.files(query.trim()).take(4)
+    }
+
+    fun openFile(file: FoundFile) { directory?.openFile(file); screen = Screen.CAMPAMENTO }
+
     fun toggleCalendar() {
         searchCalendar = !searchCalendar
         store.put(mapOf(KEY_CALENDAR to if (searchCalendar) "1" else "0"))
@@ -1232,6 +1248,7 @@ class Launcher(
         )
         const val KEY_ICONS = "icons"
         const val KEY_CONTACTS = "searchContacts"
+        const val KEY_FILES = "searchFiles"
         const val KEY_PROTECT_HIDDEN = "protectHidden"
         const val KEY_SEARCHES = "searches"
         const val KEY_PROFILES = "profiles"

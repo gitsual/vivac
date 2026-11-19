@@ -110,6 +110,8 @@ fun PetateScreen(
     findEvents: (String) -> List<CalendarEvent> = { emptyList() },
     onOpenContact: (Contact) -> Unit = {},
     onOpenEvent: (CalendarEvent) -> Unit = {},
+    findFiles: (String) -> List<dev.vivac.launcher.core.FoundFile> = { emptyList() },
+    onOpenFile: (dev.vivac.launcher.core.FoundFile) -> Unit = {},
     onOpenSettingsPage: (dev.vivac.launcher.core.SystemPage) -> Unit = {},
     /** Opening the hidden apps runs through this, which may first ask for your fingerprint or PIN. */
     askToSeeHidden: (() -> Unit) -> Unit = { it() },
@@ -127,6 +129,7 @@ fun PetateScreen(
     val openShortcut = searched(onOpenShortcut)
     val openContact = searched(onOpenContact)
     val openEvent = searched(onOpenEvent)
+    val openFile = searched(onOpenFile)
     val openPage = searched(onOpenSettingsPage)
     val webSearch = searched(onWebSearch)
     val storeSearch = searched(onStoreSearch)
@@ -198,6 +201,8 @@ fun PetateScreen(
                 val people by produceState(emptyList<Contact>(), query) { value = kotlinx.coroutines.withContext(io) { findContacts(query) } }
                 val agenda by produceState(emptyList<CalendarEvent>(), query) { value = kotlinx.coroutines.withContext(io) { findEvents(query) } }
                 if (people.isNotEmpty()) Results("CONTACTOS", people.map { it.name to null }) { openContact(people[it]) }
+                val found by produceState(emptyList<dev.vivac.launcher.core.FoundFile>(), query) { value = kotlinx.coroutines.withContext(io) { findFiles(query) } }
+                if (found.isNotEmpty()) Results("ARCHIVOS", found.map { it.name to it.kind.title }) { openFile(found[it]) }
                 if (agenda.isNotEmpty()) Results("CALENDARIO", agenda.map { it.title to When.of(it.startMillis) }) { openEvent(agenda[it]) }
                 val pages = remember(query) { Pack.searchSettings(query) }
                 if (pages.isNotEmpty()) Results("AJUSTES DE ANDROID", pages.map { it.title to it.detail }) { openPage(pages[it]) }

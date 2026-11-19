@@ -224,6 +224,24 @@ class PetateScreenTest {
     }
 
     @Test
+    fun `a search lists the photos, videos and music it matches, and a tap opens one`() {
+        val opened = mutableListOf<dev.vivac.launcher.core.FoundFile>()
+        val photo = dev.vivac.launcher.core.FoundFile(9, "playa.jpg", dev.vivac.launcher.core.FoundFile.Kind.FOTO)
+        compose.setContent {
+            PetateScreen(
+                listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {},
+                findFiles = { q -> if ("playa".startsWith(q)) listOf(photo) else emptyList() }, onOpenFile = { opened += it },
+                io = kotlinx.coroutines.Dispatchers.Unconfined,
+            )
+        }
+        compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("playa")
+        compose.waitForIdle()
+        compose.onNodeWithText("ARCHIVOS").assertExists()
+        compose.onNodeWithText("playa.jpg").performClick()
+        assertEquals(listOf(photo), opened)
+    }
+
+    @Test
     fun `a search lists the shortcuts it matches, and a tap opens one`() {
         val opened = mutableListOf<FoundShortcut>()
         val chat = FoundShortcut(maps, AppShortcut("home", "Ir a casa"))
