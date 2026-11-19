@@ -62,6 +62,8 @@ interface Actions {
     fun usageToday(packageName: String): Long?
     /** Android's usage-access page, where you let vivac read how long apps were used. */
     fun askUsageAccess()
+    /** When the next alarm rings (Android's next alarm clock), or null. */
+    fun nextAlarm(): Long?
     /** Android's fingerprint-or-PIN dialog; [onOk] runs only when you pass it. */
     fun authenticate(reason: String, onOk: () -> Unit)
     /** Whether vivac is the phone's home app (Android's home role). */
@@ -85,6 +87,12 @@ interface Actions {
 }
 
 /** Port: the phone's notifications, for vivac's own shade, and what you do with them. */
+/** What a media app is playing now, from its media notification. */
+data class NowPlaying(val title: String, val artist: String, val packageName: String, val playing: Boolean)
+
+/** The buttons of what is playing. */
+enum class Media { PREVIOUS, TOGGLE, NEXT }
+
 interface Notices {
     /** What is on the phone now; empty while notification access is off. */
     val live: kotlinx.coroutines.flow.StateFlow<List<dev.vivac.launcher.avisos.Aviso>>
@@ -99,6 +107,9 @@ interface Notices {
     fun quiet(): Boolean
     /** Turns Do Not Disturb on (priority only) or off; false without notification access. */
     fun setQuiet(on: Boolean): Boolean
+    /** The media app playing now (its media notification), or null. */
+    val playing: kotlinx.coroutines.flow.StateFlow<NowPlaying?>
+    fun media(command: Media)
 }
 
 /** What the accessibility service can do for a gesture, besides turning the screen off. */

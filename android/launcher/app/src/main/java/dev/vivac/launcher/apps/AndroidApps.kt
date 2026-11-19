@@ -273,6 +273,8 @@ class AppActions(private val context: Context) : Actions {
         return stats.queryAndAggregateUsageStats(midnight, System.currentTimeMillis())[packageName]?.totalTimeInForeground ?: 0L
     }
 
+    override fun nextAlarm(): Long? = context.getSystemService(android.app.AlarmManager::class.java)?.nextAlarmClock?.triggerTime
+
     override fun askUsageAccess() {
         start(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

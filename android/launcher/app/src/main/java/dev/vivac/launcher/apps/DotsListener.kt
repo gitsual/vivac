@@ -25,6 +25,7 @@ class DotsListener : NotificationListenerService() {
         connected = null
         Dots.publish(emptySet())
         AndroidNotices.publish(emptyList())
+        AndroidNotices.publishPlaying(null)
     }
     override fun onNotificationPosted(sbn: StatusBarNotification?) = recount()
     override fun onNotificationRemoved(sbn: StatusBarNotification?) = recount()
@@ -45,6 +46,36 @@ class DotsListener : NotificationListenerService() {
         Dots.publish(Dots.of(notices), Dots.counts(notices))
         shown = active.associateBy { it.key }
         AndroidNotices.publish(active.map(::aviso))
+        // What is playing: the first notification that carries a media session.
+        val media = active.firstNotNullOfOrNull { sbn ->
+            sbn.notification.extras.getParcelable(Notification.EXTRA_MEDIA_SESSION, android.media.session.MediaSession.Token::class.java)?.let { sbn to it }
+        }
+        controller = media?.let { (_, token) -> runCatching { android.media.session.MediaController(this, token) }.getOrNull() }
+        AndroidNotices.publishPlaying(media?.let { (sbn, _) -> nowPlaying(sbn, controller) })
+    }
+
+    private var controller: android.media.session.MediaController? = null
+
+    /** The session's own title and artist when it shares them; else the notification's. */
+    private fun nowPlaying(sbn: StatusBarNotification, c: android.media.session.MediaController?): dev.vivac.launcher.core.NowPlaying {
+        val meta = c?.metadata
+        val extras = sbn.notification.extras
+        return dev.vivac.launcher.core.NowPlaying(
+            title = meta?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE) ?: extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(),
+            artist = meta?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST) ?: extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty(),
+            packageName = sbn.packageName,
+            playing = c?.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING,
+        )
+    }
+
+    internal fun media(command: dev.vivac.launcher.core.Media) {
+        val controls = controller?.transportControls ?: return
+        when (command) {
+            dev.vivac.launcher.core.Media.PREVIOUS -> controls.skipToPrevious()
+            dev.vivac.launcher.core.Media.NEXT -> controls.skipToNext()
+            dev.vivac.launcher.core.Media.TOGGLE ->
+                if (controller?.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING) controls.pause() else controls.play()
+        }
     }
 
     private fun aviso(sbn: StatusBarNotification): Aviso {
@@ -121,6 +152,11 @@ object AndroidNotices : Notices {
     override val live: StateFlow<List<Aviso>> = current.asStateFlow()
 
     internal fun publish(avisos: List<Aviso>) { current.value = avisos }
+
+    private val nowPlaying = MutableStateFlow<dev.vivac.launcher.core.NowPlaying?>(null)
+    override val playing: StateFlow<dev.vivac.launcher.core.NowPlaying?> = nowPlaying.asStateFlow()
+    internal fun publishPlaying(p: dev.vivac.launcher.core.NowPlaying?) { nowPlaying.value = p }
+    override fun media(command: dev.vivac.launcher.core.Media) { DotsListener.connected?.media(command) }
 
     override fun open(key: String) { DotsListener.connected?.open(key) }
     override fun dismiss(key: String) { DotsListener.connected?.dismiss(key) }

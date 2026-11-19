@@ -132,6 +132,87 @@ private fun Button(label: String, onClick: () -> Unit, icon: @Composable () -> U
     }
 }
 
+/**
+ * At a glance: the next alarm and the next event, each a tap away from its app, and what is playing with its
+ * three buttons. Says so when there is nothing to show.
+ */
+@Composable
+fun GlanceWidget(
+    glance: dev.vivac.launcher.core.Glance,
+    playing: dev.vivac.launcher.core.NowPlaying?,
+    playingApp: InstalledApp?,
+    onAlarm: () -> Unit,
+    onEvent: (dev.vivac.launcher.core.CalendarEvent) -> Unit,
+    onPlaying: () -> Unit,
+    onMedia: (dev.vivac.launcher.core.Media) -> Unit,
+) {
+    VivacCard {
+        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("DE UN VISTAZO", style = Type.cota.copy(fontSize = 10.sp))
+            if (glance.nextAlarm == null && glance.nextEvent == null && playing == null) {
+                Text("Nada a la vista.", style = Type.small)
+            }
+            glance.nextAlarm?.let { at ->
+                GlanceLine(ALARM, "Alarma · " + dev.vivac.launcher.petate.When.of(at), onAlarm)
+            }
+            glance.nextEvent?.let { e ->
+                GlanceLine(EVENT, e.title, { onEvent(e) }, detail = dev.vivac.launcher.petate.When.of(e.startMillis))
+            }
+            playing?.let { p ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onPlaying),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) { playingApp?.let { AppFace(it, Ink.primary) } }
+                        Column(Modifier.weight(1f)) {
+                            Text(p.title, style = Type.body.copy(fontSize = 14.sp, lineHeight = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (p.artist.isNotBlank()) Text(p.artist, style = Type.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    MediaButton("Anterior", PREVIOUS) { onMedia(dev.vivac.launcher.core.Media.PREVIOUS) }
+                    MediaButton(if (p.playing) "Pausa" else "Reproducir", if (p.playing) PAUSE else PLAY) { onMedia(dev.vivac.launcher.core.Media.TOGGLE) }
+                    MediaButton("Siguiente", NEXT) { onMedia(dev.vivac.launcher.core.Media.NEXT) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlanceLine(glyph: String, text: String, onClick: () -> Unit, detail: String? = null) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onClick).padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LineIcon(glyph, Ink.accentText, 18.dp)
+        Text(text, style = Type.body.copy(fontSize = 14.sp, lineHeight = 17.sp), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        detail?.let { Text(it, style = Type.cota.copy(fontSize = 10.sp)) }
+    }
+}
+
+@Composable
+private fun MediaButton(label: String, glyph: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(Ink.raised)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { LineIcon(glyph, Ink.text, 16.dp) }
+}
+
+private const val ALARM = "M3.5 13a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0 M12 9v4l3 2 M5 3 2 6 M19 3l3 3"
+private const val EVENT = "M4 6h16v14H4z M4 10h16 M8 3v5 M16 3v5"
+private const val PREVIOUS = "M6 5v14 M19 5l-10 7 10 7z"
+private const val NEXT = "M18 5v14 M5 5l10 7-10 7z"
+private const val PLAY = "M7 5l12 7-12 7z"
+private const val PAUSE = "M8 5v14 M16 5v14"
+
 /** The header's height and each chat's, in dp, to work out how many chats fit. */
 private const val HEADER = 34f
 private const val ROW = 58f

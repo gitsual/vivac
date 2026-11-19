@@ -113,7 +113,7 @@ fun CampMenuSheet(
 fun WidgetPickerSheet(options: List<WidgetOption>, onPick: (WidgetOption) -> Unit, onDismiss: () -> Unit) {
     VivacSheet(onDismiss) {
         Text("Añadir widget", style = Type.section, modifier = Modifier.semantics { heading() })
-        Text("${options.size} widgets de tus apps", style = Type.mono, modifier = Modifier.padding(bottom = 8.dp))
+        Text("${options.size} widgets", style = Type.mono, modifier = Modifier.padding(bottom = 8.dp))
         LazyColumn(Modifier.heightIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             items(options, key = { it.key }) { option ->
                 Row(

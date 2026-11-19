@@ -73,4 +73,22 @@ class DotsListenerTest {
         AndroidNotices.open("x"); AndroidNotices.dismiss("x"); AndroidNotices.dismissAll()
         assertEquals(false, AndroidNotices.reply("x", "y"))
     }
+
+    @Test
+    fun `a media notification becomes what is playing, with controls, and goes when access is lost`() {
+        val service = Robolectric.buildService(DotsListener::class.java).create().get()
+        val session = android.media.session.MediaSession(app, "test")
+        val song = Notification.Builder(app, "c").setSmallIcon(android.R.drawable.star_on)
+            .setContentTitle("Canción").setContentText("Grupo")
+            .setStyle(Notification.MediaStyle().setMediaSession(session.sessionToken)).build()
+        shadowOf(service).addActiveNotification("org.music", 1, song)
+        service.onListenerConnected()
+        assertEquals(dev.vivac.launcher.core.NowPlaying("Canción", "Grupo", "org.music", playing = false), AndroidNotices.playing.value)
+        dev.vivac.launcher.core.Media.entries.forEach(AndroidNotices::media)
+        service.onListenerDisconnected()
+        assertEquals(null, AndroidNotices.playing.value)
+        // Without a listener the buttons do nothing.
+        AndroidNotices.media(dev.vivac.launcher.core.Media.TOGGLE)
+        session.release()
+    }
 }

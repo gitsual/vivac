@@ -888,6 +888,24 @@ class LauncherTest {
     }
 
     @Test
+    fun `at a glance is a vivac widget with the next alarm, and the next event only with calendar search on`() {
+        val dir = FakeDirectory().apply { agenda = listOf(CalendarEvent(5, "Cena con Ana", 0L), CalendarEvent(6, "Ruta", 9L)) }
+        val l = Launcher(FakeSource(listOf(termux)), store, actions, widgets, directory = dir)
+        actions.alarm = 1_000L
+        assertEquals(Glance(nextAlarm = 1_000L, nextEvent = null), l.glance())
+        dir.calendarAllowed = true
+        assertEquals(null, l.glance().nextEvent)
+        l.toggleCalendar()
+        assertEquals(CalendarEvent(5, "Cena con Ana", 0L), l.glance().nextEvent)
+        l.showPicker()
+        val option = l.picker!!.first { it.label == "De un vistazo · vivac" }
+        l.addWidget(option)
+        val id = l.board.items.filterIsInstance<dev.vivac.launcher.campamento.Placed>().last().id
+        assertEquals(dev.vivac.launcher.campamento.VivacWidget.Glance, l.vivacWidget(id))
+        assertEquals("De un vistazo", l.widgetLabel(id))
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

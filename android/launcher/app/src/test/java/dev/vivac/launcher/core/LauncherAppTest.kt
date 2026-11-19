@@ -228,7 +228,7 @@ class LauncherAppTest {
         compose.onNodeWithText("LIBRE").performTouchInput { longClick() }
         compose.onNodeWithText("Activar puntos de aviso").assertExists()
         compose.onNodeWithText("Añadir widget").tap()
-        compose.onNodeWithText("1 widgets de tus apps").assertExists()
+        compose.onNodeWithText("2 widgets").assertExists()
         compose.onNodeWithText("2 × 2").assertExists()
         compose.onNodeWithText("Reloj").tap()
         compose.waitForIdle()
@@ -1274,6 +1274,36 @@ class LauncherAppTest {
         compose.onNodeWithTag("card:app.organicmaps").performScrollTo().performTouchInput { swipeRight(startX = width * 0.3f, endX = width.toFloat()) }
         compose.waitForIdle()
         assertEquals(listOf("dismiss:c"), notices.calls)
+    }
+
+    @Test
+    fun `the at a glance widget shows the next alarm, the next event and what is playing, and acts on each`() {
+        actions.alarm = java.time.LocalDate.of(2026, 11, 20).atTime(7, 30).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        store.values["vivacWidgets"] = "-1=vivac:glance:dev.vivac.launcher"
+        store.values["widgets"] = "-1"
+        store.values["searchCalendar"] = "1"
+        val dir = FakeDirectory().apply { calendarAllowed = true; agenda = listOf(CalendarEvent(5, "Cena con Ana", 0L)) }
+        val notices = FakeNotices()
+        notices.playing.value = NowPlaying("Canción", "Grupo", "com.termux", playing = true)
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets, notices = notices, directory = dir).also { it.refresh() }
+        compose.setContent { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views) }
+        compose.waitForIdle()
+        compose.onNodeWithText("vie 20 nov · 07:30", substring = true).performClick()
+        assertEquals("page:ALARMAS", actions.calls.last())
+        compose.onNodeWithText("Cena con Ana").performClick()
+        assertEquals(listOf("event:5"), dir.calls.filter { it.startsWith("event") })
+        compose.onNodeWithText("Canción").performClick()
+        assertEquals("open:com.termux", actions.calls.last())
+        compose.onNodeWithContentDescription("Anterior").performClick()
+        compose.onNodeWithContentDescription("Pausa").performClick()
+        compose.onNodeWithContentDescription("Siguiente").performClick()
+        assertEquals(listOf("media:PREVIOUS", "media:TOGGLE", "media:NEXT"), notices.calls)
+        // Nothing to show: it says so.
+        actions.alarm = null
+        notices.playing.value = null
+        compose.runOnUiThread { launcher.toggleCalendar() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Nada a la vista.").assertExists()
     }
 
     @Test

@@ -27,6 +27,8 @@ class FakeNotices(avisos: List<dev.vivac.launcher.avisos.Aviso> = emptyList()) :
     var quietOn = false
     var quietWorks = true
     override fun quiet() = quietOn
+    override val playing = kotlinx.coroutines.flow.MutableStateFlow<NowPlaying?>(null)
+    override fun media(command: Media) { calls += "media:$command" }
     override fun setQuiet(on: Boolean): Boolean { calls += "quiet:$on"; if (quietWorks) quietOn = on; return quietWorks }
 }
 
@@ -66,6 +68,8 @@ class FakeActions : Actions {
     override fun lockScreenReady() = lockService
     override fun askLockAdmin() { calls += "lockAdmin" }
     val usage = mutableMapOf<String, Long>()
+    var alarm: Long? = null
+    override fun nextAlarm(): Long? = alarm
     override fun usageToday(packageName: String): Long? = usage[packageName]
     override fun askUsageAccess() { calls += "usageAccess" }
     var authOk = true

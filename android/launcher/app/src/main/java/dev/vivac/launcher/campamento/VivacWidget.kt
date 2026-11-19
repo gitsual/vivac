@@ -23,7 +23,15 @@ sealed interface VivacWidget {
         override val key = "$PREFIX$ATAJOS:$packageName"
     }
 
+    /** At a glance: the next alarm, the next event and what is playing. vivac's own, so its "package" is vivac. */
+    data object Glance : VivacWidget {
+        override val packageName = "dev.vivac.launcher"
+        override val rows = 2
+        override val key = "$PREFIX$GLANCE:$packageName"
+    }
+
     companion object {
+        private const val GLANCE = "glance"
         private const val PREFIX = "vivac:"
         private const val CHATS = "chats"
         private const val ATAJOS = "atajos"
@@ -36,6 +44,7 @@ sealed interface VivacWidget {
             return when (kind) {
                 CHATS -> Chats(pkg)
                 ATAJOS -> Atajos(pkg)
+                GLANCE -> Glance
                 else -> null
             }
         }

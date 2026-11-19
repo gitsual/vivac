@@ -158,6 +158,19 @@ fun LauncherApp(
                             onOpenApp = { launcher.openApp(w.packageName) },
                         )
                     }
+                    dev.vivac.launcher.campamento.VivacWidget.Glance -> {
+                        val glance = remember(stamp, launcher.searchCalendar) { launcher.glance() }
+                        val playing by (launcher.notices?.playing ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
+                        dev.vivac.launcher.widgets.GlanceWidget(
+                            glance = glance,
+                            playing = playing,
+                            playingApp = playing?.let { p -> launcher.apps.find { it.packageName == p.packageName } },
+                            onAlarm = { launcher.openSystemPage(SystemPage.ALARMAS) },
+                            onEvent = launcher::openEvent,
+                            onPlaying = { playing?.let { launcher.openApp(it.packageName) } },
+                            onMedia = { c -> launcher.notices?.media(c) },
+                        )
+                    }
                     null -> Unit
                 }
             },

@@ -99,6 +99,9 @@ sealed interface Zone {
 /** The two answers Android sends back while placing a widget. */
 enum class WidgetStep { BIND, CONFIGURE }
 
+/** What the at-a-glance widget shows: when the next alarm rings and the next event, each null when there is none. */
+data class Glance(val nextAlarm: Long?, val nextEvent: CalendarEvent?)
+
 /** What a flick on an app does: one of its shortcuts, or another app. */
 sealed interface Flick {
     data class App(val packageName: String) : Flick
@@ -796,6 +799,7 @@ class Launcher(
         when (w) {
             is dev.vivac.launcher.campamento.VivacWidget.Chats -> "Chats de $app"
             is dev.vivac.launcher.campamento.VivacWidget.Atajos -> "Atajos de $app"
+            dev.vivac.launcher.campamento.VivacWidget.Glance -> "De un vistazo"
         }
     } ?: widgets.label(id)
 
@@ -817,7 +821,15 @@ class Launcher(
             val w = dev.vivac.launcher.campamento.VivacWidget.Atajos(app.packageName)
             WidgetOption(w.key, "Atajos · vivac", app.label, app.packageName, "4 × ${w.rows}")
         }
-        return chats + atajos
+        val glance = dev.vivac.launcher.campamento.VivacWidget.Glance.let { WidgetOption(it.key, "De un vistazo · vivac", "vivac", it.packageName, "4 × ${it.rows}") }
+        return listOf(glance) + chats + atajos
+    }
+
+    /** The next alarm always; the next event only when you let the petate search your calendar. */
+    fun glance(): Glance {
+        val dir = directory
+        val event = if (searchCalendar && dir != null && dir.canReadCalendar()) dir.events("").firstOrNull() else null
+        return Glance(actions.nextAlarm(), event)
     }
 
     private fun addVivacWidget(w: dev.vivac.launcher.campamento.VivacWidget) {
