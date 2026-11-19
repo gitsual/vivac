@@ -721,6 +721,13 @@ class LauncherTest {
     }
 
     @Test
+    fun `the screen can be turned off through device admin instead of accessibility, after Android asks`() {
+        val l = many()
+        l.useLockAdmin()
+        assertEquals("lockAdmin", actions.calls.last())
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

@@ -193,6 +193,20 @@ class AdaptersTest {
     }
 
     @Test
+    fun `once vivac is a device admin, the screen turns off without the accessibility service`() {
+        val actions = AppActions(app)
+        assertFalse(actions.lockScreenReady())
+        actions.askLockAdmin()
+        val ask = nextIntent()
+        assertEquals(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN, ask?.action)
+        val admin = ComponentName(app, LockAdmin::class.java)
+        assertEquals(admin, ask?.getParcelableExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, ComponentName::class.java))
+        shadowOf(app.getSystemService(android.app.admin.DevicePolicyManager::class.java)).setActiveAdmin(admin)
+        assertTrue(actions.lockScreenReady())
+        assertTrue(actions.lockScreen())
+    }
+
+    @Test
     fun `the lock service turns the screen off only while it is switched on`() {
         val actions = AppActions(app)
         assertFalse(actions.lockScreenReady())

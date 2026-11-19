@@ -141,6 +141,9 @@ class Launcher(
     /** Double tap on the camp's ground turns the screen off; off until you choose it. */
     var doubleTapLock by mutableStateOf(store.get(KEY_DOUBLE_TAP) == "1"); private set
 
+    /** The device-admin way to turn the screen off, for those who would rather not switch on accessibility. */
+    fun useLockAdmin() = actions.askLockAdmin()
+
     fun toggleDoubleTapLock() {
         campMenu = false
         doubleTapLock = !doubleTapLock

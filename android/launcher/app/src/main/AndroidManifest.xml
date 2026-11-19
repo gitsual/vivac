@@ -78,6 +78,18 @@
             </intent-filter>
         </activity>
 
+        <!-- The alternative to the service below: a device admin with only the force-lock policy (opt-in from settings). -->
+        <receiver
+            android:name=".apps.LockAdmin"
+            android:exported="true"
+            android:label="@string/lock_service_label"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data android:name="android.app.device_admin" android:resource="@xml/lock_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Double tap to lock (opt-in from the camp menu): the only way Android lets an app turn the screen off. -->
         <service
             android:name=".apps.LockService"

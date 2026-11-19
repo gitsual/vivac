@@ -104,7 +104,7 @@ third-party app can do; the API is noted.
 | X12 | Layout profiles: save and switch whole camps | Hyperion | todo |
 | X13 | Wallpaper veil strength (how dark the night over your wallpaper is) | Hyperion | done: «Velo de la noche» claro/medio/oscuro in settings, kept in backups |
 | X14 | Blur behind the Petate and sheets (`RenderEffect`, API 31+) | Hyperion, Smart Launcher | todo |
-| X15 | Lock the screen without accessibility: device admin `lockNow` as the alternative | Hyperion | todo |
+| X15 | Lock the screen without accessibility: device admin `lockNow` as the alternative | Hyperion | done: «Apagar sin Accesibilidad» (force-lock policy only); accessibility still tried first because lockNow makes the next unlock ask for the PIN |
 | X16 | Import a Nova or Lawnchair layout | Lawnchair | todo |
 | X17 | Reply to notifications from home | Niagara | done: vivac's shade replies inline (`RemoteInput`) |
 | X18 | Wallpaper-derived colours, icon shapes, custom fonts | Smart Launcher, Lawnchair | n/a by design (confirmed 19-11): vivac's look is its own palette, glyphs and fonts |

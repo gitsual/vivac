@@ -78,6 +78,7 @@ class SettingsActions(
     val paintLock: () -> Unit = {},
     val toggleProtectHidden: () -> Unit = {},
     val chooseVeil: (dev.vivac.launcher.core.Veil) -> Unit = {},
+    val useLockAdmin: () -> Unit = {},
     val restoreLock: () -> Unit = {},
     val toggleLabels: () -> Unit = {},
     val toggleTintWidgets: () -> Unit = {},
@@ -166,6 +167,8 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             GestureRow("Deslizar hacia arriba", state.swipeUp, state.swipeUpApp, state.apps, act.setSwipeUp)
             GestureRow("Deslizar hacia abajo", state.swipeDown, state.swipeDownApp, state.apps, act.setSwipeDown)
             Toggle("Doble toque apaga la pantalla", "Usa el servicio de accesibilidad de vivac, que no lee nada.", state.doubleTapLock, act.toggleDoubleTap)
+            Action("Apagar sin Accesibilidad", act.useLockAdmin)
+            Text("Como administrador de dispositivo. Android pedirá el PIN, no la huella, al desbloquear después.", style = Type.small)
 
             Section("COPIA")
             Action("Guardar una copia del campamento", act.backUp)

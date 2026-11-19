@@ -255,7 +255,24 @@ class AppActions(private val context: Context) : Actions {
         }
     }
 
-    override fun lockScreen(): Boolean = LockService.lock()
+    private val policies get() = context.getSystemService(android.app.admin.DevicePolicyManager::class.java)
+    private val lockAdmin get() = android.content.ComponentName(context, LockAdmin::class.java)
+    private fun adminActive() = policies?.isAdminActive(lockAdmin) == true
+
+    /** The accessibility service first (the fingerprint keeps working); else the device admin, if you made vivac one. */
+    override fun lockScreen(): Boolean = LockService.lock() || (adminActive() && runCatching { policies!!.lockNow(); true }.getOrDefault(false))
+
+    override fun askLockAdmin() {
+        start(
+            Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, lockAdmin)
+                .putExtra(
+                    android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                    "Solo para apagar la pantalla. El siguiente desbloqueo pedirá el PIN. Para desinstalar vivac, quítalo antes de Administradores.",
+                )
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
 
     override fun backUp() {
         val name = "vivac-campamento-" + java.time.LocalDate.now() + ".txt"
@@ -308,7 +325,7 @@ class AppActions(private val context: Context) : Actions {
         }
     }
 
-    override fun lockScreenReady(): Boolean = LockService.running
+    override fun lockScreenReady(): Boolean = LockService.running || adminActive()
 
     override fun global(action: dev.vivac.launcher.core.GlobalAction): Boolean = LockService.perform(action)
 
