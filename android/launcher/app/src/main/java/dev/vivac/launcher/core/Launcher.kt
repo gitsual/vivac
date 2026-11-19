@@ -177,6 +177,26 @@ class Launcher(
 
     var veil by mutableStateOf(readVeil()); private set
 
+    /** The camp goes soft behind an open menu or sheet. */
+    var blurSheets by mutableStateOf(store.get(KEY_BLUR_SHEETS) != "0"); private set
+    /** Your wallpaper, blurred behind the camp (Android's cross-window blur). */
+    var blurWallpaper by mutableStateOf(store.get(KEY_BLUR_WALLPAPER) == "1"); private set
+
+    fun toggleBlurSheets() {
+        blurSheets = !blurSheets
+        store.put(mapOf(KEY_BLUR_SHEETS to if (blurSheets) "1" else "0"))
+    }
+
+    fun toggleBlurWallpaper() {
+        blurWallpaper = !blurWallpaper
+        store.put(mapOf(KEY_BLUR_WALLPAPER to if (blurWallpaper) "1" else "0"))
+    }
+
+    /** Any menu or sheet is open over the screen. */
+    val sheetOpen: Boolean
+        get() = campMenu || menu != null || picker != null || renaming != null || iconPicker != null ||
+            pickingQuickApps || addingTo != null || folderPicker != null || openFolder != null
+
     fun chooseVeil(v: Veil) {
         veil = v
         store.put(mapOf(KEY_VEIL to v.name))
@@ -711,6 +731,8 @@ class Launcher(
         doubleTapLock = store.get(KEY_DOUBLE_TAP) == "1"
         showWallpaper = store.get(KEY_WALLPAPER) == "1"
         veil = readVeil()
+        blurSheets = store.get(KEY_BLUR_SHEETS) != "0"
+        blurWallpaper = store.get(KEY_BLUR_WALLPAPER) == "1"
         columns = store.get(KEY_COLUMNS)?.toIntOrNull()?.coerceIn(4, 5) ?: 4
         labels = store.get(KEY_LABELS) != "0"
         showCounts = store.get(KEY_COUNTS) == "1"
@@ -972,6 +994,8 @@ class Launcher(
         const val KEY_DOUBLE_TAP = "doubleTapLock"
         const val KEY_WALLPAPER = "wallpaper"
         const val KEY_VEIL = "veil"
+        const val KEY_BLUR_SHEETS = "blurSheets"
+        const val KEY_BLUR_WALLPAPER = "blurWallpaper"
         private const val LOCK_REFUSED = "Android no dejó cambiar la pantalla de bloqueo."
         const val KEY_COLUMNS = "columns"
         const val KEY_LABELS = "labels"

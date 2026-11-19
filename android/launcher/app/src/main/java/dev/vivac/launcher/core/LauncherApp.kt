@@ -20,6 +20,8 @@ import dev.vivac.launcher.theme.LocalLabels
 import dev.vivac.launcher.theme.LocalShowCounts
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.graphicsLayer
 import dev.vivac.launcher.campamento.DragBoard
 import dev.vivac.launcher.campamento.Folder
@@ -78,10 +80,13 @@ fun LauncherApp(
     }
     // Android draws the wallpaper behind a window that asks for it; vivac's camp then lets it show through.
     val window = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.window
-    androidx.compose.runtime.LaunchedEffect(launcher.showWallpaper) {
+    val blurPx = with(androidx.compose.ui.platform.LocalDensity.current) { 24.dp.roundToPx() }
+    androidx.compose.runtime.LaunchedEffect(launcher.showWallpaper, launcher.blurWallpaper) {
         if (launcher.showWallpaper) {
             window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
             window?.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+            // Blurs what lies behind the window, the wallpaper; a no-op where Android has cross-window blur off.
+            window?.setBackgroundBlurRadius(if (launcher.blurWallpaper) blurPx else 0)
         } else {
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
             window?.setBackgroundDrawableResource(dev.vivac.launcher.R.color.noche_900)
@@ -161,7 +166,8 @@ fun LauncherApp(
         dev.vivac.launcher.apps.LocalIconChoice provides dev.vivac.launcher.apps.IconChoice(launcher.iconStyle, launcher.iconPack),
         dev.vivac.launcher.apps.LocalIconOverrides provides launcher.iconFor,
     ) {
-    AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen") { current ->
+    val soft by androidx.compose.animation.core.animateDpAsState(if (launcher.blurSheets && launcher.sheetOpen) 14.dp else 0.dp, label = "soft")
+    AnimatedContent(launcher.screen, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "screen", modifier = Modifier.blur(soft)) { current ->
         when (current) {
             Screen.CAMPAMENTO -> camp()
             Screen.AJUSTES -> SettingsScreen(
@@ -170,12 +176,12 @@ fun LauncherApp(
                     dotsAllowed = dotsAllowed, counts = launcher.showCounts, swipeUp = launcher.swipeUp, swipeDown = launcher.swipeDown,
                     doubleTapLock = launcher.doubleTapLock, isHome = actions.isHome(),
                     iconStyle = launcher.iconStyle, iconPack = launcher.iconPack, packs = actions.iconPacks(),
-                    contacts = launcher.searchContacts, calendar = launcher.searchCalendar, protectHidden = launcher.protectHidden, veil = launcher.veil,
+                    contacts = launcher.searchContacts, calendar = launcher.searchCalendar, protectHidden = launcher.protectHidden, veil = launcher.veil, blurSheets = launcher.blurSheets, blurWallpaper = launcher.blurWallpaper,
                     apps = launcher.visibleApps(), swipeUpApp = launcher.swipeUpApp, swipeDownApp = launcher.swipeDownApp,
                 ),
                 SettingsActions(
                     toggleLock = launcher::toggleLock, toggleWallpaper = launcher::toggleWallpaper, changeWallpaper = launcher::changeWallpaper,
-                    paintLock = launcher::paintLockScreen, restoreLock = launcher::restoreLockScreen, toggleProtectHidden = launcher::toggleProtectHidden, chooseVeil = launcher::chooseVeil, useLockAdmin = launcher::useLockAdmin,
+                    paintLock = launcher::paintLockScreen, restoreLock = launcher::restoreLockScreen, toggleProtectHidden = launcher::toggleProtectHidden, chooseVeil = launcher::chooseVeil, useLockAdmin = launcher::useLockAdmin, toggleBlurSheets = launcher::toggleBlurSheets, toggleBlurWallpaper = launcher::toggleBlurWallpaper,
                     toggleLabels = launcher::toggleLabels, toggleTintWidgets = launcher::toggleTintWidgets, setColumns = launcher::chooseColumns, allowDots = launcher::allowDots,
                     toggleCounts = launcher::toggleCounts, setSwipeUp = launcher::chooseSwipeUp, setSwipeDown = launcher::chooseSwipeDown,
                     toggleDoubleTap = launcher::toggleDoubleTapLock, backUp = launcher::backUp, restore = launcher::askRestore,

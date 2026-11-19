@@ -728,6 +728,26 @@ class LauncherTest {
     }
 
     @Test
+    fun `what lies behind an open menu is blurred, and your wallpaper can be too, both kept in a copy`() {
+        val l = many()
+        assertFalse(l.sheetOpen)
+        l.openCampMenu()
+        assertTrue(l.sheetOpen)
+        assertTrue(l.blurSheets)
+        assertFalse(l.blurWallpaper)
+        l.toggleBlurSheets()
+        l.toggleBlurWallpaper()
+        assertFalse(many().blurSheets)
+        assertTrue(many().blurWallpaper)
+        val copy = Backup.export(store)
+        l.toggleBlurSheets()
+        l.toggleBlurWallpaper()
+        l.restoreLayout(copy)
+        assertFalse(l.blurSheets)
+        assertTrue(l.blurWallpaper)
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

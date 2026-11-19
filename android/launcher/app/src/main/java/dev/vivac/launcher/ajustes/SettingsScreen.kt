@@ -67,6 +67,8 @@ data class SettingsState(
     val swipeDownApp: String? = null,
     val calendar: Boolean = false,
     val protectHidden: Boolean = false,
+    val blurSheets: Boolean = true,
+    val blurWallpaper: Boolean = false,
     val veil: dev.vivac.launcher.core.Veil = dev.vivac.launcher.core.Veil.MEDIO,
 )
 
@@ -79,6 +81,8 @@ class SettingsActions(
     val toggleProtectHidden: () -> Unit = {},
     val chooseVeil: (dev.vivac.launcher.core.Veil) -> Unit = {},
     val useLockAdmin: () -> Unit = {},
+    val toggleBlurSheets: () -> Unit = {},
+    val toggleBlurWallpaper: () -> Unit = {},
     val restoreLock: () -> Unit = {},
     val toggleLabels: () -> Unit = {},
     val toggleTintWidgets: () -> Unit = {},
@@ -127,7 +131,9 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
                     Text("Velo de la noche", style = Type.body, modifier = Modifier.weight(1f))
                     dev.vivac.launcher.core.Veil.entries.forEach { v -> Choice(v.title, state.veil == v) { act.chooseVeil(v) } }
                 }
+                Toggle("Desenfocar tu fondo", "Tu fondo, borroso detrás del campamento.", state.blurWallpaper, act.toggleBlurWallpaper)
             }
+            Toggle("Desenfocar detrás de los menús", "El campamento se difumina mientras un menú está abierto.", state.blurSheets, act.toggleBlurSheets)
             Toggle("Nombres bajo las apps", "Sin nombres, TalkBack los sigue leyendo.", state.labels, act.toggleLabels)
             Toggle("Widgets con los colores de vivac", "Tiñe cada widget: su negro pasa a ser el de las tarjetas y su blanco, el papel.", state.tintWidgets, act.toggleTintWidgets)
 
