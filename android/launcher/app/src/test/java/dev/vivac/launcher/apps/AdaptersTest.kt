@@ -198,6 +198,10 @@ class AdaptersTest {
         assertFalse(actions.lockScreenReady())
         assertFalse(actions.lockScreen())
         dev.vivac.launcher.core.GlobalAction.entries.forEach { assertFalse(actions.global(it)) }
+        // Robolectric has no biometric dialog: asking must not crash, and nothing is granted.
+        var granted = false
+        actions.authenticate("Ver las apps ocultas") { granted = true }
+        assertFalse(granted)
         assertEquals(
             listOf(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_RECENTS, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_POWER_DIALOG, android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT),
             dev.vivac.launcher.core.GlobalAction.entries.map(LockService::code),

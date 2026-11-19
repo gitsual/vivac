@@ -88,6 +88,27 @@ class PetateScreenTest {
     }
 
     @Test
+    fun `when hidden apps are protected, the Ocultas chip shows them only after you prove it is you`() {
+        var allow = false
+        var asked = 0
+        compose.setContent {
+            PetateScreen(
+                listOf(termux, maps, settings), setOf("app.organicmaps"), focusSearch = false, onOpenApp = {}, onAppMenu = {},
+                askToSeeHidden = { ok -> asked++; if (allow) ok() },
+            )
+        }
+        compose.onNodeWithText("Ocultas · 1").performClick()
+        compose.onNodeWithText("Organic Maps").assertDoesNotExist()
+        allow = true
+        compose.onNodeWithText("Ocultas · 1").performClick()
+        compose.onNodeWithText("Organic Maps").assertExists()
+        // Closing them again asks for nothing.
+        compose.onNodeWithText("Ocultas · 1").performClick()
+        compose.onNodeWithText("Organic Maps").assertDoesNotExist()
+        assertEquals(2, asked)
+    }
+
+    @Test
     fun `the altimeter jumps to a letter far down the list, and only letters with apps are buttons`() {
         val many = ('A'..'Z').flatMap { c -> (1..3).map { InstalledApp("$c-app $it", "p.$c$it", false) } }
         compose.setContent { PetateScreen(many, emptySet(), focusSearch = false, onOpenApp = { opened += it }, onAppMenu = {}) }

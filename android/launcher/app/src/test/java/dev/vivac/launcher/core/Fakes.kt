@@ -64,6 +64,8 @@ class FakeActions : Actions {
     override fun lockScreen(): Boolean { if (lockService) calls += "lock"; return lockService }
     override fun accessibilitySettings() { calls += "accessibility" }
     override fun lockScreenReady() = lockService
+    var authOk = true
+    override fun authenticate(reason: String, onOk: () -> Unit) { calls += "auth:$reason"; if (authOk) onOk() }
     override fun global(action: GlobalAction): Boolean { if (lockService) calls += "global:$action"; return lockService }
     var home = true
     override fun isHome() = home

@@ -94,7 +94,7 @@ third-party app can do; the API is noted.
 | X2 | More gesture actions through LockService: power menu, screenshot, quick settings, recents (`GLOBAL_ACTION_*`) | Nova, Hyperion | done: four new swipe choices; without the service, vivac says why and opens Accessibility |
 | X3 | Pinch and two-finger swipe as configurable gestures | Nova, Microsoft, Hyperion | todo |
 | X4 | Swipe on an app or folder runs a second action (another app, a shortcut) | Nova, Action | todo |
-| X5 | Fingerprint/PIN to see hidden apps (`BiometricPrompt`) | Hyperion, Smart Launcher | todo |
+| X5 | Fingerprint/PIN to see hidden apps (`BiometricPrompt`) | Hyperion, Smart Launcher | done: settings toggle; switching it off asks too; kept out of backups so a file cannot remove it |
 | X6 | At a glance on the camp: next event, next alarm, what is playing with controls (`MediaSessionManager` via the notification listener) | Pixel, Niagara, Kvaesitso | todo |
 | X7 | Widget stacks: several widgets in one slot, swiped through | Niagara, Nova | todo |
 | X8 | Petate auto-categories from `ApplicationInfo.category` (chips), plus your own tabs | Smart Launcher, Nova | todo |

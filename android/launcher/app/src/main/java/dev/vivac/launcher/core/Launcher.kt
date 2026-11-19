@@ -233,6 +233,24 @@ class Launcher(
 
     /** The Petate's search also looks through your contacts, and your calendars. Off until you choose. */
     var searchContacts by mutableStateOf(store.get(KEY_CONTACTS) == "1"); private set
+
+    /** Hidden apps show only after your fingerprint or PIN. Kept out of backups, so a file cannot switch it off. */
+    var protectHidden by mutableStateOf(store.get(KEY_PROTECT_HIDDEN) == "1"); private set
+
+    fun toggleProtectHidden() {
+        if (!protectHidden) return chooseProtectHidden(true)
+        actions.authenticate("Dejar de proteger las apps ocultas") { chooseProtectHidden(false) }
+    }
+
+    private fun chooseProtectHidden(on: Boolean) {
+        protectHidden = on
+        store.put(mapOf(KEY_PROTECT_HIDDEN to if (on) "1" else "0"))
+    }
+
+    /** Shows the hidden apps through [then], after your fingerprint or PIN when they are protected. */
+    fun seeHidden(then: () -> Unit) {
+        if (protectHidden) actions.authenticate("Ver las apps ocultas", then) else then()
+    }
     var searchCalendar by mutableStateOf(store.get(KEY_CALENDAR) == "1"); private set
 
     fun toggleContacts() {
@@ -956,6 +974,7 @@ class Launcher(
         )
         const val KEY_ICONS = "icons"
         const val KEY_CONTACTS = "searchContacts"
+        const val KEY_PROTECT_HIDDEN = "protectHidden"
         const val KEY_CALENDAR = "searchCalendar"
         const val KEY_ICON_PACK = "iconPack"
         const val KEY_ICON_FOR = "iconFor"

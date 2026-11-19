@@ -56,6 +56,8 @@ interface Actions {
     fun lockScreenReady(): Boolean
     /** One of Android's global actions through the same accessibility service; false while it is off. */
     fun global(action: GlobalAction): Boolean
+    /** Android's fingerprint-or-PIN dialog; [onOk] runs only when you pass it. */
+    fun authenticate(reason: String, onOk: () -> Unit)
     /** Whether vivac is the phone's home app (Android's home role). */
     fun isHome(): Boolean
     /** Android's own dialog to make vivac the home app. */

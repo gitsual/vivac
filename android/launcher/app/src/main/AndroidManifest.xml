@@ -5,6 +5,7 @@
     <!-- Swipe down on the Campamento pulls the notification shade. -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Seeing (not using) the network: the camp shows Wi-Fi and Tailscale like a status bar. Granted on install. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Auto-rotation from the shade; you grant it in Android's settings, vivac asks only when you use it. -->

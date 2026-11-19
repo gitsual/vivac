@@ -111,6 +111,8 @@ fun PetateScreen(
     onOpenContact: (Contact) -> Unit = {},
     onOpenEvent: (CalendarEvent) -> Unit = {},
     onOpenSettingsPage: (dev.vivac.launcher.core.SystemPage) -> Unit = {},
+    /** Opening the hidden apps runs through this, which may first ask for your fingerprint or PIN. */
+    askToSeeHidden: (() -> Unit) -> Unit = { it() },
     /** Where contacts and events are looked up: off the main thread. */
     io: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
 ) {
@@ -156,7 +158,9 @@ fun PetateScreen(
                     val main = profile == null
                     Chip("Todo", main && filter == null && !showHidden) { filter = null; showHidden = false; profileId = null }
                     Group.entries.forEach { g -> Chip(g.title, main && filter == g && !showHidden) { filter = if (filter == g) null else g; showHidden = false; profileId = null } }
-                    if (hidden.isNotEmpty()) Chip("Ocultas · ${hidden.size}", main && showHidden) { showHidden = !showHidden; filter = null; profileId = null }
+                    if (hidden.isNotEmpty()) Chip("Ocultas · ${hidden.size}", main && showHidden) {
+                        if (showHidden) showHidden = false else askToSeeHidden { showHidden = true; filter = null; profileId = null }
+                    }
                     profiles.forEach { p -> Chip(p.kind.title, profileId == p.id) { profileId = if (profileId == p.id) null else p.id; filter = null; showHidden = false } }
                 }
                 if (profile != null) ProfileBar(profile) { onLockProfile(profile) }

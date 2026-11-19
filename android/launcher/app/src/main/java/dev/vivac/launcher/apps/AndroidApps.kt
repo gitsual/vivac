@@ -312,6 +312,25 @@ class AppActions(private val context: Context) : Actions {
 
     override fun global(action: dev.vivac.launcher.core.GlobalAction): Boolean = LockService.perform(action)
 
+    /** Fingerprint, face or the screen lock's PIN; cancelling or failing simply does nothing. */
+    override fun authenticate(reason: String, onOk: () -> Unit) {
+        val prompt = android.hardware.biometrics.BiometricPrompt.Builder(context)
+            .setTitle(reason)
+            .setAllowedAuthenticators(
+                android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                    android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+            )
+            .build()
+        runCatching {
+            prompt.authenticate(
+                android.os.CancellationSignal(), context.mainExecutor,
+                object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: android.hardware.biometrics.BiometricPrompt.AuthenticationResult?) = onOk()
+                },
+            )
+        }
+    }
+
     override fun accessibilitySettings() {
         start(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }

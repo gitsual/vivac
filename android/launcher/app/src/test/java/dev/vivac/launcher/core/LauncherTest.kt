@@ -663,6 +663,37 @@ class LauncherTest {
     }
 
     @Test
+    fun `hidden apps can ask for your fingerprint or PIN before they show, and the choice is kept`() {
+        val l = many()
+        assertFalse(l.protectHidden)
+        var shown = 0
+        l.seeHidden { shown++ }
+        assertEquals(1, shown)
+        l.toggleProtectHidden()
+        assertTrue(many().protectHidden)
+        actions.authOk = false
+        l.seeHidden { shown++ }
+        assertEquals("auth:Ver las apps ocultas", actions.calls.last())
+        assertEquals(1, shown)
+        actions.authOk = true
+        l.seeHidden { shown++ }
+        assertEquals(2, shown)
+        // Switching it off is guarded too, or anyone holding the phone could.
+        actions.authOk = false
+        l.toggleProtectHidden()
+        assertTrue(l.protectHidden)
+        actions.authOk = true
+        l.toggleProtectHidden()
+        assertFalse(l.protectHidden)
+        assertEquals("auth:Dejar de proteger las apps ocultas", actions.calls.last())
+        // A copy of the camp never carries it: restoring a file cannot switch it off.
+        l.toggleProtectHidden()
+        l.restoreLayout(Backup.export(store))
+        assertTrue(l.protectHidden)
+        assertFalse(Backup.export(store).contains(Launcher.KEY_PROTECT_HIDDEN))
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()
