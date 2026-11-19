@@ -707,6 +707,20 @@ class LauncherTest {
     }
 
     @Test
+    fun `searches that opened something are remembered, newest first, five at most, and can be cleared`() {
+        val l = many()
+        assertEquals(emptyList<String>(), l.searches)
+        listOf("mapas", "  Mapas ", "x", "wifi", "ana", "brillo", "termux", "calc").forEach(l::recordSearch)
+        assertEquals(listOf("calc", "termux", "brillo", "ana", "wifi"), l.searches)
+        assertEquals(l.searches, many().searches)
+        l.clearSearches()
+        assertEquals(emptyList<String>(), many().searches)
+        // Private: a copy of the camp does not carry them.
+        l.recordSearch("mapas")
+        assertFalse(Backup.export(store).contains("mapas"))
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

@@ -115,12 +115,25 @@ fun PetateScreen(
     askToSeeHidden: (() -> Unit) -> Unit = { it() },
     /** Where contacts and events are looked up: off the main thread. */
     io: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
+    /** Past searches that opened something, newest first; a tap searches again. */
+    searches: List<String> = emptyList(),
+    onSearched: (String) -> Unit = {},
+    onClearSearches: () -> Unit = {},
 ) {
+    var query by rememberSaveable { mutableStateOf("") }
+    // Whatever a search opens, the search is remembered.
+    fun <T> searched(open: (T) -> Unit): (T) -> Unit = { x -> if (query.isNotBlank()) onSearched(query.trim()); open(x) }
+    val openApp = searched(onOpenApp)
+    val openShortcut = searched(onOpenShortcut)
+    val openContact = searched(onOpenContact)
+    val openEvent = searched(onOpenEvent)
+    val openPage = searched(onOpenSettingsPage)
+    val webSearch = searched(onWebSearch)
+    val storeSearch = searched(onStoreSearch)
     // Holding an app and moving lifts it out of the petate, to be carried onto the camp.
     val carry: @Composable (InstalledApp, Color) -> Modifier? = { app, tone ->
-        drag?.let { Modifier.carriable(it, Held(app, Zone.Petate, tone), app.label, { onOpenApp(app.packageName) }, { onAppMenu(app.packageName) }, onDrop, onLand) }
+        drag?.let { Modifier.carriable(it, Held(app, Zone.Petate, tone), app.label, { openApp(app.packageName) }, { onAppMenu(app.packageName) }, onDrop, onLand) }
     }
-    var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf<Group?>(null) }
     var showHidden by rememberSaveable { mutableStateOf(false) }
     if (hidden.isEmpty()) showHidden = false
@@ -153,7 +166,7 @@ fun PetateScreen(
                     Text(Pack.summary(apps).uppercase(), style = Type.cota.copy(fontSize = 10.sp))
                 }
                 Text("Petate", style = Type.title.copy(fontSize = 44.sp, lineHeight = 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
-                SearchField(query, { query = it }, focus) { shelves.firstOrNull()?.second?.singleOrNull()?.let { onOpenApp(it.packageName) } }
+                SearchField(query, { query = it }, focus) { shelves.firstOrNull()?.second?.singleOrNull()?.let { openApp(it.packageName) } }
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val main = profile == null
                     Chip("Todo", main && filter == null && !showHidden) { filter = null; showHidden = false; profileId = null }
@@ -164,21 +177,28 @@ fun PetateScreen(
                     profiles.forEach { p -> Chip(p.kind.title, profileId == p.id) { profileId = if (profileId == p.id) null else p.id; filter = null; showHidden = false } }
                 }
                 if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
-                if (recent.isNotEmpty() && query.isBlank() && !showHidden && profile == null) LastPitch(recent, onOpenApp, onAppMenu, carry)
+                if (searches.isNotEmpty() && query.isBlank() && !showHidden && profile == null) {
+                    Text("BÚSQUEDAS", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.semantics { heading() })
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        searches.forEach { q -> Chip(q, false) { query = q } }
+                        Chip("Borrar", false, onClearSearches)
+                    }
+                }
+                if (recent.isNotEmpty() && query.isBlank() && !showHidden && profile == null) LastPitch(recent, openApp, onAppMenu, carry)
                 val answer = remember(query) { Calc.answer(query) }
                 if (answer != null) Answer(answer) { onCopy(answer) }
                 val people by produceState(emptyList<Contact>(), query) { value = kotlinx.coroutines.withContext(io) { findContacts(query) } }
                 val agenda by produceState(emptyList<CalendarEvent>(), query) { value = kotlinx.coroutines.withContext(io) { findEvents(query) } }
-                if (people.isNotEmpty()) Results("CONTACTOS", people.map { it.name to null }) { onOpenContact(people[it]) }
-                if (agenda.isNotEmpty()) Results("CALENDARIO", agenda.map { it.title to When.of(it.startMillis) }) { onOpenEvent(agenda[it]) }
+                if (people.isNotEmpty()) Results("CONTACTOS", people.map { it.name to null }) { openContact(people[it]) }
+                if (agenda.isNotEmpty()) Results("CALENDARIO", agenda.map { it.title to When.of(it.startMillis) }) { openEvent(agenda[it]) }
                 val pages = remember(query) { Pack.searchSettings(query) }
-                if (pages.isNotEmpty()) Results("AJUSTES DE ANDROID", pages.map { it.title to it.detail }) { onOpenSettingsPage(pages[it]) }
+                if (pages.isNotEmpty()) Results("AJUSTES DE ANDROID", pages.map { it.title to it.detail }) { openPage(pages[it]) }
                 val foundShortcuts = remember(query, shortcuts) { Pack.searchShortcuts(shortcuts, query).take(4) }
-                if (foundShortcuts.isNotEmpty()) ShortcutResults(foundShortcuts, onOpenShortcut)
+                if (foundShortcuts.isNotEmpty()) ShortcutResults(foundShortcuts, openShortcut)
                 if (query.isNotBlank()) {
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Chip("Buscar en la web", false) { onWebSearch(query.trim()) }
-                        Chip("Buscar en la tienda", false) { onStoreSearch(query.trim()) }
+                        Chip("Buscar en la web", false) { webSearch(query.trim()) }
+                        Chip("Buscar en la tienda", false) { storeSearch(query.trim()) }
                     }
                 }
                 if (shelves.isEmpty() && answer == null) {
@@ -202,7 +222,7 @@ fun PetateScreen(
                                 label = app.label,
                                 background = if (deep) Ink.deep else Ink.surface,
                                 border = Ink.field,
-                                onClick = { if (profile != null) onOpenInProfile(app.packageName, profile.id) else onOpenApp(app.packageName) },
+                                onClick = { if (profile != null) onOpenInProfile(app.packageName, profile.id) else openApp(app.packageName) },
                                 onLongClick = { if (profile == null) onAppMenu(app.packageName) },
                                 dot = profile == null && app.packageName in LocalDots.current,
                                 count = if (profile == null) LocalCounts.current[app.packageName] ?: 0 else 0,

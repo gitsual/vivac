@@ -229,6 +229,7 @@ fun LauncherApp(
                     onOpenShortcut = launcher::openShortcutFromPetate,
                     onOpenSettingsPage = launcher::openSettingsPage,
                     askToSeeHidden = launcher::seeHidden,
+                    searches = launcher.searches, onSearched = launcher::recordSearch, onClearSearches = launcher::clearSearches,
                     profiles = launcher.profiles,
                     columns = launcher.columns,
                     findContacts = launcher::findContacts,

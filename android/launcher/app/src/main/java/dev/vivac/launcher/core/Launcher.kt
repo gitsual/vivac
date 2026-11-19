@@ -250,6 +250,21 @@ class Launcher(
     /** The Petate's search also looks through your contacts, and your calendars. Off until you choose. */
     var searchContacts by mutableStateOf(store.get(KEY_CONTACTS) == "1"); private set
 
+    /** Searches that opened something, newest first. Private: kept out of backups. */
+    var searches by mutableStateOf(store.get(KEY_SEARCHES).orEmpty().split("\n").filter { it.isNotBlank() }); private set
+
+    fun recordSearch(query: String) {
+        val q = query.trim()
+        if (q.length < 2) return
+        searches = (listOf(q) + searches.filterNot { it.equals(q, ignoreCase = true) }).take(5)
+        store.put(mapOf(KEY_SEARCHES to searches.joinToString("\n")))
+    }
+
+    fun clearSearches() {
+        searches = emptyList()
+        store.put(mapOf(KEY_SEARCHES to ""))
+    }
+
     /** Hidden apps show only after your fingerprint or PIN. Kept out of backups, so a file cannot switch it off. */
     var protectHidden by mutableStateOf(store.get(KEY_PROTECT_HIDDEN) == "1"); private set
 
@@ -993,6 +1008,7 @@ class Launcher(
         const val KEY_ICONS = "icons"
         const val KEY_CONTACTS = "searchContacts"
         const val KEY_PROTECT_HIDDEN = "protectHidden"
+        const val KEY_SEARCHES = "searches"
         const val KEY_CALENDAR = "searchCalendar"
         const val KEY_ICON_PACK = "iconPack"
         const val KEY_ICON_FOR = "iconFor"

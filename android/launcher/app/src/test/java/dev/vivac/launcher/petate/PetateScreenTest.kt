@@ -15,6 +15,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextClearance
+import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeDown
@@ -187,6 +189,26 @@ class PetateScreenTest {
         compose.onNodeWithText("AJUSTES DE ANDROID").assertExists()
         compose.onNodeWithText("Pantalla").performClick()
         assertEquals(listOf(dev.vivac.launcher.core.SystemPage.PANTALLA), pages)
+    }
+
+    @Test
+    fun `what you open from a search is remembered, and past searches come back with a tap`() {
+        val searched = mutableListOf<String>()
+        var cleared = false
+        compose.setContent {
+            PetateScreen(
+                listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {},
+                searches = listOf("wifi"), onSearched = { searched += it }, onClearSearches = { cleared = true },
+            )
+        }
+        compose.onNodeWithText("BÚSQUEDAS").assertExists()
+        compose.onNodeWithText("wifi").performClick()
+        compose.onNodeWithText("AJUSTES DE ANDROID").assertExists()
+        compose.onNodeWithText("Wi-Fi").performClick()
+        assertEquals(listOf("wifi"), searched)
+        compose.onNodeWithContentDescription("Buscar en el petate").performTextClearance()
+        compose.onNodeWithText("Borrar").performClick()
+        assertTrue(cleared)
     }
 
     @Test

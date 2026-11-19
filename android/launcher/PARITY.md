@@ -98,7 +98,7 @@ third-party app can do; the API is noted.
 | X6 | At a glance on the camp: next event, next alarm, what is playing with controls (`MediaSessionManager` via the notification listener) | Pixel, Niagara, Kvaesitso | todo |
 | X7 | Widget stacks: several widgets in one slot, swiped through | Niagara, Nova | todo |
 | X8 | Petate auto-categories from `ApplicationInfo.category` (chips), plus your own tabs | Smart Launcher, Nova | todo |
-| X9 | Search history and favourite results | Lawnchair, Kvaesitso | todo |
+| X9 | Search history and favourite results | Lawnchair, Kvaesitso | done: «BÚSQUEDAS», the last five that opened something, a tap searches again, «Borrar»; private (not in backups). Favourites are the dock, route and pins |
 | X10 | File search: recent photos, downloads and documents (`MediaStore`, opt-in permission) | Lawnchair, Kvaesitso | todo |
 | X11 | Mindful opening: a pause before chosen apps, and today's screen time (`UsageStatsManager`, opt-in) | Niagara, Olauncher | todo |
 | X12 | Layout profiles: save and switch whole camps | Hyperion | todo |
