@@ -428,6 +428,47 @@ class LauncherAppTest {
         compose.onNodeWithText("Organic Maps").assertExists()
     }
 
+    @Test
+    fun `an app's category is changed from its menu to a new one, an existing one, or android's again`() {
+        store.values["pinned"] = "app.organicmaps"
+        show()
+        val category = { launcher.apps.first { it.packageName == "app.organicmaps" }.category }
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithText("Cambiar la categoría").tap()
+        compose.waitForIdle()
+        compose.onNodeWithText("Guardar").tap()
+        // A blank name saves nothing; the sheet stays.
+        assertEquals(null, category())
+        compose.onNodeWithContentDescription("Categoría nueva").performTextInput("Montaña")
+        compose.onNodeWithText("Guardar").tap()
+        compose.waitForIdle()
+        assertEquals("Montaña", category())
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithText("Cambiar la categoría").tap()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Categoría nueva").performTextInput("Viaje")
+        compose.onNodeWithContentDescription("Categoría nueva").performImeAction()
+        compose.waitForIdle()
+        assertEquals("Viaje", category())
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithText("Cambiar la categoría").tap()
+        compose.waitForIdle()
+        compose.onAllNodesWithText("Viaje").onLast().tap()
+        compose.waitForIdle()
+        assertEquals("Viaje", category())
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithText("Cambiar la categoría").tap()
+        compose.onNodeWithText("La de Android").tap()
+        compose.waitForIdle()
+        assertEquals(null, category())
+        compose.onNodeWithText("Organic Maps").performTouchInput { longClick() }
+        compose.onNodeWithText("Cambiar la categoría").tap()
+        compose.waitForIdle()
+        compose.runOnUiThread { launcher.cancelCategory() }
+        compose.waitForIdle()
+        assertEquals(null, launcher.categorizing)
+    }
+
     private fun find(v: View, match: (View) -> Boolean): View? {
         if (match(v)) return v
         if (v is android.view.ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i), match)?.let { return it }

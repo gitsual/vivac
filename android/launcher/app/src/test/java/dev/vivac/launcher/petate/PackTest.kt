@@ -161,4 +161,15 @@ class PackTest {
         assertEquals(emptyList<Any>(), Pack.searchSettings("qzx"))
         assertTrue(Pack.searchSettings("a").size <= 4)
     }
+
+    @Test
+    fun `android's app categories get spanish names, and the petate lists the ones present, sorted`() {
+        assertEquals("Juegos", Pack.androidCategory(0))
+        assertEquals("Mapas", Pack.androidCategory(6))
+        assertEquals("Accesibilidad", Pack.androidCategory(8))
+        assertEquals(null, Pack.androidCategory(-1))
+        assertEquals(null, Pack.androidCategory(99))
+        val apps = listOf(maps.copy(category = "Mapas"), termux, gmail.copy(category = "Productividad"), whatsapp.copy(category = "Social"), tailscale.copy(category = "mapas"))
+        assertEquals(listOf("Mapas", "Productividad", "Social"), Pack.categories(apps))
+    }
 }

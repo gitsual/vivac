@@ -326,6 +326,15 @@ fun LauncherApp(
             onDismiss = launcher::cancelIconPicker,
         )
     }
+    launcher.categorizing?.let { app ->
+        dev.vivac.launcher.petate.CategorySheet(
+            app = app.label,
+            current = app.category,
+            known = dev.vivac.launcher.petate.Pack.categories(launcher.apps),
+            onChoose = { launcher.chooseCategory(app.packageName, it) },
+            onDismiss = launcher::cancelCategory,
+        )
+    }
     launcher.renaming?.let { app ->
         RenameSheet(
             current = app.label,

@@ -11,7 +11,7 @@ import org.robolectric.util.ReflectionHelpers.ClassParameter
 
 /** Test helpers for Android types whose constructors are hidden. */
 object Robo {
-    fun activity(context: Context, label: String, pkg: String, system: Boolean = false, user: UserHandle = Process.myUserHandle()): LauncherActivityInfo {
+    fun activity(context: Context, label: String, pkg: String, system: Boolean = false, user: UserHandle = Process.myUserHandle(), category: Int = ApplicationInfo.CATEGORY_UNDEFINED): LauncherActivityInfo {
         val info = ActivityInfo().apply {
             packageName = pkg
             name = "$pkg.Main"
@@ -19,6 +19,7 @@ object Robo {
             applicationInfo = ApplicationInfo().apply {
                 packageName = pkg
                 flags = if (system) ApplicationInfo.FLAG_SYSTEM else 0
+                this.category = category
             }
         }
         val internalClass = Class.forName("android.content.pm.LauncherActivityInfoInternal")

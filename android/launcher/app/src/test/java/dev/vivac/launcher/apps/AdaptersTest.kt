@@ -3,6 +3,7 @@ package dev.vivac.launcher.apps
 import android.app.Application
 import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.content.pm.ShortcutInfo
 import android.os.Looper
@@ -33,13 +34,14 @@ class AdaptersTest {
     fun `installed apps come from LauncherApps, once per package, without vivac itself`() {
         launcherApps.addActivity(me, Robo.activity(app, "Termux", "com.termux"))
         launcherApps.addActivity(me, Robo.activity(app, "Termux", "com.termux"))
+        launcherApps.addActivity(me, Robo.activity(app, "Organic Maps", "app.organicmaps", category = ApplicationInfo.CATEGORY_MAPS))
         launcherApps.addActivity(me, Robo.activity(app, "Ajustes", "com.android.settings", system = true))
         launcherApps.addActivity(me, Robo.activity(app, "vivac", app.packageName))
         // The shadow does not promise an order, and the Petate sorts on its own: compare as a set, sizes too.
         val installed = AndroidAppSource(app).installed()
-        assertEquals(2, installed.size)
+        assertEquals(3, installed.size)
         assertEquals(
-            setOf(InstalledApp("Termux", "com.termux", false), InstalledApp("Ajustes", "com.android.settings", true)),
+            setOf(InstalledApp("Termux", "com.termux", false), InstalledApp("Ajustes", "com.android.settings", true), InstalledApp("Organic Maps", "app.organicmaps", false, "Mapas")),
             installed.toSet(),
         )
     }

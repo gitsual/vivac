@@ -52,6 +52,7 @@ class AndroidAppSource(private val context: Context) : AppSource {
                     label = it.label.toString(),
                     packageName = it.applicationInfo.packageName,
                     isSystem = it.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0,
+                    category = dev.vivac.launcher.petate.Pack.androidCategory(it.applicationInfo.category),
                 )
             }
             .distinctBy { it.packageName }

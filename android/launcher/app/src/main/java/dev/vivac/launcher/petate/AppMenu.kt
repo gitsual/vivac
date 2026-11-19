@@ -27,6 +27,8 @@ sealed interface MenuEntry {
     data object ToFolder : MenuEntry
     /** "Cambiar el icono": offered by the sheet, like [Rename]. */
     data object ChangeIcon : MenuEntry
+    /** "Cambiar la categoría": offered by the sheet, like [Rename]. */
+    data object Category : MenuEntry
     data object Info : MenuEntry
     data object Uninstall : MenuEntry
 }

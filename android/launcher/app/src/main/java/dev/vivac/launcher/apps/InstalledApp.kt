@@ -5,6 +5,8 @@ data class InstalledApp(
     val label: String,
     val packageName: String,
     val isSystem: Boolean,
+    /** Android's category in Spanish ("Mapas"), or one you gave it; null when it has none. */
+    val category: String? = null,
 )
 
 /** Another profile on the phone: a work profile, or Android 15's private space. */

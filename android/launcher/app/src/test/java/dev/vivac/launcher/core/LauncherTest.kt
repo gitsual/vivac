@@ -777,6 +777,29 @@ class LauncherTest {
     }
 
     @Test
+    fun `an app's category can be changed from its menu, to one of yours, and back to android's`() {
+        val l = many()
+        val pkg = l.apps.first().packageName
+        l.openMenu(pkg)
+        l.pick(MenuEntry.Category)
+        assertEquals(pkg, l.categorizing?.packageName)
+        assertTrue(l.sheetOpen)
+        l.chooseCategory(pkg, "  Montaña ")
+        assertEquals(null, l.categorizing)
+        assertEquals("Montaña", l.apps.first { it.packageName == pkg }.category)
+        assertEquals("Montaña", many().apps.first { it.packageName == pkg }.category)
+        val copy = Backup.export(store)
+        l.chooseCategory(pkg, "")
+        assertEquals(null, l.apps.first { it.packageName == pkg }.category)
+        l.restoreLayout(copy)
+        assertEquals("Montaña", l.apps.first { it.packageName == pkg }.category)
+        l.openMenu(pkg)
+        l.pick(MenuEntry.Category)
+        l.cancelCategory()
+        assertEquals(null, l.categorizing)
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

@@ -132,6 +132,10 @@ class Launcher(
 
     /** Names you gave apps, by package. */
     private var names = decodeNames(store.get(KEY_NAMES))
+    /** Categories you gave apps, by package; the rest keep Android's. */
+    private var categoryFor = decodeNames(store.get(KEY_CATEGORY_FOR))
+    /** The app whose category you are changing (from its menu). */
+    var categorizing by mutableStateOf<InstalledApp?>(null); private set
     private var installed = emptyList<InstalledApp>()
     /** The app whose name you are changing (from its menu). */
     var renaming by mutableStateOf<InstalledApp?>(null); private set
@@ -195,7 +199,7 @@ class Launcher(
     /** Any menu or sheet is open over the screen. */
     val sheetOpen: Boolean
         get() = campMenu || menu != null || picker != null || renaming != null || iconPicker != null ||
-            pickingQuickApps || addingTo != null || folderPicker != null || openFolder != null
+            pickingQuickApps || addingTo != null || folderPicker != null || openFolder != null || categorizing != null
 
     fun chooseVeil(v: Veil) {
         veil = v
@@ -647,6 +651,7 @@ class Launcher(
             MenuEntry.Rename -> renaming = app
             MenuEntry.ToFolder -> folderPicker = app
             MenuEntry.ChangeIcon -> iconPicker = app
+            MenuEntry.Category -> categorizing = app
             MenuEntry.Info -> actions.info(pkg)
             MenuEntry.Uninstall -> actions.uninstall(pkg)
         }
@@ -727,6 +732,7 @@ class Launcher(
         board = loadBoard()
         recent = store.get(KEY_RECENT).orEmpty().split(",").filter { it.isNotBlank() }
         names = decodeNames(store.get(KEY_NAMES))
+        categoryFor = decodeNames(store.get(KEY_CATEGORY_FOR))
         locked = store.get(KEY_LOCKED) == "1"
         doubleTapLock = store.get(KEY_DOUBLE_TAP) == "1"
         showWallpaper = store.get(KEY_WALLPAPER) == "1"
@@ -965,7 +971,21 @@ class Launcher(
         renaming = null
     }
 
-    private fun named() = installed.map { app -> names[app.packageName]?.let { app.copy(label = it) } ?: app }
+    private fun named() = installed.map { app ->
+        val renamed = names[app.packageName]?.let { app.copy(label = it) } ?: app
+        categoryFor[app.packageName]?.let { renamed.copy(category = it) } ?: renamed
+    }
+
+    /** A blank [name] gives the app back Android's category. */
+    fun chooseCategory(packageName: String, name: String) {
+        categorizing = null
+        val n = name.trim()
+        categoryFor = if (n.isEmpty()) categoryFor - packageName else categoryFor + (packageName to n)
+        store.put(mapOf(KEY_CATEGORY_FOR to encodeNames(categoryFor)))
+        apps = named()
+    }
+
+    fun cancelCategory() { categorizing = null }
 
     fun openPinned(packageName: String, id: String) = actions.openShortcut(packageName, id)
 
@@ -1077,6 +1097,7 @@ class Launcher(
         const val KEY_PROTECT_HIDDEN = "protectHidden"
         const val KEY_SEARCHES = "searches"
         const val KEY_PROFILES = "profiles"
+        const val KEY_CATEGORY_FOR = "categoryFor"
         const val KEY_PROFILE_NOW = "profileNow"
         const val KEY_CALENDAR = "searchCalendar"
         const val KEY_ICON_PACK = "iconPack"

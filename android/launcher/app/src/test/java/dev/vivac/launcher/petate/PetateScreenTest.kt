@@ -212,6 +212,18 @@ class PetateScreenTest {
     }
 
     @Test
+    fun `category chips show only the apps of that category, and a second tap shows all again`() {
+        compose.setContent {
+            PetateScreen(listOf(termux, maps.copy(category = "Mapas"), settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {})
+        }
+        compose.onNodeWithText("Mapas").performClick()
+        compose.onNodeWithText("Organic Maps").assertExists()
+        compose.onNodeWithText("Termux").assertDoesNotExist()
+        compose.onNodeWithText("Mapas").performClick()
+        compose.onNodeWithText("Termux").assertExists()
+    }
+
+    @Test
     fun `a search lists the shortcuts it matches, and a tap opens one`() {
         val opened = mutableListOf<FoundShortcut>()
         val chat = FoundShortcut(maps, AppShortcut("home", "Ir a casa"))

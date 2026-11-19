@@ -136,13 +136,16 @@ fun PetateScreen(
     }
     var filter by rememberSaveable { mutableStateOf<Group?>(null) }
     var showHidden by rememberSaveable { mutableStateOf(false) }
+    var category by rememberSaveable { mutableStateOf<String?>(null) }
     if (hidden.isEmpty()) showHidden = false
     // A chosen profile (work, private space) shows only its apps.
     var profileId by rememberSaveable { mutableStateOf<Long?>(null) }
     val profile = profiles.firstOrNull { it.id == profileId }
-    val found = remember(apps, hidden, showHidden, query, profile) {
+    val found = remember(apps, hidden, showHidden, query, profile, category) {
         Pack.search(profile?.apps ?: Pack.visible(apps, hidden, showHidden), query)
+            .filter { app -> category == null || app.category?.equals(category, ignoreCase = true) == true }
     }
+    val categories = remember(apps, hidden) { Pack.categories(Pack.visible(apps, hidden, false)) }
     val shelves = remember(found, filter) { Pack.grouped(found, filter) }
     val jumps = remember(shelves) { Pack.jumps(shelves) }
     val grid = rememberLazyGridState()
@@ -175,6 +178,11 @@ fun PetateScreen(
                         if (showHidden) showHidden = false else askToSeeHidden { showHidden = true; filter = null; profileId = null }
                     }
                     profiles.forEach { p -> Chip(p.kind.title, profileId == p.id) { profileId = if (profileId == p.id) null else p.id; filter = null; showHidden = false } }
+                }
+                if (categories.isNotEmpty() && profile == null && !showHidden) {
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        categories.forEach { c -> Chip(c, category == c) { category = if (category == c) null else c } }
+                    }
                 }
                 if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
                 if (searches.isNotEmpty() && query.isBlank() && !showHidden && profile == null) {

@@ -81,6 +81,15 @@ object Pack {
         return shortcuts.filter { fold(it.shortcut.label).contains(needle) }
     }
 
+    /** Android's `ApplicationInfo.CATEGORY_*` (0 games .. 8 accessibility), named for the petate's chips. */
+    private val androidCategories = listOf("Juegos", "Música", "Vídeo", "Fotos", "Social", "Noticias", "Mapas", "Productividad", "Accesibilidad")
+
+    fun androidCategory(code: Int): String? = androidCategories.getOrNull(code)
+
+    /** The categories among [apps], once each (case aside), in alphabetical order. */
+    fun categories(apps: List<InstalledApp>): List<String> =
+        apps.mapNotNull { it.category?.trim()?.takeIf(String::isNotEmpty) }.distinctBy { fold(it) }.sortedWith(collator)
+
     /**
      * Android's settings pages whose name or contents hold [query], names first, at most four. Letters and digits
      * only, so "wifi" finds "Wi-Fi".
