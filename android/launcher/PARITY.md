@@ -83,6 +83,32 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | S3 | Survive uninstalled apps, reboot, process death | done |
 | S4 | Set vivac as the default home from inside the app | done: camp menu, RoleManager dialog (default-apps page as fallback) |
 
+## Beyond Pixel Launcher and Lawnchair (survey of 19-11-2026)
+
+Nova, Niagara, Smart Launcher, Kvaesitso, Hyperion, Action, Microsoft Launcher, Olauncher. Only what a
+third-party app can do; the API is noted.
+
+| # | Feature | Who has it | Status |
+|---|---------|-----------|--------|
+| X1 | Android Settings search: settings pages as Petate results (fixed catalog of `Settings.ACTION_*`) | Lawnchair | todo |
+| X2 | More gesture actions through LockService: power menu, screenshot, quick settings, recents (`GLOBAL_ACTION_*`) | Nova, Hyperion | todo |
+| X3 | Pinch and two-finger swipe as configurable gestures | Nova, Microsoft, Hyperion | todo |
+| X4 | Swipe on an app or folder runs a second action (another app, a shortcut) | Nova, Action | todo |
+| X5 | Fingerprint/PIN to see hidden apps (`BiometricPrompt`) | Hyperion, Smart Launcher | todo |
+| X6 | At a glance on the camp: next event, next alarm, what is playing with controls (`MediaSessionManager` via the notification listener) | Pixel, Niagara, Kvaesitso | todo |
+| X7 | Widget stacks: several widgets in one slot, swiped through | Niagara, Nova | todo |
+| X8 | Petate auto-categories from `ApplicationInfo.category` (chips), plus your own tabs | Smart Launcher, Nova | todo |
+| X9 | Search history and favourite results | Lawnchair, Kvaesitso | todo |
+| X10 | File search: recent photos, downloads and documents (`MediaStore`, opt-in permission) | Lawnchair, Kvaesitso | todo |
+| X11 | Mindful opening: a pause before chosen apps, and today's screen time (`UsageStatsManager`, opt-in) | Niagara, Olauncher | todo |
+| X12 | Layout profiles: save and switch whole camps | Hyperion | todo |
+| X13 | Wallpaper veil strength (how dark the night over your wallpaper is) | Hyperion | todo |
+| X14 | Blur behind the Petate and sheets (`RenderEffect`, API 31+) | Hyperion, Smart Launcher | todo |
+| X15 | Lock the screen without accessibility: device admin `lockNow` as the alternative | Hyperion | todo |
+| X16 | Import a Nova or Lawnchair layout | Lawnchair | todo |
+| X17 | Reply to notifications from home | Niagara | done: vivac's shade replies inline (`RemoteInput`) |
+| X18 | Wallpaper-derived colours, icon shapes, custom fonts | Smart Launcher, Lawnchair | n/a by design: vivac's look is its own palette, glyphs and fonts |
+
 ## Not possible for a third-party launcher
 
 | Feature | Why |
