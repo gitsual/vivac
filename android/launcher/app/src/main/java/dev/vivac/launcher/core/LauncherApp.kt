@@ -130,6 +130,7 @@ fun LauncherApp(
             stackOf = launcher::stackOf,
             onStack = launcher::stackOn,
             onUnstack = launcher::unstack,
+            onRemoveWidget = launcher::removeWidget,
             twoFingerState = claimed,
             onOpenFolder = launcher::openFolder,
             onSwipeUp = launcher::onSwipeUp,

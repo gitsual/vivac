@@ -162,6 +162,7 @@ fun CampamentoScreen(
     stackOf: (Int) -> List<Int> = { listOf(it) },
     onStack: (Int) -> Unit = {},
     onUnstack: (top: Int, id: Int) -> Unit = { _, _ -> },
+    onRemoveWidget: (Int) -> Unit = {},
     /** Apps with notices, newest first: their glyphs sit top left. */
     noticeApps: List<InstalledApp> = emptyList(),
     /** vivac's shade (Android's when vivac may not read notifications). */
@@ -235,6 +236,7 @@ fun CampamentoScreen(
                     ownOf = { sid -> if (sid < 0) ({ vivacWidget(sid, widgetRows(w.id)) }) else null },
                     onStack = { onStack(w.id) },
                     onUnstack = { sid -> onUnstack(w.id, sid) },
+                    onRemove = onRemoveWidget,
                 ) { onResizeWidget(w.id, it) }
             }
             // While something is carried, every page stays composed: the page it came from holds the finger (a
@@ -686,6 +688,8 @@ private fun WidgetCard(
     ownOf: (Int) -> (@Composable () -> Unit)? = { null },
     onStack: () -> Unit = {},
     onUnstack: (Int) -> Unit = {},
+    /** Removes the widget shown: the top, or the one swiped to in a stack. */
+    onRemove: (Int) -> Unit = {},
     onResize: (Int) -> Unit,
 ) {
     androidx.compose.runtime.DisposableEffect(drag, id) { onDispose { drag.forgetWidget(id) } }
@@ -741,6 +745,7 @@ private fun WidgetCard(
             Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (current != id) StackChip("Sacar de la pila") { onUnstack(current) }
                 StackChip("Apilar otro", onStack)
+                StackChip("Quitar") { onRemove(current) }
             }
             ResizeBar(shownRows, onResize, Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp))
         }

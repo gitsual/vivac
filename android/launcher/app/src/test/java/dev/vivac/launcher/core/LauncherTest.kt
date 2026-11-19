@@ -967,6 +967,23 @@ class LauncherTest {
     }
 
     @Test
+    fun `a widget stacked under another is listed to remove, and removing it leaves the top alone`() {
+        widgets.offered = listOf(clock)
+        val l = many()
+        l.showPicker(); l.addWidget(clock)
+        val top = l.board.ids.single()
+        l.stackOn(top)
+        l.addWidget(l.picker!!.first { it.label == "De un vistazo · vivac" })
+        val glance = l.stackOf(top).last()
+        assertEquals(listOf(top, glance), l.placedWidgets().map { it.id })
+        assertEquals("De un vistazo", l.placedWidgets().last().label)
+        l.removeWidget(glance)
+        assertEquals(listOf(top), l.stackOf(top))
+        assertEquals(listOf(top), l.board.ids)
+        assertFalse(glance in l.vivacWidgets)
+    }
+
+    @Test
     fun `a nova or lawnchair layout replaces the dock, route and laderas, keeping the widgets`() {
         widgets.offered = listOf(clock)
         val l = many()

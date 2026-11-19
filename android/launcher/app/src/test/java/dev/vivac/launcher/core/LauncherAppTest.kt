@@ -1347,6 +1347,27 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `a widget being edited can be removed, the one shown in a stack included`() {
+        store.values["vivacWidgets"] = "-1=vivac:chats:com.termux,-2=vivac:glance:dev.vivac.launcher"
+        store.values["widgets"] = "-1"
+        store.values["stacks"] = "-1=-2"
+        show()
+        compose.onNodeWithTag("stack:-1").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.runOnUiThread { launcher.editWidget(-1) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Quitar").performClick()
+        compose.waitForIdle()
+        assertEquals(listOf(-1), launcher.stackOf(-1))
+        assertFalse(-2 in launcher.vivacWidgets)
+        compose.runOnUiThread { launcher.editWidget(-1) }
+        compose.waitForIdle()
+        compose.onNodeWithText("Quitar").performClick()
+        compose.waitForIdle()
+        assertTrue(launcher.board.ids.isEmpty())
+    }
+
+    @Test
     fun `vivac's chats and shortcuts widgets show the app's chats and shortcuts in vivac's own look, and open them`() {
         actions.dotsOn = true
         actions.shortcuts = mapOf("com.termux" to listOf(AppShortcut("s", "Chat de voz")))

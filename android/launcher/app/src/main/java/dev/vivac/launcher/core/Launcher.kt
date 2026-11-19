@@ -802,7 +802,8 @@ class Launcher(
     fun openCampMenu() { campMenu = true }
     fun dismissCampMenu() { campMenu = false }
 
-    fun placedWidgets(): List<PlacedLabel> = board.ids.map { PlacedLabel(it, widgetLabel(it)) }
+    /** Every widget on the camp, the ones stacked under another included, so any of them can be removed. */
+    fun placedWidgets(): List<PlacedLabel> = board.ids.flatMap { stackOf(it) }.map { PlacedLabel(it, widgetLabel(it)) }
 
     /** vivac's own widgets on the board, by their (negative) id. */
     var vivacWidgets by mutableStateOf(dev.vivac.launcher.campamento.VivacWidget.decode(store.get(KEY_VIVAC_WIDGETS))); private set
