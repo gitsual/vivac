@@ -23,6 +23,7 @@ Status: `done` · `todo` · `n/a` (Android does not allow it for a third-party l
 | H11 | Wallpaper: show the system wallpaper behind vivac, or keep the solid camp | done: camp menu toggle, night veil over it |
 | H12 | Set wallpaper from the camp menu | done: system picker |
 | H13 | Laderas: home pages right of the camp, with widgets and apps; new one on demand, empty ones close | done |
+| H14 | Lock screen wallpaper: vivac's night drawn for the lock screen, and the phone's own back | done: settings «PANTALLA DE BLOQUEO» (WallpaperManager FLAG_LOCK); clock and notifications stay Android's (only vivac-os can restyle them) |
 
 ## Drawer (Petate)
 
