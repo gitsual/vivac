@@ -179,6 +179,7 @@ class AdaptersTest {
         assertEquals("mapas", search?.getStringExtra(android.app.SearchManager.QUERY))
         actions.pickWallpaper()
         assertEquals(Intent.ACTION_CHOOSER, nextIntent()?.action)
+        actions.pickImport()
         actions.storeSearch("mapas")
         assertEquals("market://search?q=mapas", nextIntent()?.data.toString())
     }

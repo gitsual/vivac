@@ -80,6 +80,8 @@ interface Actions {
     fun iconPacks(): List<IconPackInfo>
     /** Android's file picker for a copy to restore. */
     fun pickBackup()
+    /** Android's file picker for another launcher's backup (Nova, Lawnchair) to import. */
+    fun pickImport()
     /** The web search app you use (or the browser), for [query]. */
     fun webSearch(query: String)
     /** The app store you use (any that answers market:// links), for [query]. */

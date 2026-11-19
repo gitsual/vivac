@@ -967,6 +967,27 @@ class LauncherTest {
     }
 
     @Test
+    fun `a nova or lawnchair layout replaces the dock, route and laderas, keeping the widgets`() {
+        widgets.offered = listOf(clock)
+        val l = many()
+        l.showPicker(); l.addWidget(clock)
+        val widget = l.board.ids.single()
+        l.askImport()
+        assertEquals("import", actions.calls.last())
+        l.importLayout(emptyList())
+        assertEquals("say:Ese archivo no es una copia de Nova ni de Lawnchair.", actions.calls.last())
+        val row = { id: Long, pkg: String, container: Long, screen: Int, x: Int ->
+            Launcher3Row(id, container, screen, x, 0, 0, 0, "#Intent;component=$pkg/.M;end", pkg)
+        }
+        l.importLayout(listOf(row(1, "com.termux", -101, 0, 0), row(2, "app.organicmaps", -100, 0, 0), row(3, "org.signal", -100, 1, 0)))
+        assertEquals(listOf("com.termux"), l.home.dock)
+        assertEquals(listOf("app.organicmaps"), l.home.pinned)
+        assertTrue(widget in l.board.ids)
+        assertTrue(actions.calls.last().startsWith("say:Importado:"))
+        assertEquals(listOf("com.termux"), many().home.dock)
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

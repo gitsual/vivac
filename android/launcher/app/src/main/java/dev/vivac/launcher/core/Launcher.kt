@@ -902,6 +902,21 @@ class Launcher(
         actions.backUp()
     }
 
+    fun askImport() {
+        campMenu = false
+        actions.pickImport()
+    }
+
+    /** Another launcher's home replaces the dock, the route and the laderas; your widgets stay where they are. */
+    fun importLayout(rows: List<Launcher3Row>) {
+        val camp = LayoutImport.toCamp(rows, apps.map { it.packageName }.toSet())
+        if (camp.count == 0) return actions.say("Ese archivo no es una copia de Nova ni de Lawnchair.")
+        apply(HomeChange(home.copy(dock = camp.dock, pinned = camp.route, dockChosen = true)))
+        saveBoard(WidgetBoard(board.items.filterIsInstance<Placed>() + camp.laderas).tidied())
+        val pages = camp.laderas.map { it.page }.distinct().size
+        actions.say("Importado: ${camp.dock.size} en el dock, ${camp.route.size} en el campamento y ${camp.count - camp.dock.size - camp.route.size} en $pages laderas.")
+    }
+
     fun askRestore() {
         campMenu = false
         actions.pickBackup()

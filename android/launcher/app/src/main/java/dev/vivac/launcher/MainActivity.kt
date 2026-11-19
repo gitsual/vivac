@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
             when (requestCode) {
                 AppActions.REQ_BACKUP -> return saveCopy(uri)
                 AppActions.REQ_RESTORE -> return readCopy(uri)
+                AppActions.REQ_IMPORT -> return importLayout(uri)
             }
         }
         val step = when (requestCode) {
@@ -100,6 +101,12 @@ class MainActivity : ComponentActivity() {
         val ok = runCatching { contentResolver.openOutputStream(uri, "wt")!!.use { it.write(launcher.exportLayout().toByteArray()) } }
             .onFailure { android.util.Log.w("vivac", "copy not saved", it) }.isSuccess
         actions.say(if (ok) "Copia del campamento guardada." else "No se pudo guardar la copia.")
+    }
+
+    private fun importLayout(uri: android.net.Uri) {
+        runCatching { dev.vivac.launcher.apps.LayoutReader.read(this, uri) }
+            .onSuccess(launcher::importLayout)
+            .onFailure { actions.say("No se pudo leer ese archivo.") }
     }
 
     private fun readCopy(uri: android.net.Uri) {

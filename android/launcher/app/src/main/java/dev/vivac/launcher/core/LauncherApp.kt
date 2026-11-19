@@ -205,7 +205,7 @@ fun LauncherApp(
                 ),
                 SettingsActions(
                     toggleLock = launcher::toggleLock, toggleWallpaper = launcher::toggleWallpaper, changeWallpaper = launcher::changeWallpaper,
-                    paintLock = launcher::paintLockScreen, restoreLock = launcher::restoreLockScreen, toggleProtectHidden = launcher::toggleProtectHidden, toggleFiles = launcher::toggleFiles, chooseVeil = launcher::chooseVeil, useLockAdmin = launcher::useLockAdmin, toggleBlurSheets = launcher::toggleBlurSheets, toggleBlurWallpaper = launcher::toggleBlurWallpaper, saveCamp = launcher::saveCamp, chooseTwoFinger = launcher::chooseTwoFinger, switchCamp = launcher::switchCamp, deleteCamp = launcher::deleteCamp,
+                    paintLock = launcher::paintLockScreen, restoreLock = launcher::restoreLockScreen, toggleProtectHidden = launcher::toggleProtectHidden, toggleFiles = launcher::toggleFiles, chooseVeil = launcher::chooseVeil, useLockAdmin = launcher::useLockAdmin, toggleBlurSheets = launcher::toggleBlurSheets, toggleBlurWallpaper = launcher::toggleBlurWallpaper, saveCamp = launcher::saveCamp, importLayout = launcher::askImport, chooseTwoFinger = launcher::chooseTwoFinger, switchCamp = launcher::switchCamp, deleteCamp = launcher::deleteCamp,
                     toggleLabels = launcher::toggleLabels, toggleTintWidgets = launcher::toggleTintWidgets, setColumns = launcher::chooseColumns, allowDots = launcher::allowDots,
                     toggleCounts = launcher::toggleCounts, setSwipeUp = launcher::chooseSwipeUp, setSwipeDown = launcher::chooseSwipeDown,
                     toggleDoubleTap = launcher::toggleDoubleTapLock, backUp = launcher::backUp, restore = launcher::askRestore,

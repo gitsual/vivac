@@ -104,6 +104,7 @@ class AppActions(private val context: Context) : Actions {
         const val REQ_HOME = 7003
         const val REQ_BACKUP = 7004
         const val REQ_RESTORE = 7005
+        const val REQ_IMPORT = 7009
         /**
          * Ranks are counted separately for manifest and dynamic shortcuts; like the Pixel launcher,
          * the app's declared ones come first.
@@ -317,6 +318,10 @@ class AppActions(private val context: Context) : Actions {
         }
         true
     }.getOrDefault(false)
+
+    override fun pickImport() {
+        forResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), REQ_IMPORT)
+    }
 
     override fun pickBackup() {
         forResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain"), REQ_RESTORE)

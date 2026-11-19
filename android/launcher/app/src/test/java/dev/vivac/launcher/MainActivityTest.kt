@@ -166,6 +166,19 @@ class MainActivityTest {
     }
 
     @Test
+    fun `an imported file that is not a launcher's copy is refused`() {
+        start()
+        val file = android.net.Uri.parse("content://docs/nota.txt")
+        shadowOf(app.contentResolver).registerInputStream(file, "hola".byteInputStream())
+        result(dev.vivac.launcher.apps.AppActions.REQ_IMPORT, android.app.Activity.RESULT_OK, Intent().setData(file))
+        assertEquals("Ese archivo no es una copia de Nova ni de Lawnchair.", org.robolectric.shadows.ShadowToast.getTextOfLatestToast())
+        val broken = android.net.Uri.parse("content://docs/rota.db")
+        shadowOf(app.contentResolver).registerInputStreamSupplier(broken) { throw java.io.IOException("gone") }
+        result(dev.vivac.launcher.apps.AppActions.REQ_IMPORT, android.app.Activity.RESULT_OK, Intent().setData(broken))
+        assertEquals("No se pudo leer ese archivo.", org.robolectric.shadows.ShadowToast.getTextOfLatestToast())
+    }
+
+    @Test
     fun `it opens on the camp with the installed apps in the dock`() {
         start()
         compose.onNode(androidx.compose.ui.test.hasContentDescription("Campamento, página 1", substring = true)).assertExists()

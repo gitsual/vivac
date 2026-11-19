@@ -89,6 +89,7 @@ class FakeActions : Actions {
     var allShortcuts = listOf<Pair<String, AppShortcut>>()
     override fun allShortcuts() = allShortcuts
     override fun pickBackup() { calls += "restore" }
+    override fun pickImport() { calls += "import" }
     override fun webSearch(query: String) { calls += "web:$query" }
     override fun storeSearch(query: String) { calls += "store:$query" }
     override fun pinShortcuts(packageName: String, ids: List<String>) { calls += "pinShortcuts:$packageName:$ids" }

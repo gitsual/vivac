@@ -90,6 +90,7 @@ class SettingsActions(
     val toggleBlurSheets: () -> Unit = {},
     val toggleBlurWallpaper: () -> Unit = {},
     val saveCamp: (String) -> Unit = {},
+    val importLayout: () -> Unit = {},
     val chooseTwoFinger: (dev.vivac.launcher.core.TwoFinger, Gesture, String?) -> Unit = { _, _, _ -> },
     val switchCamp: (String) -> Unit = {},
     val deleteCamp: (String) -> Unit = {},
@@ -193,6 +194,7 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             Section("COPIA")
             Action("Guardar una copia del campamento", act.backUp)
             Action("Restaurar una copia", act.restore)
+            Action("Importar de Nova o Lawnchair", act.importLayout)
 
             Section("PERFILES")
             Text("Guarda el campamento entero con un nombre y cambia entre ellos. Los widgets se quedan como están.", style = Type.small)
