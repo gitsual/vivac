@@ -69,6 +69,8 @@ class FakeActions : Actions {
     override fun askToBeHome() { calls += "askHome" }
     override fun backUp() { calls += "backup" }
     override fun pickWallpaper() { calls += "wallpaper" }
+    var lockNightWorks = true
+    override fun setLockNight(on: Boolean): Boolean { calls += "lockNight:$on"; return lockNightWorks }
     var packs = listOf<IconPackInfo>()
     override fun iconPacks() = packs
     override fun openInProfile(packageName: String, profile: Long) { calls += "openIn:$profile:$packageName" }

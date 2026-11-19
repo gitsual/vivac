@@ -622,6 +622,18 @@ class LauncherTest {
     }
 
     @Test
+    fun `vivac's night goes on the lock screen, the phone's own lock wallpaper comes back, and a refusal is said`() {
+        val l = many()
+        l.paintLockScreen()
+        assertEquals(listOf("lockNight:true", "say:La noche de vivac ya está en la pantalla de bloqueo."), actions.calls.takeLast(2))
+        l.restoreLockScreen()
+        assertEquals(listOf("lockNight:false", "say:La pantalla de bloqueo vuelve a tu fondo de pantalla."), actions.calls.takeLast(2))
+        actions.lockNightWorks = false
+        l.paintLockScreen()
+        assertEquals("say:Android no dejó cambiar la pantalla de bloqueo.", actions.calls.last())
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

@@ -182,6 +182,17 @@ class AdaptersTest {
     }
 
     @Test
+    fun `the lock screen gets vivac's night as its own wallpaper, and gives it back`() {
+        val actions = AppActions(app)
+        val wallpapers = shadowOf(android.app.WallpaperManager.getInstance(app))
+        assertTrue(actions.setLockNight(true))
+        val lock = wallpapers.getBitmap(android.app.WallpaperManager.FLAG_LOCK)
+        assertTrue(lock != null && lock.width > 0)
+        assertNull(wallpapers.getBitmap(android.app.WallpaperManager.FLAG_SYSTEM))
+        assertTrue(actions.setLockNight(false))
+    }
+
+    @Test
     fun `the lock service turns the screen off only while it is switched on`() {
         val actions = AppActions(app)
         assertFalse(actions.lockScreenReady())

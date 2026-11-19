@@ -268,6 +268,22 @@ class AppActions(private val context: Context) : Actions {
         start(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Fondo de pantalla").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
+    /** Painted at the screen's full size; off clears the lock wallpaper, so the lock screen shows the home one again. */
+    override fun setLockNight(on: Boolean): Boolean = runCatching {
+        val wallpapers = android.app.WallpaperManager.getInstance(context)
+        if (on) {
+            val metrics = context.resources.displayMetrics
+            // The whole screen, status bar included; the display's metrics when the window manager has none yet.
+            val size = context.getSystemService(android.view.WindowManager::class.java)?.maximumWindowMetrics?.bounds
+                ?.takeUnless { it.isEmpty } ?: android.graphics.Rect(0, 0, metrics.widthPixels, metrics.heightPixels)
+            val night = dev.vivac.launcher.theme.LockNight.paint(size.width(), size.height(), metrics.density)
+            wallpapers.setBitmap(night, null, true, android.app.WallpaperManager.FLAG_LOCK)
+        } else {
+            wallpapers.clear(android.app.WallpaperManager.FLAG_LOCK)
+        }
+        true
+    }.getOrDefault(false)
+
     override fun pickBackup() {
         forResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("text/plain"), REQ_RESTORE)
     }

@@ -73,6 +73,8 @@ class SettingsActions(
     val toggleLock: () -> Unit = {},
     val toggleWallpaper: () -> Unit = {},
     val changeWallpaper: () -> Unit = {},
+    val paintLock: () -> Unit = {},
+    val restoreLock: () -> Unit = {},
     val toggleLabels: () -> Unit = {},
     val toggleTintWidgets: () -> Unit = {},
     val setColumns: (Int) -> Unit = {},
@@ -117,6 +119,10 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             if (state.wallpaper) Action("Cambiar el fondo de pantalla", act.changeWallpaper)
             Toggle("Nombres bajo las apps", "Sin nombres, TalkBack los sigue leyendo.", state.labels, act.toggleLabels)
             Toggle("Widgets con los colores de vivac", "Tiñe cada widget: su negro pasa a ser el de las tarjetas y su blanco, el papel.", state.tintWidgets, act.toggleTintWidgets)
+
+            Section("PANTALLA DE BLOQUEO")
+            Action("Poner la noche de vivac", act.paintLock)
+            Action("Volver a tu fondo", act.restoreLock)
 
             Section("ICONOS")
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

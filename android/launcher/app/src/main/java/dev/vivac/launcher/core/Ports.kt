@@ -62,6 +62,8 @@ interface Actions {
     fun backUp()
     /** Android's wallpaper picker. */
     fun pickWallpaper()
+    /** Vivac's night as the lock screen's own wallpaper, or (off) the lock screen back on the home wallpaper. False when Android refuses. */
+    fun setLockNight(on: Boolean): Boolean
     /** Icon packs installed on the phone. */
     fun iconPacks(): List<IconPackInfo>
     /** Android's file picker for a copy to restore. */

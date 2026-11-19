@@ -160,6 +160,15 @@ class Launcher(
         actions.pickWallpaper()
     }
 
+    /** The camp's night, standing still, on the lock screen. */
+    fun paintLockScreen() {
+        actions.say(if (actions.setLockNight(true)) "La noche de vivac ya está en la pantalla de bloqueo." else LOCK_REFUSED)
+    }
+
+    fun restoreLockScreen() {
+        actions.say(if (actions.setLockNight(false)) "La pantalla de bloqueo vuelve a tu fondo de pantalla." else LOCK_REFUSED)
+    }
+
     /** Columns in the Petate's grid: 4 or 5. */
     var columns by mutableStateOf(store.get(KEY_COLUMNS)?.toIntOrNull()?.coerceIn(4, 5) ?: 4); private set
     /** Names under the tiles. */
@@ -889,6 +898,7 @@ class Launcher(
         const val KEY_LOCKED = "locked"
         const val KEY_DOUBLE_TAP = "doubleTapLock"
         const val KEY_WALLPAPER = "wallpaper"
+        private const val LOCK_REFUSED = "Android no dejó cambiar la pantalla de bloqueo."
         const val KEY_COLUMNS = "columns"
         const val KEY_LABELS = "labels"
         const val KEY_TINT_WIDGETS = "tintWidgets"

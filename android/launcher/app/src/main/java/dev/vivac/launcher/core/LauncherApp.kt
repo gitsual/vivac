@@ -174,6 +174,7 @@ fun LauncherApp(
                 ),
                 SettingsActions(
                     toggleLock = launcher::toggleLock, toggleWallpaper = launcher::toggleWallpaper, changeWallpaper = launcher::changeWallpaper,
+                    paintLock = launcher::paintLockScreen, restoreLock = launcher::restoreLockScreen,
                     toggleLabels = launcher::toggleLabels, toggleTintWidgets = launcher::toggleTintWidgets, setColumns = launcher::chooseColumns, allowDots = launcher::allowDots,
                     toggleCounts = launcher::toggleCounts, setSwipeUp = launcher::chooseSwipeUp, setSwipeDown = launcher::chooseSwipeDown,
                     toggleDoubleTap = launcher::toggleDoubleTapLock, backUp = launcher::backUp, restore = launcher::askRestore,
