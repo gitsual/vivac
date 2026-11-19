@@ -16,14 +16,14 @@ object Backup {
         Launcher.KEY_NAMES, Launcher.KEY_LOCKED, Launcher.KEY_DOUBLE_TAP, Launcher.KEY_WALLPAPER, Launcher.KEY_VEIL, Launcher.KEY_BLUR_SHEETS, Launcher.KEY_BLUR_WALLPAPER,
         Launcher.KEY_COLUMNS, Launcher.KEY_LABELS, Launcher.KEY_COUNTS, Launcher.KEY_SWIPE_UP, Launcher.KEY_SWIPE_DOWN, Launcher.KEY_SWIPE_UP_APP, Launcher.KEY_SWIPE_DOWN_APP,
         Launcher.KEY_ICONS, Launcher.KEY_ICON_PACK, Launcher.KEY_ICON_FOR, Launcher.KEY_CATEGORY_FOR, Launcher.KEY_PAUSE_FOR,
-    )
+    ) + TwoFinger.entries.flatMap { listOf(it.key, it.appKey) }
 
     private val DEFAULTS = mapOf(
         Launcher.KEY_NAMES to "", Launcher.KEY_LOCKED to "0", Launcher.KEY_DOUBLE_TAP to "0", Launcher.KEY_WALLPAPER to "0", Launcher.KEY_VEIL to "MEDIO", Launcher.KEY_BLUR_SHEETS to "1", Launcher.KEY_BLUR_WALLPAPER to "0",
         Launcher.KEY_COLUMNS to "4", Launcher.KEY_LABELS to "1", Launcher.KEY_COUNTS to "0",
         Launcher.KEY_SWIPE_UP to "PETATE", Launcher.KEY_SWIPE_DOWN to "NOTIFICATIONS",
         Launcher.KEY_ICONS to "GLYPHS", Launcher.KEY_ICON_PACK to "", Launcher.KEY_ICON_FOR to "", Launcher.KEY_CATEGORY_FOR to "", Launcher.KEY_PAUSE_FOR to "",
-    )
+    ) + TwoFinger.entries.flatMap { listOf(it.key to "NOTHING", it.appKey to "") }
 
     fun export(store: Store): String = buildString {
         append(HEADER).append('\n')

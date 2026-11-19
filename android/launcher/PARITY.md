@@ -92,7 +92,7 @@ third-party app can do; the API is noted.
 |---|---------|-----------|--------|
 | X1 | Android Settings search: settings pages as Petate results (fixed catalog of `Settings.ACTION_*`) | Lawnchair | done: «AJUSTES DE ANDROID» results, by name or contents ("brillo" finds Pantalla), the 26 pages vivac already opens |
 | X2 | More gesture actions through LockService: power menu, screenshot, quick settings, recents (`GLOBAL_ACTION_*`) | Nova, Hyperion | done: four new swipe choices; without the service, vivac says why and opens Accessibility |
-| X3 | Pinch and two-finger swipe as configurable gestures | Nova, Microsoft, Hyperion | todo |
+| X3 | Pinch and two-finger swipe as configurable gestures | Nova, Microsoft, Hyperion | done: pinch, two fingers up, two fingers down, each set to any gesture or app; a two-finger move never also counts as a swipe |
 | X4 | Swipe on an app or folder runs a second action (another app, a shortcut) | Nova, Action | todo |
 | X5 | Fingerprint/PIN to see hidden apps (`BiometricPrompt`) | Hyperion, Smart Launcher | done: settings toggle; switching it off asks too; kept out of backups so a file cannot remove it |
 | X6 | At a glance on the camp: next event, next alarm, what is playing with controls (`MediaSessionManager` via the notification listener) | Pixel, Niagara, Kvaesitso | todo |

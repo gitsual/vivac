@@ -24,6 +24,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.performMultiModalInput
+import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.performImeAction
@@ -140,6 +143,33 @@ class LauncherAppTest {
         assertEquals(listOf("notifications"), actions.calls)
         compose.onRoot().performTouchInput { swipeUp() }
         compose.waitForIdle()
+        assertEquals(Screen.PETATE, launcher.screen)
+    }
+
+    @Test
+    fun `a pinch on the camp runs its gesture, and a two-finger drag is not also a swipe`() {
+        store.values[TwoFinger.PINCH.key] = Gesture.NOTIFICATIONS.name
+        store.values[TwoFinger.TWO_UP.key] = Gesture.SEARCH.name
+        show()
+        compose.onRoot().performTouchInput {
+            pinch(Offset(centerX - 300f, centerY), Offset(centerX - 40f, centerY), Offset(centerX + 300f, centerY), Offset(centerX + 40f, centerY))
+        }
+        compose.waitForIdle()
+        assertEquals(listOf("notifications"), actions.calls)
+        compose.onRoot().performMultiModalInput {
+            touch {
+                down(0, Offset(centerX - 100f, centerY + 400f))
+                down(1, Offset(centerX + 100f, centerY + 400f))
+                repeat(10) { step ->
+                    moveTo(0, Offset(centerX - 100f, centerY + 400f - 60f * (step + 1)))
+                    moveTo(1, Offset(centerX + 100f, centerY + 400f - 60f * (step + 1)))
+                }
+                up(0)
+                up(1)
+            }
+        }
+        compose.waitForIdle()
+        assertTrue(launcher.focusSearch)
         assertEquals(Screen.PETATE, launcher.screen)
     }
 
@@ -716,6 +746,7 @@ class LauncherAppTest {
         compose.onAllNodesWithText("Buscar")[0].tap()
         compose.onAllNodesWithText("Nada")[1].tap()
         compose.onNodeWithText("Doble toque apaga la pantalla").performScrollTo().performClick()
+        compose.onAllNodesWithText("Ver los avisos").onLast().performScrollTo().performClick()
         compose.onNodeWithText("Apagar sin Accesibilidad").performScrollTo().performClick()
         compose.onNodeWithText("Pack de iconos").tap()
         compose.onNodeWithText("No hay ningún pack de iconos instalado. Busca «icon pack» en tu tienda de apps.").assertExists()
@@ -738,6 +769,7 @@ class LauncherAppTest {
         assertEquals(Veil.OSCURO, launcher.veil)
         assertTrue("lockAdmin" in actions.calls)
         assertTrue(launcher.blurWallpaper)
+        assertEquals(Gesture.NOTIFICATIONS, launcher.gestureOf(TwoFinger.TWO_DOWN))
         assertFalse(launcher.blurSheets)
         assertEquals(emptyList<String>(), launcher.camps)
         assertTrue("say:Campamento «Viaje»." in actions.calls)

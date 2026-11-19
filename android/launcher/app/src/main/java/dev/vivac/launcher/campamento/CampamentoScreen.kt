@@ -143,6 +143,7 @@ fun CampamentoScreen(
     wallpaper: Boolean = false,
     /** The night veil over the wallpaper, 0..1. */
     veil: Float = 0.62f,
+    onTwoFinger: (dev.vivac.launcher.core.TwoFinger) -> Unit = {},
     onOpenFolder: (String) -> Unit = {},
     onSwipeUp: () -> Unit = { onOpenPetate(false) },
     onSwipeDown: () -> Unit = onShowNotifications,
@@ -181,8 +182,10 @@ fun CampamentoScreen(
             if (dir != 0) onPage((currentPage + dir).coerceIn(0, pageCount - 1))
         }
     }
+    val twoFingerState = remember { TwoFingerState() }
     val onSwipe: (Swipe) -> Unit = { s ->
-        when (s) {
+        // A two-finger gesture is reported on its own; its fingers do not swipe as well.
+        if (!twoFingerState.active) when (s) {
             Swipe.DOWN -> onSwipeDown()
             Swipe.UP -> onSwipeUp()
             Swipe.NONE -> Unit
@@ -195,6 +198,7 @@ fun CampamentoScreen(
             // Over the phone's wallpaper, a night veil keeps the camp readable.
             .background(if (wallpaper) Ink.deep.copy(alpha = veil) else Ink.deep)
             .onGloballyPositioned { drag.screen = it.boundsInRoot(); rootOrigin = it.positionInRoot() }
+            .twoFingers(twoFingerState, onTwoFinger)
             .swipes({ at -> drag.overWidget(at + rootOrigin) }, onSwipe)
             .pointerInput(Unit) { detectTapGestures(onTap = { onStopEditing() }, onDoubleTap = { onDoubleTap() }, onLongPress = { onCampMenu() }) },
     ) {

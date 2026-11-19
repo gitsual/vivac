@@ -71,6 +71,7 @@ data class SettingsState(
     val blurSheets: Boolean = true,
     val blurWallpaper: Boolean = false,
     val camps: List<String> = emptyList(),
+    val twoFinger: Map<dev.vivac.launcher.core.TwoFinger, Pair<Gesture, String?>> = emptyMap(),
     val currentCamp: String? = null,
     val veil: dev.vivac.launcher.core.Veil = dev.vivac.launcher.core.Veil.MEDIO,
 )
@@ -87,6 +88,7 @@ class SettingsActions(
     val toggleBlurSheets: () -> Unit = {},
     val toggleBlurWallpaper: () -> Unit = {},
     val saveCamp: (String) -> Unit = {},
+    val chooseTwoFinger: (dev.vivac.launcher.core.TwoFinger, Gesture, String?) -> Unit = { _, _, _ -> },
     val switchCamp: (String) -> Unit = {},
     val deleteCamp: (String) -> Unit = {},
     val restoreLock: () -> Unit = {},
@@ -178,6 +180,9 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             Section("GESTOS")
             GestureRow("Deslizar hacia arriba", state.swipeUp, state.swipeUpApp, state.apps, act.setSwipeUp)
             GestureRow("Deslizar hacia abajo", state.swipeDown, state.swipeDownApp, state.apps, act.setSwipeDown)
+            state.twoFinger.forEach { (t, chosen) ->
+                GestureRow(t.title, chosen.first, chosen.second, state.apps) { g, app -> act.chooseTwoFinger(t, g, app) }
+            }
             Toggle("Doble toque apaga la pantalla", "Usa el servicio de accesibilidad de vivac, que no lee nada.", state.doubleTapLock, act.toggleDoubleTap)
             Action("Apagar sin Accesibilidad", act.useLockAdmin)
             Text("Como administrador de dispositivo. Android pedirá el PIN, no la huella, al desbloquear después.", style = Type.small)

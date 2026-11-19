@@ -61,6 +61,17 @@ enum class Veil(val title: String, val alpha: Float) {
     OSCURO("Oscuro", 0.82f),
 }
 
+/** The camp's two-finger gestures, each set to any [Gesture] like the swipes. */
+enum class TwoFinger(val title: String) {
+    PINCH("Pellizcar"),
+    TWO_UP("Dos dedos hacia arriba"),
+    TWO_DOWN("Dos dedos hacia abajo"),
+    ;
+
+    val key get() = "gesture.$name"
+    val appKey get() = "gestureApp.$name"
+}
+
 enum class Gesture(val title: String) {
     PETATE("Abrir el petate"),
     SEARCH("Buscar"),
@@ -510,6 +521,22 @@ class Launcher(
         store.put(mapOf(KEY_SWIPE_DOWN to g.name, KEY_SWIPE_DOWN_APP to app.orEmpty()))
     }
 
+    /** What each two-finger gesture does; nothing until you choose. */
+    var twoFinger by mutableStateOf(readTwoFinger()); private set
+
+    private fun readTwoFinger(): Map<TwoFinger, Pair<Gesture, String?>> =
+        TwoFinger.entries.associateWith { gesture(it.key, Gesture.NOTHING) to store.get(it.appKey)?.takeIf(String::isNotBlank) }
+
+    fun gestureOf(t: TwoFinger): Gesture = twoFinger.getValue(t).first
+    fun appOf(t: TwoFinger): String? = twoFinger.getValue(t).second
+
+    fun chooseTwoFinger(t: TwoFinger, g: Gesture, app: String? = appOf(t)) {
+        twoFinger = twoFinger + (t to (g to app))
+        store.put(mapOf(t.key to g.name, t.appKey to app.orEmpty()))
+    }
+
+    fun onTwoFinger(t: TwoFinger) = perform(gestureOf(t), appOf(t))
+
     fun onSwipeUp() = perform(swipeUp, swipeUpApp)
     fun onSwipeDown() = perform(swipeDown, swipeDownApp)
 
@@ -791,6 +818,7 @@ class Launcher(
         swipeUp = gesture(KEY_SWIPE_UP, Gesture.PETATE)
         swipeDown = gesture(KEY_SWIPE_DOWN, Gesture.NOTIFICATIONS)
         swipeUpApp = store.get(KEY_SWIPE_UP_APP)
+        twoFinger = readTwoFinger()
         swipeDownApp = store.get(KEY_SWIPE_DOWN_APP)
         iconStyle = IconStyle.entries.firstOrNull { it.name == store.get(KEY_ICONS) } ?: IconStyle.GLYPHS
         iconPack = store.get(KEY_ICON_PACK)?.takeIf { it.isNotBlank() }

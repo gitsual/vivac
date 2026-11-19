@@ -833,6 +833,28 @@ class LauncherTest {
     }
 
     @Test
+    fun `a pinch and two-finger swipes do what you choose, kept and carried in a copy`() {
+        val l = many()
+        TwoFinger.entries.forEach { assertEquals(Gesture.NOTHING, l.gestureOf(it)) }
+        l.onTwoFinger(TwoFinger.PINCH)
+        val before = actions.calls.size
+        assertEquals(before, actions.calls.size)
+        l.chooseTwoFinger(TwoFinger.PINCH, Gesture.APP, "app.organicmaps")
+        l.chooseTwoFinger(TwoFinger.TWO_DOWN, Gesture.NOTIFICATIONS)
+        assertEquals(Gesture.APP, many().gestureOf(TwoFinger.PINCH))
+        assertEquals("app.organicmaps", many().appOf(TwoFinger.PINCH))
+        l.onTwoFinger(TwoFinger.PINCH)
+        assertEquals("open:app.organicmaps", actions.calls.last())
+        l.onTwoFinger(TwoFinger.TWO_DOWN)
+        assertEquals("notifications", actions.calls.last())
+        val copy = Backup.export(store)
+        l.chooseTwoFinger(TwoFinger.PINCH, Gesture.NOTHING, null)
+        l.restoreLayout(copy)
+        assertEquals(Gesture.APP, l.gestureOf(TwoFinger.PINCH))
+        assertEquals("app.organicmaps", l.appOf(TwoFinger.PINCH))
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()
