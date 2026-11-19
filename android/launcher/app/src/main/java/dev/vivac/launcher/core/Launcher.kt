@@ -285,6 +285,12 @@ class Launcher(
 
     fun openSystemPage(page: SystemPage) = actions.systemPage(page)
 
+    /** A settings page found in the petate: it opens, and the petate closes behind it. */
+    fun openSettingsPage(page: SystemPage) {
+        actions.systemPage(page)
+        screen = Screen.CAMPAMENTO
+    }
+
     var torch by mutableStateOf(false); private set
 
     /** The shade's quick switches, in your order. */

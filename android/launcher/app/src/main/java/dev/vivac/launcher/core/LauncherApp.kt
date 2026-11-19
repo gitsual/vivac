@@ -226,6 +226,7 @@ fun LauncherApp(
                     onStoreSearch = actions::storeSearch,
                     shortcuts = launcher.petateShortcuts,
                     onOpenShortcut = launcher::openShortcutFromPetate,
+                    onOpenSettingsPage = launcher::openSettingsPage,
                     profiles = launcher.profiles,
                     columns = launcher.columns,
                     findContacts = launcher::findContacts,

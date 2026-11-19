@@ -81,6 +81,21 @@ object Pack {
         return shortcuts.filter { fold(it.shortcut.label).contains(needle) }
     }
 
+    /**
+     * Android's settings pages whose name or contents hold [query], names first, at most four. Letters and digits
+     * only, so "wifi" finds "Wi-Fi".
+     */
+    fun searchSettings(query: String): List<dev.vivac.launcher.core.SystemPage> {
+        val needle = bare(query)
+        if (needle.isEmpty()) return emptyList()
+        val pages = dev.vivac.launcher.core.SystemPage.entries
+        val byName = pages.filter { bare(it.title).contains(needle) }
+        val byContents = pages.filter { it !in byName && bare(it.detail).contains(needle) }
+        return (byName + byContents).take(4)
+    }
+
+    private fun bare(text: String) = fold(text).filter { it.isLetterOrDigit() }
+
     /** [needle] is within [slips] edits (a swap counts as one) of how [word] starts. */
     private fun near(needle: String, word: String, slips: Int): Boolean =
         (needle.length - 1..needle.length + 1).any { n -> n in 1..word.length && distance(needle, word.take(n)) <= slips }

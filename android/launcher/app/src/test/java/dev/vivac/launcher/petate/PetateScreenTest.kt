@@ -156,6 +156,19 @@ class PetateScreenTest {
     }
 
     @Test
+    fun `a search lists Android's settings pages it matches, and a tap opens one`() {
+        val pages = mutableListOf<dev.vivac.launcher.core.SystemPage>()
+        compose.setContent {
+            PetateScreen(listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {}, onOpenSettingsPage = { pages += it })
+        }
+        compose.onNodeWithText("AJUSTES DE ANDROID").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("brillo")
+        compose.onNodeWithText("AJUSTES DE ANDROID").assertExists()
+        compose.onNodeWithText("Pantalla").performClick()
+        assertEquals(listOf(dev.vivac.launcher.core.SystemPage.PANTALLA), pages)
+    }
+
+    @Test
     fun `a search lists the shortcuts it matches, and a tap opens one`() {
         val opened = mutableListOf<FoundShortcut>()
         val chat = FoundShortcut(maps, AppShortcut("home", "Ir a casa"))

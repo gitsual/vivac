@@ -110,6 +110,7 @@ fun PetateScreen(
     findEvents: (String) -> List<CalendarEvent> = { emptyList() },
     onOpenContact: (Contact) -> Unit = {},
     onOpenEvent: (CalendarEvent) -> Unit = {},
+    onOpenSettingsPage: (dev.vivac.launcher.core.SystemPage) -> Unit = {},
     /** Where contacts and events are looked up: off the main thread. */
     io: kotlinx.coroutines.CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO,
 ) {
@@ -166,6 +167,8 @@ fun PetateScreen(
                 val agenda by produceState(emptyList<CalendarEvent>(), query) { value = kotlinx.coroutines.withContext(io) { findEvents(query) } }
                 if (people.isNotEmpty()) Results("CONTACTOS", people.map { it.name to null }) { onOpenContact(people[it]) }
                 if (agenda.isNotEmpty()) Results("CALENDARIO", agenda.map { it.title to When.of(it.startMillis) }) { onOpenEvent(agenda[it]) }
+                val pages = remember(query) { Pack.searchSettings(query) }
+                if (pages.isNotEmpty()) Results("AJUSTES DE ANDROID", pages.map { it.title to it.detail }) { onOpenSettingsPage(pages[it]) }
                 val foundShortcuts = remember(query, shortcuts) { Pack.searchShortcuts(shortcuts, query).take(4) }
                 if (foundShortcuts.isNotEmpty()) ShortcutResults(foundShortcuts, onOpenShortcut)
                 if (query.isNotBlank()) {

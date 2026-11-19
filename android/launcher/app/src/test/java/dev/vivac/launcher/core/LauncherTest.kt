@@ -634,6 +634,15 @@ class LauncherTest {
     }
 
     @Test
+    fun `a settings page found in the petate opens and the petate closes`() {
+        val l = many()
+        l.openPetate(search = true)
+        l.openSettingsPage(SystemPage.WIFI)
+        assertEquals("page:WIFI", actions.calls.last())
+        assertEquals(Screen.CAMPAMENTO, l.screen)
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

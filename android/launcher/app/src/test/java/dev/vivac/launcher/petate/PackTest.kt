@@ -1,6 +1,7 @@
 package dev.vivac.launcher.petate
 
 import dev.vivac.launcher.apps.InstalledApp
+import dev.vivac.launcher.core.SystemPage as SP
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -148,5 +149,16 @@ class PackTest {
         assertEquals(listOf(chat), Pack.searchShortcuts(listOf(chat, camera), "chat"))
         assertEquals(listOf(camera), Pack.searchShortcuts(listOf(chat, camera), "camara"))
         assertEquals(emptyList<FoundShortcut>(), Pack.searchShortcuts(listOf(chat, camera), " "))
+    }
+
+    @Test
+    fun `settings pages are found by name or by what they hold, names first, ignoring accents and dashes`() {
+        assertEquals(SP.WIFI, Pack.searchSettings("wifi").first())
+        assertTrue(SP.INTERNET in Pack.searchSettings("wifi"))
+        assertEquals(listOf(SP.BATERIA, SP.AHORRO), Pack.searchSettings("bateria").take(2))
+        assertTrue(SP.PANTALLA in Pack.searchSettings("brillo"))
+        assertEquals(emptyList<Any>(), Pack.searchSettings("  "))
+        assertEquals(emptyList<Any>(), Pack.searchSettings("qzx"))
+        assertTrue(Pack.searchSettings("a").size <= 4)
     }
 }
