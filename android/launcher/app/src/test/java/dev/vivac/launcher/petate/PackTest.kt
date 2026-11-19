@@ -109,12 +109,6 @@ class PackTest {
     }
 
     @Test
-    fun `summary counts apps and the Google ones honestly`() {
-        assertEquals("4 apps · 2 de Google", Pack.summary(listOf(termux, whatsapp, gmail, play)))
-        assertEquals("1 app · 0 de Google", Pack.summary(listOf(termux)))
-    }
-
-    @Test
     fun `tone is stable per package and within the palette`() {
         val a = Pack.toneIndex(whatsapp, 6)
         assertEquals(a, Pack.toneIndex(whatsapp.copy(label = "otro"), 6))

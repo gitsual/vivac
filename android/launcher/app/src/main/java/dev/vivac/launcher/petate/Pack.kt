@@ -9,10 +9,10 @@ import java.util.Locale
 data class FoundShortcut(val app: InstalledApp, val shortcut: AppShortcut)
 
 /** The Petate's three shelves, in the order they are shown. */
-enum class Group(val title: String, val caption: String) {
-    INFRA("Infra", "control del campamento"),
-    DAILY("Día a día", "lo de cada día"),
-    SYSTEM("Sistema", "grapheneos"),
+enum class Group(val title: String) {
+    INFRA("Infra"),
+    DAILY("Día a día"),
+    SYSTEM("Sistema"),
 }
 
 /** Pure rules of the Petate (the app drawer): grouping, monograms, search, summary. */
@@ -148,11 +148,6 @@ object Pack {
             .map { group -> group to apps.filter { groupOf(it) == group }.sortedWith(compareBy(collator) { it.label }) }
             .filter { it.second.isNotEmpty() }
 
-    fun summary(apps: List<InstalledApp>): String {
-        val google = apps.count { app -> googlePrefixes.any { app.packageName.startsWith(it) } }
-        val noun = if (apps.size == 1) "app" else "apps"
-        return "${apps.size} $noun · $google de Google"
-    }
 
     /** A stable colour slot per package, so a tile keeps its colour across label or locale changes. */
     fun toneIndex(app: InstalledApp, paletteSize: Int): Int = Math.floorMod(app.packageName.hashCode(), paletteSize)

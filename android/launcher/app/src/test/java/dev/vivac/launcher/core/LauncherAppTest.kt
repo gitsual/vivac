@@ -283,6 +283,19 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `the petate draws as a bag, its cloth over the night, with cord, label, mesh pocket, zip and strap`() {
+        show()
+        compose.runOnUiThread { launcher.openApp("com.termux"); launcher.openPetate(false) }
+        compose.waitForIdle()
+        compose.onNodeWithText("ÚLTIMO LARGO").assertExists()
+        val root = compose.activity.window.decorView
+        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+        compose.runOnUiThread { root.draw(Canvas(bitmap)) }
+        // Inside the bag, down its left side, the cloth shows rather than the night behind it.
+        assertTrue(bitmap.getPixel(root.width / 20, root.height * 3 / 4) != Ink.deep.toArgb())
+    }
+
+    @Test
     fun `six pins make a route that turns at the wall's edge, numbered L1 to L6`() {
         val six = (1..6).map { InstalledApp("App $it", "p.a$it", false) }
         store.values["pinned"] = six.joinToString(",") { it.packageName }

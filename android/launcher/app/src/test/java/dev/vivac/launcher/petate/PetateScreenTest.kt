@@ -84,7 +84,7 @@ class PetateScreenTest {
     fun `hidden apps only show behind the Ocultas chip`() {
         show(hidden = setOf("app.organicmaps"))
         compose.onNodeWithText("Organic Maps").assertDoesNotExist()
-        compose.onNodeWithText("Ocultas · 1").performClick()
+        compose.onNodeWithText("Ocultas · 1").performScrollTo().performClick()
         compose.onNodeWithText("Organic Maps").assertExists()
         compose.onNodeWithText("Termux").assertDoesNotExist()
     }
@@ -99,13 +99,13 @@ class PetateScreenTest {
                 askToSeeHidden = { ok -> asked++; if (allow) ok() },
             )
         }
-        compose.onNodeWithText("Ocultas · 1").performClick()
+        compose.onNodeWithText("Ocultas · 1").performScrollTo().performClick()
         compose.onNodeWithText("Organic Maps").assertDoesNotExist()
         allow = true
-        compose.onNodeWithText("Ocultas · 1").performClick()
+        compose.onNodeWithText("Ocultas · 1").performScrollTo().performClick()
         compose.onNodeWithText("Organic Maps").assertExists()
         // Closing them again asks for nothing.
-        compose.onNodeWithText("Ocultas · 1").performClick()
+        compose.onNodeWithText("Ocultas · 1").performScrollTo().performClick()
         compose.onNodeWithText("Organic Maps").assertDoesNotExist()
         assertEquals(2, asked)
     }
@@ -194,6 +194,17 @@ class PetateScreenTest {
     }
 
     @Test
+    fun `the petate is a bag with its own label and no filler text`() {
+        show()
+        compose.onNodeWithText("Petate").assertExists()
+        compose.onNodeWithText("Busca en el petate").assertExists()
+        listOf("PETATE · MATERIAL", "BUSCAR · NOMBRE O INICIALES", "Organic Maps → om", "control del campamento", "lo de cada día", "grapheneos").forEach {
+            compose.onNodeWithText(it).assertDoesNotExist()
+        }
+        compose.onNodeWithText("DE GOOGLE", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun `what you open from a search is remembered, and past searches come back with a tap`() {
         val searched = mutableListOf<String>()
         var cleared = false
@@ -203,6 +214,9 @@ class PetateScreenTest {
                 searches = listOf("wifi"), onSearched = { searched += it }, onClearSearches = { cleared = true },
             )
         }
+        // Past searches wait inside the mouth of the bag: they show once you reach for the search.
+        compose.onNodeWithText("BÚSQUEDAS").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Buscar en el petate").performClick()
         compose.onNodeWithText("BÚSQUEDAS").assertExists()
         compose.onNodeWithText("wifi").performClick()
         compose.onNodeWithText("AJUSTES DE ANDROID").assertExists()
@@ -218,10 +232,10 @@ class PetateScreenTest {
         compose.setContent {
             PetateScreen(listOf(termux, maps.copy(category = "Mapas"), settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {})
         }
-        compose.onNodeWithText("Mapas").performClick()
+        compose.onNodeWithText("Mapas").performScrollTo().performClick()
         compose.onNodeWithText("Organic Maps").assertExists()
         compose.onNodeWithText("Termux").assertDoesNotExist()
-        compose.onNodeWithText("Mapas").performClick()
+        compose.onNodeWithText("Mapas").performScrollTo().performClick()
         compose.onNodeWithText("Termux").assertExists()
     }
 

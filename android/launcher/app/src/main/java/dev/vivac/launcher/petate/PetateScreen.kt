@@ -57,6 +57,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -157,38 +158,28 @@ fun PetateScreen(
     val focus = remember { FocusRequester() }
     LaunchedEffect(focusSearch) { if (focusSearch) focus.requestFocus() }
 
+    var searching by remember { mutableStateOf(false) }
     Box(modifier.fillMaxSize().background(Ink.deep)) {
         Contours(Modifier.fillMaxSize(), color = Ink.surface)
         Column(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(start = 24.dp, top = 8.dp),
+                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
+        ) {
+        // The drawcord closes the bag's mouth; inside, the search, the label, the outer pocket, the zip pulls.
+        BagCord(Modifier.padding(horizontal = 18.dp))
+        Column(Modifier.weight(1f).fillMaxWidth().bagCloth()) {
+        BagHem()
+        Column(
+            Modifier.weight(1f).padding(start = 14.dp, top = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(Modifier.padding(end = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth()) {
-                    Text("PETATE · MATERIAL", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.weight(1f))
-                    Text(Pack.summary(apps).uppercase(), style = Type.cota.copy(fontSize = 10.sp))
-                }
-                Text("Petate", style = Type.title.copy(fontSize = 44.sp, lineHeight = 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
-                SearchField(query, { query = it }, focus) { shelves.firstOrNull()?.second?.singleOrNull()?.let { openApp(it.packageName) } }
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val main = profile == null
-                    Chip("Todo", main && filter == null && !showHidden) { filter = null; showHidden = false; profileId = null }
-                    Group.entries.forEach { g -> Chip(g.title, main && filter == g && !showHidden) { filter = if (filter == g) null else g; showHidden = false; profileId = null } }
-                    if (hidden.isNotEmpty()) Chip("Ocultas · ${hidden.size}", main && showHidden) {
-                        if (showHidden) showHidden = false else askToSeeHidden { showHidden = true; filter = null; profileId = null }
-                    }
-                    profiles.forEach { p -> Chip(p.kind.title, profileId == p.id) { profileId = if (profileId == p.id) null else p.id; filter = null; showHidden = false } }
-                }
-                if (categories.isNotEmpty() && profile == null && !showHidden) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        categories.forEach { c -> Chip(c, category == c) { category = if (category == c) null else c } }
-                    }
-                }
+            Column(Modifier.padding(end = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SearchField(query, { query = it }, focus, { searching = it }) { shelves.firstOrNull()?.second?.singleOrNull()?.let { openApp(it.packageName) } }
+                BagLabel()
                 if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
-                if (searches.isNotEmpty() && query.isBlank() && !showHidden && profile == null) {
+                if (searches.isNotEmpty() && searching && query.isBlank() && !showHidden && profile == null) {
                     Text("BÚSQUEDAS", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.semantics { heading() })
                     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         searches.forEach { q -> Chip(q, false) { query = q } }
@@ -196,6 +187,17 @@ fun PetateScreen(
                     }
                 }
                 if (recent.isNotEmpty() && query.isBlank() && !showHidden && profile == null) LastPitch(recent, openApp, onAppMenu, carry)
+                // One row of zip pulls: the shelves, the hidden, the other profiles and the categories.
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val main = profile == null
+                    PullTab("Todo", main && filter == null && category == null && !showHidden) { filter = null; category = null; showHidden = false; profileId = null }
+                    Group.entries.forEach { g -> PullTab(g.title, main && filter == g && !showHidden) { filter = if (filter == g) null else g; showHidden = false; profileId = null } }
+                    if (hidden.isNotEmpty()) PullTab("Ocultas · ${hidden.size}", main && showHidden) {
+                        if (showHidden) showHidden = false else askToSeeHidden { showHidden = true; filter = null; profileId = null }
+                    }
+                    profiles.forEach { p -> PullTab(p.kind.title, profileId == p.id) { profileId = if (profileId == p.id) null else p.id; filter = null; showHidden = false } }
+                    if (profile == null && !showHidden) categories.forEach { c -> PullTab(c, category == c) { category = if (category == c) null else c } }
+                }
                 val answer = remember(query) { Calc.answer(query) }
                 if (answer != null) Answer(answer) { onCopy(answer) }
                 val people by produceState(emptyList<Contact>(), query) { value = kotlinx.coroutines.withContext(io) { findContacts(query) } }
@@ -219,15 +221,17 @@ fun PetateScreen(
                 }
             }
             Row(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f)) {
+                Zipper()
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     state = grid,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
-                    shelves.forEach { (group, list) ->
-                        item(key = "h-${group.name}", span = { GridItemSpan(maxLineSpan) }) { ShelfHeader(group, list.size) }
+                    shelves.forEachIndexed { i, (group, list) ->
+                        item(key = "h-${group.name}", span = { GridItemSpan(maxLineSpan) }) { PocketName(group.title, seamAbove = i > 0) }
                         items(list, key = { it.packageName }) { app ->
                             val deep = app.packageName.startsWith("com.termux")
                             val tone = if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]
@@ -247,11 +251,14 @@ fun PetateScreen(
                         }
                     }
                 }
+                }
                 Altimeter(jumps.keys, letter) { ch ->
                     letter = ch
                     jumps[ch]?.let { scope.launch { grid.scrollToItem(it) } }
                 }
             }
+        }
+        }
         }
     }
 }
@@ -368,24 +375,6 @@ private fun Answer(text: String, onCopy: () -> Unit) {
     }
 }
 
-/** A shelf: its name, what it holds, how many, over a hairline. */
-@Composable
-private fun ShelfHeader(group: Group, count: Int) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, end = 4.dp)
-            .drawBehind { drawLine(Ink.field, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx()) }
-            .padding(bottom = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Text(group.title, style = Type.section, modifier = Modifier.semantics { heading() })
-        Text(group.caption, style = Type.small, modifier = Modifier.weight(1f))
-        Text("$count", style = Type.cota.copy(fontSize = 10.sp))
-    }
-}
-
 /** "Último largo": the apps you opened last through vivac, newest first. */
 @Composable
 private fun LastPitch(
@@ -394,9 +383,8 @@ private fun LastPitch(
     onAppMenu: (String) -> Unit,
     carry: @Composable (InstalledApp, Color) -> Modifier?,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("ÚLTIMO LARGO", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.semantics { heading() })
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    MeshPocket("ÚLTIMO LARGO") {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             recent.forEach { app ->
                 val tone = Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]
                 AppTile(
@@ -425,9 +413,10 @@ private fun Altimeter(present: Set<Char>, current: Char?, onJump: (Char) -> Unit
     var height by remember { mutableStateOf(1) }
     Column(
         Modifier
-            .width(32.dp)
+            .width(24.dp)
             .fillMaxHeight()
             .padding(bottom = 16.dp)
+            .strap()
             .onSizeChanged { height = it.height }
             .semantics { contentDescription = "Altímetro: desliza para saltar de letra" }
             .pointerInput(present) {
@@ -437,8 +426,9 @@ private fun Altimeter(present: Set<Char>, current: Char?, onJump: (Char) -> Unit
                 }
             },
         verticalArrangement = Arrangement.SpaceBetween,
-        horizontalAlignment = Alignment.End,
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Buckle()
         ALTIMETER.forEach { ch ->
             val on = ch == current
             val has = ch in present
@@ -447,7 +437,7 @@ private fun Altimeter(present: Set<Char>, current: Char?, onJump: (Char) -> Unit
                     .weight(1f)
                     .fillMaxWidth()
                     .then(if (has) Modifier.clickable(role = Role.Button, onClickLabel = "Saltar a la $ch") { onJump(ch) }.semantics { contentDescription = "Saltar a la $ch" } else Modifier.clearAndSetSemantics { }),
-                horizontalArrangement = Arrangement.spacedBy(3.dp, Alignment.End),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -455,29 +445,28 @@ private fun Altimeter(present: Set<Char>, current: Char?, onJump: (Char) -> Unit
                     style = Type.mono.copy(fontSize = 10.sp, lineHeight = 10.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal),
                     color = when { on -> Ink.accentText; has -> Ink.textMuted; else -> Ink.field },
                 )
-                Box(Modifier.padding(end = 6.dp).width(if (on) 10.dp else 4.dp).height(1.dp).background(if (on) Ink.accentText else Ink.field))
             }
         }
     }
 }
 
 @Composable
-private fun SearchField(query: String, onChange: (String) -> Unit, focus: FocusRequester, onGo: () -> Unit) {
-    Text("BUSCAR · NOMBRE O INICIALES", style = Type.cota.copy(fontSize = 10.sp))
+private fun SearchField(query: String, onChange: (String) -> Unit, focus: FocusRequester, onFocus: (Boolean) -> Unit, onGo: () -> Unit) {
+    // The bag's mouth: dark inside, the cord's coral around it.
     Row(
         Modifier
             .fillMaxWidth()
             .height(50.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Ink.surface)
-            .border(1.5.dp, Ink.primary, RoundedCornerShape(16.dp))
-            .padding(horizontal = 14.dp),
+            .clip(RoundedCornerShape(25.dp))
+            .background(Ink.deep)
+            .border(1.5.dp, Ink.primary, RoundedCornerShape(25.dp))
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         LineIcon(Glyph.SEARCH, Ink.text, 20.dp)
         Box(Modifier.weight(1f)) {
-            if (query.isEmpty()) Text("Organic Maps → om", style = Type.body.copy(color = Ink.textMuted))
+            if (query.isEmpty()) Text("Busca en el petate", style = Type.body.copy(color = Ink.textMuted))
             BasicTextField(
                 value = query,
                 onValueChange = onChange,
@@ -486,7 +475,7 @@ private fun SearchField(query: String, onChange: (String) -> Unit, focus: FocusR
                 cursorBrush = SolidColor(Ink.primary),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { onGo() }),
-                modifier = Modifier.fillMaxWidth().focusRequester(focus).semantics { contentDescription = "Buscar en el petate" },
+                modifier = Modifier.fillMaxWidth().focusRequester(focus).onFocusChanged { onFocus(it.isFocused) }.semantics { contentDescription = "Buscar en el petate" },
             )
         }
     }
