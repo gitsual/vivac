@@ -748,6 +748,35 @@ class LauncherTest {
     }
 
     @Test
+    fun `whole camps are saved as named profiles and switched between, kept after a restart`() {
+        val l = many()
+        assertEquals(emptyList<String>(), l.camps)
+        l.saveCamp("  ")
+        assertEquals(emptyList<String>(), l.camps)
+        l.saveCamp("Trabajo")
+        l.chooseColumns(5)
+        l.saveCamp("Casa")
+        assertEquals(listOf("Trabajo", "Casa"), many().camps)
+        assertEquals("Casa", l.currentCamp)
+        l.switchCamp("Trabajo")
+        assertEquals(4, l.columns)
+        assertEquals("Trabajo", many().currentCamp)
+        assertEquals("say:Campamento «Trabajo».", actions.calls.last())
+        // Saving under a name that exists replaces it.
+        l.chooseColumns(5)
+        l.saveCamp("Trabajo")
+        l.switchCamp("Casa")
+        l.switchCamp("Trabajo")
+        assertEquals(5, l.columns)
+        l.switchCamp("No existe")
+        assertEquals("Trabajo", l.currentCamp)
+        l.deleteCamp("Casa")
+        assertEquals(listOf("Trabajo"), many().camps)
+        l.deleteCamp("Trabajo")
+        assertEquals(null, many().currentCamp)
+    }
+
+    @Test
     fun `apps go into folders from their menu or by dragging, and folders open, rename and give apps back`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

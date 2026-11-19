@@ -721,7 +721,7 @@ class Launcher(
     fun exportLayout(): String = Backup.export(store)
 
     /** Puts a copy back: every choice it holds replaces the current one, this phone's widgets stay. */
-    fun restoreLayout(text: String) {
+    fun restoreLayout(text: String, done: String = "Campamento restaurado.") {
         if (!Backup.restore(text, store)) return actions.say("Ese archivo no es una copia del campamento de vivac.")
         home = Home.decode(store.get(KEY_DOCK), store.get(KEY_PINNED), store.get(KEY_HIDDEN))
         board = loadBoard()
@@ -744,8 +744,48 @@ class Launcher(
         iconPack = store.get(KEY_ICON_PACK)?.takeIf { it.isNotBlank() }
         iconFor = decodeIcons(store.get(KEY_ICON_FOR))
         refresh()
-        actions.say("Campamento restaurado.")
+        actions.say(done)
     }
+
+    /** Whole camps saved under a name, oldest first; switching restores one as a copy would (this phone's widgets stay). */
+    var camps by mutableStateOf(readCamps().keys.toList()); private set
+    var currentCamp by mutableStateOf(store.get(KEY_PROFILE_NOW)?.takeIf { it in camps }); private set
+
+    fun saveCamp(name: String) {
+        val n = name.trim()
+        if (n.isEmpty()) return
+        writeCamps(readCamps().also { it[n] = Backup.export(store) })
+        markCamp(n)
+    }
+
+    fun switchCamp(name: String) {
+        val copy = readCamps()[name] ?: return
+        restoreLayout(copy, "Campamento «$name».")
+        markCamp(name)
+    }
+
+    fun deleteCamp(name: String) {
+        writeCamps(readCamps().also { it.remove(name) })
+        if (currentCamp == name) markCamp(null)
+    }
+
+    private fun markCamp(name: String?) {
+        currentCamp = name
+        store.put(mapOf(KEY_PROFILE_NOW to name.orEmpty()))
+    }
+
+    private fun readCamps(): LinkedHashMap<String, String> = LinkedHashMap(
+        store.get(KEY_PROFILES).orEmpty().lines().filter { "=" in it }.associate { line ->
+            val (k, v) = line.split("=", limit = 2)
+            java.net.URLDecoder.decode(k, "UTF-8") to java.net.URLDecoder.decode(v, "UTF-8")
+        },
+    )
+
+    private fun writeCamps(all: Map<String, String>) {
+        store.put(mapOf(KEY_PROFILES to all.entries.joinToString("\n") { (k, v) -> java.net.URLEncoder.encode(k, "UTF-8") + "=" + java.net.URLEncoder.encode(v, "UTF-8") }))
+        camps = all.keys.toList()
+    }
+
 
     fun becomeHome() {
         campMenu = false
@@ -1036,6 +1076,8 @@ class Launcher(
         const val KEY_CONTACTS = "searchContacts"
         const val KEY_PROTECT_HIDDEN = "protectHidden"
         const val KEY_SEARCHES = "searches"
+        const val KEY_PROFILES = "profiles"
+        const val KEY_PROFILE_NOW = "profileNow"
         const val KEY_CALENDAR = "searchCalendar"
         const val KEY_ICON_PACK = "iconPack"
         const val KEY_ICON_FOR = "iconFor"

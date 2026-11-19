@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -69,6 +70,8 @@ data class SettingsState(
     val protectHidden: Boolean = false,
     val blurSheets: Boolean = true,
     val blurWallpaper: Boolean = false,
+    val camps: List<String> = emptyList(),
+    val currentCamp: String? = null,
     val veil: dev.vivac.launcher.core.Veil = dev.vivac.launcher.core.Veil.MEDIO,
 )
 
@@ -83,6 +86,9 @@ class SettingsActions(
     val useLockAdmin: () -> Unit = {},
     val toggleBlurSheets: () -> Unit = {},
     val toggleBlurWallpaper: () -> Unit = {},
+    val saveCamp: (String) -> Unit = {},
+    val switchCamp: (String) -> Unit = {},
+    val deleteCamp: (String) -> Unit = {},
     val restoreLock: () -> Unit = {},
     val toggleLabels: () -> Unit = {},
     val toggleTintWidgets: () -> Unit = {},
@@ -179,6 +185,23 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             Section("COPIA")
             Action("Guardar una copia del campamento", act.backUp)
             Action("Restaurar una copia", act.restore)
+
+            Section("PERFILES")
+            Text("Guarda el campamento entero con un nombre y cambia entre ellos. Los widgets se quedan como están.", style = Type.small)
+            state.camps.forEach { p ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) { Choice(p, state.currentCamp == p) { act.switchCamp(p) } }
+                    Box(
+                        Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable(role = Role.Button) { act.deleteCamp(p) }
+                            .semantics { contentDescription = "Borrar el perfil $p" },
+                        contentAlignment = Alignment.Center,
+                    ) { Text("×", style = Type.body.copy(color = Ink.textMuted)) }
+                }
+            }
+            CampSaver(act.saveCamp)
         }
     }
 }
@@ -285,5 +308,32 @@ private fun Choice(text: String, on: Boolean, onClick: () -> Unit) {
                 .border(1.5.dp, if (on) Ink.primary else Ink.borderControl, RoundedCornerShape(999.dp))
                 .padding(horizontal = 14.dp, vertical = 7.dp),
         )
+    }
+}
+
+/** A name field and a button: saves the camp as it is now under that name. */
+@Composable
+private fun CampSaver(onSave: (String) -> Unit) {
+    var name by rememberSaveable { mutableStateOf("") }
+    val save = { onSave(name); name = "" }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.foundation.text.BasicTextField(
+            value = name,
+            onValueChange = { name = it },
+            singleLine = true,
+            textStyle = Type.body,
+            cursorBrush = androidx.compose.ui.graphics.SolidColor(Ink.primary),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { save() }),
+            modifier = Modifier
+                .weight(1f)
+                .height(48.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Ink.deep)
+                .border(1.dp, Ink.borderControl, RoundedCornerShape(16.dp))
+                .padding(horizontal = 14.dp, vertical = 13.dp)
+                .semantics { contentDescription = "Nombre del perfil" },
+        )
+        Choice("Guardar perfil", false, save)
     }
 }
