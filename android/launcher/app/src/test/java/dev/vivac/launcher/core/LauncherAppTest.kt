@@ -1293,6 +1293,13 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `free space is a memory card filled with what is free, read out as free of the total`() {
+        show()
+        compose.onNodeWithContentDescription("25 GB libres de 117").assertExists()
+        compose.onNodeWithTag("free:card", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
     fun `under the switches, a brightness bar sets the screen's brightness`() {
         withNotices()
         compose.onNodeWithContentDescription("Brillo").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(0.9f) }

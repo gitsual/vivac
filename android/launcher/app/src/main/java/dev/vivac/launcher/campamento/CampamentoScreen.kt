@@ -1088,8 +1088,19 @@ private fun FactsStrip(facts: PhoneFacts, onOpenAbout: () -> Unit) {
             }
         }
         Rule()
-        Fact("LIBRE", "${facts.freeGb} GB", Modifier.weight(1f)) {
-            Gauge(if (facts.totalGb > 0) facts.freeGb.toFloat() / facts.totalGb else 0f)
+        // Free space, read like the battery: a memory card filled with what is free, the figure beside it.
+        Column(
+            Modifier
+                .weight(1f)
+                .padding(start = 10.dp, top = 10.dp, bottom = 10.dp, end = 6.dp)
+                .semantics(mergeDescendants = true) { contentDescription = "${facts.freeGb} GB libres de ${facts.totalGb}" },
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text("LIBRE", style = Type.cota.copy(fontSize = 10.sp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MemoryCard(if (facts.totalGb > 0) facts.freeGb.toFloat() / facts.totalGb else 0f)
+                Text("${facts.freeGb} GB", style = Type.figure.copy(fontSize = 20.sp, lineHeight = 26.sp), maxLines = 1)
+            }
         }
     }
 }
@@ -1128,30 +1139,40 @@ private fun Battery(percent: Int, charging: Boolean) {
 }
 
 @Composable
-private fun Fact(
-    caption: String,
-    value: String,
-    modifier: Modifier,
-    valueStyle: TextStyle = Type.figure.copy(fontSize = 20.sp, lineHeight = 26.sp),
-    detail: @Composable () -> Unit,
-) {
-    Column(modifier.padding(start = 10.dp, top = 10.dp, bottom = 10.dp, end = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(caption, style = Type.cota.copy(fontSize = 10.sp))
-        Text(value, style = valueStyle, maxLines = 1)
-        detail()
-    }
-}
-
-@Composable
 private fun Rule() {
     Box(Modifier.width(1.dp).fillMaxHeight().background(Ink.field))
 }
 
-/** A measure bar: glaciar, the colour kept for measures only. */
+/**
+ * A memory card, its corner cut, drawn the battery's size: filled in glaciar, the measure colour, as far as the
+ * [free] share of the whole; the empty rest is what is used.
+ */
 @Composable
-private fun Gauge(fraction: Float) {
-    Box(Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)).background(Ink.field)) {
-        Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().background(Ink.measure))
+private fun MemoryCard(free: Float) {
+    val f = free.coerceIn(0f, 1f)
+    Canvas(Modifier.size(width = 34.dp, height = 18.dp).testTag("free:card")) {
+        // Drawn on a 34 x 18 grid, the battery's, scaled to the canvas.
+        val u = size.width / 34f
+        if (f > 0f) {
+            val x = 3f + 28f * f
+            val fill = androidx.compose.ui.graphics.Path().apply {
+                moveTo(3f * u, 7f * u)
+                if (x >= 7f) { lineTo(7f * u, 3f * u); lineTo(x * u, 3f * u) } else lineTo(x * u, (10f - x) * u)
+                lineTo(x * u, 15f * u); lineTo(3f * u, 15f * u); close()
+            }
+            drawPath(fill, Ink.measure)
+        }
+        val outline = androidx.compose.ui.graphics.Path().apply {
+            moveTo(0.75f * u, 6.5f * u); lineTo(6f * u, 0.75f * u); lineTo(31.25f * u, 0.75f * u)
+            quadraticTo(33.25f * u, 0.75f * u, 33.25f * u, 2.75f * u); lineTo(33.25f * u, 15.25f * u)
+            quadraticTo(33.25f * u, 17.25f * u, 31.25f * u, 17.25f * u); lineTo(2.75f * u, 17.25f * u)
+            quadraticTo(0.75f * u, 17.25f * u, 0.75f * u, 15.25f * u); close()
+        }
+        drawPath(
+            outline,
+            Ink.textMuted,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx(), join = androidx.compose.ui.graphics.StrokeJoin.Round),
+        )
     }
 }
 
