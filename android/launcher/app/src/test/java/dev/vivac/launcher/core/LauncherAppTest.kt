@@ -1278,6 +1278,21 @@ class LauncherAppTest {
     }
 
     @Test
+    @org.robolectric.annotation.Config(qualifiers = "w411dp-h914dp-420dpi")
+    fun `the route's rows hold still once laid out`() {
+        val eight = (1..8).map { InstalledApp("App $it", "p.a$it", false) }
+        store.values["pinned"] = eight.joinToString(",") { it.packageName }
+        show(apps = eight)
+        compose.waitForIdle()
+        fun spots() = listOf("App 1", "App 8").map { compose.onNodeWithText(it).fetchSemanticsNode().boundsInRoot.top }
+        val settled = spots()
+        compose.mainClock.autoAdvance = false
+        val seen = (1..30).map { compose.mainClock.advanceTimeByFrame(); spots() }
+        compose.mainClock.autoAdvance = true
+        assertTrue("rows moved after settling: $settled then ${seen.distinct()}", seen.all { it == settled })
+    }
+
+    @Test
     fun `under the switches, a brightness bar sets the screen's brightness`() {
         withNotices()
         compose.onNodeWithContentDescription("Brillo").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(0.9f) }

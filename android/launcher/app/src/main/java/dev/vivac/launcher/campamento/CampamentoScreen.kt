@@ -64,6 +64,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.roundToInt
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -279,20 +280,30 @@ fun CampamentoScreen(
                             // Part of the room goes between the route's rows, so they breathe; the rest above and below.
                             val dens = LocalDensity.current
                             val rowCount = Route.rows(home.pinned.count { pkg -> apps.any { it.packageName == pkg } }, 4).size
-                            var gapPx by remember { mutableIntStateOf(0) }
-                            val basePx = with(dens) { ROW_GAP.toPx() }
-                            val gaps = with(dens) { (2 * 16).dp.toPx() }
-                            // The route's height with its rows at the base gap, whatever gap it has now.
-                            val natural = routePx - (rowCount - 1).coerceAtLeast(0) * (gapPx.takeIf { it > 0 } ?: basePx.toInt())
-                            val room = with(dens) { viewport.toPx() } - abovePx - natural - gaps
-                            val rowGap = if (rowCount > 1 && routePx > 0 && room > 0) {
-                                (basePx + room * 0.5f / (rowCount - 1)).coerceAtMost(with(dens) { 56.dp.toPx() })
+                            // The gap, in whole pixels, the measured route was laid out with. Kept with routePx so the
+                            // rows' own height is exact; a guessed or truncated gap fed the error back into the next
+                            // gap and the rows shook by a pixel or two every frame, the lowest ones the most.
+                            var routeGapPx by remember { mutableIntStateOf(0) }
+                            val basePx = with(dens) { ROW_GAP.roundToPx() }
+                            val gaps = with(dens) { (2 * 16).dp.roundToPx() }
+                            val viewportPx = with(dens) { viewport.roundToPx() }
+                            val joins = (rowCount - 1).coerceAtLeast(0)
+                            // The rows' height without any gap: it does not depend on the gap chosen below.
+                            val natural = routePx - joins * routeGapPx
+                            val room = viewportPx - abovePx - natural - gaps
+                            val rowGapPx = if (joins > 0 && routePx > 0 && room > 0) {
+                                (basePx + room * 0.5f / joins).roundToInt().coerceAtMost(with(dens) { 56.dp.roundToPx() })
                             } else basePx
-                            gapPx = rowGap.toInt()
-                            val spare = with(dens) { viewport.toPx() } - abovePx - routePx - gaps
+                            // Centre the route as it will be with this gap, not as it was last frame.
+                            val spare = viewportPx - abovePx - (natural + joins * rowGapPx) - gaps
                             if (spare > 0 && routePx > 0) Spacer(Modifier.height(with(dens) { (spare / 2).toDp() }))
-                            Box(Modifier.fillMaxWidth().onSizeChanged { routePx = it.height }.testTag("via")) {
-                                Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop, rowGap = with(dens) { rowGap.toDp() })
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .onSizeChanged { routePx = it.height; routeGapPx = rowGapPx }
+                                    .testTag("via"),
+                            ) {
+                                Via(apps, home.pinned, onOpenApp, onAppMenu, drag, drop, rowGap = with(dens) { rowGapPx.toDp() })
                             }
                         } else {
                             Ladera(p, board.onPage(p), apps, card, onOpenApp, onAppMenu, drag, drop, onShortcut, onShortcutMenu, onOpenFolder, viewport) { c, spot ->
