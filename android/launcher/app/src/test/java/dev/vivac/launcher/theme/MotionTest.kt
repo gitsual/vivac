@@ -48,4 +48,16 @@ class MotionTest {
         assertTrue(glows.minOrNull()!! < glows.maxOrNull()!!)
         assertTrue(Motion.GLOW_MIN > 0f)
     }
+
+    @Test
+    fun `the background moves at a calm frame rate, not the screen's 120 Hz`() {
+        assertTrue(Motion.FRAME_MS >= 30)
+    }
+
+    @Test
+    fun `a loop's phase is how far into its period the time is, wrapping round`() {
+        assertEquals(0f, Motion.phaseAt(0L, 9_000), 0.0001f)
+        assertEquals(0.5f, Motion.phaseAt(4_500L, 9_000), 0.0001f)
+        assertEquals(0.25f, Motion.phaseAt(9_000L * 3 + 2_250L, 9_000), 0.0001f)
+    }
 }

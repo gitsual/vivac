@@ -82,10 +82,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import dev.vivac.launcher.theme.Motion
 import androidx.compose.ui.input.pointer.pointerInput
@@ -875,12 +872,7 @@ private fun Beam(modifier: Modifier, origin: Offset?) {
     val moving = Motion.allowed(LocalContext.current)
     // The beam is drawn once; the sway and the glow are its layer's rotation and alpha, applied by the render thread.
     val phase = if (moving) {
-        rememberInfiniteTransition(label = "lamp").animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(Motion.LAMP_PERIOD_MS, easing = LinearEasing)),
-            label = "sway",
-        )
+        dev.vivac.launcher.theme.rememberLoop(Motion.LAMP_PERIOD_MS)
     } else null
     Canvas(
         modifier.graphicsLayer {
@@ -917,7 +909,10 @@ private fun Beam(modifier: Modifier, origin: Offset?) {
         )
     }
     // The faintest dazzle as it reaches forward: a warm glow from the lamp over the whole camp, a few percent at most.
-    Canvas(
+    // It is only there while it flares, a second at each end of the swing: a full-screen layer at alpha 0 still cost
+    // the GPU a pass every frame.
+    val flaring by remember(phase) { androidx.compose.runtime.derivedStateOf { Motion.flare(phase?.value ?: 0f) > 0f } }
+    if (flaring) Canvas(
         modifier.graphicsLayer {
             alpha = 0.06f * Motion.flare(phase?.value ?: 0f)
             compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha

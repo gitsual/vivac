@@ -2,11 +2,6 @@ package dev.vivac.launcher.theme
 
 import android.content.Context
 import android.provider.Settings
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.foundation.layout.Box
@@ -17,7 +12,11 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -44,12 +43,7 @@ private val contourPaths = listOf(
 private fun RingsAround(modifier: Modifier, color: Color, centre: Offset, innerRadius: androidx.compose.ui.unit.Dp) {
     val moving = Motion.allowed(LocalContext.current)
     val phase = if (moving) {
-        rememberInfiniteTransition(label = "rings").animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(Rings.STEP_MS, easing = LinearEasing)),
-            label = "travel",
-        )
+        rememberLoop(Rings.STEP_MS)
     } else null
     Canvas(modifier.graphicsLayer { }) {
         val inner = innerRadius.toPx()
@@ -58,12 +52,16 @@ private fun RingsAround(modifier: Modifier, color: Color, centre: Offset, innerR
         Rings.travelling(phase?.value ?: 0.5f).forEach { (u, alpha) ->
             if (alpha <= 0f) return@forEach
             val outline = Rings.points(u, centre, inner)
-            val path = Path().apply {
-                moveTo(outline[0].x, outline[0].y)
-                outline.drop(1).forEach { lineTo(it.x, it.y) }
-                close()
-            }
-            drawPath(path, color.copy(alpha = color.alpha * alpha), style = stroke)
+            // A polyline of short segments, not a stroked path: the GPU draws the segments straight away, where a
+            // ring larger than the screen, stroked with antialiasing, was rasterized on the CPU into a mask the
+            // size of the ring at every tick, more than half a core while the camp sat idle.
+            drawPoints(
+                outline + outline.first(),
+                androidx.compose.ui.graphics.PointMode.Polygon,
+                color.copy(alpha = color.alpha * alpha),
+                strokeWidth = stroke.width,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
         }
     }
 }
@@ -74,6 +72,14 @@ object Motion {
     const val AMPLITUDE = 0.03f
     /** One swell every nine seconds. */
     const val PERIOD_MS = 9_000
+    /**
+     * The background loops tick 20 times a second. They are slow (seconds per cycle), so 120 Hz looked no
+     * different but kept the render thread re-rasterizing every ring all the time, a whole core while idle.
+     */
+    const val FRAME_MS = 50L
+
+    /** How far into a loop of [periodMs] the time [elapsedMs] is, from 0 up to 1, wrapping round. */
+    fun phaseAt(elapsedMs: Long, periodMs: Int): Float = (elapsedMs % periodMs).toFloat() / periodMs
     /** How far behind the innermost ring the outermost one rides, as a share of the period. */
     private const val LAG = 0.35f
 
@@ -204,12 +210,7 @@ fun Contours(
     val paths = remember { contourPaths.map { PathParser().parsePathString(it).toPath() } }
     val moving = Motion.allowed(LocalContext.current)
     val phase = if (moving) {
-        rememberInfiniteTransition(label = "contours").animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(tween(Motion.PERIOD_MS, easing = LinearEasing)),
-            label = "swell",
-        )
+        rememberLoop(Motion.PERIOD_MS)
     } else null
     Box(modifier) {
         paths.forEachIndexed { i, path ->
@@ -236,4 +237,29 @@ fun Contours(
             }
         }
     }
+}
+
+/**
+ * Like an infinite transition it pauses under tests' infinite-animation policy.
+ * A phase going 0 to 1 every [periodMs], for ever, updated about every [Motion.FRAME_MS]: between ticks nothing is
+ * invalidated, so the screen can rest instead of drawing the background at the display's full rate.
+ */
+@Composable
+fun rememberLoop(periodMs: Int): State<Float> {
+    val phase = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(periodMs) {
+        val start = withInfiniteAnimationFrameMillis { it }
+        var tick = -1L
+        while (true) {
+            withInfiniteAnimationFrameMillis { now ->
+                // Only a new tick writes the phase; the frames between invalidate nothing and draw nothing.
+                val t = (now - start) / Motion.FRAME_MS
+                if (t != tick) {
+                    tick = t
+                    phase.floatValue = Motion.phaseAt(t * Motion.FRAME_MS, periodMs)
+                }
+            }
+        }
+    }
+    return phase
 }
