@@ -1300,6 +1300,18 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `the settings lamp is a bar-sized icon alone in its ring, the other icons kept outside it`() {
+        show()
+        val dp = compose.activity.resources.displayMetrics.density
+        val lamp = compose.onNodeWithContentDescription("Ajustes del sistema").fetchSemanticsNode().boundsInRoot
+        val links = compose.onNode(androidx.compose.ui.test.hasContentDescription("obertura", substring = true))
+        val near = links.fetchSemanticsNode().boundsInRoot
+        // A 44dp touch target, its ring 26dp around the centre: the connections end clear of the ring.
+        assertEquals(44f * dp, lamp.width, 1f)
+        assertTrue("connections end ${(lamp.center.x - near.right) / dp}dp from the lamp", lamp.center.x - near.right >= 26 * dp + 8 * dp)
+    }
+
+    @Test
     fun `under the switches, a brightness bar sets the screen's brightness`() {
         withNotices()
         compose.onNodeWithContentDescription("Brillo").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(0.9f) }

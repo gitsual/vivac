@@ -208,7 +208,7 @@ fun CampamentoScreen(
     ) {
         // The rings and the headlamp's beam are centred on the settings button, wherever it is laid out.
         val lampHere = lamp?.minus(rootOrigin)
-        Contours(Modifier.fillMaxSize(), color = Ink.surface, centre = lampHere)
+        Contours(Modifier.fillMaxSize(), color = Ink.surface, centre = lampHere, innerRadius = LAMP_RING)
         Beam(Modifier.fillMaxSize(), lampHere)
         Column(
             Modifier
@@ -364,6 +364,9 @@ fun CampamentoScreen(
 }
 
 private const val EDGE_WAIT_MS = 500L
+/** The settings button's touch target, and the radius of the ring that is its frame. */
+private val LAMP_BOX = 44.dp
+private val LAMP_RING = 26.dp
 private val WIDGET_GHOST_W = 168.dp
 private val WIDGET_GHOST_H = 72.dp
 
@@ -934,19 +937,20 @@ private fun Header(
     // the lamp, the connections.
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f)) { if (noticeApps.isNotEmpty()) NoticeGlyphs(noticeApps, onNotices) }
-        Connections(status, Modifier.padding(end = 14.dp))
-        // The headlamp itself: the beam starts here.
+        // The others keep out of the lamp's ring: it reaches LAMP_RING past the button's own box.
+        Connections(status, Modifier.padding(end = LAMP_RING - LAMP_BOX / 2 + 10.dp))
+        // The headlamp itself: a bar icon like the others, but coral and alone at the centre of its own ring, where
+        // the rings and the beam start. The box is the touch target; its ring, in thin coral, is what marks it out.
         Box(
             Modifier
-                .size(44.dp)
+                .size(LAMP_BOX)
                 .onGloballyPositioned { onPlaced(it.boundsInRoot().center) }
+                .drawBehind { drawCircle(Ink.accentText, LAMP_RING.toPx(), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx())) }
                 .clip(CircleShape)
-                .background(Ink.surface)
-                .border(1.5.dp, Ink.accentText, CircleShape)
                 .clickable(role = Role.Button, onClickLabel = "Abrir ajustes", onClick = onOpenSettings)
                 .semantics { contentDescription = "Ajustes del sistema" },
             contentAlignment = Alignment.Center,
-        ) { LineIcon(Glyph.SLIDERS, Ink.accentText, 22.dp) }
+        ) { LineIcon(Glyph.SLIDERS, Ink.accentText, 18.dp) }
     }
 }
 
