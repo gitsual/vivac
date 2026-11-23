@@ -79,4 +79,48 @@ Case 'the shield pill carries no words and pills cannot grow without bound' {
     }
 }
 
+# The shipped pack, as it is in the repository: what every popup page loads is
+# there, the module graph links, and the panels' grants cover exactly the
+# commands the pages run.
+Case 'the shipped pack passes the guard (config.js is rendered per machine, so a stub stands in)' {
+    $root = Get-RepoRoot
+    $d = Join-Path ([IO.Path]::GetTempPath()) ('vivac-real-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    try {
+        Copy-Item -LiteralPath (Join-Path $root 'static\zebar\vivac') -Destination $d -Recurse
+        [IO.File]::WriteAllText((Join-Path $d 'config.js'), "export const config = {};`n")
+        [IO.File]::WriteAllText((Join-Path $d 'styles.css'), '.bar { position: absolute; }')
+        Assert-Equal 0 @(Test-VivacBarFiles $d).Count (@(Test-VivacBarFiles $d) -join ' | ')
+    } finally { Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue }
+}
+Case 'the system panel is granted every sysinfo mode it runs, and the bar its nvidia-smi query' {
+    $root = Get-RepoRoot
+    $pack = [IO.File]::ReadAllText((Join-Path $root 'static\zebar\vivac\zpack.json')) | ConvertFrom-Json
+    $sys = @($pack.widgets) | Where-Object { $_.name -eq 'system' }
+    Assert-True ($null -ne $sys) 'no system widget in zpack.json'
+    $re = $sys.privileges.shellCommands[0].argsRegex
+    $js = [IO.File]::ReadAllText((Join-Path $root 'static\zebar\vivac\system.js'))
+    $modes = @([regex]::Matches($js, "sysinfo\('(-\w+)'\)") | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    Assert-True ($modes.Count -ge 5) "expected the panel to ask for at least five modes, found $($modes -join ' ')"
+    foreach ($m in $modes) {
+        $line = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File C:\vivac\bin\vivac-sysinfo.ps1 $m"
+        Assert-True ($line -match $re) "zpack.json does not grant sysinfo $m"
+    }
+    $bar = @($pack.widgets) | Where-Object { $_.name -eq 'bar' }
+    $nv = @($bar.privileges.shellCommands | Where-Object { $_.program -eq 'nvidia-smi' })[0].argsRegex
+    Assert-True ('--query-gpu=temperature.gpu,utilization.gpu --format=csv,noheader,nounits' -match $nv) 'the bar may not run its nvidia-smi query'
+    $sysinfo = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac-sysinfo.ps1'))
+    foreach ($m in $modes) { Assert-True ($sysinfo -match ('\$' + (Get-Culture).TextInfo.ToTitleCase($m.TrimStart('-')) + '\b')) "vivac-sysinfo.ps1 has no $m switch" }
+}
+Case 'every label the panels read is one the deploy hands over' {
+    $root = Get-RepoRoot
+    $deploy = [IO.File]::ReadAllText((Join-Path $root 'lib\Deploy.psm1'))
+    $given = @([regex]::Matches(([regex]::Match($deploy, "(?s)\$labels = \[ordered\]@\{\}.*?\) \{").Value), "'(\w+)'") | ForEach-Object { $_.Groups[1].Value })
+    foreach ($f in 'bar.js', 'calendar.js', 'forecast.js', 'system.js') {
+        $text = [IO.File]::ReadAllText((Join-Path $root "static\zebar\vivac\$f"))
+        foreach ($m in [regex]::Matches($text, '\b(?:L|config\.labels)\.(\w+)')) {
+            Assert-True ($given -contains $m.Groups[1].Value) "$f reads label $($m.Groups[1].Value), which Deploy.psm1 does not hand over"
+        }
+    }
+}
+
 Complete-Cases
