@@ -49,7 +49,7 @@ has 'env GBM_BACKEND=nvidia-drm' || fail 'the hardware fragment was not loaded'
 grep -q '^monitor .*scale = "' <<<"$out" || fail 'the monitors fragment was not loaded'
 grep -q '^config .*kb_layout = "es"' <<<"$out" || fail 'the input fragment was not loaded'
 has 'on hyprland.start' || fail 'no start handler registered'
-has 'start exec waybar' || fail 'waybar is not started with the session'
+has 'start exec $HOME/.config/waybar/scripts/waybar-keep.sh' || fail 'waybar is not started (through its keeper) with the session'
 # The shared-settings pull is the first autostart entry, but hl.exec_cmd starts
 # every entry at once: nothing may claim, or depend on, the pull having finished
 # before the bar starts (a changed theme reloads the bar itself, through apply-theme).
@@ -85,7 +85,7 @@ load
 grep -q '^log vivac: local.lua failed.*owner mistake' <<<"$out" || fail "a runtime error in local.lua was not logged: $out"
 grep -q '^notify .*local.lua' <<<"$out" || fail 'a runtime error in local.lua raised no notification'
 has "final $registry_rows" || fail 'a broken local.lua cost vivac binds'
-has 'start exec waybar' || fail 'a broken local.lua stopped the autostart'
+has 'start exec $HOME/.config/waybar/scripts/waybar-keep.sh' || fail 'a broken local.lua stopped the autostart'
 printf 'this is = not lua (\n' >"$hypr/local.lua"
 load
 grep -q '^log vivac: local.lua failed' <<<"$out" || fail "a syntax error in local.lua was not logged: $out"
