@@ -14,6 +14,7 @@
 Set-StrictMode -Version 2.0
 Import-Module (Join-Path $PSScriptRoot 'Vivac.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Surfaces.psm1')
+Import-Module (Join-Path $PSScriptRoot 'PanelKit.psm1')
 
 $script:IconFont = 'Segoe Fluent Icons, Segoe MDL2 Assets'
 
@@ -145,209 +146,203 @@ function Receive-UpdatesJob($Job) {
     $null
 }
 
+# What the panel shows, apart from drawing it: the total, the origins with
+# their counts (the bar and its legend), and the first rows, Windows Update's
+# before the programs'. $WuUpdates are the objects the Windows Update job
+# returns; $Apps the rows ConvertFrom-VivacWingetTable reads.
+function Get-VivacUpdatesModel([object[]]$WuUpdates = @(), [object[]]$Apps = @(), [int]$Limit = 5) {
+    $items = New-Object System.Collections.Generic.List[object]
+    foreach ($u in @($WuUpdates)) {
+        $bits = @($u.KB, (Format-UpdateSize $u.Size)) | Where-Object { $_ }
+        $items.Add([pscustomobject]@{ Origin = 'windows'; Name = [string]$u.Title; Sub = ($bits -join '  -  '); Id = '' })
+    }
+    foreach ($a in @($Apps)) {
+        $items.Add([pscustomobject]@{ Origin = 'winget'; Name = [string]$a.Name; Sub = "$($a.Version)  $([char]0x2192)  $($a.Available)"; Id = [string]$a.Id })
+    }
+    $groups = @()
+    if (@($WuUpdates).Count) { $groups += [pscustomobject]@{ Origin = 'windows'; Count = @($WuUpdates).Count } }
+    if (@($Apps).Count) { $groups += [pscustomobject]@{ Origin = 'winget'; Count = @($Apps).Count } }
+    [pscustomobject]@{
+        Total = $items.Count; Groups = $groups; First = @($items | Select-Object -First $Limit); More = ($items.Count -gt $Limit)
+    }
+}
+
+# "just now", "2 min ago", "3 h ago", "4 days ago".
+function Format-UpdatesAgo($Date, [datetime]$Now = (Get-Date)) {
+    if (-not $Date) { return (T 'upd.never_checked') }
+    $span = $Now - [datetime]$Date
+    if ($span.TotalMinutes -lt 1) { return (T 'upd.checked_now') }
+    if ($span.TotalHours -lt 1) { $text = T 'upd.ago_min' @([int]$span.TotalMinutes) }
+    elseif ($span.TotalDays -lt 1) { $text = T 'upd.ago_h' @([int]$span.TotalHours) }
+    else { $text = T 'upd.ago_d' @([int]$span.TotalDays) }
+    T 'upd.checked' @($text)
+}
+
 function Show-Updates([switch]$NoShow, [hashtable]$Registry) {
     Update-SurfaceContext
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'updates' }
     $surfaceName = 'updates'
     $p = Get-Palette
-    $culture = [Globalization.CultureInfo]::GetCultureInfo((Read-VivacSettings)['language'])
+    $t = Get-PanelTokens $p
+    $origin = @{ windows = @{ Color = $t.accent; Label = (T 'upd.windows'); Chip = 'Windows' }; winget = @{ Color = $t.info; Label = 'winget'; Chip = 'winget' } }
+
     $body = @"
-<ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-  <StackPanel x:Name="Body"/>
+<ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,-8,0">
+  <ContentControl x:Name="Body" Margin="0,0,8,0" IsTabStop="False"/>
 </ScrollViewer>
 "@
-    $hints = @(@('F5', (T 'upd.key.refresh')), @('Esc', (T 'upd.key.close')))
-    $window = New-VivacWindow (Get-WindowXaml 'vivac - updates' 520 300 (Get-KitPanelXaml $p 0xE895 (T 'upd.title') $body $hints))
+    $hints = @(@("$([char]0x2191)$([char]0x2193)", (T 'upd.key.move')), @([string][char]0x21B5, (T 'upd.key.update')), @('F5', (T 'upd.key.check')), @('Esc', (T 'upd.key.close')))
+    $window = New-VivacWindow (Get-KitWindowXamlV2 $t 'vivac - updates' 440 (Get-KitPanelXamlV2 $t (Get-KitGlyph 0xE895) (T 'upd.title') $body $hints))
+    Add-KitDrawResources $window $p
     Set-KitDropDown $window
-    $root = $window.Content.Child
-    $res = $root.Resources
-    $panel = $window.FindName('Body')
+    # The refresh button sits in the header's slot.
+    $refreshBtn = ConvertTo-PanelElement (Get-PanelButtonXaml $t 'BtnRefresh' '' 'refresh' 'neutral' 34 'Width="34" ToolTip="F5"')
+    [void]$window.FindName('HeaderRight').Children.Add($refreshBtn)
+    $bodyHost = $window.FindName('Body')
     $subtitle = $window.FindName('Subtitle')
-    $state = @{ Wu = $null; Wg = $null; WuJob = $null; WgJob = $null; Icons = @{}; ArmedReboot = $false }
+    $state = @{ Wu = $null; Wg = $null; WuJob = $null; WgJob = $null; ArmedReboot = $false; Items = @() }
 
-    $text = {
-        param([string]$Text, [string]$Color, [double]$Size = 13, [string]$Weight = 'Normal')
-        $t = New-Object Windows.Controls.TextBlock
-        $t.Text = $Text; $t.Foreground = "#$Color"; $t.FontSize = $Size; $t.FontWeight = $Weight
-        $t.TextTrimming = 'CharacterEllipsis'; $t.VerticalAlignment = 'Center'
-        $t
-    }
-    $button = {
-        param([string]$Label, [bool]$Accent, [scriptblock]$OnClick, [int]$Glyph = 0)
-        $b = New-Object Windows.Controls.Button
-        if ($Accent) { $b.Style = $res['KitButton'] } else { $b.Style = $res['KitGhost'] }
-        if ($Glyph) {
-            $sp = New-Object Windows.Controls.StackPanel
-            $sp.Orientation = 'Horizontal'
-            $g = & $text (Get-KitGlyph $Glyph) ($(if ($Accent) { $p['COLOR_BG'] } else { $p['COLOR_FG'] })) 12
-            $g.FontFamily = $script:IconFont; $g.Margin = '0,0,7,0'
-            [void]$sp.Children.Add($g)
-            [void]$sp.Children.Add((& $text $Label ($(if ($Accent) { $p['COLOR_BG'] } else { $p['COLOR_FG'] })) 12))
-            $b.Content = $sp
-        } else { $b.Content = $Label }
-        $b.Margin = '6,0,0,0'
-        $b.Add_Click($OnClick)
-        $b
-    }
-    $section = {
-        param([string]$Label)
-        $t = & $text $Label.ToUpper() $p['COLOR_ACCENT'] 11 'SemiBold'
-        $t.Margin = '4,6,0,8'
-        [void]$panel.Children.Add($t)
-    }
     $card = {
-        $c = New-Object Windows.Controls.Border
-        $c.Style = $res['KitCard']
-        $s = New-Object Windows.Controls.StackPanel
-        $c.Child = $s
-        [void]$panel.Children.Add($c)
-        $s
-    }
-    # A glyph that turns while an answer is awaited.
-    $spinner = {
-        $t = & $text (Get-KitGlyph 0xE72C) $p['COLOR_ACCENT'] 16
-        $t.FontFamily = $script:IconFont
-        $t.RenderTransformOrigin = '0.5,0.5'
-        $rt = New-Object Windows.Media.RotateTransform
-        $t.RenderTransform = $rt
-        $anim = New-Object Windows.Media.Animation.DoubleAnimation 0, 360, ([TimeSpan]::FromSeconds(1.2))
-        $anim.RepeatBehavior = [Windows.Media.Animation.RepeatBehavior]::Forever
-        $rt.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty, $anim)
-        $t
-    }
-    $loadingRow = {
-        param([int]$Glyph, [string]$Name)
-        New-KitRow $p $Glyph $Name (T 'upd.checking') (& $spinner)
-    }
-    $when = {
-        param($Date)
-        if (-not $Date) { return T 'upd.never_checked' }
-        T 'upd.last_check' @(([datetime]$Date).ToString('g', $culture))
+        param([string]$Inner, [string]$Margin = '0')
+        "<Border Margin=`"$Margin`" Background=`"#$($t.surface)`" CornerRadius=`"12`" Padding=`"14`">$Inner</Border>"
     }
 
     $render = {
-        $panel.Children.Clear()
         $wu = $state.Wu; $wg = $state.Wg
+        $wuBusy = [bool]($state.WuJob -or -not $wu)
+        $wgBusy = [bool]($state.WgJob -or -not $wg)
         $apps = @()
         if ($wg -and -not $wg.Missing -and -not $wg.Error) { $apps = @(ConvertFrom-VivacWingetTable $wg.Text) }
+        $wuList = @()
+        if ($wu -and -not $wu.Error) { $wuList = @($wu.Updates) }
+        $m = Get-VivacUpdatesModel $wuList $apps
+        $state.Items = $m.First
+        $busy = $wuBusy -or $wgBusy
+        $reboot = [bool]($wu -and -not $wu.Error -and $wu.Reboot)
 
-        # Windows Update.
-        & $section (T 'upd.windows')
-        $c = & $card
-        if (-not $wu -or $state.WuJob) {
-            [void]$c.Children.Add((& $loadingRow 0xE895 (T 'upd.windows')))
-        } elseif ($wu.Error) {
-            [void]$c.Children.Add((New-KitRow $p 0xE783 (T 'upd.windows') (T 'upd.error' @($wu.Error)) $null $p['COLOR_URGENT']))
-        } else {
-            $n = @($wu.Updates).Count
-            $right = New-Object Windows.Controls.StackPanel
-            $right.Orientation = 'Horizontal'
-            [void]$right.Children.Add((& $button (T 'upd.check') $false { & $checkWindows } 0xE72C))
-            if ($n) {
-                [void]$right.Children.Add((& $button (T 'upd.install') $true { $window.Close(); Start-Process 'ms-settings:windowsupdate-action' } 0xE896))
-                $headline = if ($n -eq 1) { T 'upd.pending_one' } else { T 'upd.pending' @($n) }
-                [void]$c.Children.Add((New-KitRow $p 0xE895 $headline (& $when $wu.LastCheck) $right))
-                foreach ($u in $wu.Updates) {
-                    $glyph = 0xE895
-                    # Definition updates (Defender's) and drivers, by their category ids.
-                    if ($u.Categories -match 'e0789628-ce08-4437-be74-2495b842f43b') { $glyph = 0xEA18 }
-                    elseif ($u.Categories -match 'ebfc1fc5-71a4-4f7b-9aca-3b9a503104a0') { $glyph = 0xE772 }
-                    $bits = @($u.KB, (Format-UpdateSize $u.Size)) | Where-Object { $_ }
-                    if ($u.Downloaded) { $bits += T 'upd.downloaded' }
-                    [void]$c.Children.Add((New-KitRow $p $glyph $u.Title ($bits -join '  -  ')))
-                }
-            } else {
-                [void]$c.Children.Add((New-KitRow $p 0xE73E (T 'upd.up_to_date') (& $when $wu.LastCheck) $right $p['COLOR_OK']))
+        # Problems are said where the numbers are, with a shape.
+        $notes = ''
+        $problem = {
+            param([string]$Text)
+            "<StackPanel Orientation=`"Horizontal`" Margin=`"0,8,0,0`"><Grid VerticalAlignment=`"Top`" Margin=`"0,2,0,0`">$(Get-PanelIconXaml 'warn' 14 $t.alert 2.2)</Grid><TextBlock Text=`"$(ConvertTo-XmlText $Text)`" Margin=`"8,0,0,0`" FontSize=`"12`" TextWrapping=`"Wrap`" MaxWidth=`"340`" Foreground=`"#$($t.alertText)`"/></StackPanel>"
+        }
+        if ($wu -and $wu.Error) { $notes += & $problem "$(T 'upd.windows'): $(T 'upd.error' @($wu.Error))" }
+        if ($wg -and $wg.Missing) { $notes += & $problem (T 'upd.no_winget') }
+        elseif ($wg -and $wg.Error) { $notes += & $problem "winget: $(T 'upd.error' @($wg.Error))" }
+
+        # The total, large, and what it counts.
+        if ($m.Total) { $big = "<TextBlock Text=`"$($m.Total)`" FontSize=`"40`" FontWeight=`"Bold`" Foreground=`"#$($t.text)`" VerticalAlignment=`"Bottom`"/><TextBlock Text=`"$(ConvertTo-XmlText (T 'upd.caption'))`" FontSize=`"13`" Margin=`"8,0,0,6`" Foreground=`"#$($t.textSecondary)`" VerticalAlignment=`"Bottom`"/>" }
+        elseif ($busy) { $big = "<TextBlock Text=`"$(ConvertTo-XmlText (T 'upd.checking'))`" FontSize=`"22`" FontWeight=`"Bold`" Foreground=`"#$($t.text)`"/>" }
+        else { $big = "<Grid VerticalAlignment=`"Center`">$(Get-PanelIconXaml 'check' 34 $t.success 2.4)</Grid><TextBlock Text=`"$(ConvertTo-XmlText (T 'upd.caption_ok'))`" FontSize=`"22`" FontWeight=`"Bold`" Margin=`"12,0,0,0`" Foreground=`"#$($t.text)`" VerticalAlignment=`"Center`"/>" }
+        $heroRows = "<StackPanel Orientation=`"Horizontal`">$big</StackPanel>"
+
+        if ($reboot) {
+            $rb = Get-PanelButtonXaml $t 'BtnReboot' (T 'upd.reboot_button') '' 'neutral' 26 'Margin="8,0,0,0"'
+            $heroRows += "<Border Margin=`"0,12,0,0`" Background=`"#$($t.bg)`" CornerRadius=`"8`" Padding=`"10,7`"><DockPanel><ContentControl DockPanel.Dock=`"Right`" Focusable=`"False`">$rb</ContentControl><StackPanel Orientation=`"Horizontal`" VerticalAlignment=`"Center`"><Grid VerticalAlignment=`"Center`">$(Get-PanelIconXaml 'restart' 14 $t.accent)</Grid><TextBlock Text=`"$(ConvertTo-XmlText (T 'upd.reboot_note'))`" Margin=`"8,0,0,0`" FontSize=`"12`" Foreground=`"#$($t.accent)`" VerticalAlignment=`"Center`"/></StackPanel></DockPanel></Border>"
+        }
+        if ($m.Groups.Count) {
+            $cols = New-Object System.Text.StringBuilder; $cells = New-Object System.Text.StringBuilder; $i = 0
+            foreach ($g in $m.Groups) {
+                if ($i) { [void]$cols.Append('<ColumnDefinition Width="3"/>') }
+                [void]$cols.Append("<ColumnDefinition Width=`"$($g.Count)*`"/>")
+                [void]$cells.Append("<Border Grid.Column=`"$($i * 2)`" Height=`"12`" CornerRadius=`"3`" Background=`"#$($origin[$g.Origin].Color)`"/>")
+                $i++
             }
-            if ($wu.Reboot) {
-                $rb = & $button (T 'upd.reboot_button') $true {
-                    param($s)
-                    if (-not $state.ArmedReboot) { $state.ArmedReboot = $true; $s.Background = "#$($p['COLOR_URGENT'])"; $s.Content = T 'upd.confirm'; return }
+            $heroRows += "<Grid Margin=`"0,12,0,0`"><Grid.ColumnDefinitions>$($cols.ToString())</Grid.ColumnDefinitions>$($cells.ToString())</Grid>"
+            $legend = foreach ($g in $m.Groups) {
+                "<StackPanel Orientation=`"Horizontal`" Margin=`"0,0,16,0`"><Border Width=`"10`" Height=`"10`" CornerRadius=`"3`" Background=`"#$($origin[$g.Origin].Color)`" VerticalAlignment=`"Center`"/><TextBlock Text=`"$(ConvertTo-XmlText $origin[$g.Origin].Label)`" Margin=`"6,0,4,0`" FontSize=`"12`"/><TextBlock Text=`"$($g.Count)`" FontSize=`"12`" FontWeight=`"Bold`"/></StackPanel>"
+            }
+            $heroRows += "<WrapPanel Margin=`"0,12,0,0`">$(-join $legend)</WrapPanel>"
+        }
+        $heroRows += $notes
+        if ($m.Total) { $heroRows += "<Grid Margin=`"0,14,0,0`">$(Get-PanelButtonXaml $t 'BtnAll' (T 'upd.update_all') 'download' 'primary' 38)</Grid>" }
+        $xaml = "<StackPanel>$(& $card "<StackPanel>$heroRows</StackPanel>")"
+
+        # The first rows, each with the colour of its origin along the edge.
+        if ($m.Total) {
+            $head = T 'upd.pending_list'
+            $note = ''
+            if ($m.More) { $head = T 'upd.first'; $note = T 'upd.of' @($m.Total) }
+            $xaml += "<Grid Margin=`"0,14,0,8`">$(Get-PanelSectionXaml $t $head $note @($m.First).Count '0')</Grid>"
+            $n = 0
+            foreach ($it in $m.First) {
+                $btn = Get-PanelButtonXaml $t "R$n" (T 'upd.update') '' 'neutral' 30
+                $xaml += @"
+<Border Margin="0,0,0,6" Background="#$($t.surface)" CornerRadius="10" BorderThickness="3,0,0,0" BorderBrush="#$($origin[$it.Origin].Color)" Padding="9,8,10,8">
+  <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <StackPanel VerticalAlignment="Center">
+      <TextBlock Text="$(ConvertTo-XmlText $it.Name)" FontSize="13" FontWeight="Bold" TextTrimming="CharacterEllipsis" Foreground="#$($t.text)"/>
+      <TextBlock Text="$(ConvertTo-XmlText $it.Sub)" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#$($t.textSecondary)"/>
+    </StackPanel>
+    <Grid Grid.Column="1" Margin="10,0">$(Get-PanelChipXaml $t 'plain' $origin[$it.Origin].Chip)</Grid>
+    <Grid Grid.Column="2">$btn</Grid>
+  </Grid>
+</Border>
+"@
+                $n++
+            }
+        }
+        $xaml += '</StackPanel>'
+        $view = ConvertTo-PanelElement $xaml
+        $bodyHost.Content = $view
+
+        # Everything installs from outside this window, so it closes first.
+        $install = {
+            param($Item)
+            if ($Item.Origin -eq 'winget') { Start-VivacWinget $Item.Id } else { Start-Process 'ms-settings:windowsupdate-action' }
+        }
+        for ($i = 0; $i -lt @($m.First).Count; $i++) {
+            $b = $view.FindName("R$i")
+            $b.Tag = $m.First[$i]
+            $b.Add_Click({ param($s2, $e2) $window.Close(); & $install $s2.Tag }.GetNewClosure())
+        }
+        $all = $view.FindName('BtnAll')
+        if ($all) {
+            $hasWu = [bool]$wuList.Count; $hasApps = [bool]$apps.Count
+            $all.Add_Click({
+                    $window.Close()
+                    if ($hasApps) { Start-VivacWinget }
+                    if ($hasWu) { Start-Process 'ms-settings:windowsupdate-action' }
+                }.GetNewClosure())
+        }
+        $rb = $view.FindName('BtnReboot')
+        if ($rb) {
+            $rb.Add_Click({
+                    param($s2, $e2)
+                    if (-not $state.ArmedReboot) {
+                        $state.ArmedReboot = $true
+                        $s2.Content = $null
+                        $s2.Background = "#$($t.alert)"
+                        $tb = New-Object Windows.Controls.TextBlock
+                        $tb.Text = T 'upd.confirm'; $tb.Foreground = "#$($t.bg)"; $tb.FontWeight = 'Bold'; $tb.FontSize = 12
+                        $s2.Content = $tb
+                        return
+                    }
                     $window.Close()
                     Start-Process shutdown.exe -ArgumentList '/r', '/t', '0' -WindowStyle Hidden
-                } 0xE777
-                [void]$c.Children.Add((New-KitRow $p 0xE7BA (T 'upd.reboot') '' $rb $p['COLOR_URGENT']))
-            }
-            if (@($wu.History).Count) {
-                $h = & $text (T 'upd.history') $p['COLOR_MUTED'] 11
-                $h.Margin = '2,10,0,2'
-                [void]$c.Children.Add($h)
-                foreach ($x in $wu.History) {
-                    $ok = if ($x.Ok) { T 'upd.ok' } else { T 'upd.failed' }
-                    $color = if ($x.Ok) { $p['COLOR_MUTED'] } else { $p['COLOR_URGENT'] }
-                    $row = New-KitRow $p ($(if ($x.Ok) { 0xE73E } else { 0xE783 })) $x.Title "$($x.Date.ToString('g', $culture))  -  $ok" $null $color
-                    $row.MinHeight = 40
-                    $row.Tag.Name.FontSize = 12
-                    [void]$c.Children.Add($row)
-                }
-            }
+                })
         }
-
-        # The programs.
-        & $section (T 'upd.apps')
-        $c = & $card
-        if (-not $wg -or $state.WgJob) {
-            [void]$c.Children.Add((& $loadingRow 0xE71D (T 'upd.apps')))
-        } elseif ($wg.Missing) {
-            [void]$c.Children.Add((New-KitRow $p 0xE7BA (T 'upd.no_winget') '' $null $p['COLOR_URGENT']))
-        } elseif ($wg.Error) {
-            [void]$c.Children.Add((New-KitRow $p 0xE783 (T 'upd.apps') (T 'upd.error' @($wg.Error)) $null $p['COLOR_URGENT']))
-        } elseif (-not $apps.Count) {
-            [void]$c.Children.Add((New-KitRow $p 0xE73E (T 'upd.apps_up_to_date') 'winget' $null $p['COLOR_OK']))
-        } else {
-            $all = & $button (T 'upd.update_all') $true { $window.Close(); Start-VivacWinget } 0xE896
-            [void]$c.Children.Add((New-KitRow $p 0xE71D (T 'upd.apps_pending' @($apps.Count)) 'winget' $all))
-            foreach ($a in $apps) {
-                $one = & $button (T 'upd.update') $false { param($s) $window.Close(); Start-VivacWinget $s.Tag }
-                $one.Tag = $a.Id
-                $row = New-KitRow $p 0xE71D $a.Name "$($a.Version)  $([char]0x2192)  $($a.Available)  -  $($a.Source)" $one
-                # The application's own icon when the Start menu lists it by a
-                # name that starts like the package's.
-                $key = ($a.Name -replace [char]0x2026, '').Trim()
-                $match = @($wg.Apps | Where-Object { $key -and $_.Name -like "$key*" }) | Select-Object -First 1
-                if (-not $match) { $match = @($wg.Apps | Where-Object { $_.Name -and $key -like "$($_.Name)*" }) | Select-Object -First 1 }
-                if ($match) { $state.Icons["shell:AppsFolder\$($match.AppID)"] = $row.Tag.Tile }
-                [void]$c.Children.Add($row)
-            }
-            if ($state.Icons.Count) {
-                try { Import-VivacMenu; [VivacIcons]::Warm([string[]]@($state.Icons.Keys)) } catch { $state.Icons.Clear() }
-            }
-        }
-
-        $more = & $text (T 'upd.settings') $p['COLOR_INFO'] 12
-        $more.Cursor = 'Hand'; $more.Margin = '4,2,0,0'
-        $more.Add_MouseLeftButtonUp({ $window.Close(); Start-Process 'ms-settings:windowsupdate' })
-        [void]$panel.Children.Add($more)
 
         # What the header says.
-        $parts = @()
-        if ($wu -and -not $state.WuJob -and -not $wu.Error) { $parts += @($wu.Updates).Count }
-        if ($wg -and -not $state.WgJob -and -not $wg.Missing -and -not $wg.Error) { $parts += $apps.Count }
-        if ($state.WuJob -or $state.WgJob -or -not $wu -or -not $wg) { $subtitle.Text = T 'upd.checking' }
-        else {
-            $total = ($parts | Measure-Object -Sum).Sum
-            if ($wu -and $wu.Reboot) { $subtitle.Text = T 'upd.reboot' }
-            elseif ($total) { $subtitle.Text = T 'upd.subtitle_pending' @([int]$total) }
-            else { $subtitle.Text = T 'upd.subtitle_ok' }
-        }
+        if ($busy -and -not $m.Total) { $subtitle.Text = T 'upd.checking' }
+        elseif ($wu -and $wu.LastCheck) { $subtitle.Text = Format-UpdatesAgo $wu.LastCheck }
+        elseif ($m.Total) { $subtitle.Text = T 'upd.subtitle_pending' @([int]$m.Total) }
+        else { $subtitle.Text = T 'upd.subtitle_ok' }
+        # The first thing to press has the focus ring, as in the design.
+        $focus = $view.FindName('BtnAll')
+        if (-not $focus) { $focus = $view.FindName('R0') }
+        if ($focus -and $window.IsLoaded -and -not $refreshBtn.IsKeyboardFocused) { [void]$focus.Focus() }
     }
 
-    $checkWindows = {
-        if ($state.WuJob) { return }
-        $state.WuJob = Start-UpdatesJob $script:WindowsUpdateJob @($true)
-        & $render
-    }
     $refresh = {
         if (-not $state.WuJob) { $state.WuJob = Start-UpdatesJob $script:WindowsUpdateJob @($true) }
         if (-not $state.WgJob) { $state.WgJob = Start-UpdatesJob $script:WingetJob }
         & $render
     }
+    $refreshBtn.Add_Click({ & $refresh })
 
-    $refreshButton = & $button '' $false { & $refresh } 0xE72C
-    $refreshButton.ToolTip = T 'upd.key.refresh'
-    [void]$window.FindName('HeaderRight').Children.Add($refreshButton)
-
-    # Answers are collected, and icons put in place, on this thread.
+    # Answers are collected on this thread.
     $timer = New-Object Windows.Threading.DispatcherTimer
     $timer.Interval = [TimeSpan]::FromMilliseconds(200)
     $timer.Add_Tick({
@@ -357,17 +352,6 @@ function Show-Updates([switch]$NoShow, [hashtable]$Registry) {
             $r = Receive-UpdatesJob $state.WgJob
             if ($r) { $state.Wg = $r; $state.WgJob = $null; $changed = $true }
             if ($changed) { & $render }
-            foreach ($k in @($state.Icons.Keys)) {
-                $img = $null
-                try { $img = [VivacIcons]::Get($k) } catch { }
-                if ($img) {
-                    $i = New-Object Windows.Controls.Image
-                    $i.Source = $img; $i.Width = 24; $i.Height = 24
-                    [Windows.Media.RenderOptions]::SetBitmapScalingMode($i, 'HighQuality')
-                    $state.Icons[$k].Child = $i
-                    $state.Icons.Remove($k)
-                } elseif ([VivacIcons]::IsMissing($k)) { $state.Icons.Remove($k) }
-            }
         })
     # Asked once the panel is up, the cache first: it answers in seconds.
     $window.Add_ContentRendered({
@@ -381,8 +365,21 @@ function Show-Updates([switch]$NoShow, [hashtable]$Registry) {
     $window.Add_Closed({ param($s) if ($s.Tag) { $s.Tag.Stop() } })
     $window.Add_PreviewKeyDown({
             param($s, $e)
-            if ($e.Key -eq 'Escape') { $window.Close(); $e.Handled = $true }
-            elseif ($e.Key -eq 'F5') { & $refresh; $e.Handled = $true }
+            $k = [string]$e.Key
+            if ($k -eq 'Escape') { $window.Close(); $e.Handled = $true }
+            elseif ($k -eq 'F5') { & $refresh; $e.Handled = $true }
+            elseif ($k -eq 'Down' -or $k -eq 'Up') {
+                $focused = [Windows.Input.Keyboard]::FocusedElement
+                if ($focused -is [Windows.UIElement]) {
+                    $dir = if ($k -eq 'Down') { 'Next' } else { 'Previous' }
+                    [void]$focused.MoveFocus((New-Object Windows.Input.TraversalRequest $dir))
+                }
+                $e.Handled = $true
+            }
+        })
+    $window.Add_Loaded({
+            $first = $window.FindName('Body').Content.FindName('BtnAll')
+            if ($first) { [void]$first.Focus() }
         })
     & $render
     if ($NoShow) { return $window }
@@ -390,4 +387,4 @@ function Show-Updates([switch]$NoShow, [hashtable]$Registry) {
     [void]$window.ShowDialog()
 }
 
-Export-ModuleMember -Function Show-Updates, ConvertFrom-VivacWingetTable
+Export-ModuleMember -Function Show-Updates, ConvertFrom-VivacWingetTable, Get-VivacUpdatesModel, Format-UpdatesAgo
