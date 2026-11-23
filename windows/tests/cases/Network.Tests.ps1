@@ -66,6 +66,46 @@ Case 'channels and bands from the centre frequency' {
     Assert-Equal '6 GHz' ([VivacNetwork]::BandOf(5955))
 }
 
+Import-Module (Join-Path $root 'lib\PanelKit.psm1') -Force
+Import-Module (Join-Path $root 'lib\NetIcons.psm1') -Force
+Case 'the network icons join PanelKit icons and every one parses' {
+    foreach ($n in 'wifi', 'ethernet', 'bluetooth', 'headphones', 'keyboard', 'gamepad', 'speaker', 'trash', 'plug', 'sliders', 'bolt', 'target', 'unlock') {
+        $el = ConvertTo-PanelElement (Get-NetIconXaml $n 16 'FFFFFF')
+        Assert-True ($el -is [Windows.Controls.Viewbox]) "icon $n"
+    }
+    Assert-True ((Get-PanelIconXaml 'wifi' 12 'FFFFFF') -match 'Path') 'PanelKit knows wifi once the icons are added'
+}
+Case 'signal bars light up as the signal grows' {
+    Assert-Equal 4 (Get-NetBarCount 100)
+    Assert-Equal 3 (Get-NetBarCount 60)
+    Assert-Equal 2 (Get-NetBarCount 30)
+    Assert-Equal 1 (Get-NetBarCount 5)
+    Assert-Equal 0 (Get-NetBarCount 0)
+}
+Case 'a sparkline puts the highest sample at the top and the lowest at the bottom' {
+    $pts = @(Get-VivacSparkPoints ([double[]]@(10, 20, 15)) 100 44)
+    Assert-Equal 3 $pts.Count
+    Assert-Equal 0 $pts[0].X
+    Assert-Equal 100 $pts[2].X
+    Assert-True ($pts[1].Y -lt $pts[0].Y -and $pts[1].Y -lt $pts[2].Y) 'the peak is highest'
+    $flat = @(Get-VivacSparkPoints ([double[]]@(5)) 100 44)
+    Assert-Equal 2 $flat.Count 'one sample is a flat line'
+    Assert-Equal $flat[0].Y $flat[1].Y
+    Assert-Equal 0 @(Get-VivacSparkPoints ([double[]]@()) 100 44).Count
+}
+Case 'only a machine with two Wi-Fi adapters lists them, naming the one that carries' {
+    $one = [pscustomobject]@{ HasInterface = $true; Interface = [guid]'11111111-1111-1111-1111-111111111111'
+        Adapters = @([pscustomobject]@{ Wifi = $true; Id = '{11111111-1111-1111-1111-111111111111}'; Name = 'Wi-Fi'; Description = 'A'; Up = $true }) }
+    Assert-Equal 0 @(Get-VivacWifiAdapters $one).Count
+    $two = [pscustomobject]@{ HasInterface = $true; Interface = [guid]'22222222-2222-2222-2222-222222222222'
+        Adapters = @([pscustomobject]@{ Wifi = $true; Id = '{11111111-1111-1111-1111-111111111111}'; Name = 'Wi-Fi'; Description = 'A'; Up = $true },
+            [pscustomobject]@{ Wifi = $true; Id = '{22222222-2222-2222-2222-222222222222}'; Name = 'Wi-Fi 2'; Description = 'B'; Up = $true },
+            [pscustomobject]@{ Wifi = $false; Id = '{3}'; Name = 'Ethernet'; Description = 'E'; Up = $true }) }
+    $r = @(Get-VivacWifiAdapters $two)
+    Assert-Equal 2 $r.Count
+    Assert-True ((-not $r[0].Carries) -and $r[1].Carries) 'the second one carries'
+}
+
 $dir = New-TempProfile
 try {
     foreach ($name in Get-VivacCatalogue) {

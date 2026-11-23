@@ -354,7 +354,7 @@ function New-VivacNotification([string]$Title, [string]$Body, [string]$App = 'vi
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
     $bodyRow = ''
     if ($Body) {
-        $bodyRow = "<TextBlock Grid.Row=`"2`" Grid.ColumnSpan=`"2`" Margin=`"0,3,0,0`" FontSize=`"12.5`" Foreground=`"#$($p['COLOR_FG'])`" Opacity=`"0.85`" TextWrapping=`"Wrap`" TextTrimming=`"CharacterEllipsis`" MaxHeight=`"68`" Text=`"$(ConvertTo-XmlText $Body)`"/>"
+        $bodyRow = "<TextBlock Grid.Row=`"2`" Grid.ColumnSpan=`"2`" Margin=`"0,3,0,0`" FontSize=`"12.5`" Foreground=`"#$($p['COLOR_FG'])`" Opacity=`"0.7`" TextWrapping=`"Wrap`" TextTrimming=`"CharacterEllipsis`" MaxHeight=`"68`" Text=`"$(ConvertTo-XmlText $Body)`"/>"
     }
     $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -363,12 +363,12 @@ function New-VivacNotification([string]$Title, [string]$Body, [string]$App = 'vi
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False"
         FontFamily="JetBrainsMono Nerd Font, Cascadia Mono, Consolas" FontSize="13">
-  <Border x:Name="Card" Background="#F2$($p['COLOR_BG'])" BorderBrush="#$($p['COLOR_SURFACE_ALT'])" BorderThickness="1" CornerRadius="12" Cursor="Hand">
+  <Border x:Name="Card" Background="#F2$($p['COLOR_SURFACE'])" BorderBrush="#$($p['COLOR_BORDER_INACTIVE'])" BorderThickness="1" CornerRadius="14" Cursor="Hand">
     <Grid>
       <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="3"/></Grid.RowDefinitions>
       <Grid Margin="12">
         <Grid.ColumnDefinitions><ColumnDefinition Width="60"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Border Width="48" Height="48" CornerRadius="10" Background="#$($p['COLOR_SURFACE'])" VerticalAlignment="Center" HorizontalAlignment="Left">
+        <Border Width="48" Height="48" CornerRadius="12" Background="#$($p['COLOR_BG'])" VerticalAlignment="Top" HorizontalAlignment="Left">
           <Grid>
             <TextBlock x:Name="Glyph" Text="$(Get-KitGlyph $Glyph)" FontFamily="$script:KitIconFont" FontSize="20" Foreground="#$($p['COLOR_ACCENT'])" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             <Image x:Name="Icon" Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -378,14 +378,14 @@ function New-VivacNotification([string]$Title, [string]$Body, [string]$App = 'vi
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
           <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
           <TextBlock FontSize="11" Foreground="#$($p['COLOR_MUTED'])" TextTrimming="CharacterEllipsis">
-            <Run Text="$(ConvertTo-XmlText $App)" Foreground="#$($p['COLOR_ACCENT'])"/><Run Text="  $((Get-Date).ToString('HH:mm'))"/>
+            <Run Text="$(ConvertTo-XmlText $App)"/><Run Text=" &#x00B7; $((Get-Date).ToString('HH:mm'))"/>
           </TextBlock>
-          <TextBlock x:Name="Close" Grid.Column="1" Text="$(Get-KitGlyph 0xE711)" FontFamily="$script:KitIconFont" FontSize="11" Foreground="#$($p['COLOR_MUTED'])" Margin="8,1,0,0" Cursor="Hand"/>
-          <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0" FontSize="14" FontWeight="SemiBold" Foreground="#$($p['COLOR_FG'])" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="42" Text="$(ConvertTo-XmlText $Title)"/>
+          <TextBlock x:Name="Close" Grid.Column="1" Text="$(Get-KitGlyph 0xE711)" FontFamily="$script:KitIconFont" FontSize="12" Foreground="#$($p['COLOR_ACCENT'])" Margin="8,1,0,0" Cursor="Hand"/>
+          <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,4,0,0" FontSize="15" FontWeight="Bold" Foreground="#$($p['COLOR_FG'])" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="44" Text="$(ConvertTo-XmlText $Title)"/>
           $bodyRow
         </Grid>
       </Grid>
-      <Border x:Name="Progress" Grid.Row="1" Background="#$($p['COLOR_ACCENT'])" HorizontalAlignment="Left" Width="380" CornerRadius="0,0,0,12"/>
+      <Border x:Name="Progress" Grid.Row="1" Background="#$($p['COLOR_ACCENT'])" HorizontalAlignment="Left" Width="380" Margin="14,0,0,0" CornerRadius="2"/>
     </Grid>
   </Border>
 </Window>
@@ -705,30 +705,50 @@ function Show-Power([switch]$NoShow, [hashtable]$Registry, [string]$Arm) {
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'power' }
     $surfaceName = 'power'
     $p = Get-Palette
-    # Segoe Fluent Icons ships with Windows 11; the glyphs are its own.
+    $t = Get-PanelTokens $p
+    # Segoe Fluent Icons ships with Windows 11; the glyphs are its own. Danger
+    # entries wear the alert bar under the tile, as the design's.
     $entries = @(
-        @{ Id = 'lock'; Glyph = [char]0xE72E; Confirm = $false },
-        @{ Id = 'logout'; Glyph = [char]0xF3B1; Confirm = $true },
-        @{ Id = 'sleep'; Glyph = [char]0xE708; Confirm = $false },
-        @{ Id = 'restart'; Glyph = [char]0xE777; Confirm = $true },
-        @{ Id = 'shutdown'; Glyph = [char]0xE7E8; Confirm = $true }
+        @{ Id = 'lock'; Glyph = [char]0xE72E; Confirm = $false; Danger = $false },
+        @{ Id = 'logout'; Glyph = [char]0xF3B1; Confirm = $true; Danger = $false },
+        @{ Id = 'sleep'; Glyph = [char]0xE708; Confirm = $false; Danger = $false },
+        @{ Id = 'restart'; Glyph = [char]0xE777; Confirm = $true; Danger = $true },
+        @{ Id = 'shutdown'; Glyph = [char]0xE7E8; Confirm = $true; Danger = $true }
     )
-    if (Test-VivacRebootOther) { $entries += @{ Id = 'other'; Glyph = [char]0xE895; Confirm = $true } }
-    $buttons = ''
+    if (Test-VivacRebootOther) { $entries += @{ Id = 'other'; Glyph = [char]0xE895; Confirm = $true; Danger = $false } }
+    $cells = ''
     for ($i = 0; $i -lt $entries.Count; $i++) {
         $e = $entries[$i]
-        $buttons += @"
-<Border x:Name="B$i" Width="132" Height="150" Margin="8" CornerRadius="10" Background="#$($p['COLOR_SURFACE'])" BorderThickness="0,0,0,3" BorderBrush="#$($p['COLOR_MUTED'])">
-  <StackPanel VerticalAlignment="Center">
-    <TextBlock HorizontalAlignment="Center" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="40" Foreground="#$($p['COLOR_ACCENT'])" Text="$($e.Glyph)"/>
-    <TextBlock x:Name="L$i" HorizontalAlignment="Center" Margin="0,14,0,0" Text="$(ConvertTo-XmlText (T "power.$($e.Id)"))"/>
-    <TextBlock HorizontalAlignment="Center" Margin="0,4,0,0" Foreground="#$($p['COLOR_MUTED'])" Text="$($i + 1)"/>
-  </StackPanel>
+        $iconColor = $(if ($e.Danger) { $t.alertText } else { $t.accent })
+        $bar = ''
+        if ($e.Danger) { $bar = "<Border Height=`"3`" CornerRadius=`"2`" Margin=`"18,0,18,0`" VerticalAlignment=`"Bottom`" Background=`"#$($t.alert)`"/>" }
+        $cells += @"
+<Border x:Name="B$i" Height="160" Margin="5" CornerRadius="12" Background="#$($t.surface)" BorderThickness="2" BorderBrush="Transparent" Cursor="Hand">
+  <Grid>
+    <StackPanel VerticalAlignment="Center">
+      <TextBlock HorizontalAlignment="Center" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="32" Foreground="#$iconColor" Text="$($e.Glyph)"/>
+      <TextBlock x:Name="L$i" HorizontalAlignment="Center" Margin="0,14,0,0" FontSize="14" FontWeight="Bold" Foreground="#$($t.text)" Text="$(ConvertTo-XmlText (T "power.$($e.Id)"))"/>
+      <Border HorizontalAlignment="Center" Margin="0,12,0,0" CornerRadius="6" Padding="7,1" BorderThickness="1" BorderBrush="#$($t.line)"><TextBlock FontSize="12" Foreground="#$($t.textSecondary)" Text="$($i + 1)"/></Border>
+    </StackPanel>
+    $bar
+  </Grid>
 </Border>
 "@
     }
-    $body = "<StackPanel><StackPanel Orientation='Horizontal' HorizontalAlignment='Center'>$buttons</StackPanel><TextBlock Margin='0,8,0,0' HorizontalAlignment='Center' Foreground='#$($p['COLOR_MUTED'])' Text='$(ConvertTo-XmlText (T 'power.hint'))'/></StackPanel>"
-    $window = New-VivacWindow (Get-WindowXaml 'vivac - power' (160 * $entries.Count) 260 $body)
+    $ret = [string][char]0x23CE
+    $arrows = [string][char]0x2190 + [string][char]0x2192
+    $strip = @"
+<Border x:Name="Strip" Visibility="Collapsed" Margin="5,6,5,0" CornerRadius="10" Padding="12,8" Background="#$($t.alertSoft)" BorderThickness="1" BorderBrush="#$($t.alert)">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Right" VerticalAlignment="Center">$(Get-KitHintsXamlV2 $t @(@($ret, (T 'power.key.confirm')), @('Esc', (T 'power.key.cancel'))))</StackPanel>
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">$(Get-PanelIconXaml 'warn' 18 $t.alert 2 'Margin="0,0,10,0"')<TextBlock x:Name="StripText" FontSize="14" FontWeight="Bold" Foreground="#$($t.alertText)" VerticalAlignment="Center"/></StackPanel>
+  </DockPanel>
+</Border>
+"@
+    $foot = "<Border Margin='0,12,0,0' Padding='2,8,0,0' BorderBrush='#$($t.line)' BorderThickness='0,1,0,0'>$(Get-KitHintsXamlV2 $t @(@("1-$($entries.Count)", (T 'power.key.choose')), @($arrows, (T 'power.key.move')), @($ret, (T 'power.key.activate')), @('Esc', (T 'power.key.close'))))</Border>"
+    $body = "<StackPanel><UniformGrid Columns=`"3`">$cells</UniformGrid>$strip$foot</StackPanel>"
+    $window = New-VivacWindow (Get-KitWindowXamlV2 $t 'vivac - power' 820 $body)
+    $strip = $window.FindName('Strip'); $stripText = $window.FindName('StripText')
     $state = @{ Index = 0; Armed = -1 }
     # Opened armed (the switch key): that entry is selected and already asks
     # for its confirmation, so one more press carries it out.
@@ -738,12 +758,12 @@ function Show-Power([switch]$NoShow, [hashtable]$Registry, [string]$Arm) {
 
     $paint = {
         for ($i = 0; $i -lt $entries.Count; $i++) {
-            $b = $window.FindName("B$i"); $l = $window.FindName("L$i")
-            if ($i -eq $state.Index) { $b.BorderBrush = "#$($p['COLOR_ACCENT'])"; $b.Background = "#$($p['COLOR_SURFACE_ALT'])" }
-            else { $b.BorderBrush = "#$($p['COLOR_MUTED'])"; $b.Background = "#$($p['COLOR_SURFACE'])" }
-            if ($i -eq $state.Armed) { $l.Text = (T 'power.confirm'); $l.Foreground = "#$($p['COLOR_URGENT'])" }
-            else { $l.Text = (T "power.$($entries[$i].Id)"); $l.Foreground = "#$($p['COLOR_FG'])" }
+            $b = $window.FindName("B$i")
+            if ($i -eq $state.Index) { $b.BorderBrush = "#$($t.focusRing)"; $b.Background = "#$($t.surfaceAlt)" }
+            else { $b.BorderBrush = 'Transparent'; $b.Background = "#$($t.surface)" }
         }
+        if ($state.Armed -ge 0) { $strip.Visibility = 'Visible'; $stripText.Text = T "power.ask.$($entries[$state.Armed].Id)" }
+        else { $strip.Visibility = 'Collapsed' }
     }
 
     # Ending the session asks first: the first press arms the entry, the
@@ -770,9 +790,13 @@ function Show-Power([switch]$NoShow, [hashtable]$Registry, [string]$Arm) {
     $window.Add_PreviewKeyDown({
         param($s, $e)
         $k = [string]$e.Key
-        if ($k -eq 'Escape') { $window.Close(); return }
-        if ($k -eq 'Left' -and $state.Index -gt 0) { $state.Index--; $state.Armed = -1; & $paint; return }
-        if ($k -eq 'Right' -and $state.Index -lt $entries.Count - 1) { $state.Index++; $state.Armed = -1; & $paint; return }
+        if ($k -eq 'Escape') { if ($state.Armed -ge 0) { $state.Armed = -1; & $paint } else { $window.Close() }; return }
+        $to = $state.Index
+        if ($k -eq 'Left') { $to-- } elseif ($k -eq 'Right') { $to++ } elseif ($k -eq 'Up') { $to -= 3 } elseif ($k -eq 'Down') { $to += 3 }
+        if ($to -ne $state.Index) {
+            if ($to -ge 0 -and $to -lt $entries.Count) { $state.Index = $to; $state.Armed = -1; & $paint }
+            return
+        }
         if (($k -match '^D([1-9])$' -or $k -match '^NumPad([1-9])$') -and [int]$Matches[1] -le $entries.Count) { & $run ([int]$Matches[1] - 1); return }
         if ($k -eq 'Return' -or $k -eq 'Space') { & $run $state.Index; return }
     })
@@ -791,81 +815,104 @@ function Show-ThemePicker([switch]$NoShow, [hashtable]$Registry) {
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'theme' }
     $surfaceName = 'theme'
     $p = Get-Palette
+    $t = Get-PanelTokens $p
     $current = $settings['theme']
     $names = @(Get-VivacCatalogue)
+    $ret = [string][char]0x23CE
+    $arrows = [string][char]0x2190 + [string][char]0x2191 + [string][char]0x2193 + [string][char]0x2192
+    $hints = @(@($arrows, (T 'theme.key.move')), @($ret, (T 'theme.key.apply')), @('I', (T 'theme.key.picture')), @('Esc', (T 'theme.key.close')))
     $body = @"
-<DockPanel>
-  <TextBlock DockPanel.Dock="Top" Margin="0,0,0,12" FontSize="16" Foreground="#$($p['COLOR_ACCENT'])" Text="$(ConvertTo-XmlText (T 'theme.title'))"/>
-  <TextBlock DockPanel.Dock="Bottom" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="#$($p['COLOR_MUTED'])" Text="$(ConvertTo-XmlText (T 'theme.hint'))"/>
-  <ListBox x:Name="Rows" Background="Transparent" BorderThickness="0" Foreground="#$($p['COLOR_FG'])">
-    <ListBox.Resources>
-      <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#$($p['COLOR_SURFACE_ALT'])"/>
-      <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#$($p['COLOR_SURFACE_ALT'])"/>
-      <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#$($p['COLOR_FG'])"/>
-    </ListBox.Resources>
-  </ListBox>
-</DockPanel>
+<StackPanel>
+  <UniformGrid x:Name="Cards" Columns="4"/>
+  <Border x:Name="FromImage" Margin="4,10,4,0" CornerRadius="12" Padding="12" Background="#$($t.surface)" Cursor="Hand">
+    <DockPanel>
+      <Border DockPanel.Dock="Right" VerticalAlignment="Center" CornerRadius="6" Padding="7,1" BorderThickness="1" BorderBrush="#$($t.line)"><TextBlock FontSize="12" Text="I" Foreground="#$($t.text)"/></Border>
+      <Border Width="38" Height="38" CornerRadius="10" Background="#$($t.surfaceAlt)"><TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="18" Foreground="#$($t.accent)" Text="$([char]0xEB9F)" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+      <StackPanel Margin="12,0" VerticalAlignment="Center"><TextBlock FontSize="14" FontWeight="Bold" Foreground="#$($t.text)" Text="$(ConvertTo-XmlText (T 'picture.menu'))"/><TextBlock FontSize="12" Foreground="#$($t.textSecondary)" TextTrimming="CharacterEllipsis" Text="$(ConvertTo-XmlText (T 'theme.from_image_sub'))"/></StackPanel>
+    </DockPanel>
+  </Border>
+</StackPanel>
 "@
-    $window = New-VivacWindow (Get-WindowXaml 'vivac - theme' 640 520 $body)
-    $rows = $window.FindName('Rows')
+    $window = New-VivacWindow (Get-KitWindowXamlV2 $t 'vivac - theme' 820 (Get-KitPanelXamlV2 $t ([string][char]0xE790) (T 'theme.title') $body $hints))
+    $cards = $window.FindName('Cards')
+    $tok = { param($th, $k, $fb) if ($th.Tokens.Contains($k) -and $th.Tokens[$k]) { [string]$th.Tokens[$k] } else { $fb } }
+    $currentTheme = $null
+    $items = @()
     foreach ($name in $names) {
-        $t = Read-VivacTheme $name
-        $panel = New-Object Windows.Controls.StackPanel
-        $panel.Orientation = 'Horizontal'
-        $panel.Margin = '4,6'
-        $panel.Tag = $name
-        foreach ($tok in 'COLOR_BG', 'COLOR_SURFACE', 'COLOR_SURFACE_ALT', 'COLOR_ACCENT', 'COLOR_MUTED', 'COLOR_INFO', 'COLOR_OK', 'COLOR_FG') {
-            $sw = New-Object Windows.Shapes.Rectangle
-            $sw.Width = 18; $sw.Height = 18; $sw.RadiusX = 4; $sw.RadiusY = 4; $sw.Margin = '0,0,3,0'
-            $sw.Fill = "#$($t.Tokens[$tok])"
-            [void]$panel.Children.Add($sw)
-        }
-        $label = New-Object Windows.Controls.TextBlock
-        $label.Margin = '14,0,0,0'
-        $label.VerticalAlignment = 'Center'
-        $mark = '  '
-        if ($name -eq $current) { $mark = '* ' }
-        $label.Text = "$mark$($t.Title)  -  $($t.Essence)"
-        [void]$panel.Children.Add($label)
-        [void]$rows.Items.Add($panel)
+        $th = Read-VivacTheme $name
+        if ($name -eq $current) { $currentTheme = $th }
+        $bg = & $tok $th 'COLOR_BG' $t.bg; $acc = & $tok $th 'COLOR_ACCENT' $t.accent
+        $sa = & $tok $th 'COLOR_SURFACE_ALT' $t.surfaceAlt; $sf = & $tok $th 'COLOR_SURFACE' $t.surface
+        $dots = foreach ($k in 'COLOR_URGENT', 'COLOR_OK', 'COLOR_INFO', 'COLOR_ACCENT', 'COLOR_FG') { "<Ellipse Width=`"13`" Height=`"13`" Margin=`"0,0,6,0`" Fill=`"#$(& $tok $th $k $t.muted)`"/>" }
+        $use = ''
+        if ($name -eq $current) { $use = "<TextBlock DockPanel.Dock=`"Right`" FontSize=`"11`" Foreground=`"#$($t.textSecondary)`" VerticalAlignment=`"Bottom`" Text=`"$([char]0x2606) $(ConvertTo-XmlText (T 'theme.in_use'))`"/>" }
+        $xaml = @"
+<Border Margin="4" CornerRadius="12" Padding="8" Background="#$($t.surface)" BorderThickness="2" BorderBrush="Transparent" Cursor="Hand">
+  <StackPanel>
+    <Border Height="100" CornerRadius="8" Background="#$bg">
+      <Canvas Width="170" Height="100"><Canvas.Clip><RectangleGeometry Rect="0,0,170,100" RadiusX="8" RadiusY="8"/></Canvas.Clip>
+        <Ellipse Canvas.Left="112" Canvas.Top="16" Width="30" Height="30" Fill="#$acc"/>
+        <Polygon Points="0,100 0,72 45,48 80,66 120,36 170,70 170,100" Fill="#$sf"/>
+        <Polygon Points="0,100 0,86 40,72 90,88 140,66 170,84 170,100" Fill="#$sa"/>
+        <Rectangle Canvas.Left="6" Canvas.Top="6" Width="158" Height="5" RadiusX="2.5" RadiusY="2.5" Fill="#$bg" Stroke="#$acc" StrokeThickness="1"/>
+      </Canvas>
+    </Border>
+    <TextBlock Margin="0,10,0,0" FontSize="14" FontWeight="Bold" Foreground="#$($t.text)" TextTrimming="CharacterEllipsis" Text="$(ConvertTo-XmlText $th.Title)"/>
+    <DockPanel Margin="0,2,0,0">$use<TextBlock FontSize="12" Foreground="#$($t.textSecondary)" TextTrimming="CharacterEllipsis" Text="$(ConvertTo-XmlText $th.Essence)"/></DockPanel>
+    <StackPanel Orientation="Horizontal" Margin="0,10,0,2">$(-join $dots)</StackPanel>
+  </StackPanel>
+</Border>
+"@
+        $card = ConvertTo-PanelElement $xaml
+        $card.Tag = $name
+        [void]$cards.Children.Add($card)
+        $items += $card
     }
-    # The last row makes a new palette from a picture (lib/Picture.psm1).
-    $fromPicture = New-Object Windows.Controls.TextBlock
-    $fromPicture.Margin = '4,10'
-    $fromPicture.Tag = ':picture'
-    $fromPicture.Foreground = "#$($p['COLOR_ACCENT'])"
-    $fromPicture.Text = T 'picture.menu'
-    [void]$rows.Items.Add($fromPicture)
-    $rows.SelectedIndex = [Math]::Max(0, [array]::IndexOf($names, $current))
-
-    $apply = {
-        $sel = $rows.SelectedItem
-        if (-not $sel) { return }
-        if ([string]$sel.Tag -eq ':picture') {
-            $dialog = New-Object Microsoft.Win32.OpenFileDialog
-            $dialog.Title = T 'picture.dialog_title'
-            $dialog.Filter = (T 'picture.filter') + '|*.png;*.jpg;*.jpeg'
-            $dialog.InitialDirectory = [Environment]::GetFolderPath('MyPictures')
-            if (-not $dialog.ShowDialog($window)) { return }
-            $window.Close()
-            # Made and worn in the background, like any switch. Start-Process
-            # quotes nothing, so the path is quoted here.
-            Invoke-Detached (Join-Path $root 'scripts\theme-from-image.ps1') @("`"$($dialog.FileName)`"", '-Apply')
-            return
+    if ($currentTheme) { $window.FindName('Subtitle').Text = T 'theme.subtitle' @([string]$currentTheme.Title, [string]$currentTheme.Essence) }
+    [void]$window.FindName('HeaderRight').Children.Add((ConvertTo-PanelElement (Get-PanelChipXaml $t 'plain' (T 'theme.count' @([string]$names.Count)))))
+    $state = @{ Index = [Math]::Max(0, [array]::IndexOf($names, $current)) }
+    $paint = {
+        for ($i = 0; $i -lt $items.Count; $i++) {
+            $c = $items[$i]
+            if ($i -eq $state.Index) { $c.BorderBrush = "#$($t.focusRing)" }
+            elseif ([string]$c.Tag -eq $current) { $c.BorderBrush = "#$($t.accent)" }
+            else { $c.BorderBrush = 'Transparent' }
         }
+    }
+    $fromPicture = {
+        $dialog = New-Object Microsoft.Win32.OpenFileDialog
+        $dialog.Title = T 'picture.dialog_title'
+        $dialog.Filter = (T 'picture.filter') + '|*.png;*.jpg;*.jpeg'
+        $dialog.InitialDirectory = [Environment]::GetFolderPath('MyPictures')
+        if (-not $dialog.ShowDialog($window)) { return }
+        $window.Close()
+        # Made and worn in the background, like any switch. Start-Process
+        # quotes nothing, so the path is quoted here.
+        Invoke-Detached (Join-Path $root 'scripts\theme-from-image.ps1') @("`"$($dialog.FileName)`"", '-Apply')
+    }
+    $apply = {
+        if ($state.Index -lt 0 -or $state.Index -ge $items.Count) { return }
         $window.Close()
         # Applied in the background: a theme switch restarts the bar and may
         # render a wallpaper, and the picker should not sit on screen for it.
-        Invoke-Detached (Join-Path $root 'scripts\apply-theme.ps1') @('-Theme', [string]$sel.Tag)
+        Invoke-Detached (Join-Path $root 'scripts\apply-theme.ps1') @('-Theme', [string]$items[$state.Index].Tag)
     }
+    for ($i = 0; $i -lt $items.Count; $i++) {
+        $idx = $i
+        $items[$i].Add_MouseLeftButtonDown({ param($s, $e) $state.Index = $idx; & $paint; if ($e.ClickCount -ge 2) { & $apply } }.GetNewClosure())
+    }
+    $window.FindName('FromImage').Add_MouseLeftButtonUp({ & $fromPicture })
     $window.Add_PreviewKeyDown({
         param($s, $e)
         $k = [string]$e.Key
         if ($k -eq 'Escape') { $window.Close(); return }
         if ($k -eq 'Return') { & $apply; $e.Handled = $true; return }
+        if ($k -eq 'I') { & $fromPicture; $e.Handled = $true; return }
+        $to = $state.Index
+        if ($k -eq 'Left') { $to-- } elseif ($k -eq 'Right') { $to++ } elseif ($k -eq 'Up') { $to -= 4 } elseif ($k -eq 'Down') { $to += 4 }
+        if ($to -ne $state.Index -and $to -ge 0 -and $to -lt $items.Count) { $state.Index = $to; & $paint; $e.Handled = $true }
     })
-    $rows.Add_MouseDoubleClick({ & $apply })
-    $window.Add_ContentRendered({ $rows.Focus() | Out-Null; $rows.ScrollIntoView($rows.SelectedItem) })
+    & $paint
     if ($NoShow) { return $window }
     if ($Registry) { $Registry[$surfaceName] = $window }
     [void]$window.ShowDialog()
@@ -2704,6 +2751,7 @@ function Get-GreeterXaml($p, [bool]$PasswordOnly = $false) {
     $net = T $(if ($online) { 'greeter.online' } else { 'greeter.offline' })
     $netColor = $(if ($online) { $p['COLOR_INFO'] } else { $p['COLOR_MUTED'] })
     $accountVis = $(if ($account) { 'Visible' } else { 'Collapsed' })
+    $kt = Get-PanelTokens $p
     $x = { param($s) ConvertTo-XmlText ([string]$s) }
     $fact = { param($label, $value, $col) "<StackPanel Grid.Column=`"$col`" HorizontalAlignment=`"Center`"><TextBlock HorizontalAlignment=`"Center`" FontSize=`"11`" Foreground=`"#$($p['COLOR_FG_DIM'])`" Text=`"$(& $x $label)`"/><TextBlock HorizontalAlignment=`"Center`" FontSize=`"12`" Margin=`"0,2,0,0`" Text=`"$(& $x $value)`" TextTrimming=`"CharacterEllipsis`"/></StackPanel>" }
     @"
@@ -2727,28 +2775,11 @@ $(Get-KitResourcesXaml $p)
       </Rectangle.Fill>
     </Rectangle>
 
-    <!-- The bar's strip, as the desktop will have it. -->
-    <Border VerticalAlignment="Top" Margin="16,12,16,0" Height="38" CornerRadius="12" Padding="16,0"
-            Background="#D9$($p['COLOR_BG'])" BorderThickness="0,0,0,3" BorderBrush="#$($p['COLOR_ACCENT'])">
-      <Grid>
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-          <TextBlock Text="vivac" FontWeight="Bold" Foreground="#$($p['COLOR_ACCENT'])"/>
-          <TextBlock Text="  $(& $x $theme)" Foreground="#$($p['COLOR_FG_DIM'])"/>
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-          <TextBlock Text="&#xE774;" FontFamily="$script:KitIconFont" FontSize="13" Foreground="#$netColor" VerticalAlignment="Center" Margin="0,0,8,0"/>
-          <TextBlock Text="$(& $x $env:COMPUTERNAME)" Foreground="#$($p['COLOR_FG_DIM'])" VerticalAlignment="Center"/>
-        </StackPanel>
-      </Grid>
-    </Border>
-
     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,24">
-      <TextBlock x:Name="Clock" HorizontalAlignment="Center" FontSize="104" FontWeight="Light"/>
+      <TextBlock x:Name="Clock" HorizontalAlignment="Center" FontSize="112" FontWeight="Bold" Foreground="#$($p['COLOR_FG'])"/>
       <TextBlock x:Name="Day" HorizontalAlignment="Center" FontSize="17" Foreground="#$($p['COLOR_FG_DIM'])" Margin="0,0,0,34"/>
 
-      <Border x:Name="Card" Width="420" CornerRadius="16" Padding="28,26,28,22" Opacity="0"
-              Background="#F0$($p['COLOR_BG'])" BorderThickness="0,0,0,3" BorderBrush="#$($p['COLOR_ACCENT'])">
-        <Border.Effect><DropShadowEffect BlurRadius="48" ShadowDepth="10" Opacity="0.45" Color="#000000"/></Border.Effect>
+      <Border x:Name="Card" Width="360" Padding="0" Opacity="0" Background="Transparent">
         <Border.RenderTransform><TranslateTransform x:Name="CardShift" Y="18"/></Border.RenderTransform>
         <Border.Triggers>
           <EventTrigger RoutedEvent="FrameworkElement.Loaded">
@@ -2761,17 +2792,17 @@ $(Get-KitResourcesXaml $p)
           </EventTrigger>
         </Border.Triggers>
         <StackPanel>
-          <Grid Width="92" Height="92" HorizontalAlignment="Center">
+          <Grid Width="64" Height="64" HorizontalAlignment="Center">
             <Ellipse Fill="#$($p['COLOR_ACCENT'])"/>
-            <TextBlock Text="$(& $x $name.Substring(0, 1).ToUpper())" FontSize="38" FontWeight="Bold" Foreground="#$($p['COLOR_BG'])"
+            <TextBlock Text="$(& $x $name.Substring(0, 1).ToUpper())" FontSize="26" FontWeight="Bold" Foreground="#$($p['COLOR_BG'])"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
-            <Ellipse x:Name="Avatar" Margin="4"/>
+            <Ellipse x:Name="Avatar"/>
           </Grid>
-          <TextBlock HorizontalAlignment="Center" Margin="0,16,0,0" FontSize="13" FontWeight="Bold" Foreground="#$($p['COLOR_ACCENT'])" Text="$(& $x $greeting)"/>
-          <TextBlock HorizontalAlignment="Center" Margin="0,2,0,0" FontSize="22" FontWeight="SemiBold" Text="$(& $x $name)"/>
+          <TextBlock HorizontalAlignment="Center" Margin="0,10,0,0" FontSize="11" Foreground="#$($p['COLOR_MUTED'])" Text="$(& $x $greeting)"/>
+          <TextBlock HorizontalAlignment="Center" Margin="0,0,0,0" FontSize="15" FontWeight="Bold" Text="$(& $x $name)"/>
           <TextBlock HorizontalAlignment="Center" Margin="0,2,0,0" FontSize="12" Foreground="#$($p['COLOR_MUTED'])" Text="$(& $x $account)" Visibility="$accountVis"/>
 
-          <Border x:Name="Field" Height="48" CornerRadius="24" Margin="0,22,0,0" BorderThickness="2"
+          <Border x:Name="Field" Height="40" CornerRadius="12" Margin="0,12,0,0" BorderThickness="2"
                   BorderBrush="#$($p['COLOR_ACCENT'])" Background="#$($p['COLOR_SURFACE'])">
             <Grid>
               <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition/><ColumnDefinition Width="46"/></Grid.ColumnDefinitions>
@@ -2782,7 +2813,7 @@ $(Get-KitResourcesXaml $p)
               <PasswordBox x:Name="Secret" Grid.Column="1" Margin="6,0,0,0" Background="Transparent" BorderThickness="0"
                            Foreground="#$($p['COLOR_FG'])" CaretBrush="#$($p['COLOR_ACCENT'])" PasswordChar="&#x25CF;" FontSize="16"
                            VerticalContentAlignment="Center"/>
-              <Button x:Name="Go" Grid.Column="2" Width="36" Height="36" Focusable="False" Cursor="Hand" HorizontalAlignment="Left">
+              <Button x:Name="Go" Grid.Column="2" Width="28" Height="28" Focusable="False" Cursor="Hand" HorizontalAlignment="Left">
                 <Button.Template><ControlTemplate TargetType="Button">
                   <Grid x:Name="G">
                     <Ellipse Fill="#$($p['COLOR_ACCENT'])"/>
@@ -2810,14 +2841,11 @@ $(Get-KitResourcesXaml $p)
           <TextBlock x:Name="Status" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,10,0,0"
                      MinHeight="16" FontSize="12" Foreground="#$($p['COLOR_MUTED'])"/>
 
-          <Border Margin="0,14,0,0" CornerRadius="10" Padding="6,8" Background="#B3$($p['COLOR_SURFACE'])">
-            <Grid>
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-              $(& $fact (T 'greeter.theme') $theme 0)
-              $(& $fact (T 'greeter.host') $env:COMPUTERNAME 1)
-              $(& $fact (T 'greeter.network') $net 2)
-            </Grid>
-          </Border>
+          <WrapPanel Margin="0,14,0,0" HorizontalAlignment="Center">
+            <Grid Margin="3,0">$(Get-PanelChipXaml $kt 'plain' $theme)</Grid>
+            <Grid Margin="3,0">$(Get-PanelChipXaml $kt 'plain' $env:COMPUTERNAME)</Grid>
+            <Grid Margin="3,0">$(Get-PanelChipXaml $kt $(if ($online) { 'ok' } else { 'plain' }) $net)</Grid>
+          </WrapPanel>
         </StackPanel>
       </Border>
     </StackPanel>
@@ -2913,8 +2941,8 @@ function Show-VivacLock([switch]$NoShow, [switch]$Greeter, [string]$Desktop = 'D
         FontFamily="JetBrainsMono Nerd Font, Cascadia Mono, Consolas" Foreground="#$($p['COLOR_FG'])">
   <Grid>
     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-      <TextBlock x:Name="Clock" HorizontalAlignment="Center" FontSize="96" Margin="0,0,0,40"/>
-      <Border x:Name="Field" Width="300" Height="52" CornerRadius="26" BorderThickness="3"
+      <TextBlock x:Name="Clock" HorizontalAlignment="Center" FontSize="112" FontWeight="Bold" Margin="0,0,0,40"/>
+      <Border x:Name="Field" Width="322" Height="40" CornerRadius="12" BorderThickness="2"
               BorderBrush="#$($p['COLOR_ACCENT'])" Background="#$($p['COLOR_SURFACE'])">
         <Grid>
           <TextBlock x:Name="Placeholder" HorizontalAlignment="Center" VerticalAlignment="Center" FontStyle="Italic"

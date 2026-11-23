@@ -250,7 +250,7 @@ hl.window_rule({ name = "vivac-ask", match = { class = "^(vivac-ask)$" }, float 
 -- vivac panels (vivac-panel): the bar's popups, floating under it at the right edge;
 -- the calendar and the forecast drop from the middle, where the clock and weather are.
 hl.window_rule({ name = "vivac-panel", match = { class = "^(org\\.vivac\\.panel\\..*)$" }, float = true, pin = true, decorate = false, no_shadow = true, move = "(monitor_w-window_w-12) 48" })
-hl.window_rule({ name = "vivac-panel-centre", match = { class = "^(org\\.vivac\\.panel\\.(calendar|forecast|menu|clipboard))$" }, move = "((monitor_w-window_w)/2) 48" })
+hl.window_rule({ name = "vivac-panel-centre", match = { class = "^(org\\.vivac\\.panel\\.(calendar|forecast|menu|clipboard|theme|power))$" }, move = "((monitor_w-window_w)/2) 48" })
 hl.window_rule({ name = "vivac-panel-osd", match = { class = "^(org\\.vivac\\.panel\\.osd)$" }, move = "((monitor_w-window_w)/2) (monitor_h-window_h-96)", no_focus = true })
 
 -- Started with the session, in this order, once the compositor is up.
