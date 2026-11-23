@@ -12,6 +12,8 @@
 Set-StrictMode -Version 2.0
 Import-Module (Join-Path $PSScriptRoot 'Vivac.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Surfaces.psm1')
+Import-Module (Join-Path $PSScriptRoot 'PanelKit.psm1')
+Import-Module (Join-Path $PSScriptRoot 'BtIcons.psm1')
 
 $script:Helper = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-tray.ps1'
 $script:AsTask = $null
@@ -88,35 +90,46 @@ function Show-Bluetooth([switch]$NoShow, [hashtable]$Registry) {
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'bluetooth' }
     $surfaceName = 'bluetooth'
     Import-VivacBluetooth
+    Register-BtIcons
     $p = Get-Palette
-    $iconFont = 'Segoe Fluent Icons, Segoe MDL2 Assets'
+    $t = Get-PanelTokens $p
     $source = $script:DeviceSource
     $batteryScript = $script:BatteryScript
     $helper = $script:Helper
+    $moreButton = Get-PanelButtonXaml $t 'More' (T 'bt.more') 'sliders' 'neutral' 42 'HorizontalAlignment="Stretch"'
     $body = @"
 <DockPanel>
-  <Button x:Name="More" DockPanel.Dock="Bottom" Style="{StaticResource KitGhost}" HorizontalAlignment="Stretch" Margin="0,10,0,0">
-    <StackPanel Orientation="Horizontal">
-      <TextBlock Text="$(Get-KitGlyph 0xE713)" FontFamily="$iconFont" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0"/>
-      <TextBlock Text="$(ConvertTo-XmlText (T 'bt.more'))" VerticalAlignment="Center"/>
-    </StackPanel>
-  </Button>
-  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel x:Name="Sections"/>
+  <Border DockPanel.Dock="Bottom" Margin="0,10,0,0">$moreButton</Border>
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Margin="0,0,-8,0">
+    <StackPanel x:Name="Sections" Margin="0,0,8,0"/>
   </ScrollViewer>
 </DockPanel>
 "@
-    $hints = @(@('F5', (T 'bt.key.scan')), @('Esc', (T 'bt.key.close')))
-    $window = New-VivacWindow (Get-WindowXaml 'vivac - bluetooth' 440 560 (Get-KitPanelXaml $p 0xE702 'Bluetooth' $body $hints))
+    $hints = @(@('F5', (T 'bt.key.scan')), @([string][char]0x21B5, (T 'bt.key.connect')), @('Esc', (T 'bt.key.close')))
+    $window = New-VivacWindow (Get-KitWindowXamlV2 $t 'vivac - bluetooth' 500 (Get-KitPanelXamlV2 $t (Get-KitGlyph 0xE702) 'Bluetooth' $body $hints))
+    Add-KitDrawResources $window $p
     Set-KitDropDown $window
-    $kit = $window.Content.Child
+    $window.MaxHeight = [Math]::Max(420, [Windows.SystemParameters]::WorkArea.Height - 40)
     $sections = $window.FindName('Sections')
     $subtitle = $window.FindName('Subtitle')
     $window.FindName('More').Add_Click({ $window.Close(); Start-Process 'ms-settings:bluetooth' })
 
-    # The radio's switch, in the header.
-    $radio = New-Object Windows.Controls.Primitives.ToggleButton
-    $radio.Style = $kit.FindResource('KitSwitch')
+    # The radio's switch, in the header: the design's 52 x 30 track.
+    $radio = ConvertTo-PanelElement @"
+<ToggleButton Cursor="Hand" FocusVisualStyle="{x:Null}"><ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
+  <Border x:Name="Track" Width="52" Height="30" CornerRadius="15" Background="#$($t.surfaceAlt)">
+    <Ellipse x:Name="Knob" Width="22" Height="22" Margin="4,0" HorizontalAlignment="Left" Fill="#$($t.muted)"/>
+  </Border>
+  <ControlTemplate.Triggers>
+    <Trigger Property="IsChecked" Value="True">
+      <Setter TargetName="Track" Property="Background" Value="#$($t.accent)"/>
+      <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/>
+      <Setter TargetName="Knob" Property="Fill" Value="#$($t.bg)"/>
+    </Trigger>
+    <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Track" Property="Opacity" Value="0.4"/></Trigger>
+  </ControlTemplate.Triggers>
+</ControlTemplate></ToggleButton.Template></ToggleButton>
+"@
     [void]$window.FindName('HeaderRight').Children.Add($radio)
 
     # What the panel holds between renders. Busy maps an address to the word
@@ -128,9 +141,9 @@ function Show-Bluetooth([switch]$NoShow, [hashtable]$Registry) {
         Battery = @{}; BatteryJob = $null; Painting = $false
     }
 
-    $typeGlyph = @{
-        headphones = 0xE7F6; headset = 0xE95B; speaker = 0xE7F5; car = 0xE804; keyboard = 0xE765; mouse = 0xE962
-        gamepad = 0xE7FC; phone = 0xE8EA; computer = 0xE7F8; watch = 0xE916; other = 0xE702
+    $typeIcon = @{
+        headphones = 'headphones'; headset = 'headphones'; speaker = 'speaker'; car = 'car'; keyboard = 'keyboard'; mouse = 'mouse'
+        gamepad = 'gamepad'; phone = 'phone'; computer = 'computer'; watch = 'watch'; other = 'bluetooth'
     }
     # A device from an older build of VivacBluetooth.cs (a resident host that
     # loaded it before) has no Type; its class of device still says it.
@@ -143,78 +156,62 @@ function Show-Bluetooth([switch]$NoShow, [hashtable]$Registry) {
 
     $newText = {
         param([string]$Text, [string]$Color, [double]$Size = 13)
-        $t = New-Object Windows.Controls.TextBlock
-        $t.Text = $Text; $t.Foreground = "#$Color"; $t.FontSize = $Size
-        $t.VerticalAlignment = 'Center'; $t.TextTrimming = 'CharacterEllipsis'
-        $t
+        $x = New-Object Windows.Controls.TextBlock
+        $x.Text = $Text; $x.Foreground = "#$Color"; $x.FontSize = $Size
+        $x.VerticalAlignment = 'Center'; $x.TextTrimming = 'CharacterEllipsis'
+        $x
     }
+    # A kit button (Kind: primary, neutral, danger); no text makes it a
+    # square one. What the handler needs travels in the Tag: it runs after
+    # this block has returned.
     $newButton = {
-        param([string]$Style, [int]$Glyph, [string]$Text, [scriptblock]$OnClick, $Device)
-        $b = New-Object Windows.Controls.Button
-        $b.Style = $kit.FindResource($Style)
-        $sp = New-Object Windows.Controls.StackPanel
-        $sp.Orientation = 'Horizontal'
-        if ($Glyph) {
-            $g = New-Object Windows.Controls.TextBlock
-            $g.Text = Get-KitGlyph $Glyph; $g.FontFamily = $iconFont; $g.FontSize = 12; $g.VerticalAlignment = 'Center'
-            if ($Text) { $g.Margin = '0,0,6,0' }
-            [void]$sp.Children.Add($g)
-        }
-        if ($Text) { $t = New-Object Windows.Controls.TextBlock; $t.Text = $Text; $t.FontSize = 12; $t.VerticalAlignment = 'Center'; [void]$sp.Children.Add($t) }
-        $b.Content = $sp
-        $b.Margin = '6,0,0,0'
-        # What the handler needs travels in the Tag: it runs after this block
-        # has returned.
+        param([string]$Kind, [string]$Icon, [string]$Text, [scriptblock]$OnClick, $Device, [int]$Height = 34)
+        $extra = ''
+        if (-not $Text) { $extra = 'Width="34"' }
+        $b = ConvertTo-PanelElement (Get-PanelButtonXaml $t '' $Text $Icon $Kind $Height $extra)
+        $b.Margin = '8,0,0,0'
         $b.Tag = @{ Run = $OnClick; Device = $Device }
         $b.Add_Click({ param($s) & $s.Tag.Run $s.Tag.Device })
         $b
     }
     $newHeader = {
         param([string]$Text, [int]$Count = -1, $Right = $null)
-        $g = New-Object Windows.Controls.DockPanel
-        $g.Margin = '2,12,0,6'
-        if ($Right) { [Windows.Controls.DockPanel]::SetDock($Right, 'Right'); [void]$g.Children.Add($Right) }
-        $sp = New-Object Windows.Controls.StackPanel
-        $sp.Orientation = 'Horizontal'; $sp.VerticalAlignment = 'Center'
-        $t = & $newText $Text.ToUpper() $p['COLOR_ACCENT'] 11
-        $t.FontWeight = 'SemiBold'
-        [void]$sp.Children.Add($t)
-        if ($Count -ge 0) { $c = & $newText "  $Count" $p['COLOR_MUTED'] 11; [void]$sp.Children.Add($c) }
-        [void]$g.Children.Add($sp)
-        $g
+        $pill = $null
+        if ($Count -ge 0) { $pill = $Count }
+        $dp = New-Object Windows.Controls.DockPanel
+        $dp.Margin = '0,10,0,6'
+        if ($Right) { [Windows.Controls.DockPanel]::SetDock($Right, 'Right'); [void]$dp.Children.Add($Right) }
+        [void]$dp.Children.Add((ConvertTo-PanelElement (Get-PanelSectionXaml $t $Text '' $pill '2,0,0,0')))
+        $dp
     }
-    # A row in a card of its own: the menu's row, with the device's glyph in
-    # the colour of its state.
+    # A card: the surface block of 12 px corners, with $Child inside.
     $newCard = {
-        param($Row)
-        $card = New-Object Windows.Controls.Border
-        $card.CornerRadius = 10; $card.Padding = '10,4'; $card.Margin = '0,0,0,6'
-        $card.Background = "#$($p['COLOR_SURFACE'])"
-        $Row.Tag.Tile.Background = "#$($p['COLOR_BG'])"
-        $card.Child = $Row
+        param($Child)
+        $card = ConvertTo-PanelElement (Get-PanelCardXaml $t '<ContentControl x:Name="Slot" IsTabStop="False"/>' 'ok' '0,0,0,8')
+        $card.Padding = '10'
+        $card.Child = $Child
         $card
     }
     $newNote = {
-        param([int]$Glyph, [string]$Text, [string]$Color)
-        $card = New-Object Windows.Controls.Border
-        $card.CornerRadius = 10; $card.Padding = '12,10'; $card.Margin = '0,0,0,6'
-        $card.Background = "#$($p['COLOR_SURFACE'])"
-        $dp = New-Object Windows.Controls.DockPanel
-        $g = & $newText (Get-KitGlyph $Glyph) $Color 15
-        $g.FontFamily = $iconFont; $g.Margin = '0,0,10,0'; $g.VerticalAlignment = 'Top'
-        [Windows.Controls.DockPanel]::SetDock($g, 'Left')
-        [void]$dp.Children.Add($g)
-        $t = & $newText $Text $p['COLOR_FG'] 12
-        $t.TextWrapping = 'Wrap'; $t.TextTrimming = 'None'
-        [void]$dp.Children.Add($t)
-        $card.Child = $dp
+        param([string]$Icon, [string]$Text, [string]$Color, [bool]$Bad = $false)
+        $level = 'ok'
+        if ($Bad) { $level = 'alert' }
+        $card = ConvertTo-PanelElement (Get-PanelCardXaml $t "<DockPanel><Viewbox x:Name=`"NoteIcon`" DockPanel.Dock=`"Left`" Width=`"1`" Height=`"1`"/><TextBlock x:Name=`"NoteText`" TextWrapping=`"Wrap`" FontSize=`"12`" VerticalAlignment=`"Center`" Foreground=`"#$($t.text)`"/></DockPanel>" $level '0,0,0,8')
+        $dp = $card.Child
+        $dp.Children.Clear()
+        $mark = ConvertTo-PanelElement (Get-PanelIconXaml $Icon 18 $Color 2 'Margin="0,0,10,0" VerticalAlignment="Top"')
+        [Windows.Controls.DockPanel]::SetDock($mark, 'Left')
+        [void]$dp.Children.Add($mark)
+        $x = & $newText $Text $t.text 12
+        $x.TextWrapping = 'Wrap'; $x.TextTrimming = 'None'
+        [void]$dp.Children.Add($x)
         $card
     }
     # A thin bar that runs while the search does.
     $newSweep = {
         [Windows.Markup.XamlReader]::Parse(@"
-<Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Height="3" CornerRadius="2" Margin="2,0,2,8" Background="#$($p['COLOR_SURFACE'])" ClipToBounds="True">
-  <Border Width="90" HorizontalAlignment="Left" CornerRadius="2" Background="#$($p['COLOR_ACCENT'])">
+<Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Height="3" CornerRadius="2" Margin="2,0,2,8" Background="#$($t.surface)" ClipToBounds="True">
+  <Border Width="90" HorizontalAlignment="Left" CornerRadius="2" Background="#$($t.accent)">
     <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
     <Border.Triggers>
       <EventTrigger RoutedEvent="FrameworkElement.Loaded">
@@ -226,6 +223,33 @@ function Show-Bluetooth([switch]$NoShow, [hashtable]$Registry) {
   </Border>
 </Border>
 "@)
+    }
+    # One device: tile, name over a line, then what goes on its right.
+    $newRow = {
+        param([string]$Icon, [string]$Name, [string]$Sub, [string]$SubColor, [object[]]$Right)
+        $g = New-Object Windows.Controls.Grid
+        foreach ($w in 'Auto', '*', 'Auto') {
+            $c = New-Object Windows.Controls.ColumnDefinition
+            $c.Width = [Windows.GridLengthConverter]::new().ConvertFromString($w)
+            $g.ColumnDefinitions.Add($c)
+        }
+        $tile = ConvertTo-PanelElement (Get-PanelTileXaml $t $Icon 40)
+        $tile.VerticalAlignment = 'Center'
+        [void]$g.Children.Add($tile)
+        $st = New-Object Windows.Controls.StackPanel
+        $st.VerticalAlignment = 'Center'; $st.Margin = '12,0,8,0'
+        $n = & $newText $Name $t.text 14
+        $n.FontWeight = 'Bold'
+        [void]$st.Children.Add($n)
+        [void]$st.Children.Add((& $newText $Sub $SubColor 12))
+        [Windows.Controls.Grid]::SetColumn($st, 1)
+        [void]$g.Children.Add($st)
+        $r = New-Object Windows.Controls.StackPanel
+        $r.Orientation = 'Horizontal'; $r.VerticalAlignment = 'Center'
+        foreach ($e in $Right) { if ($e) { [void]$r.Children.Add($e) } }
+        [Windows.Controls.Grid]::SetColumn($r, 2)
+        [void]$g.Children.Add($r)
+        $g
     }
 
     $startScan = {
@@ -290,58 +314,52 @@ function Show-Bluetooth([switch]$NoShow, [hashtable]$Registry) {
     $deviceRow = {
         param($d)
         $type = & $typeOf $d
-        $glyph = $typeGlyph[$type]
-        if (-not $glyph) { $glyph = $typeGlyph['other'] }
-        # The section already says whether it is connected.
-        $sub = T "bt.type.$type"
-        $color = $p['COLOR_MUTED']
+        $icon = $typeIcon[$type]
+        if (-not $icon) { $icon = $typeIcon['other'] }
+        $sub = "$(T "bt.type.$type")  $([char]0x00B7)  $(if ($d.Connected) { T 'bt.connected' } else { T 'bt.not_connected' })"
+        $subColor = $t.textSecondary
         $busy = $state.Busy.ContainsKey($d.Address)
-        if ($busy) { $sub = $state.Busy[$d.Address]; $color = $p['COLOR_ACCENT'] }
+        if ($busy) { $sub = $state.Busy[$d.Address]; $subColor = $t.accent }
         $pct = $null
-        if (-not $busy -and $d.Connected) {
-            $color = $p['COLOR_OK']
-            $pct = $state.Battery[(& $hex $d)]
-        }
+        if (-not $busy -and $d.Connected) { $pct = $state.Battery[(& $hex $d)] }
 
-        $right = New-Object Windows.Controls.StackPanel
-        $right.Orientation = 'Horizontal'
+        $right = @()
+        # The battery: the design's cell outline and the figure.
+        if ($null -ne $pct) {
+            $color = $t.success
+            if ($pct -le 20) { $color = $t.alert }
+            $bat = New-Object Windows.Controls.StackPanel
+            $bat.Orientation = 'Horizontal'; $bat.VerticalAlignment = 'Center'
+            [void]$bat.Children.Add((ConvertTo-PanelElement (Get-PanelIconXaml 'battery' 16 $color 2 'Margin="0,0,5,0" VerticalAlignment="Center"')))
+            [void]$bat.Children.Add((& $newText "$pct %" $color 12))
+            $bat.ToolTip = T 'bt.battery' @([string]$pct)
+            $right += $bat
+        }
         if (-not $busy) {
-            if ([VivacBluetooth]::CanConnect($d.Kind)) {
-                if ($d.Connected) { [void]$right.Children.Add((& $newButton 'KitGhost' 0 (T 'bt.btn.disconnect') $toggleConnection $d)) }
-                else { [void]$right.Children.Add((& $newButton 'KitButton' 0 (T 'bt.btn.connect') $toggleConnection $d)) }
+            $canConnect = [VivacBluetooth]::CanConnect($d.Kind)
+            if ($canConnect) {
+                if ($d.Connected) { $right += (& $newButton 'neutral' '' (T 'bt.btn.disconnect') $toggleConnection $d) }
+                else {
+                    $b = & $newButton 'primary' '' (T 'bt.btn.connect') $toggleConnection $d
+                    if (-not $state.FirstPrimary) { $state.FirstPrimary = $b }
+                    $right += $b
+                }
             }
             if ($state.Forget -eq $d.Address) {
-                $b = & $newButton 'KitButton' 0xE74D (T 'bt.forget_again') $forget $d
-                $b.Background = "#$($p['COLOR_URGENT'])"
+                $right += (& $newButton 'danger' 'trash' (T 'bt.forget_again') $forget $d)
             } else {
-                $b = & $newButton 'KitGhost' 0xE74D '' $forget $d
+                $b = & $newButton 'neutral' 'trash' '' $forget $d
                 $b.ToolTip = T 'bt.forget'
+                $right += $b
             }
-            [void]$right.Children.Add($b)
         }
-        $row = New-KitRow $p $glyph $d.Name $sub $right $color
-        if ($busy) { $row.Tag.Sub.Foreground = "#$($p['COLOR_ACCENT'])" }
-        # The battery as Windows' own gauge glyph (Battery0..Battery10) and
-        # the figure, after the kind.
-        if ($null -ne $pct) {
-            $level = [Math]::Max(0, [Math]::Min(10, [int][Math]::Floor($pct / 10)))
-            $code = if ($level -eq 10) { 0xE83F } else { 0xE850 + $level }
-            $run = New-Object Windows.Documents.Run (Get-KitGlyph $code)
-            $run.FontFamily = $iconFont
-            if ($pct -le 20) { $run.Foreground = "#$($p['COLOR_URGENT'])" }
-            [void]$row.Tag.Sub.Inlines.Add((New-Object Windows.Documents.Run "    "))
-            [void]$row.Tag.Sub.Inlines.Add($run)
-            [void]$row.Tag.Sub.Inlines.Add((New-Object Windows.Documents.Run " $pct %"))
-            $row.ToolTip = T 'bt.battery' @([string]$pct)
-        }
-        $card = & $newCard $row
-        if ($d.Connected) { $row.Tag.Tile.Background = "#33$($p['COLOR_OK'])" }
-        $card
+        & $newCard (& $newRow $icon $d.Name $sub $subColor $right)
     }
 
     $render = {
         if ($state.Painting) { return }
         $state.Painting = $true
+        $state.FirstPrimary = $null
         try {
             $sections.Children.Clear()
             $connected = @($state.Paired | Where-Object { $_.Connected } | Sort-Object Name)
@@ -353,22 +371,22 @@ function Show-Bluetooth([switch]$NoShow, [hashtable]$Registry) {
             else { $subtitle.Text = T 'bt.summary' @([string]$connected.Count, [string]$state.Paired.Count) }
 
             if ($state.Note) {
-                $c = $p['COLOR_ACCENT']; $g = 0xE946
-                if ($state.NoteBad) { $c = $p['COLOR_URGENT']; $g = 0xE7BA }
-                [void]$sections.Children.Add((& $newNote $g $state.Note $c))
+                $c = $t.accent; $g = 'bluetooth'
+                if ($state.NoteBad) { $c = $t.alert; $g = 'warn' }
+                [void]$sections.Children.Add((& $newNote $g $state.Note $c $state.NoteBad))
             }
             if ($null -eq $state.On) {
-                [void]$sections.Children.Add((& $newNote 0xE702 (T 'bt.no_radio') $p['COLOR_MUTED']))
+                [void]$sections.Children.Add((& $newNote 'bluetooth' (T 'bt.no_radio') $t.muted))
                 return
             }
             if (-not $state.On) {
-                $card = & $newNote 0xE702 (T 'bt.off_note') $p['COLOR_MUTED']
-                $on = & $newButton 'KitButton' 0xE7E8 (T 'bt.btn.turn_on') $switchRadio $null
-                $on.HorizontalAlignment = 'Left'; $on.Margin = '25,10,0,0'
+                $card = & $newNote 'bluetooth' (T 'bt.off_note') $t.muted
+                $on = & $newButton 'primary' '' (T 'bt.btn.turn_on') $switchRadio $null
+                $on.HorizontalAlignment = 'Left'; $on.Margin = '28,10,0,0'
+                $dp = $card.Child
                 $wrap = New-Object Windows.Controls.StackPanel
-                $card.Child.Children[1].TextWrapping = 'Wrap'
-                $old = $card.Child; $card.Child = $null
-                [void]$wrap.Children.Add($old); [void]$wrap.Children.Add($on)
+                $card.Child = $null
+                [void]$wrap.Children.Add($dp); [void]$wrap.Children.Add($on)
                 $card.Child = $wrap
                 [void]$sections.Children.Add($card)
                 return
@@ -379,32 +397,40 @@ function Show-Bluetooth([switch]$NoShow, [hashtable]$Registry) {
                 foreach ($d in $connected) { [void]$sections.Children.Add((& $deviceRow $d)) }
             }
             [void]$sections.Children.Add((& $newHeader (T 'bt.section.paired') $resting.Count))
-            if (-not $state.Paired.Count) { [void]$sections.Children.Add((& $newNote 0xE946 (T 'bt.none_paired') $p['COLOR_MUTED'])) }
-            elseif (-not $resting.Count) { [void]$sections.Children.Add((& $newText (T 'bt.all_connected') $p['COLOR_MUTED'] 12)) }
+            if (-not $state.Paired.Count) { [void]$sections.Children.Add((& $newNote 'bluetooth' (T 'bt.none_paired') $t.muted)) }
+            elseif (-not $resting.Count) { $x = & $newText (T 'bt.all_connected') $t.muted 12; $x.Margin = '2,0,0,8'; [void]$sections.Children.Add($x) }
             foreach ($d in $resting) { [void]$sections.Children.Add((& $deviceRow $d)) }
 
             $known = @($state.Paired | ForEach-Object { $_.Address })
             $near = @($state.Nearby | Where-Object { -not $_.Paired -and $known -notcontains $_.Address } | Sort-Object Name)
-            $scanBtn = $null
-            if (-not $state.Scan) { $scanBtn = & $newButton 'KitGhost' 0xE72C (T 'bt.btn.scan') { & $startScan; & $render } $null }
-            [void]$sections.Children.Add((& $newHeader (T 'bt.section.nearby') $(if ($state.Scan) { -1 } else { $near.Count }) $scanBtn))
+            # Right of the heading: the search button, or while it runs the
+            # word for it with the refresh icon.
+            $right = $null
+            if (-not $state.Scan) { $right = & $newButton 'neutral' 'refresh' (T 'bt.btn.scan') { & $startScan; & $render } $null 28 }
+            else {
+                $right = New-Object Windows.Controls.StackPanel
+                $right.Orientation = 'Horizontal'; $right.VerticalAlignment = 'Center'
+                [void]$right.Children.Add((ConvertTo-PanelElement (Get-PanelIconXaml 'refresh' 13 $t.textSecondary 2 'Margin="0,0,6,0" VerticalAlignment="Center"')))
+                [void]$right.Children.Add((& $newText (T 'bt.scan.running') $t.textSecondary 12))
+            }
+            [void]$sections.Children.Add((& $newHeader (T 'bt.section.nearby') $(if ($state.Scan) { -1 } else { $near.Count }) $right))
             if ($state.Scan) {
                 [void]$sections.Children.Add((& $newSweep))
-                $t = & $newText (T 'bt.scanning') $p['COLOR_MUTED'] 12
-                $t.Margin = '2,0,0,8'
-                [void]$sections.Children.Add($t)
             } elseif (-not $near.Count -and $state.Scanned) {
-                [void]$sections.Children.Add((& $newNote 0xE946 (T 'bt.none_near') $p['COLOR_MUTED']))
+                [void]$sections.Children.Add((& $newNote 'bluetooth' (T 'bt.none_near') $t.muted))
             }
             foreach ($d in $near) {
                 $type = & $typeOf $d
-                $glyph = $typeGlyph[$type]
-                if (-not $glyph) { $glyph = $typeGlyph['other'] }
-                $btn = & $newButton 'KitButton' 0xE71B (T 'bt.btn.pair') $pair $d
-                $row = New-KitRow $p $glyph $d.Name "$(T "bt.type.$type")  $([char]0x00B7)  $([VivacBluetooth]::FormatAddress($d.Address))" $btn $p['COLOR_INFO']
-                [void]$sections.Children.Add((& $newCard $row))
+                $icon = $typeIcon[$type]
+                if (-not $icon) { $icon = $typeIcon['other'] }
+                $btn = & $newButton 'neutral' 'plug' (T 'bt.btn.pair') $pair $d
+                $sub = "$(T "bt.type.$type")  $([char]0x00B7)  $([VivacBluetooth]::FormatAddress($d.Address))"
+                [void]$sections.Children.Add((& $newCard (& $newRow $icon $d.Name $sub $t.textSecondary @($btn))))
             }
         } finally { $state.Painting = $false }
+        # The design's focus ring sits on the one button that answers Enter.
+        $first = $state.FirstPrimary
+        if ($first) { [void]$window.Dispatcher.BeginInvoke([Action]{ [void][Windows.Input.Keyboard]::Focus($first) }.GetNewClosure()) }
     }
 
     # The switch is the radio: a click asks Windows, and the switch shows

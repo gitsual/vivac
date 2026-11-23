@@ -31,14 +31,15 @@ try {
         Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
         $surfaces = Get-Module Surfaces | Select-Object -First 1
         & $surfaces { $script:RebootOther = $true }
-        $confirm = & $surfaces { T 'power.confirm' }
+        $ask = & $surfaces { T 'power.ask.other' }
         $other = & $surfaces { T 'power.other' }
         $plain = Show-Power -NoShow
         $armed = Show-Power -NoShow -Arm other
         $last = 5
         Assert-Equal $other $plain.FindName("L$last").Text 'the plain power menu arms nothing'
-        Assert-Equal $confirm $armed.FindName("L$last").Text 'Restart in Linux is armed'
-        Assert-Equal (& $surfaces { T 'power.restart' }) $armed.FindName('L3').Text 'nothing else is armed'
+        Assert-Equal 'Collapsed' ([string]$plain.FindName('Strip').Visibility) 'the plain power menu shows no question'
+        Assert-Equal 'Visible' ([string]$armed.FindName('Strip').Visibility) 'Restart in Linux is armed: the question shows'
+        Assert-Equal $ask $armed.FindName('StripText').Text 'the question is the entry''s own'
         $unknown = Show-Power -NoShow -Arm nothing
         Assert-Equal $other $unknown.FindName("L$last").Text 'an entry that is not there arms nothing'
         & $surfaces { $script:RebootOther = $null }
