@@ -149,7 +149,17 @@ hl.bind("SUPER + SHIFT + W", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-reboot-othe
 -- @help: hypr help.hypr.ask
 hl.bind("SUPER + SHIFT + A", hl.dsp.exec_cmd(vivac.terminal .. " --class vivac-ask -e $HOME/.local/bin/vivac-ask"))
 -- @help: hypr help.hypr.clipboard
-hl.bind("SUPER + V", hl.dsp.exec_cmd("cliphist list | rofi -dmenu -i -p Clipboard | cliphist decode | wl-copy"))
+hl.bind("SUPER + V", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-panel clipboard"))
+-- @help: hypr help.hypr.menu
+hl.bind("SUPER + X", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-panel menu"))
+-- The volume keys: the level changes and a capsule says where it landed
+-- (vivac-panel osd, the Windows side's volume OSD).
+-- @help: hypr help.hypr.volume_up
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-panel osd volume up"))
+-- @help: hypr help.hypr.volume_down
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-panel osd volume down"))
+-- @help: hypr help.hypr.volume_mute
+hl.bind("XF86AudioMute", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-panel osd volume mute"))
 -- @help: hypr help.hypr.reload
 hl.bind("SUPER + SHIFT + R", hl.dsp.exec_cmd("hyprctl reload"))
 
@@ -237,6 +247,11 @@ hl.window_rule({ name = "vivac-welcome", match = { class = "^(vivac-welcome)$" }
 -- vivac ask is a side panel: floating against the right edge, the height of
 -- the screen less a margin, so what it is asked about stays in view.
 hl.window_rule({ name = "vivac-ask", match = { class = "^(vivac-ask)$" }, float = true, size = "560 (monitor_h*0.9)", move = "(monitor_w-window_w-16) (monitor_h*0.05)" })
+-- vivac panels (vivac-panel): the bar's popups, floating under it at the right edge;
+-- the calendar and the forecast drop from the middle, where the clock and weather are.
+hl.window_rule({ name = "vivac-panel", match = { class = "^(org\\.vivac\\.panel\\..*)$" }, float = true, pin = true, decorate = false, no_shadow = true, move = "(monitor_w-window_w-12) 48" })
+hl.window_rule({ name = "vivac-panel-centre", match = { class = "^(org\\.vivac\\.panel\\.(calendar|forecast|menu|clipboard))$" }, move = "((monitor_w-window_w)/2) 48" })
+hl.window_rule({ name = "vivac-panel-osd", match = { class = "^(org\\.vivac\\.panel\\.osd)$" }, move = "((monitor_w-window_w)/2) (monitor_h-window_h-96)", no_focus = true })
 
 -- Started with the session, in this order, once the compositor is up.
 -- The pull of the optional shared settings (it does nothing when none are
@@ -249,7 +264,8 @@ table.insert(vivac.autostart, { id = "sync-shared", cmd = "${VIVAC_REPO:-$HOME/v
 table.insert(vivac.autostart, { id = "drop-tray", cmd = "$HOME/.local/bin/vivac-drop --notify" })
 -- The shared keyboard and mouse (lan-mouse), back on only if it was left on.
 table.insert(vivac.autostart, { id = "mouse", cmd = "$HOME/.local/bin/vivac-mouse resume" })
-table.insert(vivac.autostart, { id = "waybar", cmd = "waybar" })
+-- The bar, kept up: waybar-keep.sh starts it and starts it again if it dies.
+table.insert(vivac.autostart, { id = "waybar", cmd = "$HOME/.config/waybar/scripts/waybar-keep.sh" })
 table.insert(vivac.autostart, { id = "hypridle", cmd = "hypridle" })
 -- Clipboard history for the picker above; harmless when cliphist is absent.
 table.insert(vivac.autostart, { id = "cliphist", cmd = "wl-paste --watch cliphist store" })

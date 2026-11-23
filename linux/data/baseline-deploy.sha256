@@ -26,7 +26,7 @@ d8693d4cfe2ee4a6ddae2aee5cdfbd02b886ed4aa92630653d0191cb5391d182  dotfiles/bridg
 f69058aa3305f02195637654679bd12f2d8ccaae01217764c6e5e3922d11b8b4  dotfiles/bridge/.local/share/vivac/switch-login.sh
 043978e2eb4bac9e4750697a1aa94ae2a82c8b2ccc015764ad890c0ed2415e72  dotfiles/dunst/.config/dunst/dunstrc
 675a3b616ec6bc42bf06674c4b11f3e9e6fc60562d99dc0f6f6d4d255d74be06  dotfiles/hypr/.config/hypr/hypridle.conf
-fe7395d1efb55cde64a137c9113e668174f2b435de923ad41c15a5b385e571c4  dotfiles/hypr/.config/hypr/hyprland.lua
+ff252b829d8bcca7d67e2179820e3e52b1a4c0cfe11471da7403f1253b23d6ba  dotfiles/hypr/.config/hypr/hyprland.lua
 f6fb631aef275fc624a390f5b9281168497f596a92e9e687c0618c3674bc54e8  dotfiles/hypr/.config/hypr/hyprlock.conf
 86aaa6f67e286bdb49b5a63cab6d65133f6686d814b0ff509142f1302dea3b0a  dotfiles/hypr/.config/hypr/hyprpaper.conf
 366af025965f0db167d6fe763bd002a5b5a8b558f07ad3c6cf4d5890dcaa1518  dotfiles/hypr/.config/hypr/local.lua.example
@@ -62,6 +62,7 @@ f9522fbc197ec8a3fbc9c197bfeeb839f1a5e8307f8b5718f9db53c641a3686d  dotfiles/ricer
 f83792888aaa59994790ed530bb7dafcda08e3a0f3f97774839c8a3faf4dec86  dotfiles/ricer/.config/nwg-bar/icons/suspend.svg
 a163273069081fc3949fea32ed15907e77e00d82a7e570456752ef280409d10c  dotfiles/ricer/.config/nwg-bar/style.css
 71359fb87ea2a74371a1e856de8c657405e18f39093129bc6f6bd683978edaf6  dotfiles/ricer/.local/bin/vivac-ask
+522f771d34f17f197fd0c81709e8a6f1b428cbf6b89b9b8160f05028f405f6eb  dotfiles/ricer/.local/bin/vivac-panel
 b3afd5a2c0ab32532ebe629773f3486148c2bd26eac1b076086a91bdf95a9fd8  dotfiles/ricer/.local/bin/vivac-power
 19b0c6077ca8a7f2b441f60b05c52ba5af6c7163ef2cf669cc3e610b4c583c5e  dotfiles/ricer/.local/bin/vivac-theme
 090766eccd45ca35ee79c791aeab3c383a6bbd1056b9d1c8ee15ca5dd7121f56  dotfiles/rofi/.config/rofi/config.rasi
@@ -76,9 +77,11 @@ a7f6d6e31fa8111b724b1b06d46311866ea490845b7377797fca481072550e6d  dotfiles/secur
 7120b38f5a9ec3b00e22fac420218c406c8fddd8c62ff5359a275102a70e303c  dotfiles/theme/.config/kdeglobals
 25c572c4b4f84a8342bd763e4429f6f3c5025f3fef2c3ec77232eb71aab30012  dotfiles/waybar/.config/waybar/scripts/net-wired.sh
 6688b4714fa5be29c249fbc72567e3de67c908df0a8daa3c0e8afdc5a24f7c95  dotfiles/waybar/.config/waybar/scripts/net-wireless.sh
+5ca0f70a23bf1b312f3cd58d12a36ed5b77970834346f70ebf55fb66128c862a  dotfiles/waybar/.config/waybar/scripts/waybar-keep.sh
 ac81224fc768b751e3c5ac3b10ff1c8ef6c6f8b00ab7fd075b40d9dfbc9417ec  dotfiles/waybar/.config/waybar/scripts/ws-refresh.sh
 647f0d9a165bf0db975c3ae7f585931e2fc8e1a9e6a8e2660722e4d4835b4620  dotfiles/waybar/.config/waybar/scripts/ws-render.sh
-fac6b72279a18bf6b673e0376f67aeb80fc3f24d368e51a69d19870312935aae  dotfiles/waybar/.config/waybar/style.css
+2cb9ebfd2ab43185baf760edc9aae6ae675f11fb099077d719575b8b824300af  dotfiles/waybar/.config/waybar/scripts/ws-windows.sh
+035e682978db6339d8b51e1d9e93f373b7e19be0d54a5bd8c701fdeb433d2333  dotfiles/waybar/.config/waybar/style.css
 d92b7d39cd2f0ded3acd33a61edf70a3d9d9fdef9f95c4929cf9bf4d483abc31  dotfiles/waybar/.config/waybar/workspace-icons.json
 b716454b9108b0f4a8d8c13081a1e6277d3e5d29c1b6f27264fc4ff50f009a83  dotfiles/welcome/.local/bin/vivac-welcome
 16e0f8c1f5ed428ec0c8da4e8775f7c3ae967171ab62f337dc365c076514a411  dotfiles/wofi/.config/wofi/style.css

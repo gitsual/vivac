@@ -12,6 +12,10 @@ Import-Module (Join-Path $PSScriptRoot 'Bridge.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Mouse.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Phone.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Hermes.psm1')
+Import-Module (Join-Path $PSScriptRoot 'PanelKit.psm1')
+Import-Module (Join-Path $PSScriptRoot 'KitDraw.psm1')
+Import-Module (Join-Path $PSScriptRoot 'SoundLogic.psm1')
+Import-Module (Join-Path $PSScriptRoot 'ClipLogic.psm1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $script:VivacEntry = Join-Path $root 'bin\vivac.ps1'
@@ -446,29 +450,34 @@ function Show-Notification([string]$Title, [string]$Body) {
 
 # --------------------------------------------------------------- volume OSD
 
-# The volume indicator that replaces Windows' flyout. The resident host takes
-# the volume keys, sets the volume, and shows this; it is built once and
-# repainted from the current palette each time, and hides itself after a
-# second and a half without a change.
+# The volume indicator that replaces Windows' flyout, in the capsule the Linux
+# side draws (linux/lib/vivacpanel/osd.py): a badge with the speaker, the
+# output's name over a bar of notches, and the level in large type. The
+# resident host takes the volume keys, sets the volume, and shows this; it is
+# built once and repainted from the current palette each time, and hides
+# itself after a second and a half without a change.
 function New-VivacVolumeOsd {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
     $xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="vivac - volume" Width="320" Height="64"
+        Title="vivac - volume" Width="380" Height="72"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="NoResize"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" Focusable="False"
-        FontFamily="JetBrainsMono Nerd Font, Cascadia Mono, Consolas" FontSize="14">
-  <Border x:Name="Frame" BorderThickness="2" CornerRadius="12" Padding="16,0">
+        FontFamily="JetBrainsMono Nerd Font, Cascadia Mono, Consolas" FontSize="14" UseLayoutRounding="True">
+  <Border x:Name="Frame" BorderThickness="2" CornerRadius="36" Padding="18,0,18,0">
     <Grid VerticalAlignment="Center">
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="34"/><ColumnDefinition Width="*"/><ColumnDefinition Width="52"/>
+        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
-      <TextBlock x:Name="Glyph" Grid.Column="0" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="20" VerticalAlignment="Center"/>
-      <Border x:Name="Track" Grid.Column="1" Height="8" CornerRadius="4" VerticalAlignment="Center">
-        <Border x:Name="Fill" HorizontalAlignment="Left" CornerRadius="4"/>
+      <Border x:Name="Badge" Grid.Column="0" Width="40" Height="40" CornerRadius="20" VerticalAlignment="Center">
+        <TextBlock x:Name="Glyph" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"/>
       </Border>
-      <TextBlock x:Name="Level" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+      <StackPanel Grid.Column="1" Margin="14,0,10,0" VerticalAlignment="Center">
+        <TextBlock x:Name="Name" FontSize="12" TextTrimming="CharacterEllipsis"/>
+        <Border x:Name="BarHost" Margin="0,6,0,0" Height="14"/>
+      </StackPanel>
+      <TextBlock x:Name="Level" Grid.Column="2" MinWidth="56" TextAlignment="Right" HorizontalAlignment="Right" VerticalAlignment="Center"/>
     </Grid>
   </Border>
 </Window>
@@ -479,27 +488,59 @@ function New-VivacVolumeOsd {
     $hide.Interval = [TimeSpan]::FromMilliseconds(1500)
     $hide.Tag = $w
     $hide.Add_Tick({ param($s) $s.Stop(); $s.Tag.Hide() })
-    [pscustomobject]@{ Window = $w; Timer = $hide }
+    [pscustomobject]@{ Window = $w; Timer = $hide; Bar = $null }
+}
+
+# The default output's name for the capsule, asked of Core Audio at most once
+# in a few seconds: holding a volume key shows this thirty times a second.
+$script:OsdName = ''
+$script:OsdNameAt = [datetime]::MinValue
+function Get-VivacOsdName {
+    if (([datetime]::Now - $script:OsdNameAt).TotalSeconds -gt 3) {
+        $script:OsdNameAt = [datetime]::Now
+        $name = ''
+        try { if ('VivacAudio' -as [type]) { $name = [VivacAudio]::DefaultName(0) } } catch { }
+        $script:OsdName = Get-SoundShortName $name
+    }
+    $script:OsdName
 }
 
 function Show-VivacVolumeOsd($Osd, [int]$Level, [bool]$Muted) {
     Update-SurfaceContext
     $p = Get-Palette
+    $t = Get-KitTokens $p
     $w = $Osd.Window
-    $w.FindName('Frame').Background = "#F2$($p['COLOR_BG'])"
-    $w.FindName('Frame').BorderBrush = "#$($p['COLOR_ACCENT'])"
-    $w.FindName('Track').Background = "#$($p['COLOR_SURFACE'])"
-    $fill = $w.FindName('Fill')
-    $fill.Background = "#$($p['COLOR_ACCENT'])"
-    if ($Muted) { $fill.Background = "#$($p['COLOR_MUTED'])" }
-    $fill.Width = [Math]::Max(0, 200 * $Level / 100)
+    $w.FindName('Frame').Background = New-KitBrush "F7$($t['bg'])"
+    $w.FindName('Frame').BorderBrush = New-KitBrush $t['accent']
+    $w.FindName('Badge').Background = New-KitBrush $t['surface']
     $glyph = $w.FindName('Glyph')
-    $glyph.Foreground = "#$($p['COLOR_ACCENT'])"
+    $glyph.Foreground = New-KitBrush $(if ($Muted) { $t['alert'] } else { $t['accent'] })
     # Segoe Fluent Icons: mute, then speaker with no, one, two, three waves.
     $glyph.Text = if ($Muted) { [char]0xE74F } elseif ($Level -eq 0) { [char]0xE992 } elseif ($Level -lt 34) { [char]0xE993 } elseif ($Level -lt 67) { [char]0xE994 } else { [char]0xE995 }
+    $name = $w.FindName('Name')
+    $name.Foreground = New-KitBrush $t['textSecondary']
+    $name.Text = Get-VivacOsdName
+    $name.Visibility = if ($name.Text) { 'Visible' } else { 'Collapsed' }
+    if (-not $Osd.Bar) {
+        $Osd.Bar = New-KitNotchBar $t 26 14
+        $w.FindName('BarHost').Child = $Osd.Bar
+    }
+    $Osd.Bar.Tag.Tokens = $t
+    [void](Set-KitNotchBar $Osd.Bar ([Math]::Min(100, $Level) / 100) $Muted)
     $label = $w.FindName('Level')
-    $label.Foreground = "#$($p['COLOR_FG'])"
-    $label.Text = "$Level"
+    $label.Inlines.Clear()
+    if ($Muted) {
+        $label.FontSize = 12; $label.FontWeight = 'Normal'
+        $label.Foreground = New-KitBrush $t['alert']
+        [void]$label.Inlines.Add((New-Object Windows.Documents.Run (T 'osd.muted')))
+    } else {
+        $label.FontSize = 24; $label.FontWeight = 'Bold'
+        $label.Foreground = New-KitBrush $t['text']
+        [void]$label.Inlines.Add((New-Object Windows.Documents.Run "$Level"))
+        $unit = New-Object Windows.Documents.Run '%'
+        $unit.FontSize = 14; $unit.FontWeight = 'Normal'; $unit.Foreground = New-KitBrush $t['textSecondary']
+        [void]$label.Inlines.Add($unit)
+    }
     # Bottom centre of the primary work area, where Windows puts its own.
     $area = [Windows.SystemParameters]::WorkArea
     $w.Left = $area.Left + ($area.Width - $w.Width) / 2
@@ -1135,28 +1176,27 @@ function Invoke-MenuEntry($Entry, [string]$Query, [switch]$Admin) {
 }
 
 function Get-MenuXaml($p) {
-    $hints = Get-KitHintsXaml $p @(@('&#x2191;&#x2193;', (T 'menu.key.move')), @('Tab', (T 'menu.key.category')), @('&#x21B5;', (T 'menu.key.open')),
-        @('Ctrl+&#x21B5;', (T 'menu.key.admin')), @('Esc', (T 'menu.key.close')))
+    $t = Get-PanelTokens $p
+    $up = "$([char]0x2191)$([char]0x2193)"; $ret = [string][char]0x21B5
+    $hints = "<Border DockPanel.Dock=`"Bottom`" Margin=`"0,10,0,0`" Padding=`"2,8,0,0`" BorderBrush=`"#$($t.line)`" BorderThickness=`"0,1,0,0`">$(Get-KitHintsXamlV2 $t @(@($up, (T 'menu.key.move')), @('Tab', (T 'menu.key.category')), @($ret, (T 'menu.key.open')), @("Ctrl+$ret", (T 'menu.key.admin')), @('Esc', (T 'menu.key.close'))))</Border>"
     $icon = $script:KitIconFont
-    @"
+    $frequent = ConvertTo-XmlText (T 'menu.section.frequent').ToUpper()
+    $body = @"
 <Grid>
-  <Grid.Resources>
-$(Get-KitResourcesXaml $p)
-  </Grid.Resources>
   <Grid.ColumnDefinitions>
-    <ColumnDefinition Width="210"/>
-    <ColumnDefinition Width="18"/>
+    <ColumnDefinition Width="230"/>
     <ColumnDefinition Width="*"/>
   </Grid.ColumnDefinitions>
 
-  <DockPanel Grid.Column="0">
-    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,16">
-      <Border Width="40" Height="40" CornerRadius="20" Background="#$($p['COLOR_ACCENT'])">
-        <TextBlock x:Name="Initial" FontSize="18" FontWeight="Bold" Foreground="#$($p['COLOR_BG'])" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+  <Border Grid.Column="0" Background="#$($t.surface)" CornerRadius="12,0,0,12" Padding="12,16">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,0,14">
+      <Border Width="36" Height="36" CornerRadius="18" Background="#$($t.accent)">
+        <TextBlock x:Name="Initial" FontSize="15" FontWeight="Bold" Foreground="#$($t.actionText)" HorizontalAlignment="Center" VerticalAlignment="Center"/>
       </Border>
       <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-        <TextBlock x:Name="User" FontSize="15" FontWeight="SemiBold" Foreground="#$($p['COLOR_FG'])"/>
-        <TextBlock x:Name="Today" FontSize="11" Foreground="#$($p['COLOR_MUTED'])"/>
+        <TextBlock x:Name="User" FontSize="13" FontWeight="Bold" Foreground="#$($t.text)"/>
+        <TextBlock x:Name="Today" FontSize="11" Foreground="#$($t.textSecondary)"/>
       </StackPanel>
     </StackPanel>
     <Grid x:Name="Power" DockPanel.Dock="Bottom" Margin="0,12,0,0">
@@ -1164,67 +1204,127 @@ $(Get-KitResourcesXaml $p)
     </Grid>
     <ListBox x:Name="Cats" Background="Transparent" BorderThickness="0" Focusable="False"
              ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+      <ListBox.ItemContainerStyle>
+        <Style TargetType="ListBoxItem">
+          <Setter Property="Foreground" Value="#$($t.textSecondary)"/>
+          <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+          <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+          <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="Bd" CornerRadius="8" Margin="0,1" Padding="9,0,12,0" Background="Transparent" BorderThickness="3,0,0,0" BorderBrush="Transparent">
+              <ContentPresenter x:Name="Pres"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#66$($t.surfaceAlt)"/></Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#$($t.surfaceAlt)"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="#$($t.accent)"/>
+                <Setter TargetName="Pres" Property="TextElement.Foreground" Value="#$($t.text)"/>
+                <Setter TargetName="Pres" Property="TextElement.FontWeight" Value="Bold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate></Setter.Value></Setter>
+        </Style>
+      </ListBox.ItemContainerStyle>
       <ListBox.ItemTemplate><DataTemplate>
-        <Grid Height="38">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <TextBlock Text="{Binding Glyph}" FontFamily="$icon" FontSize="15" Foreground="#$($p['COLOR_ACCENT'])" VerticalAlignment="Center"/>
+        <Grid Height="36">
+          <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+          <TextBlock Text="{Binding Glyph}" FontFamily="$icon" FontSize="15" Foreground="#$($t.accent)" VerticalAlignment="Center"/>
           <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-          <TextBlock Grid.Column="2" Text="{Binding Sub}" FontSize="11" Foreground="#$($p['COLOR_MUTED'])" VerticalAlignment="Center" Margin="6,0,2,0"/>
+          <TextBlock Grid.Column="2" Text="{Binding Sub}" FontSize="11" FontWeight="Normal" Foreground="#$($t.muted)" VerticalAlignment="Center" Margin="6,0,0,0"/>
         </Grid>
       </DataTemplate></ListBox.ItemTemplate>
     </ListBox>
   </DockPanel>
+  </Border>
 
-  <Border Grid.Column="1" Width="1" HorizontalAlignment="Center" Background="#$($p['COLOR_SURFACE_ALT'])"/>
-
-  <DockPanel Grid.Column="2">
-    <Border DockPanel.Dock="Top" Background="#$($p['COLOR_SURFACE'])" CornerRadius="10" Padding="14,10" Margin="0,0,0,12"
-            BorderBrush="#$($p['COLOR_ACCENT'])" BorderThickness="1">
+  <DockPanel Grid.Column="1" Margin="16">
+    <Border DockPanel.Dock="Top" Background="#$($t.surface)" CornerRadius="12" Padding="14,0" Height="42" Margin="0,0,0,12"
+            BorderBrush="#$($t.accent)" BorderThickness="2">
       <Grid>
         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-        <TextBlock Text="&#xE721;" FontFamily="$icon" FontSize="16" Foreground="#$($p['COLOR_ACCENT'])" VerticalAlignment="Center" Margin="0,0,12,0"/>
-        <TextBlock x:Name="Placeholder" Grid.Column="1" FontSize="16" Foreground="#$($p['COLOR_MUTED'])" VerticalAlignment="Center" IsHitTestVisible="False"
+        <Grid Margin="0,0,10,0" VerticalAlignment="Center">$(Get-PanelIconXaml 'search' 17 $t.accent)</Grid>
+        <TextBlock x:Name="Placeholder" Grid.Column="1" FontSize="13" Foreground="#$($t.textSecondary)" VerticalAlignment="Center" IsHitTestVisible="False"
                    Text="$(ConvertTo-XmlText (T 'menu.placeholder'))"/>
-        <TextBox x:Name="Filter" Grid.Column="1" FontSize="16" Background="Transparent" BorderThickness="0" Padding="0"
-                 Foreground="#$($p['COLOR_FG'])" CaretBrush="#$($p['COLOR_ACCENT'])" VerticalAlignment="Center"/>
-        <TextBlock x:Name="Count" Grid.Column="2" FontSize="11" Foreground="#$($p['COLOR_MUTED'])" VerticalAlignment="Center" Margin="12,0,0,0"/>
+        <TextBox x:Name="Filter" Grid.Column="1" FontSize="13" Background="Transparent" BorderThickness="0" Padding="0"
+                 Foreground="#$($t.text)" CaretBrush="#$($t.accent)" VerticalAlignment="Center"/>
+        <TextBlock x:Name="Count" Grid.Column="2" FontSize="12" Foreground="#$($t.textSecondary)" VerticalAlignment="Center" Margin="12,0,0,0"/>
       </Grid>
     </Border>
-    <Border DockPanel.Dock="Bottom" Margin="2,12,0,0">$hints</Border>
+    $hints
     <ListBox x:Name="Rows" Background="Transparent" BorderThickness="0" Focusable="False"
              ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True"
              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.IsVirtualizingWhenGrouping="True"
              VirtualizingPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel">
+      <ListBox.ItemContainerStyle>
+        <Style TargetType="ListBoxItem">
+          <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+          <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+          <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="Bd" CornerRadius="10" Margin="0,2,6,2" Background="#$($t.surface)">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#$($t.surfaceAlt)"/></Trigger>
+              <Trigger Property="IsSelected" Value="True"><Setter TargetName="Bd" Property="Background" Value="#$($t.actionFill)"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate></Setter.Value></Setter>
+        </Style>
+      </ListBox.ItemContainerStyle>
       <ListBox.GroupStyle>
         <GroupStyle>
           <GroupStyle.HeaderTemplate><DataTemplate>
-            <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Foreground="#$($p['COLOR_ACCENT'])" Margin="10,10,0,4"/>
+            <DockPanel Margin="2,8,6,4" Height="20">
+              <TextBlock x:Name="Note" DockPanel.Dock="Right" Text="$(ConvertTo-XmlText (T 'menu.sorted_by_use'))" FontSize="12" Foreground="#$($t.textSecondary)" VerticalAlignment="Center" Visibility="Collapsed"/>
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="Bold" Foreground="#$($t.muted)" VerticalAlignment="Center"/>
+                <Border Background="#$($t.surface)" CornerRadius="8" Padding="7,1" Margin="8,0,0,0" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding ItemCount}" FontSize="12" Foreground="#$($t.text)"/>
+                </Border>
+              </StackPanel>
+            </DockPanel>
+            <DataTemplate.Triggers>
+              <DataTrigger Binding="{Binding Name}" Value="$frequent"><Setter TargetName="Note" Property="Visibility" Value="Visible"/></DataTrigger>
+            </DataTemplate.Triggers>
           </DataTemplate></GroupStyle.HeaderTemplate>
         </GroupStyle>
       </ListBox.GroupStyle>
       <ListBox.ItemTemplate><DataTemplate>
-        <Grid Height="48">
-          <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-          <Border Width="36" Height="36" CornerRadius="9" Background="#$($p['COLOR_SURFACE'])">
-            <Grid>
-              <TextBlock Text="{Binding Glyph}" FontFamily="$icon" FontSize="17" Foreground="#$($p['COLOR_ACCENT'])"
-                         HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding ShowGlyph, Converter={StaticResource B2V}}"/>
-              <Image Source="{Binding Icon}" Width="26" Height="26" RenderOptions.BitmapScalingMode="HighQuality"/>
-            </Grid>
-          </Border>
-          <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,8,0">
-            <TextBlock x:Name="N" Text="{Binding Name}" FontSize="14" TextTrimming="CharacterEllipsis"/>
-            <TextBlock Text="{Binding Sub}" FontSize="11" Foreground="#$($p['COLOR_MUTED'])" TextTrimming="CharacterEllipsis"/>
-          </StackPanel>
-          <Border x:Name="Go" Grid.Column="2" Background="#$($p['COLOR_ACCENT'])" CornerRadius="4" Padding="7,1" Margin="0,0,6,0"
-                  VerticalAlignment="Center" Visibility="Hidden">
-            <TextBlock Text="&#x21B5;" FontSize="12" Foreground="#$($p['COLOR_BG'])"/>
-          </Border>
-        </Grid>
+        <Border x:Name="Fill" CornerRadius="10" Padding="10,7">
+          <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="34"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <Border x:Name="Tile" Width="34" Height="34" CornerRadius="8" Background="#$($t.surfaceAlt)">
+              <Grid>
+                <TextBlock x:Name="G" Text="{Binding Glyph}" FontFamily="$icon" FontSize="17" Foreground="#$($t.accent)"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding ShowGlyph, Converter={StaticResource B2V}}"/>
+                <Image Source="{Binding Icon}" Width="24" Height="24" RenderOptions.BitmapScalingMode="HighQuality"/>
+              </Grid>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,8,0">
+              <TextBlock x:Name="N" Text="{Binding Name}" FontSize="13" FontWeight="Bold" TextTrimming="CharacterEllipsis" Foreground="#$($t.text)"/>
+              <TextBlock x:Name="S" Text="{Binding Sub}" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="#$($t.textSecondary)"/>
+            </StackPanel>
+            <StackPanel x:Name="Go" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+              <Border Background="#$($t.surface)" BorderBrush="#$($t.line)" BorderThickness="1" CornerRadius="6" Padding="6,1">
+                <TextBlock Text="&#x21B5;" FontSize="12" Foreground="#$($t.text)"/>
+              </Border>
+              <TextBlock x:Name="GoText" Text="$(ConvertTo-XmlText (T 'menu.key.open'))" FontSize="11" Margin="6,0,0,0" Foreground="#$($t.actionText)" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Grid>
+        </Border>
         <DataTemplate.Triggers>
-          <DataTrigger Binding="{Binding Urgent}" Value="True"><Setter TargetName="N" Property="Foreground" Value="#$($p['COLOR_URGENT'])"/></DataTrigger>
           <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
             <Setter TargetName="Go" Property="Visibility" Value="Visible"/>
+            <Setter TargetName="Tile" Property="Background" Value="#$($t.bg)"/>
+            <Setter TargetName="N" Property="Foreground" Value="#$($t.actionText)"/>
+            <Setter TargetName="S" Property="Foreground" Value="#$($t.actionText)"/>
+            <Setter TargetName="S" Property="Opacity" Value="0.85"/>
+          </DataTrigger>
+          <DataTrigger Binding="{Binding Urgent}" Value="True">
+            <Setter TargetName="Fill" Property="Background" Value="#$($t.alert)"/>
+            <Setter TargetName="N" Property="Foreground" Value="#$($t.bg)"/>
+            <Setter TargetName="S" Property="Foreground" Value="#$($t.bg)"/>
+            <Setter TargetName="Tile" Property="Background" Value="#$($t.bg)"/>
+            <Setter TargetName="GoText" Property="Foreground" Value="#$($t.bg)"/>
           </DataTrigger>
         </DataTemplate.Triggers>
       </DataTemplate></ListBox.ItemTemplate>
@@ -1232,6 +1332,7 @@ $(Get-KitResourcesXaml $p)
   </DockPanel>
 </Grid>
 "@
+    $body
 }
 
 function Show-Menu([switch]$NoShow, [hashtable]$Registry, [string]$Category = '') {
@@ -1273,7 +1374,7 @@ function Show-Menu([switch]$NoShow, [hashtable]$Registry, [string]$Category = ''
         $all.Add($r)
     }
 
-    $window = New-VivacWindow (Get-WindowXaml 'vivac - menu' 1000 640 (Get-MenuXaml $p))
+    $window = New-VivacWindow (Get-PanelWindowXaml $p 'vivac - menu' 1000 640 (Get-MenuXaml $p) 0 (Get-KitResourcesXaml $p))
     $rows = $window.FindName('Rows')
     $cats = $window.FindName('Cats')
     $filter = $window.FindName('Filter')
@@ -1387,8 +1488,8 @@ function Show-Menu([switch]$NoShow, [hashtable]$Registry, [string]$Category = ''
     foreach ($id in 'lock', 'sleep', 'restart', 'shutdown') {
         $entry = $entries | Where-Object { $_.Kind -eq 'power' -and $_.Target -eq $id } | Select-Object -First 1
         $b = New-Object Windows.Controls.Border
-        $b.Height = 38; $b.Margin = '2,0'; $b.CornerRadius = 8; $b.Cursor = 'Hand'
-        $b.Background = "#$($p['COLOR_SURFACE'])"
+        $b.Height = 38; $b.Margin = '3,0'; $b.CornerRadius = 10; $b.Cursor = 'Hand'
+        $b.Background = 'Transparent'
         $b.ToolTip = $entry.Name
         $t = New-Object Windows.Controls.TextBlock
         $t.Text = & $glyph $entry.Glyph
@@ -1399,7 +1500,7 @@ function Show-Menu([switch]$NoShow, [hashtable]$Registry, [string]$Category = ''
         $b.Tag = @{ Entry = $entry; Armed = $false; Text = $t }
         [Windows.Controls.Grid]::SetColumn($b, $col++)
         $b.Add_MouseEnter({ param($s) $s.Background = "#$($p['COLOR_SURFACE_ALT'])" })
-        $b.Add_MouseLeave({ param($s) $s.Background = "#$($p['COLOR_SURFACE'])" })
+        $b.Add_MouseLeave({ param($s) $s.Background = 'Transparent' })
         $b.Add_MouseLeftButtonUp({
                 param($s)
                 $tag = $s.Tag
@@ -1525,6 +1626,24 @@ function Get-SliderStyleXaml($p) {
 "@
 }
 
+# What the panel draws from: the playback and recording devices and the
+# applications playing, as plain objects, grouped as the panel shows them. A
+# machine with no audio endpoint (a virtual machine) answers with nothing
+# instead of an error; tests and screenshots replace this function to feed
+# sample data.
+function Get-VivacSoundData {
+    $data = @{ Outputs = @(); Inputs = @(); Apps = @() }
+    try { $data.Outputs = @([VivacAudio]::Devices(0)) } catch { }
+    try { $data.Inputs = @([VivacAudio]::Devices(1)) } catch { }
+    try { $data.Apps = @(Group-SoundSessions @([VivacAudio]::Sessions((T 'sound.system_sounds')))) } catch { }
+    $data
+}
+
+# The sound panel, as designed for both systems (see linux/lib/vivacpanel/
+# sound.py): the default output's level up top with the outputs as chips,
+# one card per application with its own level and mute, the inputs below.
+# Windows' scalar tops out at 100, so the faders do too and carry no tinted
+# zone past it; everything else is the Linux panel's.
 function Show-Sound([switch]$NoShow, [hashtable]$Registry) {
     Update-SurfaceContext
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'sound' }
@@ -1532,288 +1651,394 @@ function Show-Sound([switch]$NoShow, [hashtable]$Registry) {
     Import-VivacAudio
     try { Import-VivacMenu } catch { }
     $p = Get-Palette
-    $body = @"
-<StackPanel>
-  <Border Style="{StaticResource KitCard}" Margin="0,0,0,14">
-    <Grid>
-      <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <TextBlock x:Name="MasterGlyph" FontFamily="$script:KitIconFont" FontSize="20" Foreground="#$($p['COLOR_ACCENT'])" VerticalAlignment="Center" Cursor="Hand" Margin="0,0,12,0"/>
-      <Slider x:Name="Master" Grid.Column="1" VerticalAlignment="Center"/>
-      <TextBlock x:Name="MasterValue" Grid.Column="2" FontSize="22" FontWeight="SemiBold" Foreground="#$($p['COLOR_FG'])" VerticalAlignment="Center" Margin="14,0,0,0" MinWidth="58" TextAlignment="Right"/>
-    </Grid>
-  </Border>
-  <ScrollViewer x:Name="Scroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <StackPanel x:Name="Sections"/>
-  </ScrollViewer>
-  <Button x:Name="More" Style="{StaticResource KitGhost}" Margin="0,12,0,0" HorizontalAlignment="Stretch">
-    <StackPanel Orientation="Horizontal">
-      <TextBlock Text="&#xE713;" FontFamily="$script:KitIconFont" FontSize="13" VerticalAlignment="Center" Margin="0,0,8,0"/>
-      <TextBlock Text="$(ConvertTo-XmlText (T 'sound.more'))" VerticalAlignment="Center"/>
-    </StackPanel>
-  </Button>
-</StackPanel>
-"@
+    $t = Get-KitTokens $p
+    $cap = 100
     $hints = @(@((T 'sound.key.click'), (T 'sound.key.default')), @((T 'sound.key.icon'), (T 'sound.key.mute')), @('Esc', (T 'sound.key.close')))
-    $window = New-VivacWindow (Get-WindowXaml 'vivac - sound' 460 600 (Get-KitPanelXaml $p 0xE767 (T 'sound.title') $body $hints))
+    $body = @'
+<ScrollViewer x:Name="Scroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+  <StackPanel x:Name="Sections" Margin="0,0,0,2"/>
+</ScrollViewer>
+'@
+    $window = New-VivacWindow (Get-KitWindowXamlV2 $t 'vivac - sound' 440 (Get-KitPanelXamlV2 $t ([string][char]0xE767) (T 'sound.title') $body $hints))
+    Add-KitDrawResources $window $p $cap
     Set-KitDropDown $window
     $sections = $window.FindName('Sections')
     $subtitle = $window.FindName('Subtitle')
-    $master = $window.FindName('Master')
-    $masterValue = $window.FindName('MasterValue')
-    $masterGlyph = $window.FindName('MasterGlyph')
-    $window.FindName('More').Add_Click({ $window.Close(); Start-Process 'ms-settings:sound' })
     # The list scrolls; the window stops short of the screen's bottom.
-    $window.FindName('Scroll').MaxHeight = [Math]::Max(200, $window.MaxHeight - 300)
+    $window.FindName('Scroll').MaxHeight = [Math]::Max(300, $window.MaxHeight - 150)
 
-    # What the rows and the master control share: the default output, its
-    # slider row and the mute switch in the header.
-    $state = @{ DefaultId = $null; DefaultSlider = $null; Syncing = $false; Switch = $null }
+    $more = New-Object Windows.Controls.Button
+    $more.Style = $window.FindResource('KitChip')
+    $more.Content = New-KitText (T 'sound.settings') $t['textSecondary'] 12
+    $more.Background = New-KitBrush $t['surface']
+    $more.ToolTip = T 'sound.more'
+    $more.Add_Click({ $window.Close(); Start-Process 'ms-settings:sound' })
+    [void]$window.FindName('HeaderRight').Children.Add($more)
 
-    $glyphFor = {
-        param([bool]$Muted, [bool]$Mic)
-        if ($Mic) { if ($Muted) { [string][char]0xF781 } else { [string][char]0xE720 } }
-        elseif ($Muted) { [string][char]0xE74F } else { [string][char]0xE767 }
-    }
-    # The kind of device, from its name, as Windows does not say it plainly.
-    $deviceGlyph = {
-        param([string]$Name, [bool]$Mic)
-        if ($Mic) { return 0xE720 }
-        if ($Name -match 'Auricular|Headphone|Headset|Cascos') { return 0xE7F6 }
-        if ($Name -match 'HDMI|NVIDIA|Display|DisplayPort|Monitor|\bVA\d|TV') { return 0xE7F4 }
-        if ($Name -match 'Digital|S/PDIF|SPDIF|Optical') { return 0xE8D6 }
-        0xE7F5
-    }
+    # What handlers share. Dragging holds a redraw back so a fader is not
+    # rebuilt under the pointer; InputsOpen keeps the fold as the user left it.
+    $state = @{ Dragging = $false; Signature = ''; InputsOpen = $false }
 
-    $newText = {
-        param([string]$Text, [string]$Color, [double]$Size = 14)
-        $t = New-Object Windows.Controls.TextBlock
-        $t.Text = $Text; $t.Foreground = "#$Color"; $t.FontSize = $Size
-        $t.VerticalAlignment = 'Center'
-        $t
-    }
-    $newHeader = {
-        param([string]$Text)
-        $t = & $newText $Text.ToUpper() $p['COLOR_ACCENT'] 11
-        $t.FontWeight = 'SemiBold'; $t.Margin = '10,10,0,6'
-        $t
+    $micGlyph = { param([bool]$Muted) if ($Muted) { 0xF781 } else { 0xE720 } }
+    $outGlyph = { param([bool]$Muted) if ($Muted) { 0xE74F } else { 0xE767 } }
+    $appGlyph = { param([bool]$Muted) if ($Muted) { 0xE74F } else { 0xE8D6 } }
+
+    $newLabel = {
+        param([string]$Text, [string]$Color, [double]$Size = 13, [bool]$Bold = $false)
+        $x = New-KitText $Text $Color $Size
+        if ($Bold) { $x.FontWeight = 'Bold' }
+        $x.TextTrimming = 'CharacterEllipsis'
+        $x
     }
 
-    # One control line: a mute glyph, a slider and the number. $Apply gets
-    # (tag, level) and $Mute gets (tag, muted); the tag says what they act on.
-    $newLevelRow = {
-        param($Tag, [int]$Level, [bool]$Muted, [bool]$Mic, [scriptblock]$Apply, [scriptblock]$Mute)
-        $g = New-Object Windows.Controls.Grid
-        $g.Margin = '44,2,0,4'
-        foreach ($w in 28, 0, 46) {
-            $c = New-Object Windows.Controls.ColumnDefinition
-            if ($w) { $c.Width = $w } else { $c.Width = '*' }
-            $g.ColumnDefinitions.Add($c)
-        }
-        $glyph = & $newText (& $glyphFor $Muted $Mic) $p['COLOR_ACCENT'] 15
-        $glyph.FontFamily = $script:KitIconFont
-        $glyph.Cursor = 'Hand'
-        $glyph.ToolTip = T 'sound.key.mute'
-        if ($Muted) { $glyph.Foreground = "#$($p['COLOR_MUTED'])" }
-        # What a handler needs travels in the control's Tag: the handlers run long
-        # after this block has returned, when its variables are gone.
-        $glyph.Tag = @{ Tag = $Tag; Muted = $Muted; Mic = $Mic; Mute = $Mute }
-        $glyph.Add_MouseLeftButtonUp({
-                param($s, $e)
-                $s.Tag.Muted = -not $s.Tag.Muted
-                & $s.Tag.Mute $s.Tag.Tag $s.Tag.Muted
-                $s.Text = & $glyphFor $s.Tag.Muted $s.Tag.Mic
-                if ($s.Tag.Muted) { $s.Foreground = "#$($p['COLOR_MUTED'])" } else { $s.Foreground = "#$($p['COLOR_ACCENT'])" }
-                if ([string]$s.Tag.Tag -eq [string]$state.DefaultId) { & $syncHeader }
-                $e.Handled = $true
-            })
-        [Windows.Controls.Grid]::SetColumn($glyph, 0)
-        $slider = New-Object Windows.Controls.Slider
-        # The range before the value: a Slider starts at 0..10 and would clamp it.
-        $slider.Minimum = 0
-        $slider.Maximum = 100
-        $slider.Value = $Level
-        $slider.VerticalAlignment = 'Center'
-        $value = & $newText "$Level%" $p['COLOR_FG_DIM'] 12
-        $value.HorizontalAlignment = 'Right'
-        $slider.Tag = @{ Tag = $Tag; Label = $value; Apply = $Apply }
-        $slider.Add_ValueChanged({
+    # A mute button: the glyph for the state, alert-filled while muted. It flips
+    # the state, tells $OnMute (ctx, muted) and redraws. What a handler needs
+    # travels in the control's Tag: the handler runs long after this block has
+    # returned and its variables are gone.
+    $newMute = {
+        param([bool]$Muted, [scriptblock]$GlyphFor, [scriptblock]$OnMute, $Ctx, [bool]$Big = $false)
+        $b = New-Object Windows.Controls.Button
+        $b.Style = $window.FindResource($(if ($Muted) { 'KitMuteOn' } else { 'KitMute' }))
+        $b.Content = [string][char](& $GlyphFor $Muted)
+        $b.VerticalAlignment = 'Center'
+        $b.ToolTip = T 'sound.key.mute'
+        if ($Big) { $b.Width = 40; $b.Height = 40; $b.FontSize = 20 }
+        $b.Tag = @{ Muted = $Muted; OnMute = $OnMute; Ctx = $Ctx; State = $state }
+        $b.Add_Click({
                 param($s)
-                $level = [int][Math]::Round($s.Value)
-                $s.Tag.Label.Text = "$level%"
-                & $s.Tag.Apply $s.Tag.Tag $level
-                if (-not $state.Syncing -and [string]$s.Tag.Tag -eq [string]$state.DefaultId) {
-                    $state.Syncing = $true
-                    try { $master.Value = $level } finally { $state.Syncing = $false }
-                    & $syncHeader
-                }
+                & $s.Tag.OnMute $s.Tag.Ctx (-not $s.Tag.Muted)
+                & $s.Tag.State.Render
             })
-        [Windows.Controls.Grid]::SetColumn($slider, 1)
-        [Windows.Controls.Grid]::SetColumn($value, 2)
-        [void]$g.Children.Add($glyph); [void]$g.Children.Add($slider); [void]$g.Children.Add($value)
-        $g.Tag = $slider
-        $g
-    }
-
-    # A block that lights up under the pointer, as the menu's rows do; the
-    # default device keeps the selected look with the accent bar.
-    $newBlock = {
-        param([bool]$Selected)
-        $b = New-Object Windows.Controls.Border
-        $b.CornerRadius = 10; $b.Padding = '10,6'; $b.Margin = '0,0,0,6'
-        $bg = $p['COLOR_SURFACE']
-        if ($Selected) { $bg = $p['COLOR_SURFACE_ALT'] }
-        $b.Background = "#$bg"
-        $b.Tag = $bg
-        $b.Add_MouseEnter({ param($s) if ($s.Tag -ne $p['COLOR_SURFACE_ALT']) { $s.Background = "#$($p['COLOR_SURFACE_ALT'])" } })
-        $b.Add_MouseLeave({ param($s) $s.Background = "#$($s.Tag)" })
         $b
     }
 
-    # The header: the default output's name, its level in large type and
-    # its mute switch.
-    $syncHeader = {
-        $id = $state.DefaultId
-        if (-not $id) { $subtitle.Text = T 'sound.none'; return }
-        $muted = $false
-        try { $muted = [VivacAudio]::GetMute() } catch { }
-        $level = [int][Math]::Round($master.Value)
-        if ($muted) { $masterValue.Text = T 'sound.muted_short'; $masterValue.Foreground = "#$($p['COLOR_MUTED'])" }
-        else { $masterValue.Text = "$level%"; $masterValue.Foreground = "#$($p['COLOR_FG'])" }
-        $masterGlyph.Text = & $glyphFor $muted $false
-        if ($muted) { $masterGlyph.Foreground = "#$($p['COLOR_MUTED'])" } else { $masterGlyph.Foreground = "#$($p['COLOR_ACCENT'])" }
-        if ($state.Switch) {
-            $state.Syncing = $true
-            try { $state.Switch.IsChecked = -not $muted } finally { $state.Syncing = $false }
+    $newFader = {
+        param([int]$Value, [bool]$Muted, [scriptblock]$OnLevel, $Ctx)
+        $f = New-KitFader $window $t $Value $cap $Muted
+        $f.Tag = @{ OnLevel = $OnLevel; Ctx = $Ctx; State = $state }
+        $f.Add_ValueChanged({
+                param($s)
+                & $s.Tag.OnLevel $s.Tag.Ctx ([int][Math]::Round($s.Value))
+            })
+        # Held back from redraws while the knob is down.
+        $f.Add_PreviewMouseLeftButtonDown({ param($s) $s.Tag.State.Dragging = $true })
+        $f.Add_PreviewMouseLeftButtonUp({ param($s) $s.Tag.State.Dragging = $false })
+        $f.Add_LostMouseCapture({ param($s) $s.Tag.State.Dragging = $false })
+        $f
+    }
+
+    $section = {
+        param([string]$Title, [int]$Count, [string]$Side, [string]$CountBg)
+        $g = New-Object Windows.Controls.Grid
+        $g.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = 'Auto' }))
+        $g.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = 'Auto' }))
+        $g.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = '*' }))
+        $g.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = 'Auto' }))
+        $cap1 = & $newLabel $Title.ToUpper() $t['muted'] 12 $true
+        $cap1.FontWeight = 'Bold'
+        $n = New-Object Windows.Controls.Border
+        $n.CornerRadius = 8; $n.Padding = '7,0'; $n.Margin = '8,0,0,0'
+        $n.Background = New-KitBrush $CountBg
+        $n.Child = New-KitText "$Count" $t['text'] 12
+        [Windows.Controls.Grid]::SetColumn($n, 1)
+        [void]$g.Children.Add($cap1); [void]$g.Children.Add($n)
+        if ($Side) {
+            $s = New-KitText $Side $t['textSecondary'] 12
+            [Windows.Controls.Grid]::SetColumn($s, 3)
+            [void]$g.Children.Add($s)
         }
+        $g
     }
 
-    $master.Add_ValueChanged({
-            param($s)
-            if ($state.Syncing -or -not $state.DefaultId) { return }
-            $level = [int][Math]::Round($s.Value)
-            $state.Syncing = $true
-            try {
-                if ($state.DefaultSlider) { $state.DefaultSlider.Value = $level } else { [VivacAudio]::SetVolume($state.DefaultId, $level) }
-            } finally { $state.Syncing = $false }
-            & $syncHeader
-        })
-    $toggleMaster = {
-        if (-not $state.DefaultId) { return }
-        try { [void][VivacAudio]::ToggleMute() } catch { }
-        & $render
+    $newCard = {
+        param([string]$Bg, [double]$Radius = 12, $Padding = '14')
+        $c = New-Object Windows.Controls.Border
+        $c.CornerRadius = $Radius
+        $c.Padding = $Padding
+        $c.Background = New-KitBrush $Bg
+        $c
     }
-    $masterGlyph.Add_MouseLeftButtonUp({ & $toggleMaster })
 
-    $sw = New-Object Windows.Controls.Primitives.ToggleButton
-    $sw.Style = $window.FindName('HeaderRight').FindResource('KitSwitch')
-    $sw.ToolTip = T 'sound.key.mute'
-    $state.Switch = $sw
-    $sw.Add_Click({ if (-not $state.Syncing) { & $toggleMaster } })
-    [void]$window.FindName('HeaderRight').Children.Add($sw)
+    $bigLevel = {
+        param([int]$Level, [bool]$Muted)
+        $b = New-Object Windows.Controls.TextBlock
+        $b.FontSize = 36; $b.FontWeight = 'Bold'
+        $b.Foreground = New-KitBrush $(if ($Muted) { $t['muted'] } else { $t['text'] })
+        $r1 = New-Object Windows.Documents.Run "$Level"
+        $r2 = New-Object Windows.Documents.Run '%'
+        $r2.FontSize = 18; $r2.FontWeight = 'Normal'; $r2.Foreground = New-KitBrush $t['textSecondary']
+        [void]$b.Inlines.Add($r1); [void]$b.Inlines.Add($r2)
+        $b.VerticalAlignment = 'Center'
+        $b
+    }
 
-    $render = {
-        $sections.Children.Clear()
-        $state.DefaultId = $null; $state.DefaultSlider = $null
-        foreach ($flow in 0, 1) {
-            [void]$sections.Children.Add((& $newHeader (T @('sound.output', 'sound.input')[$flow])))
-            $devices = @([VivacAudio]::Devices($flow))
-            if (-not $devices.Count) {
-                $none = & $newText (T 'sound.none') $p['COLOR_MUTED'] 12
-                $none.Margin = '10,0,0,6'
-                [void]$sections.Children.Add($none)
-            }
-            foreach ($d in $devices) {
-                $box = & $newBlock $d.IsDefault
-                $stack = New-Object Windows.Controls.StackPanel
-                $check = $null
-                $sub = T 'sound.use'
-                if ($d.IsDefault) {
-                    $sub = T 'sound.default'
-                    $check = & $newText ([string][char]0xE73E) $p['COLOR_ACCENT'] 14
-                    $check.FontFamily = $script:KitIconFont
-                    $check.Margin = '0,0,4,0'
+    $outputCard = {
+        param($outs)
+        $card = & $newCard $t['surface']
+        $stack = New-Object Windows.Controls.StackPanel
+        $card.Child = $stack
+        $head = & $section (T 'sound.output') $outs.Count (T 'sound.default') $t['bg']
+        $head.Margin = '0,0,0,10'
+        [void]$stack.Children.Add($head)
+        if (-not $outs.Count) {
+            [void]$stack.Children.Add((New-KitText (T 'sound.none') $t['textSecondary'] 12))
+            return $card
+        }
+        $wrap = New-Object Windows.Controls.WrapPanel
+        $wrap.Margin = '4,4,0,0'
+        foreach ($d in $outs) {
+            $name = Get-SoundShortName $d.Name
+            $value = ''
+            if (-not $d.IsDefault) { $value = if ($d.Muted) { T 'sound.muted_short' } else { "$($d.Volume)%" } }
+            $check = ''
+            if ($d.IsDefault) { $check = [string][char]0x2713 }
+            $chip = New-KitChip $window $t $name $value -Selected:$d.IsDefault -Check $check
+            $chip.Margin = '0,0,6,6'
+            $chip.ToolTip = $d.Name
+            $chip.Tag['Id'] = $d.Id
+            $chip.Tag['State'] = $state
+            $chip.Add_Click({ param($s) try { [VivacAudio]::SetDefault([string]$s.Tag['Id']) } catch { }; & $s.Tag['State'].Render })
+            [void]$wrap.Children.Add($chip)
+        }
+        [void]$stack.Children.Add($wrap)
+        $default = @($outs | Where-Object { $_.IsDefault })[0]
+        if ($default) {
+            $top = New-Object Windows.Controls.Grid
+            $top.Margin = '0,2,0,10'
+            foreach ($w in 'Auto', '*', 'Auto') { $top.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = $w })) }
+            $ctx = @{ Id = $default.Id; Big = $null }
+            $mute = & $newMute $default.Muted $outGlyph { param($c, $m) try { [VivacAudio]::SetMute($c.Id, $m) } catch { } } $ctx $true
+            [void]$top.Children.Add($mute)
+            $big = & $bigLevel $default.Volume $default.Muted
+            $big.Margin = '12,0,0,0'
+            $ctx.Big = $big
+            [Windows.Controls.Grid]::SetColumn($big, 1)
+            [void]$top.Children.Add($big)
+            $tag = New-Object Windows.Controls.Border
+            $tag.CornerRadius = 8; $tag.Padding = '8,2'; $tag.Background = New-KitBrush $t['bg']; $tag.VerticalAlignment = 'Center'
+            $tag.Child = New-KitText (T 'sound.cap' @([string]$cap)) $t['textSecondary'] 12
+            [Windows.Controls.Grid]::SetColumn($tag, 2)
+            [void]$top.Children.Add($tag)
+            [void]$stack.Children.Add($top)
+            $fader = & $newFader $default.Volume $default.Muted { param($c, $l) try { [VivacAudio]::SetVolume($c.Id, $l) } catch { }; $c.Big.Inlines.FirstInline.Text = "$l" } $ctx
+            [void]$stack.Children.Add($fader)
+            [void]$stack.Children.Add((New-KitRuler $t (Get-SoundRulerValues $cap)))
+        }
+        $card
+    }
+
+    $appCard = {
+        param($a)
+        $card = & $newCard $t['surface'] 12 '12,10,12,8'
+        $card.Margin = '0,0,0,6'
+        $stack = New-Object Windows.Controls.StackPanel
+        $card.Child = $stack
+        $top = New-Object Windows.Controls.Grid
+        foreach ($w in 'Auto', '*', 'Auto', 'Auto') { $top.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = $w })) }
+        $kind = Get-SoundAppState $a
+        # The program's own icon, in a tile that wears a success ring (a gap of the
+        # panel's colour, then the ring) while the application plays.
+        $slot = New-Object Windows.Controls.Grid
+        $slot.Width = 36; $slot.Height = 36; $slot.VerticalAlignment = 'Center'; $slot.Margin = '4,0,12,0'
+        if ($kind -eq 'playing') {
+            $outer = New-Object Windows.Controls.Border
+            $outer.Margin = '-4'; $outer.CornerRadius = 14; $outer.BorderThickness = '2'; $outer.BorderBrush = New-KitBrush $t['success']
+            $gap = New-Object Windows.Controls.Border
+            $gap.Margin = '-2'; $gap.CornerRadius = 12; $gap.BorderThickness = '2'; $gap.BorderBrush = New-KitBrush $t['bg']
+            [void]$slot.Children.Add($outer); [void]$slot.Children.Add($gap)
+        }
+        $tile = New-Object Windows.Controls.Border
+        $tile.CornerRadius = 10; $tile.Background = New-KitBrush $t['surfaceAlt']
+        $glyph = New-KitGlyph 0xE8D6 $(if ($kind -eq 'playing') { $t['accent'] } else { $t['muted'] }) 18
+        $glyph.HorizontalAlignment = 'Center'
+        $exe = $null
+        if ($a.ProcessId) { try { $exe = (Get-Process -Id ([int]$a.ProcessId) -ErrorAction Stop).Path } catch { } }
+        if ($a.Name -eq (T 'sound.system_sounds')) { $glyph.Text = [string][char]0xEA8F }
+        $tileInner = New-Object Windows.Controls.Grid
+        [void]$tileInner.Children.Add($glyph)
+        if ($exe -and ('VivacMenuRow' -as [type])) {
+            # The program's own icon arrives on the icon thread (lib/VivacMenu.cs);
+            # the glyph stands in until it does.
+            $iconRow = New-Object VivacMenuRow
+            $iconRow.IconKey = $exe
+            $vis = New-Object Windows.Data.Binding 'ShowGlyph'
+            $vis.Source = $iconRow
+            $vis.Converter = New-Object Windows.Controls.BooleanToVisibilityConverter
+            [void]$glyph.SetBinding([Windows.UIElement]::VisibilityProperty, $vis)
+            $img = New-Object Windows.Controls.Image
+            $img.Width = 22; $img.Height = 22
+            [Windows.Media.RenderOptions]::SetBitmapScalingMode($img, 'HighQuality')
+            $src = New-Object Windows.Data.Binding 'Icon'
+            $src.Source = $iconRow
+            [void]$img.SetBinding([Windows.Controls.Image]::SourceProperty, $src)
+            [void]$tileInner.Children.Add($img)
+        }
+        $tile.Child = $tileInner
+        [void]$slot.Children.Add($tile)
+        [void]$top.Children.Add($slot)
+        $col = New-Object Windows.Controls.StackPanel
+        $col.VerticalAlignment = 'Center'
+        $nameText = & $newLabel $a.Name $(if ($a.Muted) { $t['textSecondary'] } else { $t['text'] }) 13 $true
+        [void]$col.Children.Add($nameText)
+        $line = New-Object Windows.Controls.StackPanel
+        $line.Orientation = 'Horizontal'
+        $stateColor = switch ($kind) { 'silenced' { $t['alert'] } 'playing' { $t['success'] } default { $t['textSecondary'] } }
+        if ($kind -eq 'silenced') {
+            $mi = New-KitGlyph 0xE74F $stateColor 12
+            $mi.Margin = '0,0,6,0'
+            [void]$line.Children.Add($mi)
+            [void]$line.Children.Add((New-KitText (T 'sound.silenced') $stateColor 12))
+        } else {
+            if ($kind -eq 'playing') {
+                $bars = New-Object Windows.Controls.StackPanel
+                $bars.Orientation = 'Horizontal'; $bars.VerticalAlignment = 'Bottom'; $bars.Margin = '0,0,6,2'
+                foreach ($h in 5, 8, 11) {
+                    $r = New-Object Windows.Shapes.Rectangle
+                    $r.Width = 3; $r.Height = $h; $r.Margin = '0,0,1,0'; $r.VerticalAlignment = 'Bottom'
+                    $r.Fill = New-KitBrush $stateColor
+                    [void]$bars.Children.Add($r)
                 }
-                $row = New-KitRow $p (& $deviceGlyph $d.Name ($flow -eq 1)) $d.Name $sub $check
+                [void]$line.Children.Add($bars)
+            }
+            [void]$line.Children.Add((New-KitText $(if ($kind -eq 'playing') { T 'sound.playing' } else { T 'sound.paused' }) $stateColor 12))
+        }
+        if ($a.Indexes.Count -gt 1) {
+            [void]$line.Children.Add((New-KitText " $([char]0x00B7) $(T 'sound.app_sub' @([string]$a.Indexes.Count))" $t['textSecondary'] 12))
+        }
+        [void]$col.Children.Add($line)
+        [Windows.Controls.Grid]::SetColumn($col, 1)
+        [void]$top.Children.Add($col)
+        $pct = New-KitText "$($a.Volume)%" $(if ($a.Muted) { $t['textSecondary'] } else { $t['text'] }) 15 -Bold
+        if ($a.Muted) { $pct.TextDecorations = [Windows.TextDecorations]::Strikethrough }
+        $pct.HorizontalAlignment = 'Right'; $pct.Margin = '8,0,10,0'
+        [Windows.Controls.Grid]::SetColumn($pct, 2)
+        [void]$top.Children.Add($pct)
+        $ctx = @{ Indexes = @($a.Indexes); Pct = $pct }
+        $mute = & $newMute $a.Muted $appGlyph { param($c, $m) foreach ($i in $c.Indexes) { try { [VivacAudio]::SetSessionMute($i, $m) } catch { } } } $ctx
+        [Windows.Controls.Grid]::SetColumn($mute, 3)
+        [void]$top.Children.Add($mute)
+        [void]$stack.Children.Add($top)
+        $fader = & $newFader $a.Volume $a.Muted { param($c, $l) foreach ($i in $c.Indexes) { try { [VivacAudio]::SetSessionVolume($i, $l) } catch { } }; $c.Pct.Text = "$l%" } $ctx
+        $fader.Margin = '0,4,0,0'
+        [void]$stack.Children.Add($fader)
+        $card
+    }
+
+    $inputCard = {
+        param($ins)
+        $card = & $newCard $t['surface'] 12 '14,12'
+        $stack = New-Object Windows.Controls.StackPanel
+        $card.Child = $stack
+        $head = & $section (T 'sound.input') $ins.Count '' $t['bg']
+        $head.Margin = '0,0,0,8'
+        [void]$stack.Children.Add($head)
+        if (-not $ins.Count) {
+            [void]$stack.Children.Add((New-KitText (T 'sound.none') $t['textSecondary'] 12))
+            return $card
+        }
+        $default = @($ins | Where-Object { $_.IsDefault })[0]
+        if (-not $default) { $default = $ins[0] }
+        $others = @($ins | Where-Object { $_.Id -ne $default.Id })
+        $entry = New-Object Windows.Controls.StackPanel
+        $top = New-Object Windows.Controls.Grid
+        foreach ($w in 'Auto', '*', 'Auto') { $top.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = $w })) }
+        $ctx = @{ Id = $default.Id; Pct = $null }
+        $mute = & $newMute $default.Muted $micGlyph { param($c, $m) try { [VivacAudio]::SetMute($c.Id, $m) } catch { } } $ctx
+        $mute.Margin = '0,0,12,0'
+        [void]$top.Children.Add($mute)
+        $col = New-Object Windows.Controls.StackPanel
+        $col.VerticalAlignment = 'Center'
+        [void]$col.Children.Add((& $newLabel (Get-SoundShortName $default.Name) $t['text'] 13 $true))
+        [void]$col.Children.Add((& $newLabel (T 'sound.default') $t['textSecondary'] 12))
+        [Windows.Controls.Grid]::SetColumn($col, 1)
+        [void]$top.Children.Add($col)
+        $pct = New-KitText "$($default.Volume)%" $(if ($default.Muted) { $t['textSecondary'] } else { $t['text'] }) 15 -Bold
+        if ($default.Muted) { $pct.TextDecorations = [Windows.TextDecorations]::Strikethrough }
+        $ctx.Pct = $pct
+        [Windows.Controls.Grid]::SetColumn($pct, 2)
+        [void]$top.Children.Add($pct)
+        [void]$entry.Children.Add($top)
+        $entry.ToolTip = $default.Name
+        $fader = & $newFader $default.Volume $default.Muted { param($c, $l) try { [VivacAudio]::SetVolume($c.Id, $l) } catch { }; $c.Pct.Text = "$l%" } $ctx
+        $fader.Margin = '0,6,0,0'
+        [void]$entry.Children.Add($fader)
+        [void]$stack.Children.Add($entry)
+        if ($others.Count) {
+            $fold = New-Object Windows.Controls.StackPanel
+            $fold.Visibility = if ($state.InputsOpen) { 'Visible' } else { 'Collapsed' }
+            foreach ($d in $others) {
+                $row = New-KitRow $p 0xE720 (Get-SoundShortName $d.Name) (T 'sound.use')
                 $row.Cursor = 'Hand'
-                if ($d.IsDefault) { $row.Tag.Name.FontWeight = 'SemiBold' }
-                # Clicking the device makes it the default one.
+                $row.ToolTip = $d.Name
+                $row.Margin = '0,6,0,0'
+                $row.Background = [Windows.Media.Brushes]::Transparent
                 $row.Tag['Id'] = $d.Id
-                $row.Add_MouseLeftButtonUp({ param($s) try { [VivacAudio]::SetDefault([string]$s.Tag['Id']) } catch { }; & $render })
-                [void]$stack.Children.Add($row)
-                $level = & $newLevelRow $d.Id $d.Volume $d.Muted ($flow -eq 1) { param($id, $l) [VivacAudio]::SetVolume($id, $l) } { param($id, $m) [VivacAudio]::SetMute($id, $m) }
-                [void]$stack.Children.Add($level)
-                $box.Child = $stack
-                [void]$sections.Children.Add($box)
-                if ($flow -eq 0 -and $d.IsDefault) {
-                    $state.DefaultId = $d.Id
-                    $state.DefaultSlider = $level.Tag
-                    $subtitle.Text = $d.Name
-                    $state.Syncing = $true
-                    try { $master.Value = $d.Volume } finally { $state.Syncing = $false }
-                }
+                $row.Tag['State'] = $state
+                $row.Add_MouseLeftButtonUp({ param($s) try { [VivacAudio]::SetDefault([string]$s.Tag['Id']) } catch { }; & $s.Tag['State'].Render })
+                [void]$fold.Children.Add($row)
             }
+            $toggle = New-Object Windows.Controls.StackPanel
+            $toggle.Orientation = 'Horizontal'; $toggle.Cursor = 'Hand'; $toggle.Margin = '0,10,0,0'
+            $arrow = New-KitText $(if ($state.InputsOpen) { [string][char]0x25BE } else { [string][char]0x25B8 }) $t['textSecondary'] 12
+            $arrow.Margin = '0,0,8,0'
+            [void]$toggle.Children.Add($arrow)
+            [void]$toggle.Children.Add((New-KitText (T 'sound.more_inputs' @([string]$others.Count)) $t['textSecondary'] 12))
+            $toggle.Background = [Windows.Media.Brushes]::Transparent
+            $toggle.Tag = @{ Fold = $fold; Arrow = $arrow; State = $state }
+            $toggle.Add_MouseLeftButtonUp({
+                    param($s)
+                    $open = $s.Tag.Fold.Visibility -ne 'Visible'
+                    $s.Tag.State.InputsOpen = $open
+                    $s.Tag.Fold.Visibility = if ($open) { 'Visible' } else { 'Collapsed' }
+                    $s.Tag.Arrow.Text = if ($open) { [string][char]0x25BE } else { [string][char]0x25B8 }
+                })
+            [void]$stack.Children.Add($toggle)
+            [void]$stack.Children.Add($fold)
         }
-        [void]$sections.Children.Add((& $newHeader (T 'sound.apps')))
-        # An application can hold several sessions (one per stream); they are
-        # one row, and the row moves them all. Its icon is its program's.
-        $groups = @([VivacAudio]::Sessions((T 'sound.system_sounds')) | Group-Object Name)
-        if (-not $groups.Count) {
-            $none = & $newText (T 'sound.no_apps') $p['COLOR_MUTED'] 12
-            $none.Margin = '10,0,0,6'
+        $card
+    }
+
+    $state.Render = {
+        $data = Get-VivacSoundData
+        $outs = @($data.Outputs); $ins = @($data.Inputs); $apps = @($data.Apps)
+        $state.Signature = Get-SoundSignature $outs $ins $apps
+        $sections.Children.Clear()
+        $default = @($outs | Where-Object { $_.IsDefault })[0]
+        if ($default) { $subtitle.Text = Get-SoundShortName $default.Name } else { $subtitle.Text = T 'sound.none' }
+        $outCard = & $outputCard $outs
+        $outCard.Margin = '0,0,0,14'
+        [void]$sections.Children.Add($outCard)
+        $appsHead = & $section (T 'sound.apps') $apps.Count '' $t['surface']
+        $appsHead.Margin = '0,0,0,8'
+        [void]$sections.Children.Add($appsHead)
+        if (-not $apps.Count) {
+            $none = New-KitText (T 'sound.no_apps') $t['textSecondary'] 12
+            $none.TextWrapping = 'Wrap'; $none.Margin = '0,0,0,6'
             [void]$sections.Children.Add($none)
         }
-        foreach ($grp in $groups) {
-            $first = $grp.Group[0]
-            $box = & $newBlock $false
-            $stack = New-Object Windows.Controls.StackPanel
-            $name = $grp.Name
-            $exe = $null
-            if ($first.ProcessId) {
-                try {
-                    $proc = Get-Process -Id ([int]$first.ProcessId) -ErrorAction Stop
-                    $exe = $proc.Path
-                    $desc = $proc.MainModule.FileVersionInfo.FileDescription
-                    if ($desc -and $name -eq $proc.ProcessName) { $name = $desc }
-                } catch { }
-            }
-            $glyphCode = 0xE8D6
-            if ($name -eq (T 'sound.system_sounds')) { $glyphCode = 0xEA8F }
-            $row = New-KitRow $p $glyphCode $name (T 'sound.app_sub' @([string]$grp.Count))
-            if ($grp.Count -le 1) { $row.Tag.Sub.Visibility = 'Collapsed' }
-            if ($exe -and ('VivacMenuRow' -as [type])) {
-                # The program's own icon, through a binding: it arrives on the
-                # icon thread (lib/VivacMenu.cs) and the row shows it then, the
-                # glyph standing in until it does.
-                $iconRow = New-Object VivacMenuRow
-                $iconRow.IconKey = $exe
-                $grid = New-Object Windows.Controls.Grid
-                $glyphText = $row.Tag.Glyph
-                $row.Tag.Tile.Child = $null
-                $vis = New-Object Windows.Data.Binding 'ShowGlyph'
-                $vis.Source = $iconRow
-                $vis.Converter = New-Object Windows.Controls.BooleanToVisibilityConverter
-                [void]$glyphText.SetBinding([Windows.UIElement]::VisibilityProperty, $vis)
-                $img = New-Object Windows.Controls.Image
-                $img.Width = 24; $img.Height = 24
-                [Windows.Media.RenderOptions]::SetBitmapScalingMode($img, 'HighQuality')
-                $src = New-Object Windows.Data.Binding 'Icon'
-                $src.Source = $iconRow
-                [void]$img.SetBinding([Windows.Controls.Image]::SourceProperty, $src)
-                [void]$grid.Children.Add($glyphText); [void]$grid.Children.Add($img)
-                $row.Tag.Tile.Child = $grid
-            }
-            [void]$stack.Children.Add($row)
-            $indexes = @($grp.Group | ForEach-Object { $_.Index })
-            [void]$stack.Children.Add((& $newLevelRow $indexes $first.Volume $first.Muted $false { param($ix, $l) foreach ($i in $ix) { [VivacAudio]::SetSessionVolume($i, $l) } } { param($ix, $m) foreach ($i in $ix) { [VivacAudio]::SetSessionMute($i, $m) } }))
-            $box.Child = $stack
-            [void]$sections.Children.Add($box)
-        }
-        & $syncHeader
+        foreach ($a in $apps) { [void]$sections.Children.Add((& $appCard $a)) }
+        $inCard = & $inputCard $ins
+        $inCard.Margin = '0,8,0,0'
+        [void]$sections.Children.Add($inCard)
     }
 
+    # Follow the machine: an application starting or stopping, a device
+    # plugged, a level moved elsewhere. Windows has no event here that does not
+    # need a COM sink, so the panel looks every second and a half and redraws
+    # only when the answer changed and no fader is held.
+    $timer = New-Object Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(1500)
+    $timer.Add_Tick({
+            if ($state.Dragging -or [Windows.Input.Mouse]::LeftButton -eq 'Pressed') { return }
+            $data = Get-VivacSoundData
+            if ((Get-SoundSignature @($data.Outputs) @($data.Inputs) @($data.Apps)) -ne $state.Signature) { & $state.Render }
+        })
+    $window.Resources['vivac.soundTimer'] = $timer
+    $window.Add_Closed({ param($s) $s.Resources['vivac.soundTimer'].Stop() })
     $window.Add_PreviewKeyDown({ param($s, $e) if ([string]$e.Key -eq 'Escape') { $window.Close(); $e.Handled = $true } })
-    & $render
+    & $state.Render
     if ($NoShow) { return $window }
+    $timer.Start()
     if ($Registry) { $Registry[$surfaceName] = $window }
     [void]$window.ShowDialog()
 }
@@ -1849,12 +2074,12 @@ function Add-VivacClipboardEntry {
     if ([Windows.Clipboard]::ContainsText()) {
         $text = [Windows.Clipboard]::GetText()
         if (-not $text.Trim()) { return }
-        $entry = [pscustomobject]@{ Kind = 'text'; Text = $text; Image = $null; Key = $text }
+        $entry = New-ClipEntry 'text' $text
     } elseif ([Windows.Clipboard]::ContainsImage()) {
         $img = [Windows.Clipboard]::GetImage()
         if (-not $img) { return }
         $img.Freeze()
-        $entry = [pscustomobject]@{ Kind = 'image'; Text = ''; Image = $img; Key = "image:$($img.PixelWidth)x$($img.PixelHeight):$($img.GetHashCode())" }
+        $entry = New-ClipEntry 'image' '' $img
     }
     if (-not $entry) { return }
     # Copying something again moves it to the top instead of repeating it.
@@ -1882,77 +2107,277 @@ function Get-PasteNative {
 
 # Picking a row puts it back on the clipboard and pastes it where the cursor
 # was, as Windows' Win+V does; Del forgets one row, Shift+Del all of them.
+#
+# The panel is the Linux side's (linux/lib/vivacpanel/clipboard.py): a search
+# box with the match count, filter chips with counters, the history on the
+# left and the selected entry on the right with its actions. What looks like
+# a secret is drawn as a mask and never matches a search; what a password
+# manager marks private is not recorded at all (Test-ClipboardPrivate).
 function Show-Clipboard([switch]$NoShow, [hashtable]$Registry) {
     Update-SurfaceContext
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'clipboard' }
     $surfaceName = 'clipboard'
     $p = Get-Palette
+    $t = Get-KitTokens $p
     $native = Get-PasteNative
     $previous = $native::GetForegroundWindow()
+    $arrows = "$([char]0x2191)$([char]0x2193)"
+    $hints = @(@($arrows, (T 'clip.key.select')), @([string][char]0x21B5, (T 'clip.key.paste')),
+        @((T 'clip.key.del'), (T 'clip.key.forget')), @("$([char]0x21E7)$(T 'clip.key.del')", (T 'clip.key.forget_all')),
+        @('Esc', (T 'clip.key.close')), @('Tab', (T 'clip.key.filter')))
     $body = @"
-<DockPanel>
-  <TextBox x:Name="Filter" DockPanel.Dock="Top" Margin="0,0,0,10" Padding="8,6" FontSize="16" Background="#$($p['COLOR_SURFACE'])"
-           Foreground="#$($p['COLOR_FG'])" CaretBrush="#$($p['COLOR_ACCENT'])" BorderBrush="#$($p['COLOR_ACCENT'])" BorderThickness="0,0,0,2"/>
-  <TextBlock DockPanel.Dock="Bottom" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="#$($p['COLOR_MUTED'])" Text="$(ConvertTo-XmlText (T 'clip.hint'))"/>
-  <ListBox x:Name="Rows" Background="Transparent" BorderThickness="0" Foreground="#$($p['COLOR_FG'])"
-           ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-    <ListBox.Resources>
-      <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#$($p['COLOR_SURFACE_ALT'])"/>
-      <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#$($p['COLOR_SURFACE_ALT'])"/>
-      <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#$($p['COLOR_FG'])"/>
-    </ListBox.Resources>
-  </ListBox>
-</DockPanel>
+<StackPanel>
+  <Grid Margin="0,0,0,10">
+    <Border Background="#$($t['surface'])" BorderBrush="#$($t['focusRing'])" BorderThickness="2" CornerRadius="10" Height="42"/>
+    <TextBox x:Name="Filter" Height="38" Margin="2" Padding="12,0" FontSize="14" Background="Transparent" BorderThickness="0"
+             VerticalContentAlignment="Center" Foreground="#$($t['text'])" CaretBrush="#$($t['accent'])"/>
+    <TextBlock x:Name="Placeholder" IsHitTestVisible="False" Margin="14,0,0,0" VerticalAlignment="Center" FontSize="14" Foreground="#80$($t['textSecondary'])"/>
+    <TextBlock x:Name="CountOf" IsHitTestVisible="False" Margin="0,0,14,0" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="12" Foreground="#$($t['textSecondary'])"/>
+  </Grid>
+  <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="14"/><ColumnDefinition Width="290"/></Grid.ColumnDefinitions>
+    <StackPanel>
+      <StackPanel x:Name="Chips" Orientation="Horizontal" Margin="0,0,0,8"/>
+      <Border Background="#$($t['surface'])" CornerRadius="10" Padding="4">
+        <ScrollViewer x:Name="Scroll" MaxHeight="440" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel x:Name="Rows"/>
+        </ScrollViewer>
+      </Border>
+    </StackPanel>
+    <Border x:Name="Detail" Grid.Column="2" Background="#$($t['surface'])" CornerRadius="12" Padding="14" VerticalAlignment="Top">
+      <StackPanel x:Name="DetailBody"/>
+    </Border>
+  </Grid>
+</StackPanel>
 "@
-    $window = New-VivacWindow (Get-WindowXaml 'vivac - clipboard' 760 560 $body)
-    $rows = $window.FindName('Rows')
+    $window = New-VivacWindow (Get-KitWindowXamlV2 $t 'vivac - clipboard' 820 (Get-KitPanelXamlV2 $t ([string][char]0xE77F) (T 'clip.title') $body $hints))
+    Add-KitDrawResources $window $p
+    $rowsBox = $window.FindName('Rows')
     $filter = $window.FindName('Filter')
+    $chipsBox = $window.FindName('Chips')
+    $detailBody = $window.FindName('DetailBody')
+    $window.FindName('Placeholder').Text = T 'clip.search'
+    $subtitle = $window.FindName('Subtitle')
+    $countOf = $window.FindName('CountOf')
+    $placeholder = $window.FindName('Placeholder')
 
-    $render = {
-        $rows.Items.Clear()
-        $needle = (ConvertTo-MenuKey $filter.Text.Trim())
-        foreach ($e in $script:ClipHistory) {
-            if ($needle -and ($e.Kind -ne 'text' -or (ConvertTo-MenuKey $e.Text).IndexOf($needle) -lt 0)) { continue }
-            $item = New-Object Windows.Controls.StackPanel
-            $item.Orientation = 'Horizontal'
-            $item.Margin = '4,4'
-            $item.Tag = $e
-            if ($e.Kind -eq 'image') {
-                $img = New-Object Windows.Controls.Image
-                $img.Source = $e.Image; $img.Height = 48; $img.MaxWidth = 160; $img.Stretch = 'Uniform'
-                [void]$item.Children.Add($img)
-                $label = New-Object Windows.Controls.TextBlock
-                $label.Margin = '12,0,0,0'; $label.VerticalAlignment = 'Center'; $label.Foreground = "#$($p['COLOR_MUTED'])"
-                $label.Text = T 'clip.image' @($e.Image.PixelWidth, $e.Image.PixelHeight)
-                [void]$item.Children.Add($label)
-            } else {
-                $lines = @($e.Text -split "`r?`n")
-                $first = $lines[0].Trim()
-                if ($first.Length -gt 90) { $first = $first.Substring(0, 89) + [char]0x2026 }
-                $t = New-Object Windows.Controls.TextBlock
-                $t.Text = $first
-                [void]$item.Children.Add($t)
-                if ($lines.Count -gt 1) {
-                    $more = New-Object Windows.Controls.TextBlock
-                    $more.Margin = '10,0,0,0'; $more.Foreground = "#$($p['COLOR_MUTED'])"
-                    $more.Text = T 'clip.lines' @($lines.Count - 1)
-                    [void]$item.Children.Add($more)
-                }
-            }
-            [void]$rows.Items.Add($item)
-        }
-        if (-not $rows.Items.Count) {
-            $empty = New-Object Windows.Controls.TextBlock
-            $empty.Foreground = "#$($p['COLOR_MUTED'])"; $empty.Margin = '6,6'
-            $empty.Text = T 'clip.empty'
-            [void]$rows.Items.Add($empty)
-        } else { $rows.SelectedIndex = 0 }
+    $wipe = New-Object Windows.Controls.Button
+    $wipe.Style = $window.FindResource('KitOutline')
+    $wipeRow = New-Object Windows.Controls.StackPanel
+    $wipeRow.Orientation = 'Horizontal'
+    $wg = New-KitGlyph 0xE74D $t['alert'] 12
+    $wg.Margin = '0,0,8,0'
+    $wipeRow.Children.Add($wg) | Out-Null
+    $wipeLabel = New-KitText (T 'clip.forget_all') $t['alert'] 12
+    $wipeRow.Children.Add($wipeLabel) | Out-Null
+    $wipe.Content = $wipeRow
+    $wipe.Tag = @{ Glyph = $wg; Label = $wipeLabel; Tokens = $t }
+    # The outline fills with the alert colour under the pointer, so its text
+    # turns to the panel's colour with it.
+    $wipe.Add_MouseEnter({ param($s) $s.Tag.Glyph.Foreground = New-KitBrush $s.Tag.Tokens['bg']; $s.Tag.Label.Foreground = New-KitBrush $s.Tag.Tokens['bg'] })
+    $wipe.Add_MouseLeave({ param($s) $s.Tag.Glyph.Foreground = New-KitBrush $s.Tag.Tokens['alert']; $s.Tag.Label.Foreground = New-KitBrush $s.Tag.Tokens['alert'] })
+    [void]$window.FindName('HeaderRight').Children.Add($wipe)
+
+    # What the handlers share: the filter chip, the selected row, what the
+    # search and the chip leave on screen.
+    $state = @{ Filter = 'all'; Index = 0; Shown = @(); Total = 0 }
+    $kindGlyph = @{ text = 0xE8A5; link = 0xE71B; image = 0xE91B; private = 0xE72E }
+
+    $describe = {
+        param($e)
+        if ($e.Kind -eq 'image') { return @((T 'clip.image' @([string]$e.Width, [string]$e.Height)), (T 'clip.kind.image')) }
+        if ($e.Private) { return @((Get-ClipMask), (T 'clip.private_sub')) }
+        $parts = @()
+        if ($e.Lines -gt 1) { $parts += T 'clip.lines' @([string]($e.Lines - 1)) }
+        $parts += T 'clip.chars' @([string]$e.Chars)
+        @($e.First, ($parts -join " $([char]0x00B7) "))
     }
 
-    $paste = {
-        $sel = $rows.SelectedItem
-        if (-not $sel -or -not $sel.Tag) { return }
-        $e = $sel.Tag
+    $row = {
+        param($e, [int]$I)
+        $selected = $I -eq $state.Index
+        $fg = if ($selected) { $t['actionText'] } else { $t['text'] }
+        $dim = if ($selected) { $t['actionText'] } else { $t['textSecondary'] }
+        $b = New-Object Windows.Controls.Border
+        $b.CornerRadius = 8; $b.Padding = '8,6'; $b.Margin = '0,0,0,2'; $b.MinHeight = 44
+        $b.Background = if ($selected) { New-KitBrush $t['actionFill'] } else { [Windows.Media.Brushes]::Transparent }
+        $g = New-Object Windows.Controls.Grid
+        foreach ($w in 'Auto', '*', 'Auto') { $g.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = $w })) }
+        $tile = New-Object Windows.Controls.Border
+        $tile.Width = 32; $tile.Height = 32; $tile.CornerRadius = 8; $tile.VerticalAlignment = 'Center'
+        $tile.Background = if ($selected) { New-KitBrush "26$($t['actionText'])" } else { New-KitBrush $t['surfaceAlt'] }
+        $tile.Child = New-KitGlyph $kindGlyph[(Get-ClipKind $e)] $(if ($selected) { $t['actionText'] } else { $t['accent'] }) 16
+        $tile.Child.HorizontalAlignment = 'Center'
+        [void]$g.Children.Add($tile)
+        $text = & $describe $e
+        $col = New-Object Windows.Controls.StackPanel
+        $col.VerticalAlignment = 'Center'; $col.Margin = '12,0,8,0'
+        $name = New-KitText $text[0] $fg 13
+        $name.TextTrimming = 'CharacterEllipsis'
+        if ($selected) { $name.FontWeight = 'Bold' }
+        $sub = New-KitText $text[1] $dim 11
+        $sub.TextTrimming = 'CharacterEllipsis'
+        [void]$col.Children.Add($name); [void]$col.Children.Add($sub)
+        [Windows.Controls.Grid]::SetColumn($col, 1)
+        [void]$g.Children.Add($col)
+        $end = $null
+        if ($e.Kind -eq 'image' -and $e.Image) {
+            $end = New-Object Windows.Controls.Image
+            $end.Source = $e.Image; $end.MaxWidth = 96; $end.MaxHeight = 36; $end.Stretch = 'Uniform'
+            [Windows.Media.RenderOptions]::SetBitmapScalingMode($end, 'HighQuality')
+        } elseif ($e.Private) {
+            $end = New-Object Windows.Controls.Border
+            $end.CornerRadius = 8; $end.Padding = '6,1'
+            $end.Background = New-KitBrush $(if ($selected) { "26$($t['actionText'])" } else { "40$($t['accent'])" })
+            $end.Child = New-KitText (T 'clip.private') $(if ($selected) { $t['actionText'] } else { $t['accent'] }) 11 -Bold
+        }
+        if ($end) {
+            $end.VerticalAlignment = 'Center'
+            [Windows.Controls.Grid]::SetColumn($end, 2)
+            [void]$g.Children.Add($end)
+        }
+        $b.Child = $g
+        # No tooltip: a secret is never shown, not even there.
+        $b.Tag = @{ Index = $I; State = $state }
+        if (-not $selected) {
+            $b.Add_MouseEnter({ param($s) $s.Background = New-KitBrush $s.Tag.State.Hover })
+            $b.Add_MouseLeave({ param($s) $s.Background = [Windows.Media.Brushes]::Transparent })
+        }
+        $b.Add_MouseLeftButtonDown({
+                param($s, $ev)
+                $s.Tag.State.Index = $s.Tag.Index
+                & $s.Tag.State.Render
+                if ($ev.ClickCount -ge 2) { & $s.Tag.State.Paste }
+                $ev.Handled = $true
+            })
+        $b
+    }
+    $state.Hover = $t['surfaceAlt']
+
+    $drawChips = {
+        $chipsBox.Children.Clear()
+        $n = Get-ClipCounts $script:ClipHistory.ToArray()
+        foreach ($kind in (Get-ClipKinds)) {
+            $on = $kind -eq $state.Filter
+            $chip = New-KitChip $window $t (T "clip.f.$kind") ([string]$n[$kind]) -Selected:$on -NoRing
+            if (-not $on) { $chip.Background = New-KitBrush $t['surface'] }
+            $chip.Margin = '0,0,6,0'
+            $chip.Tag['Kind'] = $kind
+            $chip.Tag['State'] = $state
+            $chip.Add_Click({ param($s) $s.Tag['State'].Filter = $s.Tag['Kind']; $s.Tag['State'].Index = 0; & $s.Tag['State'].Render })
+            [void]$chipsBox.Children.Add($chip)
+        }
+    }
+
+    $drawDetail = {
+        $detailBody.Children.Clear()
+        if (-not $state.Shown.Count) { $window.FindName('Detail').Visibility = 'Hidden'; return }
+        $window.FindName('Detail').Visibility = 'Visible'
+        $e = $state.Shown[$state.Index]
+        $kind = Get-ClipKind $e
+        $head = New-Object Windows.Controls.Grid
+        $head.Margin = '0,0,0,10'
+        $head.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = '*' }))
+        $head.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = 'Auto' }))
+        $cap = New-KitText (T 'clip.preview').ToUpper() $t['accent'] 11 -Bold
+        $cap.Margin = '4,0,0,0'
+        $tag = New-Object Windows.Controls.StackPanel
+        $tag.Orientation = 'Horizontal'
+        $tg = New-KitGlyph $kindGlyph[$kind] $t['textSecondary'] 12
+        $tg.Margin = '0,0,8,0'
+        [void]$tag.Children.Add($tg)
+        [void]$tag.Children.Add((New-KitText (T "clip.kind.$kind") $t['textSecondary'] 12))
+        [Windows.Controls.Grid]::SetColumn($tag, 1)
+        [void]$head.Children.Add($cap); [void]$head.Children.Add($tag)
+        [void]$detailBody.Children.Add($head)
+        $pane = New-Object Windows.Controls.Border
+        $pane.Background = New-KitBrush $t['bg']; $pane.CornerRadius = 10; $pane.Padding = '12'; $pane.Height = 220
+        if ($e.Kind -eq 'image' -and $e.Image) {
+            $img = New-Object Windows.Controls.Image
+            $img.Source = $e.Image; $img.Stretch = 'Uniform'; $img.StretchDirection = 'DownOnly'
+            [Windows.Media.RenderOptions]::SetBitmapScalingMode($img, 'HighQuality')
+            $pane.Child = $img
+        } else {
+            $shown = if ($e.Private) { Get-ClipMask } else { $e.Text }
+            # A long text is cut for the panel: the whole of it is still what a paste puts back.
+            if ($shown.Length -gt 6000) { $shown = $shown.Substring(0, 6000) + [string][char]0x2026 }
+            $tb = New-KitText $shown $(if ($e.Private) { $t['accent'] } else { $t['text'] }) 13
+            $tb.TextWrapping = 'Wrap'; $tb.VerticalAlignment = 'Top'
+            $sv = New-Object Windows.Controls.ScrollViewer
+            $sv.VerticalScrollBarVisibility = 'Auto'; $sv.HorizontalScrollBarVisibility = 'Disabled'
+            $sv.Content = $tb
+            $pane.Child = $sv
+        }
+        [void]$detailBody.Children.Add($pane)
+        $stats = New-Object Windows.Controls.StackPanel
+        $stats.Orientation = 'Horizontal'; $stats.Margin = '0,10,0,10'
+        $parts = if ($e.Kind -eq 'image') { @("$($e.Width)$([char]0x00D7)$($e.Height)") }
+        elseif ($e.Private) { @((T 'clip.private_sub')) }
+        else { @((T 'clip.n_lines' @([string]$e.Lines)), (T 'clip.chars' @([string]$e.Chars))) }
+        foreach ($s in $parts) {
+            $x = New-KitText $s $t['textSecondary'] 12
+            $x.Margin = '0,0,16,0'
+            [void]$stats.Children.Add($x)
+        }
+        [void]$detailBody.Children.Add($stats)
+        $buttons = New-Object Windows.Controls.Grid
+        $buttons.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = '*' }))
+        $buttons.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition -Property @{ Width = 'Auto' }))
+        $go = New-Object Windows.Controls.Button
+        $go.Style = $window.FindResource('KitActionPrimary')
+        $go.Content = "$(T 'clip.paste')  $([char]0x21B5)"
+        $go.Height = 44
+        $go.Tag = $state
+        $go.Add_Click({ param($s) & $s.Tag.Paste })
+        $del = New-Object Windows.Controls.Button
+        $del.Style = $window.FindResource('KitActionDanger')
+        $dr = New-Object Windows.Controls.StackPanel
+        $dr.Orientation = 'Horizontal'
+        $dgl = New-KitGlyph 0xE74D $t['text'] 12
+        $dgl.Margin = '0,0,8,0'
+        [void]$dr.Children.Add($dgl)
+        [void]$dr.Children.Add((New-KitText (T 'clip.forget') $t['text'] 12))
+        $del.Content = $dr
+        $del.Margin = '8,0,0,0'
+        $del.Height = 44
+        $del.Tag = @{ State = $state; Entry = $e }
+        $del.Add_Click({ param($s) [void]$script:ClipHistory.Remove($s.Tag.Entry); & $s.Tag.State.Render })
+        [Windows.Controls.Grid]::SetColumn($del, 1)
+        [void]$buttons.Children.Add($go); [void]$buttons.Children.Add($del)
+        [void]$detailBody.Children.Add($buttons)
+    }
+
+    $state.Render = {
+        & $drawChips
+        $pool = Select-ClipByKind $script:ClipHistory.ToArray() $state.Filter
+        $state.Shown = @(Select-ClipFiltered $pool $filter.Text)
+        $state.Total = $script:ClipHistory.Count
+        $state.Index = [Math]::Max(0, [Math]::Min($state.Index, $state.Shown.Count - 1))
+        $subtitle.Text = T 'clip.count' @([string]$state.Total)
+        $countOf.Text = T 'clip.of' @([string]$state.Shown.Count, [string]$state.Total)
+        $placeholder.Visibility = if ($filter.Text) { 'Hidden' } else { 'Visible' }
+        & $drawDetail
+        $rowsBox.Children.Clear()
+        if (-not $state.Shown.Count) {
+            $msg = if (-not $state.Total) { T 'clip.none' } else { T 'clip.no_match' }
+            $none = New-KitText $msg $t['textSecondary'] 12
+            $none.TextWrapping = 'Wrap'; $none.Margin = '10,8'
+            [void]$rowsBox.Children.Add($none)
+            return
+        }
+        $selected = $null
+        for ($i = 0; $i -lt $state.Shown.Count; $i++) {
+            $r = & $row $state.Shown[$i] $i
+            if ($i -eq $state.Index) { $selected = $r }
+            [void]$rowsBox.Children.Add($r)
+        }
+        # Scrolled to once it has a place: a row not yet laid out has nowhere to scroll to.
+        if ($selected) { $selected.Add_Loaded({ param($s) $s.BringIntoView() }) }
+    }
+
+    $state.Paste = {
+        if (-not $state.Shown.Count) { return }
+        $e = $state.Shown[$state.Index]
         if ($e.Kind -eq 'image') { [Windows.Clipboard]::SetImage($e.Image) } else { [Windows.Clipboard]::SetText($e.Text) }
         $window.Close()
         if ($previous -ne [IntPtr]::Zero) {
@@ -1965,23 +2390,40 @@ function Show-Clipboard([switch]$NoShow, [hashtable]$Registry) {
         }
     }
 
-    $filter.Add_TextChanged({ & $render })
+    $wipe.Tag['State'] = $state
+    $wipe.Add_Click({ param($s) $script:ClipHistory.Clear(); & $s.Tag['State'].Render })
+    $filter.Tag = $state
+    $filter.Add_TextChanged({ param($s) $s.Tag.Index = 0; & $s.Tag.Render })
     $window.Add_PreviewKeyDown({
         param($s, $ev)
         $k = [string]$ev.Key
+        $kinds = @(Get-ClipKinds)
         if ($k -eq 'Escape') { $window.Close(); $ev.Handled = $true; return }
-        if ($k -eq 'Down' -and $rows.SelectedIndex -lt $rows.Items.Count - 1) { $rows.SelectedIndex++; $rows.ScrollIntoView($rows.SelectedItem); $ev.Handled = $true; return }
-        if ($k -eq 'Up' -and $rows.SelectedIndex -gt 0) { $rows.SelectedIndex--; $rows.ScrollIntoView($rows.SelectedItem); $ev.Handled = $true; return }
-        if ($k -eq 'Return') { & $paste; $ev.Handled = $true; return }
+        if ($k -eq 'Down' -or $k -eq 'Up') {
+            if ($state.Shown.Count) {
+                $step = if ($k -eq 'Down') { 1 } else { -1 }
+                $state.Index = [Math]::Max(0, [Math]::Min($state.Shown.Count - 1, $state.Index + $step))
+                & $state.Render
+            }
+            $ev.Handled = $true; return
+        }
+        if ($k -eq 'Tab') {
+            $back = [bool]([Windows.Input.Keyboard]::Modifiers -band [Windows.Input.ModifierKeys]::Shift)
+            $at = [Array]::IndexOf($kinds, $state.Filter)
+            $state.Filter = $kinds[($at + $(if ($back) { -1 } else { 1 }) + $kinds.Count) % $kinds.Count]
+            $state.Index = 0
+            & $state.Render
+            $ev.Handled = $true; return
+        }
+        if ($k -eq 'Return') { & $state.Paste; $ev.Handled = $true; return }
         if ($k -eq 'Delete') {
             if ([Windows.Input.Keyboard]::Modifiers -band [Windows.Input.ModifierKeys]::Shift) { $script:ClipHistory.Clear() }
-            elseif ($rows.SelectedItem -and $rows.SelectedItem.Tag) { [void]$script:ClipHistory.Remove($rows.SelectedItem.Tag) }
-            & $render; $ev.Handled = $true; return
+            elseif ($state.Shown.Count) { [void]$script:ClipHistory.Remove($state.Shown[$state.Index]) }
+            & $state.Render; $ev.Handled = $true; return
         }
     })
-    $rows.Add_MouseDoubleClick({ & $paste })
     $window.Add_ContentRendered({ $filter.Focus() | Out-Null })
-    & $render
+    & $state.Render
     if ($NoShow) { return $window }
     if ($Registry) { $Registry[$surfaceName] = $window }
     [void]$window.ShowDialog()

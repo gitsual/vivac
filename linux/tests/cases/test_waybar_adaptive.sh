@@ -27,13 +27,19 @@ render() {
 	printf '%s' "$home/.config/waybar/config"
 }
 
-# modules CONFIG — the module ids Waybar would place, one per line, after
+# modules CONFIG — the module ids Waybar would place (a group's included), one per line, after
 # checking that each one has a definition and the file parses.
 modules() {
 	python - "$1" <<'PY'
 import json, sys
 config = json.load(open(sys.argv[1]))
 placed = config["modules-left"] + config["modules-center"] + config["modules-right"]
+# A group places its own modules (the system gauges fold into group/system).
+i = 0
+while i < len(placed):
+    if placed[i].startswith("group/") and placed[i] in config:
+        placed[i + 1:i + 1] = config[placed[i]].get("modules", [])
+    i += 1
 missing = [m for m in placed if m not in config]
 if missing:
     sys.exit(f"modules placed but not defined: {missing}")

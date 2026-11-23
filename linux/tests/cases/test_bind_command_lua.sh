@@ -37,7 +37,7 @@ expected=(
 	'SUPER SHIFT,E|$HOME/.config/rofi/power/powermenu.sh'
 	'SUPER SHIFT,Q|$HOME/.local/bin/vivac-power'
 	'SUPER SHIFT,T|$HOME/.local/bin/vivac-theme'
-	'SUPER,V|cliphist list | rofi -dmenu -i -p Clipboard | cliphist decode | wl-copy'
+	'SUPER,V|$HOME/.local/bin/vivac-panel clipboard'
 	'SUPER SHIFT,R|hyprctl reload'
 )
 

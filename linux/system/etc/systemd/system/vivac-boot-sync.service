@@ -1,0 +1,47 @@
+# Carry the theme onto the EFI system partition: GRUB's menu theme and the
+# boot logo HackBGRT shows for Windows. The Linux twin of the Windows task
+# \vivac\boot-sync (docs/boot-sync.md).
+#
+# Started by vivac-boot-sync.path when the user stages a theme with
+# scripts/boot-stage.sh. The user writes /var/lib/vivac/boot-stage; this
+# service, as root, treats everything in it as hostile and writes only
+# grub/themes/vivac and EFI/HackBGRT on the partition.
+[Unit]
+Description=vivac: carry the theme onto the EFI system partition
+Documentation=file:///usr/local/lib/vivac/boot-sync.py
+RequiresMountsFor=/boot/efi
+ConditionPathExists=/var/lib/vivac/boot-stage/palette.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/lib/vivac/boot-sync.py --stage /var/lib/vivac/boot-stage --esp /boot/efi --log /var/log/vivac/boot-sync.log
+LogsDirectory=vivac
+UMask=0022
+
+# Nothing but those two folders of the partition may be written to; a "-"
+# makes a folder that is not there (no Windows, no HackBGRT) not an error.
+ProtectSystem=strict
+ReadWritePaths=-/boot/efi/grub/themes/vivac -/boot/efi/EFI/HackBGRT
+ProtectHome=true
+PrivateTmp=true
+PrivateNetwork=true
+PrivateDevices=true
+NoNewPrivileges=true
+CapabilityBoundingSet=CAP_DAC_OVERRIDE
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# Decoding a 64-megapixel picture is the most it ever does.
+MemoryMax=2G
+TimeoutStartSec=120

@@ -72,3 +72,31 @@ if [[ -f "$conf" ]] && ! grep -qx 'PasswordAuthentication no' "$conf"; then
 		say "sshd: passwords refused"
 	fi
 fi
+
+# 4. Termux wears the theme: the terminal colours Linux's kitty wears (its
+# background and foreground) and the accent as the cursor, from the theme
+# named in ~/.config/vivac/settings (the same setting the other halves read),
+# the default palette when none is named or the name is not a shipped one.
+theme="$(sed -n 's/^theme=//p' "$HOME/.config/vivac/settings" 2>/dev/null | tail -1)"
+palette="$here/data/theme.conf"
+if [[ "$theme" =~ ^[a-z][a-z0-9-]*$ && -f "$here/data/themes/$theme.conf" ]]; then
+	palette="$here/data/themes/$theme.conf"
+fi
+colour() { sed -n "s/^$1=\([0-9A-Fa-f]\{6\}\)$/\1/p" "$palette" | tail -1 | tr 'A-F' 'a-f'; }
+colors="$HOME/.termux/colors.properties"
+colors_body="# Written by vivac android/scripts/deploy.sh from $(basename "$palette" .conf); rewritten on every deploy.
+background=#$(colour TERMINAL_BG)
+foreground=#$(colour TERMINAL_FG)
+cursor=#$(colour COLOR_ACCENT)
+"
+if [[ ! -f "$colors" ]] || [[ "$(cat "$colors")"$'\n' != "$colors_body" ]]; then
+	if [[ -e "$colors" ]] && ! grep -q 'Written by vivac' "$colors"; then backup "$colors"; fi
+	if ((dry)); then
+		say "would: write $colors"
+	else
+		mkdir -p "$(dirname "$colors")"
+		printf '%s' "$colors_body" >"$colors"
+		say "wrote $colors"
+		command -v termux-reload-settings >/dev/null 2>&1 && termux-reload-settings || true
+	fi
+fi

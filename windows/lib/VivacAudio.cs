@@ -25,6 +25,7 @@ public class VivacAudioSession {
     public string Name;
     public int Volume;
     public bool Muted;
+    public bool Active;   // the session is playing (not just open)
 }
 
 public static class VivacAudio {
@@ -206,6 +207,16 @@ public static class VivacAudio {
         return list;
     }
 
+    // The default device's own name, for the volume indicator: one endpoint
+    // asked, not the whole list. Empty when there is no device.
+    public static string DefaultName(int flow) {
+        try {
+            IMMDevice d;
+            if (Enumerator().GetDefaultAudioEndpoint(flow, 1, out d) != 0) return "";
+            return NameOf(d);
+        } catch { return ""; }
+    }
+
     public static void SetDefault(string id) {
         IPolicyConfig policy = (IPolicyConfig)new PolicyConfigClient();
         for (int role = 0; role < 3; role++) Marshal.ThrowExceptionForHR(policy.SetDefaultEndpoint(id, role));
@@ -285,7 +296,7 @@ public static class VivacAudio {
             float level; bool mute;
             v.GetMasterVolume(out level);
             v.GetMute(out mute);
-            list.Add(new VivacAudioSession { Index = i, ProcessId = pid, Name = name, Volume = (int)Math.Round(level * 100), Muted = mute });
+            list.Add(new VivacAudioSession { Index = i, ProcessId = pid, Name = name, Volume = (int)Math.Round(level * 100), Muted = mute, Active = state == 1 });
         }
         return list;
     }

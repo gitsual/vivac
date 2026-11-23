@@ -60,9 +60,12 @@ function Get-MachineContext($Theme, $Settings, $Facts) {
     $tokens['PIPE_NAME'] = Get-VivacPipeName
     $labels = [ordered]@{}
     foreach ($k in 'desktop', 'wired', 'no_link', 'not_connected', 'no_address', 'theme', 'power', 'bt_on', 'bt_off', 'eject', 'updates', 'updates_none', 'updates_apps', 'updates_security', 'reboot', 'av_on', 'av_off', 'phone_reachable',
-        'feels', 'humidity', 'wind', 'rain', 'next_hours', 'week', 'today', 'loading', 'forecast_unavailable',
+        'usb_actions', 'feels', 'humidity', 'wind', 'rain', 'next_hours', 'week', 'today', 'loading', 'forecast_unavailable',
         'wx_clear', 'wx_partly', 'wx_cloudy', 'wx_fog', 'wx_drizzle', 'wx_rain', 'wx_snow', 'wx_showers', 'wx_thunder',
-        'cpu', 'memory', 'disks', 'cores', 'frequency', 'vendor', 'free', 'swap', 'free_of', 'top', 'loading_top', 'vram', 'gpu_power', 'fan') {
+        'cpu', 'memory', 'disks', 'cores', 'frequency', 'vendor', 'free', 'swap', 'free_of', 'top', 'loading_top', 'vram', 'gpu_power', 'fan',
+        'sys_title', 'sys_tab_gpu', 'sys_bar_click', 'sys_of', 'sys_measuring', 'sys_t_2min', 'sys_t_1min', 'sys_t_now', 'sys_use_total', 'sys_peak_mean', 'sys_procs_threads', 'sys_queue', 'sys_smt', 'sys_freq_now', 'sys_threads', 'sys_threads_note', 'sys_top_sum', 'sys_top_mem', 'sys_top_mem_note', 'sys_used', 'sys_available', 'sys_swap', 'sys_no_swap', 'sys_mem_map', 'sys_free_n', 'sys_rest_procs', 'sys_of_total', 'sys_tab_alert', 'sys_drives_n', 'sys_drives', 'sys_total_free', 'sys_with_space', 'sys_need_attention', 'sys_free_of_total', 'sys_at_pct', 'sys_sorted_path', 'sys_all_fine', 'sys_full', 'sys_no_disks', 'sys_gpu_use', 'sys_peak_ago', 'sys_dur_min', 'sys_dur_s', 'sys_fan_stopped', 'sys_vram_pct', 'sys_gpu_progs', 'sys_gpu_none', 'sys_kinds_note', 'sys_kind_compute', 'sys_kind_graphics', 'sys_kind_both', 'sys_k_tab', 'sys_k_close',
+        'cal_title', 'cal_week', 'cal_wk', 'cal_day_of', 'cal_days_left', 'cal_days_left_one', 'cal_k_month', 'cal_k_today',
+        'fc_title', 'fc_updated', 'fc_refresh', 'fc_k_refresh', 'fc_sun_left', 'fc_sun_in', 'fc_night', 'fc_hm', 'fc_min_only', 'fc_sunrise', 'fc_sunset', 'fc_uv_low', 'fc_uv_moderate', 'fc_uv_high', 'fc_uv_very_high', 'fc_uv_extreme', 'fc_temp_c', 'fc_range') {
         $labels[$k] = Get-VivacString "bar.$k"
     }
     $tokens['BAR_LABELS_JSON'] = ($labels | ConvertTo-Json -Compress)

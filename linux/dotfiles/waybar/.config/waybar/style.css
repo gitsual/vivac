@@ -1,6 +1,6 @@
 * { border: none; border-radius: 0; font-family: "JetBrains Mono Nerd Font", "Font Awesome 6 Free"; font-size: 13px; min-height: 0; }
 window#waybar { background: rgba(45, 31, 45, 0.95); border-radius: 12px; border-bottom: 3px solid #E1777D; color: #E8D5AB; }
-#workspaces, #clock, #cpu, #memory, #disk, #network, #pulseaudio, #custom-updates, #custom-gpu, #bluetooth, #backlight, #battery, #temperature, #custom-weather, #custom-phone, #window, #submap { background: rgba(67, 54, 63, 0.7); padding: 0 12px; margin: 5px 2px; border-radius: 10px; border-bottom: 2px solid #979367; }
+#workspaces, #clock, #cpu, #memory, #disk, #network, #pulseaudio, #custom-updates, #custom-gpu, #bluetooth, #backlight, #battery, #temperature, #custom-weather, #custom-phone, #custom-usb, #custom-security, #custom-system, #window, #submap { background: rgba(67, 54, 63, 0.7); padding: 0 12px; margin: 5px 2px; border-radius: 10px; border-bottom: 2px solid #979367; }
 #workspaces { padding: 0 4px; }
 #workspaces label { color: #E8D5AB; padding: 0 6px; border-radius: 8px; }
 #workspaces label:hover { background: rgba(232, 213, 171, 0.15); }
@@ -27,3 +27,11 @@ window#waybar { background: rgba(45, 31, 45, 0.95); border-radius: 12px; border-
 #custom-power { background: #E1777D; color: #2D1F2D; border-radius: 10px; margin: 5px; padding: 0 10px; }
 tooltip { background: rgba(45, 31, 45, 0.98); border: 2px solid #E1777D; border-radius: 8px; }
 tooltip label { color: #E8D5AB; }
+
+/* Categories, as the Windows bar reads: a thin rule between groups. */
+#custom-sep { min-width: 1px; padding: 0; margin: 11px 5px; background: #979367; opacity: 0.6; font-size: 1px; }
+#custom-security.ok { color: #55A185; }
+#custom-security.warn, #custom-system.warning { color: #E1777D; border-bottom: 2px solid #E1777D; }
+#custom-security.alert, #custom-system.critical { color: #BD6161; border-bottom: 2px solid #BD6161; }
+#tray { padding: 0 8px; margin: 5px 1px; border-radius: 10px; }
+#tray > .needs-attention { box-shadow: inset 0 -2px #BD6161; }

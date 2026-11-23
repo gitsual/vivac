@@ -24,6 +24,7 @@
       },
       "privileges": {
         "shellCommands": [
+          { "program": "conhost.exe", "argsRegex": "^--headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File C:\\\\Users\\\\alvar\\\\bin\\\\sesiones\\.ps1 (restaurar|guardar)$" },
           {
             "program": "cmd.exe",
             "argsRegex": "^/c echo (theme|power|help|sound|bluetooth|security|network|updates|phone)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul \\|\\| conhost\\.exe --headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac\\.ps1 (theme|power|help|sound|bluetooth|security|network|updates|phone)$"
@@ -34,7 +35,7 @@
           },
           {
             "program": "powershell.exe",
-            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-tray\\.ps1 (-Status|-Updates|-Bluetooth|-Eject [A-Z]:|-Open (bluetooth|updates|antivirus))$"
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-tray\\.ps1 (-Status|-Drives|-Updates|-Bluetooth|-Eject [A-Z]:|-Browse [A-Z]:|-DriveMenu [A-Z]:|-Open (bluetooth|updates|antivirus))$"
           },
           {
             "program": "powershell.exe",
@@ -42,7 +43,7 @@
           },
           {
             "program": "nvidia-smi",
-            "argsRegex": "^--query-gpu=temperature\\.gpu --format=csv,noheader,nounits$"
+            "argsRegex": "^--query-gpu=temperature\\.gpu,utilization\\.gpu --format=csv,noheader,nounits$"
           },
           {
             "program": "cmd.exe",
@@ -78,10 +79,10 @@
         {
           "name": "default",
           "anchor": "top_center",
-          "offsetX": "-35px",
+          "offsetX": "0px",
           "offsetY": "46px",
-          "width": "300px",
-          "height": "290px",
+          "width": "468px",
+          "height": "700px",
           "monitorSelection": { "type": "primary" }
         }
       ]
@@ -101,20 +102,20 @@
         {
           "name": "default",
           "anchor": "top_center",
-          "offsetX": "100px",
+          "offsetX": "0px",
           "offsetY": "46px",
-          "width": "420px",
-          "height": "440px",
+          "width": "580px",
+          "height": "880px",
           "monitorSelection": { "type": "primary" }
         }
       ]
     },
     {
-      "name": "cpu",
-      "htmlPath": "./cpu.html",
+      "name": "system",
+      "htmlPath": "./system.html",
       "zOrder": "top_most",
       "shownInTaskbar": false,
-      "focused": false,
+      "focused": true,
       "resizable": false,
       "transparent": true,
       "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
@@ -122,101 +123,17 @@
       "privileges": { "shellCommands": [
           {
             "program": "powershell.exe",
-            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-sysinfo\\.ps1 (-Top|-Gpu)$"
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-sysinfo\\.ps1 (-Top|-Gpu|-Info|-Cores|-GpuProcs)$"
           }
         ] },
       "presets": [
         {
           "name": "default",
           "anchor": "top_right",
-          "offsetX": "-320px",
+          "offsetX": "-14px",
           "offsetY": "46px",
-          "width": "340px",
-          "height": "380px",
-          "monitorSelection": { "type": "primary" }
-        }
-      ]
-    },
-    {
-      "name": "memory",
-      "htmlPath": "./memory.html",
-      "zOrder": "top_most",
-      "shownInTaskbar": false,
-      "focused": false,
-      "resizable": false,
-      "transparent": true,
-      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
-      "caching": { "defaultDuration": 604800, "rules": [{ "urlRegex": "\\.(css|js|json)$", "duration": 0 }] },
-      "privileges": { "shellCommands": [
-          {
-            "program": "powershell.exe",
-            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-sysinfo\\.ps1 (-Top|-Gpu)$"
-          }
-        ] },
-      "presets": [
-        {
-          "name": "default",
-          "anchor": "top_right",
-          "offsetX": "-258px",
-          "offsetY": "46px",
-          "width": "340px",
-          "height": "360px",
-          "monitorSelection": { "type": "primary" }
-        }
-      ]
-    },
-    {
-      "name": "disk",
-      "htmlPath": "./disk.html",
-      "zOrder": "top_most",
-      "shownInTaskbar": false,
-      "focused": false,
-      "resizable": false,
-      "transparent": true,
-      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
-      "caching": { "defaultDuration": 604800, "rules": [{ "urlRegex": "\\.(css|js|json)$", "duration": 0 }] },
-      "privileges": { "shellCommands": [
-          {
-            "program": "powershell.exe",
-            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-sysinfo\\.ps1 (-Top|-Gpu)$"
-          }
-        ] },
-      "presets": [
-        {
-          "name": "default",
-          "anchor": "top_right",
-          "offsetX": "-198px",
-          "offsetY": "46px",
-          "width": "340px",
-          "height": "330px",
-          "monitorSelection": { "type": "primary" }
-        }
-      ]
-    },
-    {
-      "name": "gpu",
-      "htmlPath": "./gpu.html",
-      "zOrder": "top_most",
-      "shownInTaskbar": false,
-      "focused": false,
-      "resizable": false,
-      "transparent": true,
-      "includeFiles": ["*.html", "*.css", "*.js", "*.json"],
-      "caching": { "defaultDuration": 604800, "rules": [{ "urlRegex": "\\.(css|js|json)$", "duration": 0 }] },
-      "privileges": { "shellCommands": [
-          {
-            "program": "powershell.exe",
-            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-sysinfo\\.ps1 (-Top|-Gpu)$"
-          }
-        ] },
-      "presets": [
-        {
-          "name": "default",
-          "anchor": "top_right",
-          "offsetX": "-135px",
-          "offsetY": "46px",
-          "width": "340px",
-          "height": "250px",
+          "width": "540px",
+          "height": "830px",
           "monitorSelection": { "type": "primary" }
         }
       ]
