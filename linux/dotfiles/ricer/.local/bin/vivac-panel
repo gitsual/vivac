@@ -1,0 +1,51 @@
+#!/usr/bin/python3
+"""vivac-panel: the bar's panels, the Linux side of windows/lib/Surfaces.psm1.
+
+    vivac-panel sound          devices and every application's own level
+    vivac-panel usb            removable drives: open, eject
+    vivac-panel security       firewall, antivirus scan, audit
+    vivac-panel clipboard      clipboard history, private entries hidden
+    vivac-panel calendar       the month, today marked
+    vivac-panel forecast       the weather for the next days
+    vivac-panel system [TAB]   cpu | memory | disk | gpu
+    vivac-panel osd volume     a passing level indicator after a volume key
+    vivac-panel updates        what is pending, by origin, and whether to restart
+    vivac-panel menu           everything to open, by category, with a calculator
+    vivac-panel waybar KIND    one line of JSON for the bar (usb, security)
+
+Each panel is a floating GTK 4 window of app id org.vivac.panel.<kind>, which
+Hyprland places under the bar; Esc or a click elsewhere closes it, and
+running it again while open closes it too. /usr/bin/python3 on purpose:
+the system's GTK bindings, not whichever Python a version manager offers.
+"""
+import importlib
+import os
+import sys
+from pathlib import Path
+
+SELF = Path(__file__).resolve()
+REPO = Path(os.environ.get("VIVAC_REPO") or SELF.parents[4])
+sys.path.insert(0, str(REPO / "lib"))
+
+PANELS = ("sound", "usb", "security", "clipboard", "calendar", "forecast", "system", "osd", "updates", "menu")
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__.strip())
+        return 0 if argv else 2
+    kind, rest = argv[0], argv[1:]
+    if kind == "waybar":
+        if not rest:
+            return 2
+        module = importlib.import_module(f"vivacpanel.{rest[0]}")
+        return module.waybar(rest[1:])
+    if kind not in PANELS:
+        print(f"vivac-panel: unknown panel {kind!r}", file=sys.stderr)
+        return 2
+    module = importlib.import_module(f"vivacpanel.{kind}")
+    return module.main(*rest) if rest else module.main()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

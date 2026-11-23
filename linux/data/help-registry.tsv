@@ -29,7 +29,10 @@ SUPER+SHIFT+T	hypr	exec	$HOME/.local/bin/vivac-theme	help.hypr.theme
 SUPER+SHIFT+B	hypr	exec	$HOME/.local/bin/vivac-bridge	help.hypr.bridge
 SUPER+SHIFT+W	hypr	exec	$HOME/.local/bin/vivac-reboot-other	help.hypr.switch
 SUPER+SHIFT+A	hypr	exec	kitty --class vivac-ask -e $HOME/.local/bin/vivac-ask	help.hypr.ask
-SUPER+V	hypr	exec	cliphist list | rofi -dmenu -i -p Clipboard | cliphist decode | wl-copy	help.hypr.clipboard
+SUPER+V	hypr	exec	$HOME/.local/bin/vivac-panel clipboard	help.hypr.clipboard
+XF86AudioRaiseVolume	hypr	exec	$HOME/.local/bin/vivac-panel osd volume up	help.hypr.volume_up
+XF86AudioLowerVolume	hypr	exec	$HOME/.local/bin/vivac-panel osd volume down	help.hypr.volume_down
+XF86AudioMute	hypr	exec	$HOME/.local/bin/vivac-panel osd volume mute	help.hypr.volume_mute
 SUPER+SHIFT+R	hypr	exec	hyprctl reload	help.hypr.reload
 SUPER+left	hypr	dispatch	movefocus l	help.hypr.focus_left
 SUPER+right	hypr	dispatch	movefocus r	help.hypr.focus_right
@@ -85,3 +88,4 @@ Print	system	doc	docs/keys.md#system	help.system.screenshot_full
 XF86AudioRaiseVolume	system	doc	docs/keys.md#system	help.system.volume_up
 XF86AudioLowerVolume	system	doc	docs/keys.md#system	help.system.volume_down
 XF86MonBrightnessUp	system	doc	docs/keys.md#system	help.system.brightness_up
+SUPER+X	hypr	exec	$HOME/.local/bin/vivac-panel menu	help.hypr.menu

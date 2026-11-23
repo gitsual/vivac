@@ -1,7 +1,10 @@
 cliphist
+gtk4
 kvantum
 nwg-bar
 nwg-look
+python-gobject
 qt6ct
 swappy
+udisks2
 wf-recorder
