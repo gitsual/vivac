@@ -1,8 +1,10 @@
-# Windows Security, drawn by vivac: Defender's state and Malwarebytes' where
-# the desktop already looks (one shield on the bar, one surface in the
-# palette) instead of two programs' own windows, tray icons and reminders.
+# Windows Security, drawn by vivac: what Windows' own Security Center
+# registers (every antivirus and firewall, by name and state), Defender's
+# detail, Avast's and Malwarebytes' where the desktop already looks (one
+# shield on the bar, one surface in the palette) instead of each program's
+# own windows, tray icons and reminders.
 #
-# Nothing here changes how either protects: scripts/apply-system.ps1
+# Nothing here changes how any of them protects: scripts/apply-system.ps1
 # -Defender does that for Defender, and -SecurityQuiet takes Windows
 # Security's tray icon and non-critical notifications away. Threat alerts
 # stay the programs' own, so a detection is never shown only when vivac
@@ -17,6 +19,69 @@ $script:Helper = Join-Path (Split-Path -Parent $PSScriptRoot) 'bin\vivac-securit
 # Signatures older than this are worth a look; Defender itself updates them
 # several times a day.
 $script:StaleDays = 3
+
+# ------------------------------------------------------------ Security Center
+
+# What Windows itself registers in root/SecurityCenter2: one row per
+# antivirus and per firewall, as Windows Security lists them. productState
+# reads as 0xAABBCC: BB is the state (0x10 or 0x11 on; 0x20 snoozed, as
+# Avast reports its shields paused; anything else off, which is also what
+# Defender reports once another antivirus has it in passive mode) and CC
+# says whether the product calls itself up to date (0x00) or not (0x10).
+function Get-VivacSecurityProducts {
+    $out = New-Object System.Collections.Generic.List[object]
+    foreach ($kind in @(@('av', 'AntiVirusProduct'), @('fw', 'FirewallProduct'))) {
+        $items = @(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName $kind[1] -ErrorAction SilentlyContinue)
+        foreach ($i in $items) {
+            $st = [int]$i.productState
+            $bb = ($st -shr 8) -band 0xFF
+            $cc = $st -band 0xFF
+            $state = 'off'
+            if ($bb -eq 0x10 -or $bb -eq 0x11) { $state = 'on' } elseif ($bb -eq 0x20) { $state = 'snoozed' }
+            $name = [string]$i.displayName
+            $vendor = 'other'
+            if ($name -match 'Defender') { $vendor = 'defender' }
+            elseif ($name -match 'Avast') { $vendor = 'avast' }
+            elseif ($name -match 'Malwarebytes') { $vendor = 'malwarebytes' }
+            elseif ($name -match 'Bitdefender') { $vendor = 'bitdefender' }
+            $out.Add([ordered]@{ Kind = $kind[0]; Name = $name; Vendor = $vendor; State = $state; UpToDate = ($cc -eq 0) })
+        }
+    }
+    $out.ToArray()
+}
+
+# ---------------------------------------------------------------------- Avast
+
+# Avast One keeps its settings sealed, so what is read is what it publishes:
+# its service, its version, the newest definitions folder (named by date,
+# yyMMddNN) and its firewall service; whether its shields are on, paused or
+# off is what it tells the Security Center. Its window is AvastUI /gui and
+# its definitions update is ashUpd vps, both of its own.
+$script:AvastDir = Join-Path $env:ProgramFiles 'Avast Software\Suite'
+$script:AvastUI = Join-Path $script:AvastDir 'AvastUI.exe'
+$script:AvastUpd = Join-Path $script:AvastDir 'ashUpd.exe'
+
+# $null when Avast is not installed.
+function Get-VivacAvastStatus {
+    if (-not (Test-Path -LiteralPath $script:AvastUI)) { return $null }
+    $a = [ordered]@{ Running = $false; Version = ''; DefsDays = $null; Firewall = $null; Shields = 'unknown'; UpToDate = $true }
+    $svc = Get-Service -Name 'avast! Antivirus' -ErrorAction SilentlyContinue
+    $a.Running = [bool]($svc -and $svc.Status -eq 'Running')
+    try { $a.Version = [string](Get-Item -LiteralPath $script:AvastUI).VersionInfo.ProductVersion } catch { }
+    $defs = Get-ChildItem -LiteralPath (Join-Path $script:AvastDir 'defs') -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^\d{8}' } | Sort-Object Name -Descending | Select-Object -First 1
+    if ($defs) {
+        try {
+            $d = [datetime]::ParseExact($defs.Name.Substring(0, 6), 'yyMMdd', [Globalization.CultureInfo]::InvariantCulture)
+            $a.DefsDays = [int][Math]::Max(0, [Math]::Floor(((Get-Date).Date - $d).TotalDays))
+        } catch { }
+    }
+    $fw = Get-Service -Name 'avast! Firewall' -ErrorAction SilentlyContinue
+    if ($fw) { $a.Firewall = [bool]($fw.Status -eq 'Running') }
+    $a
+}
+
+# --------------------------------------------------------------- Malwarebytes
 
 # Malwarebytes keeps its state in files any user may read, each signed: a
 # hash on the first line, then JSON. Only the few values below are taken,
@@ -79,20 +144,31 @@ function Get-VivacMalwarebytesStatus {
 # A trial this close to its end is worth a word; after it Malwarebytes only
 # scans by hand.
 $script:MbTrialWarnDays = 5
+$script:MbPaid = @('trial', 'licensed', 'premium')
 
-# What Defender, the firewall and Malwarebytes report, and what of it needs a
-# look. Each problem is 'alert' (the machine is not protected now) or 'warn'
-# (it is, less well than it should be). Nothing here needs elevation.
+# ------------------------------------------------------------------- the state
+
+# What the Security Center, Defender, the firewall, Avast and Malwarebytes
+# report, and what of it needs a look. Each problem is 'alert' (the machine
+# is not protected now) or 'warn' (it is, less well than it should be).
+# Defender off is only an alert while no other antivirus is on: with Avast
+# on, Defender stands in passive mode by Windows' own design. Nothing here
+# needs elevation.
 function Get-VivacSecurityStatus {
     $s = [ordered]@{
-        State = 'ok'; Defender = $false; Realtime = $false; SignatureDays = $null; ScanDays = $null
-        Tamper = $false; Threats = @(); Recent = 0; Firewall = $null; Malwarebytes = $null; Problems = @()
+        State = 'ok'; Products = @(); Defender = $false; Passive = $false; Realtime = $false; SignatureDays = $null; ScanDays = $null
+        Tamper = $false; Threats = @(); Recent = 0; Firewall = $null; FirewallBy = ''; Avast = $null; Malwarebytes = $null; Problems = @()
     }
     $problems = New-Object System.Collections.Generic.List[object]
+    $s.Products = @(Get-VivacSecurityProducts)
+    $others = @($s.Products | Where-Object { $_.Kind -eq 'av' -and $_.Vendor -ne 'defender' })
+    $othersOn = @($others | Where-Object { $_.State -eq 'on' })
+
     $mp = Get-MpComputerStatus -ErrorAction SilentlyContinue
     if ($mp -and $mp.AMServiceEnabled) {
         $s.Defender = $true
         $s.Realtime = [bool]$mp.RealTimeProtectionEnabled
+        $s.Passive = ([string]$mp.AMRunningMode -match 'Passive') -or (-not $s.Realtime -and $others.Count -gt 0)
         $s.SignatureDays = [int][Math]::Floor(((Get-Date) - $mp.AntivirusSignatureLastUpdated).TotalDays)
         # A scan that never happened is reported as uint32's largest value.
         $ages = @(@($mp.QuickScanAge, $mp.FullScanAge) | Where-Object { $null -ne $_ -and [uint32]$_ -ne [uint32]::MaxValue })
@@ -102,26 +178,52 @@ function Get-VivacSecurityStatus {
         $since = (Get-Date).AddDays(-7)
         $s.Recent = @(Get-MpThreatDetection -ErrorAction SilentlyContinue | Where-Object { $_.InitialDetectionTime -gt $since }).Count
         if ($s.Threats.Count) { $problems.Add(@('alert', (T 'security.p_threats' @($s.Threats.Count)))) }
-        if (-not $s.Realtime) { $problems.Add(@('alert', (T 'security.p_realtime'))) }
+        if (-not $s.Realtime -and -not $s.Passive) { $problems.Add(@('alert', (T 'security.p_realtime'))) }
         if ($s.SignatureDays -gt $script:StaleDays) { $problems.Add(@('warn', (T 'security.p_signatures' @($s.SignatureDays)))) }
         if (-not $s.Tamper) { $problems.Add(@('warn', (T 'security.p_tamper'))) }
-    } else {
+    } elseif (-not $othersOn.Count) {
         $problems.Add(@('alert', (T 'security.p_no_defender')))
     }
+    # Somebody has to watch in real time: Defender itself, or another
+    # antivirus the Security Center says is on. Defender in passive mode
+    # behind a paused Avast is nobody.
+    if (-not $s.Realtime -and -not $othersOn.Count) { $problems.Add(@('alert', (T 'security.p_no_realtime'))) }
+
     # The firewall's own COM object answers in milliseconds where
     # Get-NetFirewallProfile takes seconds. Profiles 1, 2 and 4 are domain,
     # private and public; an inbound action of 1 lets unsolicited traffic in.
+    # Another firewall registered and on (Avast's) stands in for a Windows
+    # profile that is off.
+    $fwProducts = @($s.Products | Where-Object { $_.Kind -eq 'fw' })
+    $fwOn = @($fwProducts | Where-Object { $_.State -eq 'on' })
+    $s.FirewallBy = $(if ($fwOn.Count) { $fwOn[0].Name } else { 'Windows' })
     try {
         $fw = New-Object -ComObject HNetCfg.FwPolicy2
         $s.Firewall = -not @(1, 2, 4 | Where-Object { -not $fw.FirewallEnabled($_) -or $fw.DefaultInboundAction($_) -eq 1 }).Count
+        if (-not $s.Firewall -and $fwOn.Count) { $s.Firewall = $true }
         if (-not $s.Firewall) { $problems.Add(@('warn', (T 'security.p_firewall'))) }
     } catch { }
-    # Defender keeps protecting whatever Malwarebytes does, so nothing about
-    # it is more than a warning.
+
+    # Avast: its shields as it reports them to Windows, its service, its
+    # definitions. Paused shields with Defender in passive mode are the alert
+    # above; here they are what to look at.
+    $av = Get-VivacAvastStatus
+    $s.Avast = $av
+    if ($av) {
+        $reg = @($others | Where-Object { $_.Vendor -eq 'avast' }) | Select-Object -First 1
+        if ($reg) { $av.Shields = $reg.State; $av.UpToDate = $reg.UpToDate }
+        if (-not $av.Running) { $problems.Add(@('warn', (T 'security.p_avast_stopped'))) }
+        elseif ($av.Shields -eq 'snoozed') { $problems.Add(@('warn', (T 'security.p_avast_snoozed'))) }
+        elseif ($av.Shields -eq 'off') { $problems.Add(@('warn', (T 'security.p_avast_off'))) }
+        if ($av.DefsDays -gt $script:StaleDays -or -not $av.UpToDate) { $problems.Add(@('warn', (T 'security.p_avast_defs' @($(if ($null -ne $av.DefsDays) { $av.DefsDays } else { '?' }))))) }
+    }
+
+    # Others keep protecting whatever Malwarebytes does, so nothing about it
+    # is more than a warning.
     $mb = Get-VivacMalwarebytesStatus
     $s.Malwarebytes = $mb
     if ($mb) {
-        $paid = @('trial', 'licensed', 'premium') -contains $mb.License
+        $paid = $script:MbPaid -contains $mb.License
         if (-not $mb.Running) { $problems.Add(@('warn', (T 'security.p_mb_stopped'))) }
         elseif ($paid -and $mb.LayersOn -lt $mb.Layers.Count) { $problems.Add(@('warn', (T 'security.p_mb_layers' @($mb.Layers.Count - $mb.LayersOn)))) }
         if ($mb.License -eq 'trial' -and $null -ne $mb.LicenseDays -and $mb.LicenseDays -le $script:MbTrialWarnDays) {
@@ -135,23 +237,72 @@ function Get-VivacSecurityStatus {
     $s
 }
 
+# One word per program, for the tooltip and the cards' chips.
+function Get-ProductWord($s, [string]$Vendor) {
+    switch ($Vendor) {
+        'defender' {
+            if (-not $s.Defender) { return (T 'security.off') }
+            if ($s.Realtime) { return (T 'security.active') }
+            if ($s.Passive) { return (T 'security.passive') }
+            return (T 'security.off')
+        }
+        'avast' {
+            $av = $s.Avast
+            if (-not $av.Running) { return (T 'security.mb_stopped') }
+            if ($av.Shields -eq 'on') { return (T 'security.active') }
+            if ($av.Shields -eq 'snoozed') { return (T 'security.snoozed') }
+            return (T 'security.off')
+        }
+        'malwarebytes' {
+            $mb = $s.Malwarebytes
+            if (-not $mb.Running) { return (T 'security.mb_stopped') }
+            if ($script:MbPaid -contains $mb.License) { return (T 'security.active') }
+            return (T 'security.mb_manual')
+        }
+    }
+    ''
+}
+
+# The programs installed, in the order the cards and the tooltip show them:
+# the one watching in real time first, Defender always, Malwarebytes last.
+function Get-ProductList($s) {
+    $list = New-Object System.Collections.Generic.List[object]
+    if ($s.Avast) { $list.Add(@('avast', 'Avast One')) }
+    $list.Add(@('defender', 'Microsoft Defender'))
+    if ($s.Malwarebytes) { $list.Add(@('malwarebytes', 'Malwarebytes')) }
+    # The comma keeps a one-product list a list: PowerShell unrolls what a
+    # function returns, and a lone pair would come back as two strings.
+    , $list.ToArray()
+}
+
 # What the bar draws: a state, the few words next to the shield (none when
-# all is well, so it recedes like the other gauges) and the tooltip, for
-# Defender and Malwarebytes together. antivirus has the shape
-# bin/vivac-tray.ps1 -Status gives it, so the shield can stand for both.
+# all is well, so it recedes like the other gauges) and the tooltip, one
+# line per program with its word and the firewall's. antivirus keeps the
+# shape bin/vivac-tray.ps1 -Status gave it, so the shield can stand for all.
 function Get-VivacSecuritySummary {
     $s = Get-VivacSecurityStatus
     $text = ''
-    $tip = T 'security.ok'
-    if ($s.Malwarebytes) { $tip = T 'security.ok_both' }
+    $list = Get-ProductList $s
+    $words = @($list | ForEach-Object { "$($_[1]): $(Get-ProductWord $s $_[0])" })
+    $tip = (@($words) + @((T 'security.fw_by' @($s.FirewallBy)))) -join "`n"
     if ($s.Problems.Count) {
         $text = $s.Problems[0][1]
-        $tip = (@($s.Problems | ForEach-Object { $_[1] }) -join ' - ')
+        $tip = (@($s.Problems | ForEach-Object { $_[1] }) -join ' - ') + "`n" + $tip
     }
-    $out = [ordered]@{ state = $s.State; text = $text; tip = $tip; defender = [bool]$s.Defender; antivirus = $null; malwarebytes = $null }
+    $out = [ordered]@{
+        state = $s.State; text = $text; tip = $tip; defender = [bool]$s.Defender; passive = [bool]$s.Passive
+        antivirus = $null; avast = $null; malwarebytes = $null
+        products = @($list | ForEach-Object { [ordered]@{ name = $_[1]; state = (Get-ProductWord $s $_[0]) } })
+        firewall = $s.FirewallBy
+    }
+    $av = $s.Avast
+    if ($av) {
+        $out.avast = [ordered]@{ running = $av.Running; shields = $av.Shields; defsDays = $av.DefsDays; firewall = $av.Firewall }
+        $out.antivirus = [ordered]@{ name = 'Avast'; running = ($av.Running -and $av.Shields -eq 'on') }
+    }
     $mb = $s.Malwarebytes
     if ($mb) {
-        $out.antivirus = [ordered]@{ name = 'Malwarebytes'; running = $mb.Running }
+        if (-not $out.antivirus) { $out.antivirus = [ordered]@{ name = 'Malwarebytes'; running = $mb.Running } }
         $out.malwarebytes = [ordered]@{ running = $mb.Running; layers = $mb.LayersOn; of = $mb.Layers.Count; license = $mb.License; days = $mb.LicenseDays }
     }
     $out
@@ -163,24 +314,34 @@ function Format-Days($Days) {
     T 'security.days_ago' @($Days)
 }
 
+# ----------------------------------------------------------------- the surface
+
 function Show-Security([switch]$NoShow, [hashtable]$Registry) {
     Update-SurfaceContext
     if (-not $NoShow -and -not $Registry) { Enter-SingleInstance 'security' }
     $surfaceName = 'security'
     $p = Get-Palette
     $s = Get-VivacSecurityStatus
+    $av = $s.Avast
     $mb = $s.Malwarebytes
+    $list = Get-ProductList $s
     $tone = @{ ok = $p['COLOR_OK']; warn = $p['COLOR_ACCENT']; alert = $p['COLOR_URGENT']; dim = $p['COLOR_MUTED'] }
     $iconFont = 'Segoe Fluent Icons, Segoe MDL2 Assets'
 
-    # The actions, one tile each, numbered for the keys.
-    $actions = @(
-        @{ Id = 'scan'; Glyph = 0xE721; Sub = 'Defender' },
-        @{ Id = 'update'; Glyph = 0xE895; Sub = 'Defender' },
-        @{ Id = 'history'; Glyph = 0xE81C; Sub = 'Defender' },
-        @{ Id = 'windows'; Glyph = 0xE8A7; Sub = 'Windows' }
-    )
-    if ($mb) { $actions = @($actions[0], $actions[1], @{ Id = 'malwarebytes'; Glyph = 0xEA18; Sub = (T 'security.open') }, $actions[2], $actions[3]) }
+    # The actions, one tile each, numbered for the keys: Defender's scan and
+    # signatures first, then each other program's own window and update,
+    # then Defender's history and Windows Security itself.
+    $actions = New-Object System.Collections.Generic.List[object]
+    $actions.Add(@{ Id = 'scan'; Glyph = 0xE721; Sub = 'Defender' })
+    $actions.Add(@{ Id = 'update'; Glyph = 0xE895; Sub = 'Defender' })
+    if ($av) {
+        $actions.Add(@{ Id = 'avast'; Glyph = 0xEA18; Sub = (T 'security.open') })
+        if (Test-Path -LiteralPath $script:AvastUpd) { $actions.Add(@{ Id = 'avast_update'; Glyph = 0xE895; Sub = 'Avast' }) }
+    }
+    if ($mb) { $actions.Add(@{ Id = 'malwarebytes'; Glyph = 0xEA18; Sub = (T 'security.open') }) }
+    $actions.Add(@{ Id = 'history'; Glyph = 0xE81C; Sub = 'Defender' })
+    $actions.Add(@{ Id = 'windows'; Glyph = 0xE8A7; Sub = 'Windows' })
+    $actions = $actions.ToArray()
     $tiles = ''
     for ($i = 0; $i -lt $actions.Count; $i++) {
         $a = $actions[$i]
@@ -214,14 +375,19 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
 </Border>
 "@
     }
-    $cards = (& $card 'Microsoft Defender' 'DefRows' 'DefChip' '0')
-    $width = 560
-    $cardCols = '<ColumnDefinition/>'
-    if ($mb) {
-        $cards += (& $card 'Malwarebytes' 'MbRows' 'MbChip' '2')
-        $cardCols = '<ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/>'
-        $width = 900
+    # One column per card, a 12-pixel gutter between; the window grows 340
+    # pixels per card past the first.
+    $cards = ''
+    $cardCols = ''
+    $boxes = @{ avast = @('AvRows', 'AvChip'); defender = @('DefRows', 'DefChip'); malwarebytes = @('MbRows', 'MbChip') }
+    for ($i = 0; $i -lt $list.Count; $i++) {
+        $b = $boxes[$list[$i][0]]
+        if ($i) { $cardCols += '<ColumnDefinition Width="12"/>' }
+        $cardCols += '<ColumnDefinition/>'
+        $cards += (& $card $list[$i][1] $b[0] $b[1] ([string](2 * $i)))
     }
+    $width = 560 + 340 * ($list.Count - 1)
+    if ($actions.Count -gt 5) { $width = [Math]::Max($width, 120 * $actions.Count + 40) }
 
     $body = @"
 <StackPanel>
@@ -250,7 +416,7 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
     $window = New-VivacWindow (Get-WindowXaml 'vivac - security' $width 600 (Get-KitPanelXaml $p 0xEA18 (T 'security.title') $body $hints))
     Set-KitDropDown $window
     $find = { param($n) $window.FindName($n) }
-    if ($mb) { (& $find 'Subtitle').Text = T 'security.subtitle_both' } else { (& $find 'Subtitle').Text = 'Microsoft Defender' }
+    (& $find 'Subtitle').Text = (@($list | ForEach-Object { $_[1] }) -join "  $([char]0x00B7)  ")
 
     # The verdict: the state in words, and what to look at.
     $verdict = & $find 'Verdict'
@@ -261,8 +427,9 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
     $vt = & $find 'VerdictTitle'
     $vt.Text = T "security.verdict_$($s.State)"
     $vt.Foreground = "#$($tone[$s.State])"
+    $words = @($list | ForEach-Object { "$($_[1]) $(Get-ProductWord $s $_[0])" })
     if ($s.Problems.Count) { (& $find 'VerdictText').Text = (@($s.Problems | ForEach-Object { $_[1] }) -join '  -  ') }
-    elseif ($mb) { (& $find 'VerdictText').Text = T 'security.verdict_ok_both' }
+    elseif ($list.Count -gt 1) { (& $find 'VerdictText').Text = T 'security.verdict_ok_many' @(($words -join ', ')) }
     else { (& $find 'VerdictText').Text = T 'security.verdict_ok_one' }
 
     $chip = {
@@ -285,12 +452,18 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
     }
     $onOff = { param($on, $bad) if ($on) { @((T 'security.on'), 'ok') } else { @((T 'security.off'), $bad) } }
 
+    # Defender: its chip says active, passive (another antivirus has the
+    # real-time watch, by Windows' design) or off.
     $def = & $find 'DefRows'
     if ($s.Defender) {
-        $chipTone = 'ok'; if ($s.State -eq 'alert') { $chipTone = 'alert' }
-        & $chip 'DefChip' (T 'security.active') $chipTone
-        $v = & $onOff $s.Realtime 'alert'
-        & $row $def 0xEA18 (T 'security.realtime') $v[0] $v[1]
+        if ($s.Realtime) { & $chip 'DefChip' (T 'security.active') $(if ($s.State -eq 'alert') { 'alert' } else { 'ok' }) }
+        elseif ($s.Passive) { & $chip 'DefChip' (T 'security.passive') 'dim' }
+        else { & $chip 'DefChip' (T 'security.off') 'alert' }
+        if ($s.Realtime) { & $row $def 0xEA18 (T 'security.realtime') (T 'security.on') 'ok' }
+        elseif ($s.Passive) {
+            $by = @($list | Where-Object { $_[0] -ne 'defender' -and $_[0] -ne 'malwarebytes' } | ForEach-Object { $_[1] })
+            & $row $def 0xEA18 (T 'security.realtime') (T 'security.passive') 'dim' $(if ($by.Count) { T 'security.passive_detail' @($by[0]) } else { '' })
+        } else { & $row $def 0xEA18 (T 'security.realtime') (T 'security.off') 'alert' }
         $sigTone = 'ok'; if ($s.SignatureDays -gt $script:StaleDays) { $sigTone = 'warn' }
         & $row $def 0xE895 (T 'security.signatures') (Format-Days $s.SignatureDays) $sigTone
         & $row $def 0xE721 (T 'security.last_scan') (Format-Days $s.ScanDays) 'dim'
@@ -305,17 +478,40 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
         & $row $def 0xE783 'Defender' (T 'security.p_no_defender') 'alert'
     }
     if ($null -ne $s.Firewall) {
-        if ($s.Firewall) { & $row $def 0xE968 (T 'security.firewall') (T 'security.firewall_ok') 'ok' }
+        if ($s.Firewall) { & $row $def 0xE968 (T 'security.firewall') (T 'security.firewall_ok') 'ok' $s.FirewallBy }
         else { & $row $def 0xE968 (T 'security.firewall') (T 'security.firewall_open') 'warn' }
+    }
+
+    # Avast: shields as the Security Center sees them, its service and
+    # version, its definitions, its own firewall.
+    if ($av) {
+        $box = & $find 'AvRows'
+        $word = Get-ProductWord $s 'avast'
+        $avTone = 'ok'
+        if (-not $av.Running -or $av.Shields -eq 'off') { $avTone = 'alert' } elseif ($av.Shields -eq 'snoozed') { $avTone = 'warn' }
+        if ($avTone -eq 'alert' -and $s.State -ne 'alert') { $avTone = 'warn' }
+        & $chip 'AvChip' $word $avTone
+        & $row $box 0xEA18 (T 'security.shields') $word $avTone
+        $svcTone = 'ok'; $svc = T 'security.mb_running'
+        if (-not $av.Running) { $svcTone = 'warn'; $svc = T 'security.mb_stopped' }
+        & $row $box 0xE9D9 (T 'security.mb_service') $svc $svcTone ("v$($av.Version)")
+        $defTone = 'ok'; $defSub = ''
+        if ($av.DefsDays -gt $script:StaleDays) { $defTone = 'warn' }
+        if (-not $av.UpToDate) { $defTone = 'warn'; $defSub = T 'security.wsc_outdated' }
+        & $row $box 0xE895 (T 'security.defs') (Format-Days $av.DefsDays) $defTone $defSub
+        if ($null -ne $av.Firewall) {
+            $v = & $onOff $av.Firewall 'dim'
+            & $row $box 0xE968 (T 'security.avast_firewall') $v[0] $v[1]
+        }
     }
 
     if ($mb) {
         $box = & $find 'MbRows'
-        if ($mb.Running) { & $chip 'MbChip' (T 'security.mb_running') 'ok' } else { & $chip 'MbChip' (T 'security.mb_stopped') 'warn' }
+        if ($mb.Running) { & $chip 'MbChip' (Get-ProductWord $s 'malwarebytes') $(if ($script:MbPaid -contains $mb.License) { 'ok' } else { 'dim' }) } else { & $chip 'MbChip' (T 'security.mb_stopped') 'warn' }
         $svcTone = 'ok'; $svc = T 'security.mb_running'
         if (-not $mb.Running) { $svcTone = 'warn'; $svc = T 'security.mb_stopped' }
         & $row $box 0xE9D9 (T 'security.mb_service') $svc $svcTone ("v$($mb.Version)")
-        $paid = @('trial', 'licensed', 'premium') -contains $mb.License
+        $paid = $script:MbPaid -contains $mb.License
         $off = @($mb.Layers | Where-Object { -not $_.On } | ForEach-Object { T "security.mb_layer_$($_.Id)" })
         if ($paid) {
             $layerTone = 'ok'; if ($mb.LayersOn -lt $mb.Layers.Count) { $layerTone = 'warn' }
@@ -336,8 +532,8 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
                 $days = '?'; if ($null -ne $mb.LicenseDays) { $days = [Math]::Max(0, $mb.LicenseDays) }
                 & $row $box 0xE8D7 (T 'security.mb_license') (T 'security.mb_lic_trial' @($days)) $licTone
             }
-            { @('licensed', 'premium') -contains $_ } { & $row $box 0xE8D7 (T 'security.mb_license') 'Premium' 'ok' }
-            'expired' { & $row $box 0xE8D7 (T 'security.mb_license') (T 'security.mb_lic_expired') 'warn' }
+            { $script:MbPaid -contains $_ } { & $row $box 0xE8D7 (T 'security.mb_license') 'Premium' 'ok' }
+            { $_ -match 'expired' } { & $row $box 0xE8D7 (T 'security.mb_license') (T 'security.mb_lic_expired') 'dim' }
             default { & $row $box 0xE8D7 (T 'security.mb_license') (T 'security.mb_lic_free') 'dim' }
         }
     }
@@ -353,7 +549,8 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
     # Scans and updates run in a process of their own and report back with a
     # vivac notification, so closing this window does not stop them.
     # Malwarebytes' command line needs elevation and documents no scan for
-    # this edition, so its scan is started from its own window.
+    # this edition, so its scan is started from its own window; Avast's
+    # definitions update is its own ashUpd, silent, and its scans its window.
     $run = {
         param($i)
         $window.Close()
@@ -363,6 +560,8 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
             'history'      { Start-Process 'windowsdefender://threat' }
             'windows'      { Start-Process 'windowsdefender:' }
             'malwarebytes' { Start-Process -FilePath $script:MbExe }
+            'avast'        { Start-Process -FilePath $script:AvastUI -ArgumentList '/gui' }
+            'avast_update' { Start-Process -FilePath $script:AvastUpd -ArgumentList 'vps' -WindowStyle Hidden }
         }
     }
     for ($i = 0; $i -lt $actions.Count; $i++) {
@@ -387,4 +586,4 @@ function Show-Security([switch]$NoShow, [hashtable]$Registry) {
     [void]$window.ShowDialog()
 }
 
-Export-ModuleMember -Function Get-VivacSecurityStatus, Get-VivacMalwarebytesStatus, Get-VivacSecuritySummary, Show-Security
+Export-ModuleMember -Function Get-VivacSecurityProducts, Get-VivacSecurityStatus, Get-VivacAvastStatus, Get-VivacMalwarebytesStatus, Get-VivacSecuritySummary, Show-Security

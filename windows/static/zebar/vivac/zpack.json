@@ -24,6 +24,7 @@
       },
       "privileges": {
         "shellCommands": [
+          { "program": "conhost.exe", "argsRegex": "^--headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File C:\\\\Users\\\\alvar\\\\bin\\\\sesiones\\.ps1 (restaurar|guardar)$" },
           {
             "program": "cmd.exe",
             "argsRegex": "^/c echo (theme|power|help|sound|bluetooth|security|network|updates|phone)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul \\|\\| conhost\\.exe --headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac\\.ps1 (theme|power|help|sound|bluetooth|security|network|updates|phone)$"
@@ -34,7 +35,7 @@
           },
           {
             "program": "powershell.exe",
-            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-tray\\.ps1 (-Status|-Updates|-Bluetooth|-Eject [A-Z]:|-Open (bluetooth|updates|antivirus))$"
+            "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-tray\\.ps1 (-Status|-Drives|-Updates|-Bluetooth|-Eject [A-Z]:|-Browse [A-Z]:|-DriveMenu [A-Z]:|-Open (bluetooth|updates|antivirus))$"
           },
           {
             "program": "powershell.exe",
