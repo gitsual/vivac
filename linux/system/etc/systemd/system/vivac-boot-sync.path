@@ -1,0 +1,12 @@
+# Starts vivac-boot-sync.service when the user stages a theme.
+# scripts/boot-stage.sh writes palette.conf last, by rename, so one switch is
+# one trigger.
+[Unit]
+Description=vivac: a theme was staged for the boot menu
+
+[Path]
+PathChanged=/var/lib/vivac/boot-stage/palette.conf
+Unit=vivac-boot-sync.service
+
+[Install]
+WantedBy=paths.target

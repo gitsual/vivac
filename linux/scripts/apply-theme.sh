@@ -199,6 +199,14 @@ if $reload; then
 	# until they are closed. This is the signal kitty sends itself.
 	pkill -SIGUSR1 -x kitty >/dev/null 2>&1 || true
 	timeout 5 dunstctl reload >/dev/null 2>&1 || true
+	# The boot menu follows the theme too, when the machine has the sync
+	# installed (docs/boot-sync.md): staging is the user's half, the root
+	# service picks it up from there. Nothing to do, and nothing to break,
+	# where the stage folder is not there.
+	boot_stage="${VIVAC_BOOT_STAGE:-/var/lib/vivac/boot-stage}"
+	if [[ -d "$boot_stage" && -w "$boot_stage" && -f "$repo_root/scripts/boot-stage.sh" ]]; then
+		setsid bash "$repo_root/scripts/boot-stage.sh" --stage "$boot_stage" --theme "$theme" >/dev/null 2>&1 &
+	fi
 	# base46 compiles its highlights once and caches the bytecode. The theme
 	# file just re-rendered keeps its name, so nothing in that cache looks
 	# stale to it and the next editor would start in the previous palette.
