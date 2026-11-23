@@ -15,9 +15,12 @@ What it gives today:
 - **Photos to the chat.** `vivac-photo-get` through `vivac-gate`, and
   `vivac-phone-pull` on the PC, so Hermes can send what the camera took.
 
+- **Termux wears the theme.** The deploy writes `~/.termux/colors.properties` from the
+  theme named in `~/.config/vivac/settings`: the terminal background and foreground
+  Linux's kitty wears, and the accent as the cursor.
+
 Coming in the next phases: alerts from the phone to WhatsApp, the phone as a
-`vivac link` peer, and themes (Termux colours plus a wallpaper that Material You
-turns into system colours).
+`vivac link` peer, and a wallpaper that Material You turns into system colours.
 
 ## 1. On the phone (once)
 
