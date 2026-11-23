@@ -27,7 +27,7 @@ SELF = Path(__file__).resolve()
 REPO = Path(os.environ.get("VIVAC_REPO") or SELF.parents[4])
 sys.path.insert(0, str(REPO / "lib"))
 
-PANELS = ("sound", "usb", "security", "clipboard", "calendar", "forecast", "system", "osd", "updates", "menu")
+PANELS = ("sound", "usb", "security", "clipboard", "calendar", "forecast", "system", "osd", "updates", "menu", "power", "theme", "network", "bluetooth")
 
 
 def main(argv: list[str]) -> int:

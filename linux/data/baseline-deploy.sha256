@@ -24,10 +24,10 @@ a6e7674979d2751e40c52a0b0f984bfe601ac21438eaeb4831fc078a48abc23f  dotfiles/bridg
 d8693d4cfe2ee4a6ddae2aee5cdfbd02b886ed4aa92630653d0191cb5391d182  dotfiles/bridge/.local/bin/vivac-phone-pull
 13c3fb6a28242f0c50b95cd13b0b5bea69d53117385585f5e6f9fdbc155fc037  dotfiles/bridge/.local/bin/vivac-reboot-other
 f69058aa3305f02195637654679bd12f2d8ccaae01217764c6e5e3922d11b8b4  dotfiles/bridge/.local/share/vivac/switch-login.sh
-043978e2eb4bac9e4750697a1aa94ae2a82c8b2ccc015764ad890c0ed2415e72  dotfiles/dunst/.config/dunst/dunstrc
+f6c74b1c25aa582c2e45f33431854a945726c8138d2bda7a8eefa1e3511619dd  dotfiles/dunst/.config/dunst/dunstrc
 675a3b616ec6bc42bf06674c4b11f3e9e6fc60562d99dc0f6f6d4d255d74be06  dotfiles/hypr/.config/hypr/hypridle.conf
-ff252b829d8bcca7d67e2179820e3e52b1a4c0cfe11471da7403f1253b23d6ba  dotfiles/hypr/.config/hypr/hyprland.lua
-f6fb631aef275fc624a390f5b9281168497f596a92e9e687c0618c3674bc54e8  dotfiles/hypr/.config/hypr/hyprlock.conf
+9b2f4208a459b57efcf4a7e96c47fff4bbab1b649028a2d776221af204b6c58c  dotfiles/hypr/.config/hypr/hyprland.lua
+afd161d932eb95dce3f44aced85f64f656913fd02d332d5a3048b4356080b7d6  dotfiles/hypr/.config/hypr/hyprlock.conf
 86aaa6f67e286bdb49b5a63cab6d65133f6686d814b0ff509142f1302dea3b0a  dotfiles/hypr/.config/hypr/hyprpaper.conf
 366af025965f0db167d6fe763bd002a5b5a8b558f07ad3c6cf4d5890dcaa1518  dotfiles/hypr/.config/hypr/local.lua.example
 7e9935040c68504651ed755dc07a143e4ee66ab0a930b7f8394214844a465ee5  dotfiles/hypr/.config/hypr/scripts/dispatch.sh
@@ -62,9 +62,9 @@ f9522fbc197ec8a3fbc9c197bfeeb839f1a5e8307f8b5718f9db53c641a3686d  dotfiles/ricer
 f83792888aaa59994790ed530bb7dafcda08e3a0f3f97774839c8a3faf4dec86  dotfiles/ricer/.config/nwg-bar/icons/suspend.svg
 a163273069081fc3949fea32ed15907e77e00d82a7e570456752ef280409d10c  dotfiles/ricer/.config/nwg-bar/style.css
 71359fb87ea2a74371a1e856de8c657405e18f39093129bc6f6bd683978edaf6  dotfiles/ricer/.local/bin/vivac-ask
-522f771d34f17f197fd0c81709e8a6f1b428cbf6b89b9b8160f05028f405f6eb  dotfiles/ricer/.local/bin/vivac-panel
-b3afd5a2c0ab32532ebe629773f3486148c2bd26eac1b076086a91bdf95a9fd8  dotfiles/ricer/.local/bin/vivac-power
-19b0c6077ca8a7f2b441f60b05c52ba5af6c7163ef2cf669cc3e610b4c583c5e  dotfiles/ricer/.local/bin/vivac-theme
+35d73316ee953e5811f632248cc5fd4efc34a5299d49fa157a346123bbb127ab  dotfiles/ricer/.local/bin/vivac-panel
+d99519f77dc07b3383977c63393c66a36a80bd53ba2dd70a9c84290d1cb816ab  dotfiles/ricer/.local/bin/vivac-power
+78a926443169e779054a612191012bfca2695c1fd374600b9145b5b398d588b3  dotfiles/ricer/.local/bin/vivac-theme
 090766eccd45ca35ee79c791aeab3c383a6bbd1056b9d1c8ee15ca5dd7121f56  dotfiles/rofi/.config/rofi/config.rasi
 0e9510c7a93a30cdfd96f9e809b452d5e73153779a916d4c0338310463f8bdbd  dotfiles/rofi/.config/rofi/power/powermenu.sh
 7052c1d2e4c778acbbcdafd72a91e444481be1ffef37c1e988281366081cc521  dotfiles/rofi/.config/rofi/themes/bad-romance.rasi

@@ -163,6 +163,14 @@ if $icons_only; then
 	exit 0
 fi
 
+# The tile panel (vivac-panel power) asks twice before reboot and power off,
+# which nwg-bar cannot do; nwg-bar stays as the fallback without GTK 4 or a
+# panel launcher, and is what VIVAC_POWER_NWG=1 asks for.
+if [[ -z "${VIVAC_POWER_NWG:-}" ]] && command -v vivac-panel >/dev/null 2>&1 &&
+	python3 -c 'import gi; gi.require_version("Gtk", "4.0")' 2>/dev/null; then
+	exec vivac-panel power
+fi
+
 mkdir -p -- "$runtime"
 rasterize
 bar="$runtime/nwg-bar.json"

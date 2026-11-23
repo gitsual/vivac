@@ -1,34 +1,51 @@
 [global]
-    width = (300, 420)
-    height = 100
-    offset = 15x15
+    # The common notification card (Comun-Notificacion): icon tile on the
+    # left, "app" small and dim, the summary bold, the body dim, a thin
+    # progress line along the bottom. dunst has no clock line and no
+    # per-part colour except through markup, so the time is omitted and the
+    # dim parts are spans. Top right, just under the 48 px bar.
+    width = (340, 440)
+    height = (96, 200)
+    offset = (12, 56)
     origin = top-right
-    transparency = 10
-    corner_radius = 10
+    transparency = 0
+    corner_radius = 14
     frame_width = 2
-    gap_size = 5
+    gap_size = 8
+    progress_bar = true
+    progress_bar_height = 6
+    progress_bar_frame_width = 0
+    progress_bar_corner_radius = 3
+    progress_bar_horizontal_alignment = left
+    highlight = "#E1777D"
+    format = "<span size='small' foreground='#C0AD95'>%a</span>\n<b>%s</b>\n<span foreground='#C0AD95'>%b</span>"
+    show_indicators = false
     font = JetBrains Mono Nerd Font 10
     icon_theme = Papirus
     icon_position = left
     min_icon_size = 48
     max_icon_size = 48
     text_icon_padding = 12
-    padding = 12
-    horizontal_padding = 12
+    padding = 14
+    horizontal_padding = 16
     vertical_alignment = center
     frame_color = "#E1777D"
     separator_color = "#979367"
     background = "#2D1F2D"
     foreground = "#E8D5AB"
 [urgency_low]
-    frame_color = "#979367"
+    frame_color = "#7C606E"
     timeout = 5
 [urgency_normal]
     frame_color = "#E1777D"
     timeout = 10
+# Critical changes colour and shape: the urgent frame, a warning glyph before
+# the summary and a thicker frame, so it never relies on colour alone.
 [urgency_critical]
-    foreground = "#E1777D"
+    foreground = "#E8D5AB"
     frame_color = "#BD6161"
+    highlight = "#BD6161"
+    format = "<span size='small' foreground='#BD6161'>󰀦 %a</span>\n<b>%s</b>\n<span foreground='#C0AD95'>%b</span>"
     timeout = 0
 # The phone's notifications, as KDE Connect passes them on (vivac-phone):
 # the palette and timeouts above like any other, with a phone glyph before
@@ -36,4 +53,4 @@
 # request comes the same way, with its Accept and Reject actions.
 [vivac-phone]
     appname = "KDE Connect"
-    format = "󰄜 <b>%s</b>\n%b"
+    format = "<span size='small' foreground='#C0AD95'>󰄜 %a</span>\n<b>%s</b>\n<span foreground='#C0AD95'>%b</span>"

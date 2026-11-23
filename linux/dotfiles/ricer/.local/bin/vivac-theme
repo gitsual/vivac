@@ -102,6 +102,14 @@ pick_picture() {
 		rofi -dmenu -i -p "$(i18n_get picture.prompt)"
 }
 
+# The grid panel (vivac-panel theme) is the menu where there is a screen and
+# GTK 4 to draw it; the rofi list below stays as the fallback, and is what
+# VIVAC_THEME_ROFI=1 asks for. --print and from-image never come here.
+if [[ -z "${VIVAC_THEME_ROFI:-}" && -n "${WAYLAND_DISPLAY:-${DISPLAY:-}}" ]] &&
+	command -v vivac-panel >/dev/null 2>&1 && python3 -c 'import gi; gi.require_version("Gtk", "4.0")' 2>/dev/null; then
+	exec vivac-panel theme
+fi
+
 current="$(sed -nE 's/^theme=(.*)$/\1/p' \
 	"${XDG_CONFIG_HOME:-$HOME/.config}/vivac/settings" 2>/dev/null | tail -1)"
 selected=0
