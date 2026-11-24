@@ -58,7 +58,7 @@ function Get-VivacHoverNow { [long]([Diagnostics.Stopwatch]::GetTimestamp() * 10
 # as resident windows are named, so the pipe cannot be made to open anything
 # else this way; usb carries the drive (usb:G:) its menu is about.
 function Resolve-VivacHoverVerb([string]$Text) {
-    $m = [regex]::Match($Text, '^hover(-leave)? (network(?: (?:wifi|ethernet))?|bluetooth|sound|security|theme|power|updates|usb:[a-z]:)$')
+    $m = [regex]::Match($Text, '^hover(-leave)? (network(?: (?:wifi|ethernet))?|bluetooth|sound|security|theme|power|updates|phone|sessions|usb:[a-z]:)$')
     if (-not $m.Success) { return $null }
     $panel = $m.Groups[2].Value
     # The network panel has two tabs, named by the pill the pointer is on.
@@ -90,7 +90,7 @@ function Test-VivacPumpVerb([string]$Text, [hashtable]$Open) {
 
 # Verbs that share a window share its slot in the host's registry.
 function Get-VivacHoverKey([string]$Verb) {
-    switch ($Verb) { 'phone' { 'menu' } 'switch' { 'power' } default { $Verb } }
+    switch ($Verb) { 'switch' { 'power' } default { $Verb } }
 }
 
 # What a hover verb does to the host's windows: 'open' (the caller builds the

@@ -497,8 +497,8 @@ function modulePill(m, out) {
     case 'updates': return updatesPill();
     case 'phone': return phonePill();
     case 'theme': return `<button class="pill theme" data-act="theme" title="${esc(config.labels.theme)}">${G.theme}</button>`;
-    // sesiones (13-11): clic = restaurar la última foto de los escritorios; clic derecho = guardarla (bin\sesiones.ps1)
-    case 'sesiones': return `<button class="pill sesiones" data-act="sesiones" title="Sesiones · clic: restaurar · clic derecho: guardar">${G.sesiones}</button>`;
+    // sesiones (13-11): clic = panel de sesiones (restaurar pide confirmación); clic derecho = guardar la foto (bin\sesiones.ps1)
+    case 'sesiones': return `<button class="pill sesiones" data-act="sesiones">${G.sesiones}</button>`;
     case 'power': return `<button class="pill power" data-act="power" title="${esc(config.labels.power)}">${G.power}</button>`;
   }
   return '';
@@ -534,7 +534,9 @@ function drawRight(out) {
       });
     } else if (act === 'sesiones') {
       const ses = (verbo) => zebar.shellSpawn('conhost.exe', `--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\Users\\alvar\\bin\\sesiones.ps1 ${verbo}`);
-      b.addEventListener('click', () => ses('restaurar'));
+      // A click opens the panel (what a restore brings back, asked twice);
+      // only the right click acts on its own, as it always did.
+      b.addEventListener('click', () => launch('sessions'));
       b.addEventListener('contextmenu', (e) => { e.preventDefault(); ses('guardar'); });
     } else if (act === 'sys') {
       // Unfolds the gauges, or folds them; the right button opens the panel.
