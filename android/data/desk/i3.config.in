@@ -1,0 +1,74 @@
+# The phone's own desktop (android/bin/vivac-desk): i3 on Termux:X11 with the
+# computer's Hyprland keys and look: gaps, an accent border on the focused
+# window, rounded corners and shadows (picom), the theme's wallpaper and a bar
+# like the computer's. vivac-desk renders it from the theme in
+# ~/.config/vivac/settings each time the desktop starts.
+
+set $mod Mod4
+font pango:JetBrainsMono Nerd Font 20
+floating_modifier $mod
+focus_follows_mouse no
+default_border pixel 4
+default_floating_border pixel 4
+hide_edge_borders none
+gaps inner 16
+gaps outer 8
+gaps top 4
+
+# class                 border         background     text           indicator      child_border
+client.focused          #@COLOR_ACCENT@ #@COLOR_BG@ #@COLOR_FG@ #@COLOR_ACCENT@ #@COLOR_ACCENT@
+client.focused_inactive #@COLOR_SURFACE@ #@COLOR_BG@ #@COLOR_FG_DIM@ #@COLOR_SURFACE@ #@COLOR_SURFACE@
+client.unfocused        #@COLOR_BORDER_INACTIVE@ #@COLOR_BG@ #@COLOR_MUTED@ #@COLOR_BORDER_INACTIVE@ #@COLOR_BORDER_INACTIVE@
+client.urgent           #@COLOR_URGENT@ #@COLOR_BG@ #@COLOR_FG@ #@COLOR_URGENT@ #@COLOR_URGENT@
+client.background       #@COLOR_BG@
+
+bindsym $mod+Return exec --no-startup-id sh -c 'kitty -c "@DESK@/kitty.conf" || st'
+bindsym $mod+r exec --no-startup-id rofi -show drun -config "@DESK@/rofi.rasi"
+bindsym $mod+d exec --no-startup-id rofi -show run -config "@DESK@/rofi.rasi"
+bindsym $mod+e exec --no-startup-id sh -c 'kitty -c "@DESK@/kitty.conf" -e nvim || st -e nvim'
+bindsym $mod+q kill
+bindsym $mod+f fullscreen toggle
+bindsym $mod+space floating toggle
+bindsym $mod+j layout toggle split
+bindsym $mod+Shift+r restart
+bindsym $mod+Shift+e exec --no-startup-id vivac-desk menu
+
+bindsym $mod+Left focus left
+bindsym $mod+Right focus right
+bindsym $mod+Up focus up
+bindsym $mod+Down focus down
+bindsym $mod+Shift+Left move left
+bindsym $mod+Shift+Right move right
+bindsym $mod+Shift+Up move up
+bindsym $mod+Shift+Down move down
+bindsym $mod+Mod1+Left resize shrink width 10 px
+bindsym $mod+Mod1+Right resize grow width 10 px
+bindsym $mod+Mod1+Up resize shrink height 10 px
+bindsym $mod+Mod1+Down resize grow height 10 px
+
+bindsym $mod+1 workspace number 1
+bindsym $mod+2 workspace number 2
+bindsym $mod+3 workspace number 3
+bindsym $mod+4 workspace number 4
+bindsym $mod+5 workspace number 5
+bindsym $mod+6 workspace number 6
+bindsym $mod+7 workspace number 7
+bindsym $mod+8 workspace number 8
+bindsym $mod+9 workspace number 9
+bindsym $mod+0 workspace number 10
+bindsym $mod+Shift+1 move container to workspace number 1
+bindsym $mod+Shift+2 move container to workspace number 2
+bindsym $mod+Shift+3 move container to workspace number 3
+bindsym $mod+Shift+4 move container to workspace number 4
+bindsym $mod+Shift+5 move container to workspace number 5
+bindsym $mod+Shift+6 move container to workspace number 6
+bindsym $mod+Shift+7 move container to workspace number 7
+bindsym $mod+Shift+8 move container to workspace number 8
+bindsym $mod+Shift+9 move container to workspace number 9
+bindsym $mod+Shift+0 move container to workspace number 10
+
+# The look: wallpaper, compositor, bar. exec_always so $mod+Shift+r redraws.
+exec_always --no-startup-id feh --no-fehbg --bg-fill "@WALLPAPER@"
+exec_always --no-startup-id sh -c 'pkill -x picom; exec picom --config "@DESK@/picom.conf"'
+exec_always --no-startup-id sh -c 'pkill -x polybar; exec polybar -c "@DESK@/polybar.ini" vivac'
+exec --no-startup-id sh -c 'kitty -c "@DESK@/kitty.conf" || st'

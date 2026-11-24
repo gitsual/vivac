@@ -1,0 +1,20 @@
+# The phone's own desktop terminal (android/bin/vivac-desk): the computer's
+# kitty, at the phone's scale. Rendered from the theme each time the desktop
+# starts.
+font_family Fira Code
+bold_font Fira Code Bold
+font_size 20.0
+enable_audio_bell no
+window_padding_width 16
+foreground #@TERMINAL_FG:lower@
+background #@TERMINAL_BG:lower@
+background_opacity 0.92
+selection_background #@COLOR_ACCENT:lower@
+selection_foreground #@COLOR_BG:lower@
+cursor #@COLOR_ACCENT:lower@
+cursor_shape beam
+cursor_blink_interval 0.5
+copy_on_select yes
+url_style curly
+url_color #@COLOR_INFO:lower@
+mouse_hide_wait 3.0

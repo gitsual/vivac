@@ -28,8 +28,11 @@ printf 'background=#000000\n' >"$HOME/.termux/colors.properties"
 printf 'theme=metropolis\nprompt_user=someone\nlanguage=es\n' >"$HOME/.config/vivac/settings"
 printf 'alias ll="ls -l"\n' >"$HOME/.bashrc"
 printf 'extra-keys = [[ESC, TAB]]\nterminal-cursor-style = block\n' >"$HOME/.termux/termux.properties"
-mkdir -p "$HOME/.config/i3"
+mkdir -p "$HOME/.config/i3" "$HOME/.config/polybar"
 printf 'my own i3\n' >"$HOME/.config/i3/config"
+# An earlier deploy linked the desktop's settings here; those files are now
+# rendered by vivac-desk instead and the links point at nothing.
+ln -s "$repo_root/data/desk/polybar.ini" "$HOME/.config/polybar/config.ini"
 
 # The font comes from the network: a fake curl hands over a fixture, whose
 # checksum stands in for the pinned one; a wrong checksum installs nothing.
@@ -107,16 +110,14 @@ grep -q 'Written by vivac' "$colors" || fail "colours file not marked as vivac's
 mine="$(find "$HOME/.local/state/vivac/backups" -type f -name colors.properties)"
 [[ -n "$mine" && "$(cat "$mine")" == 'background=#000000' ]] || fail "the user's own colours were not backed up"
 
-# The phone's own desktop (vivac-desk) reads its i3 and polybar settings
-# from the repository; an i3 config of the user's own is backed up first.
-[[ "$(readlink -- "$HOME/.config/i3/config")" == "$repo_root/data/desk/i3.config" ]] ||
-    fail "i3 config not linked to the repository's"
-[[ "$(readlink -- "$HOME/.config/polybar/config.ini")" == "$repo_root/data/desk/polybar.ini" ]] ||
-    fail "polybar config not linked to the repository's"
+# The phone's own desktop (vivac-desk) renders its settings into its own
+# folder when it starts: an i3 config of the user's own is left as it is, and
+# a link an earlier deploy left, now pointing at nothing, is moved aside.
+[[ "$(cat "$HOME/.config/i3/config")" == 'my own i3' ]] || fail "the user's own i3 config was touched"
+[[ ! -e "$HOME/.config/polybar/config.ini" && ! -L "$HOME/.config/polybar/config.ini" ]] ||
+    fail "the stale polybar link was left"
 [[ "$(readlink -- "$HOME/.claude/CLAUDE.md")" == "$repo_root/data/claude/CLAUDE.md" ]] ||
     fail "Claude Code on the phone does not read the phone's CLAUDE.md"
-mine="$(find "$HOME/.local/state/vivac/backups" -type f -path '*i3/config')"
-[[ -n "$mine" && "$(cat "$mine")" == 'my own i3' ]] || fail "the user's own i3 config was not backed up"
 
 : >"$CURL_LOG"
 after="$(snapshot)"

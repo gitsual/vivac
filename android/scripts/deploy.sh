@@ -220,9 +220,10 @@ if [[ "$(readlink -- "$button" 2>/dev/null)" != "$here/shortcuts/vivac-screen" ]
 	say "linked $button"
 fi
 
-# 9. The phone's own desktop (bin/vivac-desk): i3 and polybar read their
-# settings from the repository, and fontconfig finds kitty's Fira Code where
-# step 5 put it. A file of the user's own in the way is backed up first.
+# 9. The phone's own desktop (bin/vivac-desk) renders its settings from the
+# theme into ~/.config/vivac/desk/ each time it starts, so nothing is linked
+# for it here. Links an earlier deploy put in ~/.config/i3 and
+# ~/.config/polybar point at files that are gone: they are moved aside.
 link() {
 	local src="$1" dest="$2"
 	[[ -L "$dest" && "$(readlink -- "$dest")" == "$src" ]] && return 0
@@ -231,8 +232,9 @@ link() {
 	act ln -s -- "$src" "$dest"
 	say "linked $dest"
 }
-link "$here/data/desk/i3.config" "$HOME/.config/i3/config"
-link "$here/data/desk/polybar.ini" "$HOME/.config/polybar/config.ini"
+for stale in "$HOME/.config/i3/config" "$HOME/.config/polybar/config.ini"; do
+	[[ -L "$stale" && "$(readlink -- "$stale")" == "$here/data/desk/"* && ! -e "$stale" ]] && backup "$stale"
+done
 [[ -f "$font" ]] && link "$font" "$HOME/.local/share/fonts/vivac-FiraCode-Regular.ttf"
 
 # 10. Claude Code on the phone (bin/claude) reads what this phone is and how

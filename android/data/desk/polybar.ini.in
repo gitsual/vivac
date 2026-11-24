@@ -1,0 +1,125 @@
+; The phone's own desktop bar (android/bin/vivac-desk), drawn like the
+; computer's Waybar: a rounded panel with the accent along its foot and a pill
+; per gauge. vivac-desk renders it from the theme in ~/.config/vivac/settings
+; each time the desktop starts. Sizes are in pixels at twice the computer's,
+; the scale the phone reads at (dpi 192).
+
+[colors]
+panel = #F2@COLOR_BG@
+chip = #@COLOR_SURFACE@
+chip-alt = #@COLOR_SURFACE_ALT@
+bg = #@COLOR_BG@
+fg = #@COLOR_FG@
+dim = #@COLOR_FG_DIM@
+muted = #@COLOR_MUTED@
+accent = #@COLOR_ACCENT@
+urgent = #@COLOR_URGENT@
+info = #@COLOR_INFO@
+ok = #@COLOR_OK@
+clear = #00000000
+
+[bar/vivac]
+dpi = 192
+width = 100%:-56
+offset-x = 16
+offset-y = 12
+height = 56
+radius = 24
+background = ${colors.panel}
+foreground = ${colors.fg}
+border-top-size = 10
+border-left-size = 12
+border-right-size = 12
+border-bottom-size = 6
+border-top-color = ${colors.panel}
+border-left-color = ${colors.panel}
+border-right-color = ${colors.panel}
+border-bottom-color = ${colors.accent}
+padding = 0
+module-margin = 1
+font-0 = JetBrainsMono Nerd Font:size=10;3
+font-1 = JetBrainsMono Nerd Font:size=10:weight=bold;3
+font-2 = JetBrainsMono Nerd Font:size=20;8
+modules-left = launcher workspaces
+modules-center = date
+modules-right = status power
+wm-restack = i3
+enable-ipc = true
+cursor-click = pointer
+
+[pill]
+format-prefix = 
+format-prefix-font = 3
+format-prefix-foreground = ${colors.chip}
+format-suffix = 
+format-suffix-font = 3
+format-suffix-foreground = ${colors.chip}
+
+[module/launcher]
+inherit = pill
+type = custom/text
+label = 󰀻
+label-foreground = ${colors.accent}
+label-background = ${colors.chip}
+label-padding = 1
+click-left = rofi -show drun -config "@DESK@/rofi.rasi" &
+
+[module/workspaces]
+inherit = pill
+type = internal/i3
+pin-workspaces = false
+enable-click = true
+enable-scroll = false
+format = <label-state>
+label-focused = %name%
+label-focused-font = 2
+label-focused-foreground = ${colors.accent}
+label-focused-background = ${colors.chip}
+label-focused-padding = 1
+label-unfocused = %name%
+label-unfocused-foreground = ${colors.fg}
+label-unfocused-background = ${colors.chip}
+label-unfocused-padding = 1
+label-visible = %name%
+label-visible-background = ${colors.chip}
+label-visible-padding = 1
+label-urgent = %name%
+label-urgent-foreground = ${colors.bg}
+label-urgent-background = ${colors.urgent}
+label-urgent-padding = 1
+
+[module/date]
+inherit = pill
+type = internal/date
+interval = 5
+time = %H:%M
+date = %a %d
+label = 󰥔 %time%  %date%
+label-foreground = ${colors.fg}
+label-background = ${colors.chip}
+label-padding = 1
+
+; Android keeps /sys/class/power_supply and the Wi-Fi state from apps:
+; Termux:API reads them (vivac-desk bar status). One pill for both: the
+; phone is narrow, and each pill's rounded ends take room of their own.
+[module/status]
+inherit = pill
+type = custom/script
+exec = vivac-desk bar status
+interval = 30
+label-background = ${colors.chip}
+label-padding = 1
+
+[module/power]
+type = custom/text
+label = ⏻
+label-foreground = ${colors.bg}
+label-background = ${colors.accent}
+label-padding = 1
+format-prefix = 
+format-prefix-font = 3
+format-prefix-foreground = ${colors.accent}
+format-suffix = 
+format-suffix-font = 3
+format-suffix-foreground = ${colors.accent}
+click-left = vivac-desk menu &

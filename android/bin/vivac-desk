@@ -6,14 +6,27 @@
 #   vivac-desk [start]   start the desktop (or reuse it) and open Termux:X11
 #   vivac-desk stop      end the desktop
 #   vivac-desk status    say whether it is running
+#   vivac-desk render    write the desktop's settings from the theme again
+#                        (Super+Shift+r then redraws a running desktop)
+#   vivac-desk menu      the power button's menu (rofi): leave, reload
+#   vivac-desk bar battery|wifi|status   one gauge for the bar (Termux:API)
 #
-# The window manager reads ~/.config/i3/config and the bar
-# ~/.config/polybar/config.ini, both linked by android/scripts/deploy.sh.
+# Each start renders the desktop from the theme named in
+# ~/.config/vivac/settings (theme=, as deploy.sh reads it), into
+# ~/.config/vivac/desk/: i3's config, the bar (polybar), the compositor
+# (picom) and the launcher (rofi), from data/desk/*.in; the wallpaper is the
+# computer's for that theme. Changing the theme and starting again is enough.
 set -Eeuo pipefail
 
+here="$(cd -- "$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")/.." && pwd -P)"
 display=":1"
 state="$HOME/.local/state/vivac/desk"
-packages=(termux-x11-nightly i3 polybar kitty st rofi termux-api)
+conf="$HOME/.config/vivac/desk"
+packages=(termux-x11-nightly i3 polybar kitty st rofi picom feh termux-api)
+# The computer's bar font, JetBrains Mono with the Nerd Font icons.
+font_url="https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz"
+font_sha="${VIVAC_DESK_FONT_SHA256:-ef552a3e638f25125c6ad4c51176a6adcdce295ab1d2ffacf0db060caf8c1582}"
+font_dir="$HOME/.local/share/fonts/vivac-jetbrains-nerd"
 app="com.termux.x11/com.termux.x11.MainActivity"
 export TMPDIR="${TMPDIR:-${PREFIX:?not inside Termux: PREFIX is unset}/tmp}"
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$TMPDIR}"
@@ -22,6 +35,102 @@ alive() {
 	local pid
 	pid="$(cat "$state/$1.pid" 2>/dev/null)" || return 1
 	[[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null
+}
+
+# theme — the theme named in the vivac settings, if it is a shipped one.
+theme() {
+	local t
+	t="$(sed -n 's/^theme=//p' "$HOME/.config/vivac/settings" 2>/dev/null | tail -1)" || t=""
+	[[ "$t" =~ ^[a-z][a-z0-9-]*$ && -f "$here/data/themes/$t.conf" ]] && printf '%s\n' "$t"
+}
+
+# render — data/desk/*.in into $conf, against the theme's palette: @KEY@ is
+# the colour as written, @KEY:lower@ in lower case, @KEY:rgb@ as "r, g, b".
+palette() {
+	local name
+	name="$(theme)" || name=""
+	if [[ -n "$name" ]]; then printf '%s\n' "$here/data/themes/$name.conf"; else printf '%s\n' "$here/data/theme.conf"; fi
+}
+
+render() {
+	local name palette wall key value lower rgb args=() tpl
+	name="$(theme)" || name=""
+	palette="$(palette)"
+	name="${name:-$(sed -n 's/^# @title: //p' "$palette" | tr 'A-Z ' 'a-z-')}"
+	wall="$here/../linux/assets/wallpapers/$name.png"
+	[[ -f "$wall" ]] || wall="$here/../linux/assets/wallpapers/bad-romance.png"
+	wall="$(readlink -f -- "$wall" 2>/dev/null || printf '%s' "$wall")"
+	while IFS='=' read -r key value; do
+		[[ "$key" =~ ^[A-Z_]+$ && "$value" =~ ^[0-9A-Fa-f]{6}$ ]] || continue
+		lower="${value,,}"
+		rgb="$((16#${value:0:2})), $((16#${value:2:2})), $((16#${value:4:2}))"
+		args+=(-e "s|@$key:lower@|$lower|g" -e "s|@$key:rgb@|$rgb|g" -e "s|@$key@|${value^^}|g")
+	done <"$palette"
+	args+=(-e "s|@WALLPAPER@|$wall|g" -e "s|@DESK@|$conf|g")
+	mkdir -p "$conf"
+	for tpl in "$here"/data/desk/*.in; do
+		sed "${args[@]}" "$tpl" >"$conf/$(basename "$tpl" .in)"
+	done
+}
+
+# install_font — the bar's font, checked against its checksum.
+install_font() {
+	[[ -f "$font_dir/JetBrainsMonoNerdFont-Regular.ttf" ]] && return 0
+	local tmp
+	tmp="$(mktemp -d)"
+	if curl -fsSL "$font_url" -o "$tmp/f.tar.xz" &&
+		[[ "$(sha256sum "$tmp/f.tar.xz" | cut -d' ' -f1)" == "$font_sha" ]]; then
+		mkdir -p "$font_dir"
+		tar -xJf "$tmp/f.tar.xz" -C "$font_dir" JetBrainsMonoNerdFont-Regular.ttf JetBrainsMonoNerdFont-Bold.ttf
+		command -v fc-cache >/dev/null && fc-cache -f "$font_dir" >/dev/null 2>&1 || true
+	else
+		printf 'the bar font did not download or did not match its checksum; the bar shows boxes for icons\n' >&2
+	fi
+	rm -rf -- "$tmp"
+}
+
+# bar battery|wifi — one gauge, as the computer's bar draws it.
+bar() {
+	local json pct status ssid
+	case "${1:-}" in
+	battery)
+		json="$(termux-battery-status 2>/dev/null)" || json=""
+		pct="$(sed -n 's/.*"percentage": *\([0-9]*\).*/\1/p' <<<"$json")"
+		status="$(sed -n 's/.*"status": *"\([A-Z_]*\)".*/\1/p' <<<"$json")"
+		[[ -n "$pct" ]] || return 0
+		if [[ "$status" == CHARGING || "$status" == FULL ]]; then
+			printf '󰂄 %s%%\n' "$pct"
+			return 0
+		fi
+		local icons=(󰁺 󰁼 󰁾 󰂀 󰁹) i=$((pct / 20))
+		((i > 4)) && i=4
+		if ((pct <= 15)); then
+			printf '%%{F#%s}%s %s%%%%{F-}\n' "$(sed -n 's/^COLOR_URGENT=//p' "$(palette)")" "${icons[$i]}" "$pct"
+		else
+			printf '%s %s%%\n' "${icons[$i]}" "$pct"
+		fi
+		;;
+	wifi)
+		json="$(termux-wifi-connectioninfo 2>/dev/null)" || json=""
+		ssid="$(sed -n 's/.*"ssid": *"\([^"]*\)".*/\1/p' <<<"$json")"
+		if [[ "$json" == *'"COMPLETED"'* && -n "$ssid" && "$ssid" != '<unknown ssid>' ]]; then
+			printf '󰖩\n'
+		else
+			printf '󰖪\n'
+		fi
+		;;
+	status) printf '%s  %s\n' "$(bar wifi)" "$(bar battery)" ;;
+	esac
+}
+
+# menu — the power button: leave the desktop or redraw it.
+menu() {
+	local pick
+	pick="$(printf '󰗼  Leave the desktop\n󰑓  Reload\n' | rofi -dmenu -i -p 'vivac' -config "$conf/rofi.rasi")" || return 0
+	case "$pick" in
+	*Leave*) stop ;;
+	*Reload*) DISPLAY="$display" i3-msg restart >/dev/null 2>&1 || true ;;
+	esac
 }
 
 open_app() {
@@ -34,6 +143,7 @@ start() {
 		return 1
 	fi
 	mkdir -p "$state"
+	render
 	if ! alive x11; then
 		rm -f -- "$TMPDIR/.X11-unix/X${display#:}"
 		setsid termux-x11 "$display" >"$state/x11.log" 2>&1 </dev/null &
@@ -49,7 +159,7 @@ start() {
 		}
 	fi
 	if ! alive i3; then
-		DISPLAY="$display" setsid i3 >"$state/i3.log" 2>&1 </dev/null &
+		DISPLAY="$display" setsid i3 -c "$conf/i3.config" >"$state/i3.log" 2>&1 </dev/null &
 		echo $! >"$state/i3.pid"
 	fi
 	open_app
@@ -74,12 +184,16 @@ case "${1:-start}" in
 install)
 	pkg install -y x11-repo
 	pkg install -y "${packages[@]}"
+	install_font
 	;;
 start) start ;;
 stop) stop ;;
+render) render ;;
+menu) menu ;;
+bar) bar "${2:-}" ;;
 status) if alive x11 && alive i3; then echo running; else echo stopped; fi ;;
 *)
-	printf 'usage: vivac-desk [install|start|stop|status]\n' >&2
+	printf 'usage: vivac-desk [install|start|stop|status|render|menu|bar battery|wifi|status]\n' >&2
 	exit 2
 	;;
 esac

@@ -49,7 +49,7 @@ bash "$desk" install >/dev/null || fail "install failed"
 first="$(grep '^pkg ' "$log" | head -1)"
 [[ "$first" == *"install"*"x11-repo"* ]] || fail "x11-repo not installed first: $first"
 second="$(grep '^pkg ' "$log" | sed -n 2p)"
-for p in termux-x11-nightly i3 polybar kitty rofi; do
+for p in termux-x11-nightly i3 polybar kitty rofi picom feh termux-api; do
 	[[ " $second " == *" $p "* ]] || fail "install does not ask for $p: $second"
 done
 
@@ -63,17 +63,33 @@ exec sleep 60
 FAKE
 cat >"$PREFIX/bin/i3" <<'FAKE'
 #!/usr/bin/env bash
-printf 'i3 DISPLAY=%s\n' "$DISPLAY" >>"$CALLS"
+printf 'i3 DISPLAY=%s %s\n' "$DISPLAY" "$*" >>"$CALLS"
 exec sleep 60
 FAKE
 chmod +x "$PREFIX/bin/termux-x11" "$PREFIX/bin/i3"
 export PATH="$PREFIX/bin:$PATH"
 
-# 3. start: server on :1, i3 on it, the app opened.
+# 3. start: server on :1, i3 on it with the desktop rendered from the theme
+# in the vivac settings, the app opened.
+mkdir -p "$HOME/.config/vivac"
+printf 'theme=cosmos\n' >"$HOME/.config/vivac/settings"
 : >"$log"
 bash "$desk" start >/dev/null || fail "start failed"
 grep -qx 'termux-x11 :1' "$log" || fail "X server not started on :1: $(cat "$log")"
-grep -qx 'i3 DISPLAY=:1' "$log" || fail "i3 not started on :1: $(cat "$log")"
+conf="$HOME/.config/vivac/desk"
+grep -qx "i3 DISPLAY=:1 -c $conf/i3.config" "$log" || fail "i3 not started on :1 with the rendered config: $(cat "$log")"
+accent="$(sed -n 's/^COLOR_ACCENT=//p' "$repo_root/data/themes/cosmos.conf")"
+for f in i3.config polybar.ini picom.conf rofi.rasi kitty.conf; do
+	[[ -s "$conf/$f" ]] || fail "$f was not rendered"
+	! grep -q '@[A-Z_]*\(:[a-z]*\)\?@' "$conf/$f" || fail "$f kept a token: $(grep -o '@[A-Z_:a-z]*@' "$conf/$f" | head -3)"
+done
+grep -qi "$accent" "$conf/polybar.ini" || fail "the bar does not wear the theme's accent ($accent)"
+grep -qi "$accent" "$conf/i3.config" || fail "the windows do not wear the theme's accent ($accent)"
+grep -qi "$accent" "$conf/rofi.rasi" || fail "the launcher does not wear the theme's accent ($accent)"
+wall="$(sed -n 's/.*feh --no-fehbg --bg-fill "\([^"]*\)".*/\1/p' "$conf/i3.config")"
+[[ "$wall" == */linux/assets/wallpapers/cosmos.png && -f "$wall" ]] || fail "the wallpaper is not the theme's: $wall"
+grep -q "polybar -c \"$conf/polybar.ini\"" "$conf/i3.config" || fail "i3 does not start the rendered bar"
+grep -q "picom --config \"$conf/picom.conf\"" "$conf/i3.config" || fail "i3 does not start the compositor"
 grep -q '^am start.*com.termux.x11' "$log" || fail "Termux:X11 app not opened: $(cat "$log")"
 [[ "$(bash "$desk" status)" == *running* ]] || fail "status does not say running"
 
@@ -89,6 +105,23 @@ bash "$desk" stop >/dev/null || fail "stop failed"
 [[ "$(bash "$desk" status)" == *stopped* ]] || fail "status does not say stopped after stop"
 ! pgrep -f "$PREFIX/bin/termux-x11" >/dev/null || fail "X server still running after stop"
 
-# 6. Offline: nothing above reached for the network.
+# 6. The bar's gauges, from Termux:API: battery level and charging, Wi-Fi.
+cat >"$fakes/termux-battery-status" <<'FAKE'
+#!/usr/bin/env bash
+printf '{\n  "percentage": %s,\n  "status": "%s"\n}\n' "${PCT:-54}" "${STATUS:-DISCHARGING}"
+FAKE
+cat >"$fakes/termux-wifi-connectioninfo" <<'FAKE'
+#!/usr/bin/env bash
+printf '{\n  "ssid": "%s",\n  "supplicant_state": "%s"\n}\n' "${SSID:-casa}" "${WSTATE:-COMPLETED}"
+FAKE
+chmod +x "$fakes/termux-battery-status" "$fakes/termux-wifi-connectioninfo"
+[[ "$(PCT=54 bash "$desk" bar battery)" == "󰁾 54%" ]] || fail "battery at 54%: $(PCT=54 bash "$desk" bar battery)"
+[[ "$(PCT=9 bash "$desk" bar battery)" == "%{F#"*"}󰁺 9%%{F-}" ]] || fail "a low battery does not stand out: $(PCT=9 bash "$desk" bar battery)"
+[[ "$(PCT=97 STATUS=CHARGING bash "$desk" bar battery)" == "󰂄 97%" ]] || fail "charging: $(PCT=97 STATUS=CHARGING bash "$desk" bar battery)"
+[[ "$(bash "$desk" bar wifi)" == "󰖩" ]] || fail "wifi: $(bash "$desk" bar wifi)"
+[[ "$(PCT=54 bash "$desk" bar status)" == "󰖩  󰁾 54%" ]] || fail "status: $(PCT=54 bash "$desk" bar status)"
+[[ "$(WSTATE=DISCONNECTED bash "$desk" bar wifi)" == "󰖪" ]] || fail "no wifi: $(WSTATE=DISCONNECTED bash "$desk" bar wifi)"
+
+# 7. Offline: nothing above reached for the network.
 ! grep -q '^curl ' "$log" || fail "the desktop used the network"
 true
