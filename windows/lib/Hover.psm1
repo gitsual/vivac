@@ -78,6 +78,16 @@ function Resolve-VivacPanelTab([string]$Text) {
     @{ Verb = $Text; Tab = '' }
 }
 
+# Whether a verb read while a panel is open is served at once: the hover
+# verbs, and the verbs of a panel that is open (a click pinning or closing it).
+# The rest (the menu key, lock, a panel that is closed) wait for the panel
+# to close, as they always did.
+function Test-VivacPumpVerb([string]$Text, [hashtable]$Open) {
+    if (Resolve-VivacHoverVerb $Text) { return $true }
+    $w = $Open[(Get-VivacHoverKey (Resolve-VivacPanelTab $Text).Verb)]
+    [bool]($w -and $w.IsVisible)
+}
+
 # Verbs that share a window share its slot in the host's registry.
 function Get-VivacHoverKey([string]$Verb) {
     switch ($Verb) { 'phone' { 'menu' } 'switch' { 'power' } default { $Verb } }
@@ -117,4 +127,4 @@ function Step-VivacClick([string]$Key, [hashtable]$Open, [hashtable]$States) {
     'toggle'
 }
 
-Export-ModuleMember -Function New-VivacHoverClose, Get-VivacHoverRestMs, Get-VivacHoverNow, Resolve-VivacHoverVerb, Get-VivacHoverKey, Step-VivacHover, Step-VivacClick, Resolve-VivacPanelTab
+Export-ModuleMember -Function New-VivacHoverClose, Get-VivacHoverRestMs, Get-VivacHoverNow, Resolve-VivacHoverVerb, Get-VivacHoverKey, Step-VivacHover, Step-VivacClick, Resolve-VivacPanelTab, Test-VivacPumpVerb

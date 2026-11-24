@@ -305,6 +305,34 @@ Case 'a network panel can be switched to a tab by the host, and opened on one' {
     Assert-True ($daemon -match '(?s)\$netArgs\.Tab = \$tab.{0,40}Show-Network @netArgs') 'the host does not open on the tab'
 }
 
+# ------------------------------------- verbs that arrive while a panel is open
+
+# Found with a real pointer in the VM: the host's 30 ms timer does not tick
+# again while a panel is open (a DispatcherTimer does not re-enter its own
+# handler), so a hover-leave, a click or a tab switch sat in the queue until
+# the panel closed. An open panel's own timer therefore serves the verbs that
+# concern open panels.
+Case 'while a panel is open, hover verbs and the verbs of an open panel are served at once; others wait' {
+    $open = @{ sound = (New-FakeWindow $true); help = (New-FakeWindow $false) }
+    Assert-True (Test-VivacPumpVerb 'hover sound' $open) 'hover on an open panel'
+    Assert-True (Test-VivacPumpVerb 'hover-leave sound' $open) 'hover-leave'
+    Assert-True (Test-VivacPumpVerb 'hover network wifi' $open) 'hover on a panel that is not open yet'
+    Assert-True (Test-VivacPumpVerb 'sound' $open) 'the click that pins or closes an open panel'
+    Assert-True (-not (Test-VivacPumpVerb 'help' $open)) 'a verb for a panel that is closed waits'
+    Assert-True (-not (Test-VivacPumpVerb 'menu' $open)) 'a menu key waits'
+    Assert-True (-not (Test-VivacPumpVerb 'lock' $open)) 'lock waits'
+    Assert-True (-not (Test-VivacPumpVerb 'quit' $open)) 'quit waits'
+    $open.network = New-FakeWindow $true
+    Assert-True (Test-VivacPumpVerb 'network ethernet' $open) 'a click with a tab on an open panel'
+}
+Case 'every window is served by the pump, in the one place windows are made' {
+    $fn = [regex]::Match($surfaces, '(?s)function New-VivacWindow.*?\n\}\n').Value
+    Assert-True ($fn -match 'Start-VivacWindowTimer') 'New-VivacWindow starts no timer'
+    Assert-True ($surfaces -match 'function Set-VivacHoverPump') 'no pump can be set'
+    Assert-True ($daemon -match 'Set-VivacHoverPump') 'the host sets no pump'
+    Assert-True ($daemon -match 'Test-VivacPumpVerb') 'the host does not choose the verbs to serve'
+}
+
 # ------------------------------------------------- the Zebar popups' rule
 
 Case 'the popups'' rule (hover-rule.js) is the same contract as the host''s' {

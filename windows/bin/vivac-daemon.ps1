@@ -162,6 +162,17 @@ function Invoke-UsbMenu([string]$Drive) {
             "`"$(Join-Path $PSScriptRoot 'vivac-tray.ps1')`"", '-Eject', $Drive)
     }
 }
+# Run by an open panel's timer (see Set-VivacHoverPump in Surfaces): the verbs
+# that concern open panels are served now, the others go back to the queue.
+function Invoke-VerbsWhileOpen {
+    $later = @(); $v = $null
+    while ($queue.TryDequeue([ref]$v)) {
+        if (Test-VivacPumpVerb $v $open) {
+            try { Invoke-Verb $v } catch { Write-DaemonLog "verb '$v' failed: $_" }
+        } else { $later += $v }
+    }
+    foreach ($l in $later) { $queue.Enqueue($l) }
+}
 function Invoke-Verb([string]$Verb) {
     if ($Verb -eq 'quit') {
         foreach ($w in @($open.Values)) { try { $w.Close() } catch { } }
@@ -521,6 +532,7 @@ $timer.Add_Tick({
         }
     })
 if ($LockAtStart) { $queue.Enqueue('greet') }
+Set-VivacHoverPump { Invoke-VerbsWhileOpen }
 $timer.Start()
 # However the loop ends -- 'quit', or an exception no handler caught -- the
 # process ends with it. The pipe's runspace would otherwise keep it alive,
