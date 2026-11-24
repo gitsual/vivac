@@ -5,6 +5,14 @@
 #   vivac-phone-screen toggle   on or off
 #   vivac-phone-screen watch    (started by toggle) turns it off once the
 #                               phone is unplugged
+#   vivac-phone-screen auto     (started with the session) the phone plugged
+#                               in turns it on by itself and a notification
+#                               says it is ready, opening nothing on the
+#                               phone (its home-screen widget opens the
+#                               viewer); unplugging is watch's, as ever.
+#                               Turned off by hand, it stays off until the
+#                               phone is plugged in again. phone_screen_auto=
+#                               false in the vivac settings turns this off.
 #
 # On: Hyprland gets a virtual monitor, VIVAC-PHONE, right of the monitors
 # there are, at the phone's resolution (landscape) and scale 2, so it reads
@@ -61,17 +69,20 @@ phone() {
 mode_on() { [[ -s "$state" ]]; }
 rule() { hyprctl eval "$1" >/dev/null 2>&1 || true; }
 
-# connect SERIAL — the screen to the phone over USB, and its viewer opened
+# connect SERIAL [auto] — the screen to the phone over USB, and its viewer opened
 # afresh (one left open keeps the zoom it had in portrait). Again after the
 # phone comes back from a USB blip: the forward goes with the old connection.
 connect() {
 	"$ADB" -s "$1" reverse tcp:$port tcp:$port >/dev/null 2>&1 || true
+	[[ "${2:-}" == auto ]] && return 0
 	"$ADB" -s "$1" shell am force-stop "$viewer" >/dev/null 2>&1 || true
 	"$ADB" -s "$1" shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$port" >/dev/null 2>&1 || true
 }
 
+# on [auto] — with auto, nothing is opened on the phone (its home-screen
+# widget opens the viewer) and the notification says it is ready.
 on() {
-	local serial size w h monitors right primary n cutout inset
+	local how="${1:-}" serial size w h monitors right primary n cutout inset
 	serial="$(phone)" || serial=""
 	[[ -n "$serial" ]] || {
 		tell "$(i18n_get phone.screen_none)"
@@ -148,10 +159,14 @@ on() {
 		printf '%s\n' "$!" >"$inhibit"
 		disown
 	fi
-	connect "$serial"
+	connect "$serial" "$how"
 	printf '%s\n' "$serial" >"$state"
 	setsid -f "$self" watch </dev/null >/dev/null 2>&1
-	tell "$(i18n_get phone.screen_on)"
+	if [[ "$how" == auto ]]; then
+		tell "$(i18n_get phone.screen_ready)"
+	else
+		tell "$(i18n_get phone.screen_on)"
+	fi
 }
 
 off() {
@@ -230,8 +245,24 @@ watch)
 		sleep "${VIVAC_PHONE_SCREEN_CHECK:-5}"
 	done
 	;;
+auto)
+	setting="$(sed -n 's/^phone_screen_auto=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/vivac/settings" 2>/dev/null | tail -1)" || setting=""
+	[[ "$setting" == false ]] && exit 0
+	# seen: the phone that was there at the last look. Only a phone newly
+	# there turns it on: one turned off by hand while plugged in stays off,
+	# and one back from a USB blip is watch's to reconnect.
+	seen=""
+	while :; do
+		serial="$(phone)" || serial=""
+		if [[ -n "$serial" && "$serial" != "$seen" ]]; then
+			mode_on || on auto || true
+		fi
+		seen="$serial"
+		sleep "${VIVAC_PHONE_SCREEN_CHECK:-2}"
+	done
+	;;
 *)
-	printf 'usage: vivac-phone-screen toggle\n' >&2
+	printf 'usage: vivac-phone-screen toggle | auto\n' >&2
 	exit 2
 	;;
 esac

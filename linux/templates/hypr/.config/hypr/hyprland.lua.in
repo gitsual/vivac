@@ -288,6 +288,8 @@ table.insert(vivac.autostart, { id = "drop-tray", cmd = "$HOME/.local/bin/vivac-
 table.insert(vivac.autostart, { id = "mouse", cmd = "$HOME/.local/bin/vivac-mouse resume" })
 -- The bar, kept up: waybar-keep.sh starts it and starts it again if it dies.
 table.insert(vivac.autostart, { id = "waybar", cmd = "$HOME/.config/waybar/scripts/waybar-keep.sh" })
+-- The phone as a screen: plugged in, it turns on by itself and says it is ready.
+table.insert(vivac.autostart, { id = "phone-screen", cmd = "$HOME/.local/bin/vivac-phone-screen auto" })
 table.insert(vivac.autostart, { id = "hypridle", cmd = "hypridle" })
 -- Clipboard history for the picker above; harmless when cliphist is absent.
 table.insert(vivac.autostart, { id = "cliphist", cmd = "wl-paste --watch cliphist store" })

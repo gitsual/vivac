@@ -21,7 +21,8 @@ fail() {
 	exit 1
 }
 sandbox="$(mktemp -d "${TMPDIR:-/tmp}/vivac-screen.XXXXXX")"
-trap 'rm -rf -- "$sandbox"' EXIT
+auto_pid=""
+trap '{ [[ -z "$auto_pid" ]] || kill "$auto_pid"; pkill -f -- "$sandbox"; } 2>/dev/null || true; rm -rf -- "$sandbox"' EXIT
 mkdir -p "$sandbox/bin" "$sandbox/run"
 calls="$sandbox/calls"
 cat >"$sandbox/bin/adb" <<'FAKE'
@@ -34,7 +35,9 @@ if [[ "$*" == devices ]]; then
 		printf '%s\n' "$((n + 1))" >"$BLIPFILE"
 		((n < BLIPS)) && exit 0
 	fi
-	[[ -n "${SERIAL:-}" ]] && printf '%s\tdevice\n' "$SERIAL"
+	serial="${SERIAL:-}"
+	[[ -n "${SERIAL_FILE:-}" ]] && serial="$(cat "$SERIAL_FILE")"
+	[[ -n "$serial" ]] && printf '%s\tdevice\n' "$serial"
 	exit 0
 fi
 printf 'adb %s\n' "$*" >>"$CALLS"
@@ -190,7 +193,49 @@ settle
 has 'adb -s PHONE1 shell cmd window user-rotation free' "after an unplug, the phone's own rotation was not given back"
 [[ ! -e "$sandbox/run/vivac-phone-screen.rotation" ]] || fail "the saved rotation outlived its return"
 
-# Only toggle and watch.
+# auto, started with the session: the phone plugged in turns the screen on
+# by itself, without opening anything on the phone, and says it is ready;
+# unplugged, everything is undone; turned off by hand while plugged in, it
+# stays off until the phone is plugged in again.
+"$tool" toggle 2>/dev/null || true
+settle
+plugged="$sandbox/plugged"
+: >"$plugged"
+: >"$calls"
+SERIAL_FILE="$plugged" VIVAC_PHONE_SCREEN_MISSES=1 "$tool" auto >/dev/null 2>&1 &
+auto_pid=$!
+sleep 0.5
+printf 'PHONE1\n' >"$plugged"
+sleep 1
+has 'hyprctl output create headless VIVAC-PHONE' "plugging the phone in did not turn the screen on"
+! grep -q 'vnc://' "$calls" || fail "plugging the phone in opened the viewer on it by itself: $(cat "$calls")"
+grep -q '^notify-send .*phone.screen_ready\|^notify-send .*ready' "$calls" || fail "plugging the phone in did not say it is ready: $(cat "$calls")"
+: >"$calls"
+SERIAL_FILE="$plugged" "$tool" toggle 2>/dev/null
+sleep 1
+has 'hyprctl output remove VIVAC-PHONE' "turning it off by hand did nothing"
+! grep -q 'output create' "$calls" || fail "auto turned it back on while still plugged in"
+: >"$plugged"
+sleep 1
+printf 'PHONE1\n' >"$plugged"
+sleep 1
+has 'hyprctl output create headless VIVAC-PHONE' "plugging the phone in again did not turn it on"
+: >"$calls"
+: >"$plugged"
+sleep 1
+has 'hyprctl output remove VIVAC-PHONE' "unplugging the phone did not undo it"
+kill "$auto_pid" 2>/dev/null || true
+wait "$auto_pid" 2>/dev/null || true
+
+# phone_screen_auto=false in the settings: auto does nothing.
+mkdir -p "$sandbox/cfg/vivac"
+printf 'phone_screen_auto=false\n' >"$sandbox/cfg/vivac/settings"
+: >"$calls"
+printf 'PHONE1\n' >"$plugged"
+XDG_CONFIG_HOME="$sandbox/cfg" SERIAL_FILE="$plugged" timeout 1.5 "$tool" auto 2>/dev/null || true
+! grep -q 'output create' "$calls" || fail "auto ran with phone_screen_auto=false"
+
+# Only toggle, watch and auto.
 "$tool" 3 2>/dev/null && fail "an unknown argument was accepted"
 
 hypr="$repo_root/templates/hypr/.config/hypr/hyprland.lua.in"
@@ -198,6 +243,7 @@ for n in 1 2 3 4 5 6 7 8 9 10; do
 	grep -qF "hl.bind(\"SUPER + ALT + $((n % 10))\", hl.dsp.focus({ workspace = $((10 + n)) }))" "$hypr" ||
 		fail "SUPER+ALT+$((n % 10)) does not go to the phone's workspace $((10 + n))"
 done
+grep -qF 'cmd = "$HOME/.local/bin/vivac-phone-screen auto"' "$hypr" || fail "the session does not start watching for the phone"
 grep -q '"output": "!VIVAC-PHONE"' "$repo_root/render/waybar/config.in" || fail "the computer's bar would show on the phone too"
 # The phone's bar reads as the computer's: the time and the weather in the
 # middle, the workspaces and the window on the left.

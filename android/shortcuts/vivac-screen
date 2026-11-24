@@ -1,0 +1,18 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# The computer's screen on this phone: Termux:Widget's button (deploy.sh puts
+# it in ~/.shortcuts/tasks/ under a name in the phone's language). The
+# computer serves it over the USB cable once it has seen the phone
+# (vivac-phone-screen on Linux); this opens the VNC viewer on it, or says the
+# computer is not ready yet.
+port=5900
+if (exec 3<>"/dev/tcp/localhost/$port") 2>/dev/null; then
+	am start -a android.intent.action.VIEW -d "vnc://localhost:$port" >/dev/null 2>&1
+else
+	language="$(sed -n 's/^language=//p' "$HOME/.config/vivac/settings" 2>/dev/null | tail -1)" || language=""
+	if [[ "$language" == es* ]]; then
+		text='El ordenador aún no está listo: conecta el móvil por USB'
+	else
+		text='The computer is not ready yet: plug the phone in by USB'
+	fi
+	command -v termux-toast >/dev/null && termux-toast "$text" || printf '%s\n' "$text" >&2
+fi

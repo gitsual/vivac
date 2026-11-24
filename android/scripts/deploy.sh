@@ -207,6 +207,18 @@ if ! grep -qs '\.bashrc' "$profile"; then
 	fi
 fi
 
+# 8. Termux:Widget's button for the computer's screen (shortcuts/vivac-screen),
+# named in the phone's language (language= in the vivac settings).
+language="$(sed -n 's/^language=//p' "$HOME/.config/vivac/settings" 2>/dev/null | tail -1)" || language=""
+if [[ "$language" == es* ]]; then label='Pantalla vivac'; else label='vivac screen'; fi
+button="$HOME/.shortcuts/tasks/$label"
+if [[ "$(readlink -- "$button" 2>/dev/null)" != "$here/shortcuts/vivac-screen" ]]; then
+	[[ -e "$button" || -L "$button" ]] && backup "$button"
+	act mkdir -p "$(dirname "$button")"
+	act ln -s -- "$here/shortcuts/vivac-screen" "$button"
+	say "linked $button"
+fi
+
 if ((reload)); then
 	command -v termux-reload-settings >/dev/null 2>&1 && termux-reload-settings || true
 fi

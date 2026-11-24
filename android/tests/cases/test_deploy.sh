@@ -25,7 +25,7 @@ printf 'old mine\n' >"$PREFIX/bin/vivac-facts"
 printf 'Port 8022\n#PasswordAuthentication yes\nPrintMotd yes\n' >"$PREFIX/etc/ssh/sshd_config"
 mkdir -p "$HOME/.termux" "$HOME/.config/vivac"
 printf 'background=#000000\n' >"$HOME/.termux/colors.properties"
-printf 'theme=metropolis\nprompt_user=someone\n' >"$HOME/.config/vivac/settings"
+printf 'theme=metropolis\nprompt_user=someone\nlanguage=es\n' >"$HOME/.config/vivac/settings"
 printf 'alias ll="ls -l"\n' >"$HOME/.bashrc"
 printf 'extra-keys = [[ESC, TAB]]\nterminal-cursor-style = block\n' >"$HOME/.termux/termux.properties"
 
@@ -49,7 +49,8 @@ cp -- "$FONT_FIXTURE" "$out"
 FAKE
 chmod +x "$fakes/curl"
 export PATH="$fakes:$PATH" CURL_LOG="$sandbox/curl.log" FONT_FIXTURE="$sandbox/font.zip"
-export VIVAC_FONT_SHA256="$(sha256sum "$sandbox/font.fixture" | cut -d' ' -f1)"
+VIVAC_FONT_SHA256="$(sha256sum "$sandbox/font.fixture" | cut -d' ' -f1)"
+export VIVAC_FONT_SHA256
 
 snapshot() { (cd "$sandbox" && find . -printf '%p %y %l\n' | LC_ALL=C sort && find . -type f -exec md5sum {} + | LC_ALL=C sort); }
 
@@ -95,6 +96,11 @@ grep -qF '\[\e[38;5;203m\]someone\[\e[0m\]@\[\e[38;5;143m\]pixel-8\[\e[0m\] \[\e
     fail "Termux prompt is not Linux's: $(grep PS1 "$HOME/.bashrc")"
 [[ "$(grep -c '>>> vivac prompt' "$HOME/.bashrc")" == 1 ]] || fail "prompt block written twice"
 grep -q '\.bashrc' "$HOME/.bash_profile" || fail "a login shell would not read .bashrc"
+# The home-screen widget's button for the computer's screen, named in the
+# phone's language, running vivac's script.
+widget="$HOME/.shortcuts/tasks/Pantalla vivac"
+[[ "$(readlink -- "$widget")" == "$repo_root/shortcuts/vivac-screen" ]] || fail "the widget has no button for the computer's screen"
+[[ -x "$repo_root/shortcuts/vivac-screen" ]] || fail "the widget's script is not executable"
 grep -q 'Written by vivac' "$colors" || fail "colours file not marked as vivac's"
 mine="$(find "$HOME/.local/state/vivac/backups" -type f -name colors.properties)"
 [[ -n "$mine" && "$(cat "$mine")" == 'background=#000000' ]] || fail "the user's own colours were not backed up"
