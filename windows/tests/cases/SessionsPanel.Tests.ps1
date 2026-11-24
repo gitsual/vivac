@@ -24,7 +24,7 @@ Add-Content -LiteralPath $env:FAKE_SES_CALLS -Value $Accion -Encoding UTF8
 if ($env:FAKE_SES_FAIL -and $Accion -eq 'guardar') { exit 1 }
 if ($Accion -eq 'ver') {
     'Foto del 2026-11-13T10:20:30'
-    '  [1] Terminal: Claude 'work' + Hermes abc'
+    '  [1] Terminal: Claude work + Hermes abc'
     '  [2] chrome: Correo'
     '  [1] code: proyecto'
 }
