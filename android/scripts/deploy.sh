@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Put the android half of vivac in place inside Termux.
 #
-#   scripts/deploy.sh            link the tools, write the boot script, harden sshd
+#   scripts/deploy.sh            link the tools, write the boot script, harden sshd,
+#                                dress Termux and link the desktop's settings
 #   scripts/deploy.sh --dry-run  say what would change, change nothing
 #
 # Same rules as the Linux deploy: nothing is ever deleted. A file of the
@@ -218,6 +219,21 @@ if [[ "$(readlink -- "$button" 2>/dev/null)" != "$here/shortcuts/vivac-screen" ]
 	act ln -s -- "$here/shortcuts/vivac-screen" "$button"
 	say "linked $button"
 fi
+
+# 9. The phone's own desktop (bin/vivac-desk): i3 and polybar read their
+# settings from the repository, and fontconfig finds kitty's Fira Code where
+# step 5 put it. A file of the user's own in the way is backed up first.
+link() {
+	local src="$1" dest="$2"
+	[[ -L "$dest" && "$(readlink -- "$dest")" == "$src" ]] && return 0
+	[[ -e "$dest" || -L "$dest" ]] && backup "$dest"
+	act mkdir -p "$(dirname "$dest")"
+	act ln -s -- "$src" "$dest"
+	say "linked $dest"
+}
+link "$here/data/desk/i3.config" "$HOME/.config/i3/config"
+link "$here/data/desk/polybar.ini" "$HOME/.config/polybar/config.ini"
+[[ -f "$font" ]] && link "$font" "$HOME/.local/share/fonts/vivac-FiraCode-Regular.ttf"
 
 if ((reload)); then
 	command -v termux-reload-settings >/dev/null 2>&1 && termux-reload-settings || true

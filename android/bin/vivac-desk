@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# The phone's own desktop: i3 on Termux:X11, dressed like the computer's
+# Hyprland, running on the phone alone (no computer, no network).
+#
+#   vivac-desk install   install the X11 repository and the desktop packages
+#   vivac-desk [start]   start the desktop (or reuse it) and open Termux:X11
+#   vivac-desk stop      end the desktop
+#   vivac-desk status    say whether it is running
+#
+# The window manager reads ~/.config/i3/config and the bar
+# ~/.config/polybar/config.ini, both linked by android/scripts/deploy.sh.
+set -Eeuo pipefail
+
+display=":1"
+state="$HOME/.local/state/vivac/desk"
+packages=(termux-x11-nightly i3 polybar kitty st rofi termux-api)
+app="com.termux.x11/com.termux.x11.MainActivity"
+export TMPDIR="${TMPDIR:-${PREFIX:?not inside Termux: PREFIX is unset}/tmp}"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$TMPDIR}"
+
+alive() {
+	local pid
+	pid="$(cat "$state/$1.pid" 2>/dev/null)" || return 1
+	[[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null
+}
+
+open_app() {
+	am start --user 0 -n "$app" >/dev/null 2>&1 || true
+}
+
+start() {
+	if ! command -v termux-x11 >/dev/null 2>&1 || ! command -v i3 >/dev/null 2>&1; then
+		printf 'the desktop is not installed yet: run  vivac-desk install\n' >&2
+		return 1
+	fi
+	mkdir -p "$state"
+	if ! alive x11; then
+		rm -f -- "$TMPDIR/.X11-unix/X${display#:}"
+		setsid termux-x11 "$display" >"$state/x11.log" 2>&1 </dev/null &
+		echo $! >"$state/x11.pid"
+		local i
+		for ((i = 0; i < 100; i++)); do
+			[[ -e "$TMPDIR/.X11-unix/X${display#:}" ]] && break
+			sleep 0.1
+		done
+		[[ -e "$TMPDIR/.X11-unix/X${display#:}" ]] || {
+			printf 'the X server did not come up; see %s\n' "$state/x11.log" >&2
+			return 1
+		}
+	fi
+	if ! alive i3; then
+		DISPLAY="$display" setsid i3 >"$state/i3.log" 2>&1 </dev/null &
+		echo $! >"$state/i3.pid"
+	fi
+	open_app
+	printf 'desktop running on %s\n' "$display"
+}
+
+stop() {
+	local name pid
+	for name in i3 x11; do
+		if alive "$name"; then
+			pid="$(cat "$state/$name.pid")"
+			kill "$pid" 2>/dev/null || true
+			for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+			kill -9 "$pid" 2>/dev/null || true
+		fi
+		rm -f -- "$state/$name.pid"
+	done
+	printf 'desktop stopped\n'
+}
+
+case "${1:-start}" in
+install)
+	pkg install -y x11-repo
+	pkg install -y "${packages[@]}"
+	;;
+start) start ;;
+stop) stop ;;
+status) if alive x11 && alive i3; then echo running; else echo stopped; fi ;;
+*)
+	printf 'usage: vivac-desk [install|start|stop|status]\n' >&2
+	exit 2
+	;;
+esac
