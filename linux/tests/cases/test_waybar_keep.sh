@@ -22,6 +22,7 @@ cat >"$sandbox/bin/pgrep" <<'FAKE'
 FAKE
 cat >"$sandbox/bin/fakebar" <<'FAKE'
 #!/usr/bin/env bash
+sleep 0.3
 echo start >>"$SANDBOX/starts"
 FAKE
 cat >"$sandbox/bin/notify-send" <<'FAKE'
@@ -29,19 +30,28 @@ cat >"$sandbox/bin/notify-send" <<'FAKE'
 echo "$*" >>"$SANDBOX/notices"
 FAKE
 chmod +x "$sandbox/bin/"*
+# The keeper starts the bar detached (setsid -f) and returns at once: wait for
+# every bar it started before counting. /usr/bin/pgrep, not the fake above.
+settle() {
+	local tries=50
+	while /usr/bin/pgrep -f "$sandbox/bin/fakebar" >/dev/null && ((tries-- > 0)); do sleep 0.1; done
+}
 export PATH="$sandbox/bin:$PATH" SANDBOX="$sandbox" WAYBAR_BIN="$sandbox/bin/fakebar" \
 	KEEP_LOCK="$sandbox/lock" KEEP_INTERVAL=0 KEEP_STATE="$sandbox/state"
 
 touch "$sandbox/running"
 KEEP_ROUNDS=3 "$tool"
+settle
 [[ ! -e "$sandbox/starts" ]] || fail "started a bar while one runs"
 
 rm "$sandbox/running"
 KEEP_ROUNDS=1 "$tool"
+settle
 [[ "$(wc -l <"$sandbox/starts")" -eq 1 ]] || fail "no bar started when none ran"
 
 : >"$sandbox/starts"
 KEEP_ROUNDS=12 KEEP_MAX_RESTARTS=5 KEEP_BACKOFF=100 "$tool"
+settle
 [[ "$(wc -l <"$sandbox/starts")" -le 6 ]] || fail "a dying bar was restarted without end: $(wc -l <"$sandbox/starts")"
 [[ "$(wc -l <"$sandbox/notices")" -eq 1 ]] || fail "expected one notice when giving up"
 
@@ -49,5 +59,6 @@ exec 9>"$sandbox/lock"
 flock -n 9
 : >"$sandbox/starts"
 KEEP_ROUNDS=2 "$tool"
+settle
 [[ ! -s "$sandbox/starts" ]] || fail "a second keeper did not step aside"
 printf 'ok: waybar-keep\n'
