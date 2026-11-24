@@ -98,10 +98,35 @@ theme_file="$(theme_file_for "$repo_root" "$theme")" || theme_file=''
 # Undo the previous overlay before laying down a new one, so switching themes
 # five times leaves exactly as many files behind as switching once, and so the
 # Stow symlink is put back byte-for-byte rather than approximated.
+# A recorded link that resolves is put back as recorded. One that no longer
+# does (the checkout moved since the record was written: on 2026-11-24 the
+# repository had gone into linux/, and Hyprland was left with no config) is
+# pointed at this checkout's dotfile for the same home path, relative as Stow
+# makes it; with no such dotfile it fails and the target is left alone.
+current_stow_link() {
+	local target="$1" link="$2" dir rest package
+	dir="$(dirname -- "$target")"
+	if [[ "$link" == /* ]]; then [[ -e "$link" ]] && { printf '%s\n' "$link"; return 0; }
+	else [[ -e "$dir/$link" ]] && { printf '%s\n' "$link"; return 0; }; fi
+	rest="${target#"$HOME"/}"
+	[[ "$rest" != "$target" ]] || return 1
+	for package in "$repo_root"/dotfiles/*/; do
+		if [[ -e "$package$rest" ]]; then
+			realpath -s --relative-to="$dir" -- "$package$rest"
+			return 0
+		fi
+	done
+	return 1
+}
+
 if [[ -f "$manifest" ]]; then
 	while IFS=$'\t' read -r target link; do
 		[[ -n "$target" ]] || continue
 		if [[ -n "$link" ]]; then
+			link="$(current_stow_link "$target" "$link")" || {
+				printf 'apply-theme: %s was not restored: its link points nowhere and no dotfile of this checkout replaces it\n' "$target" >&2
+				continue
+			}
 			# Never leave the path empty, not even for a microsecond: a
 			# reload that lands in that window makes Hyprland write its own
 			# stub config over it, which costs the session 49 of its 55

@@ -108,6 +108,34 @@ done
 grep -Fq 'etc/greetd' "$sandbox/.state/vivac/theme-overlay" 2>/dev/null &&
 	fail 'the overlay reaches outside the home directory'
 
+# A record older than the checkout's layout (2026-11-24: the repository had
+# moved into linux/ since the overlay was written) names Stow links that no
+# longer resolve. Putting those back verbatim left Hyprland without its
+# config. A dead link is pointed at today's dotfile for the same home path;
+# one with no dotfile left is not restored, and the target stays as it is.
+mkdir -p -- "$sandbox/.config/hypr" "$sandbox/.state/vivac"
+# The sandbox's hypr files are Stow links into this checkout: remove the link
+# before writing, or the write goes through it into the repository.
+for stand_in in hyprland.lua gone.conf; do
+	rm -f -- "$sandbox/.config/hypr/$stand_in"
+	[[ "$(readlink -f -- "$sandbox/.config/hypr")" == "$sandbox/.config/hypr" ]] ||
+		fail 'the sandbox hypr directory is a link into the checkout; refusing to write through it'
+done
+printf 'rendered\n' >"$sandbox/.config/hypr/hyprland.lua"
+printf 'rendered\n' >"$sandbox/.config/hypr/gone.conf"
+printf '%s\t%s\n' \
+	"$sandbox/.config/hypr/hyprland.lua" '../../m2/old-layout/dotfiles/hypr/.config/hypr/hyprland.lua' \
+	"$sandbox/.config/hypr/gone.conf" '../../m2/old-layout/dotfiles/hypr/.config/hypr/gone.conf' \
+	>"$sandbox/.state/vivac/theme-overlay"
+run --theme bad-romance --no-reload >/dev/null 2>"$sandbox/stale.err"
+[[ -L "$sandbox/.config/hypr/hyprland.lua" && -e "$sandbox/.config/hypr/hyprland.lua" ]] ||
+	fail "a stale record left $(readlink -- "$sandbox/.config/hypr/hyprland.lua" 2>/dev/null || echo 'no link') behind"
+[[ "$(readlink -f -- "$sandbox/.config/hypr/hyprland.lua")" == "$(readlink -f -- "$repo_root/dotfiles/hypr/.config/hypr/hyprland.lua")" ]] ||
+	fail "the stale link was not pointed at today's dotfile: $(readlink -- "$sandbox/.config/hypr/hyprland.lua")"
+[[ ! -L "$sandbox/.config/hypr/gone.conf" && "$(cat "$sandbox/.config/hypr/gone.conf")" == rendered ]] ||
+	fail 'a stale link with no dotfile left was put back, or its file removed'
+grep -q 'gone.conf' "$sandbox/stale.err" || fail 'a stale link was skipped without a word'
+
 printf 'apply-theme: %d palette-dependent files overlaid and restored exactly\n' "${#before[@]}"
 
 # --------------------------------------------------------------- the swap
