@@ -24,14 +24,14 @@
       },
       "privileges": {
         "shellCommands": [
-          { "program": "conhost.exe", "argsRegex": "^--headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File C:\\\\Users\\\\alvar\\\\bin\\\\sesiones\\.ps1 (restaurar|guardar)$" },
+          { "program": "conhost.exe", "argsRegex": "^--headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File C:\\\\Users\\\\alvar\\\\bin\\\\sesiones\\.ps1 guardar$" },
           {
             "program": "cmd.exe",
-            "argsRegex": "^/c echo (theme|power|help|sound|bluetooth|security|network( wifi| ethernet)?|updates|phone)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul \\|\\| conhost\\.exe --headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac\\.ps1 (theme|power|help|sound|bluetooth|security|network( wifi| ethernet)?|updates|phone)$"
+            "argsRegex": "^/c echo (theme|power|help|sound|bluetooth|security|network( wifi| ethernet)?|updates|phone|sessions)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul \\|\\| conhost\\.exe --headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac\\.ps1 (theme|power|help|sound|bluetooth|security|network( wifi| ethernet)?|updates|phone|sessions)$"
           },
           {
             "program": "cmd.exe",
-            "argsRegex": "^/c echo (hover|hover-leave) (network( wifi| ethernet)?|bluetooth|sound|security|theme|power|updates|usb:[A-Za-z]:)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul$"
+            "argsRegex": "^/c echo (hover|hover-leave) (network( wifi| ethernet)?|bluetooth|sound|security|theme|power|updates|phone|sessions|usb:[A-Za-z]:)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul$"
           },
           {
             "program": "powershell.exe",

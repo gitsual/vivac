@@ -23,7 +23,7 @@
 
   The bar also writes "hover <panel>" when the pointer has rested 300 ms on a
   button and "hover-leave <panel>" when it goes (panels: network, bluetooth,
-  sound, security, theme, power, updates, usb:<drive>). A panel opened that
+  sound, security, theme, power, updates, phone, sessions, usb:<drive>). A panel opened that
   way closes itself by the rule in lib\Hover.psm1; a click on its button, or
   a click or key inside it, pins it, and a pinned panel closes as any other.
 #>
@@ -61,6 +61,8 @@ if ($LockAtStart) {
 Import-Module (Join-Path $root 'lib\Hover.psm1') -Force
 Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
 Import-Module (Join-Path $root 'lib\UsbPanel.psm1') -Force
+Import-Module (Join-Path $root 'lib\PhonePanel.psm1') -Force
+Import-Module (Join-Path $root 'lib\SessionsPanel.psm1') -Force
 Import-Module (Join-Path $root 'lib\Security.psm1') -Force
 Import-Module (Join-Path $root 'lib\Bluetooth.psm1') -Force
 Import-Module (Join-Path $root 'lib\Network.psm1') -Force
@@ -207,7 +209,7 @@ function Invoke-Verb([string]$Verb) {
         $Verb = $split.Verb
         $tab = $split.Tab
     }
-    if (@('menu', 'phone', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security', 'usb') -notcontains $Verb) { return }
+    if (@('menu', 'phone', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security', 'usb', 'sessions') -notcontains $Verb) { return }
     # The phone is the menu, open on its category: one window for both. The
     # switch key is the power menu, opened on Restart in the other system.
     $key = Get-VivacHoverKey $Verb
@@ -241,7 +243,8 @@ function Invoke-Verb([string]$Verb) {
             # one installed meanwhile is there the next time.
             $script:refreshApps = $true
         }
-        'phone' { Show-Menu -Registry $open -Category phone }
+        'phone' { Show-Phone -Registry $open }
+        'sessions' { Show-Sessions -Registry $open }
         'help'  { Show-Help -Registry $open }
         'power' { Show-Power -Registry $open }
         'switch' { Show-Power -Registry $open -Arm other }
@@ -276,7 +279,7 @@ foreach ($warm in (Show-Sound -NoShow), (Show-Menu -NoShow), (Show-Help -NoShow)
 # the next ones at once: asked here, the security surface opens like the rest.
 (Show-Security -NoShow).Close()
 (Show-Bluetooth -NoShow).Close()
-$loadingVerbs = @('menu', 'phone', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security')
+$loadingVerbs = @('menu', 'phone', 'sessions', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security')
 try { Import-VivacLoading } catch { }
 (Show-Network -NoShow).Close()
 (Show-Updates -NoShow).Close()

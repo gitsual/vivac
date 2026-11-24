@@ -7,9 +7,10 @@
 // gauges. Closing is the panel's business (lib\Hover.psm1, hover-rule.js).
 export const REST_MS = 300;
 
-// The same mapping the Arch bar has. Phone, workspaces and the sessions
-// button open nothing; their tooltips stay.
+// The same mapping the Arch bar has. The workspaces open nothing; their
+// tooltips stay.
 const BY_ACT = {
+  phone: 'phone', sesiones: 'sessions',
   mute: 'sound', network: 'network', bluetooth: 'bluetooth', security: 'security',
   theme: 'theme', power: 'power', updates: 'updates', sys: 'system', sysgauge: 'system',
 };

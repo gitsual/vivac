@@ -171,6 +171,79 @@ try {
         $cmd = @($pack.widgets[0].privileges.shellCommands | Where-Object { $_.program -eq 'cmd.exe' -and $_.argsRegex -match 'pipe' })[0].argsRegex
         Assert-True ('/c echo phone>\\.\pipe\vivac-x 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\v\bin\vivac.ps1 phone' -match $cmd) 'the phone verb is not granted'
     }
+    # ---- the panel's own pieces -------------------------------------------
+    Import-Module (Join-Path $root 'lib\PhonePanel.psm1') -Force
+    [void](Import-VivacStrings 'en')
+    Case 'a link is http or https with no spaces; nothing else' {
+        foreach ($ok in 'http://a.b', 'https://a.b/c?d=1#e') { Assert-True (Test-VivacPhoneLink $ok) "refused: $ok" }
+        foreach ($no in '', 'ftp://a.b', 'https://a b', 'see https://a.b', "https://a.b`nx", '-https://a.b') { Assert-True (-not (Test-VivacPhoneLink $no)) "accepted: '$no'" }
+    }
+    Case 'the tiles: ring, file, clipboard, link (only with a link) and pairing; only pairing without a phone' {
+        $phones = @([pscustomobject]@{ id = 'a1'; name = 'P' })
+        $t = @(Get-VivacPhoneTiles $true $phones $false)
+        Assert-Equal 'ring,send-file,send-clip,send-url,manage' (($t | ForEach-Object { $_.Key }) -join ',')
+        Assert-True (-not ($t | Where-Object { $_.Key -eq 'send-url' }).Enabled) 'the link tile is on without a link'
+        Assert-True (($t | Where-Object { $_.Key -eq 'ring' }).Enabled) 'ring is off'
+        Assert-True (@(Get-VivacPhoneTiles $true $phones $true | Where-Object { $_.Key -eq 'send-url' })[0].Enabled) 'the link tile is off with a link'
+        Assert-Equal 'manage' ((Get-VivacPhoneTiles $true @() $true | ForEach-Object { $_.Key }) -join ',')
+        Assert-Equal 'manage' ((Get-VivacPhoneTiles $false @() $false | ForEach-Object { $_.Key }) -join ',')
+    }
+    Case 'the subtitle is the phone name, or what is missing; never a battery' {
+        Assert-Equal 'P' (Get-VivacPhoneSubtitle $true @([pscustomobject]@{ id = 'a1'; name = 'P' }))
+        Assert-Equal (T 'phone.none') (Get-VivacPhoneSubtitle $true @())
+        Assert-Equal (T 'phone.not_installed') (Get-VivacPhoneSubtitle $false @())
+    }
+    Case 'actions call kdeconnect-cli with the right words and never without a valid device' {
+        Reset-Calls
+        $r = Invoke-VivacPhoneAction ring 'a1b2c3d4e5f60718_29' 'P'
+        Assert-True $r.Ok 'ring failed'
+        Assert-Equal 'P is ringing' $r.Message
+        Assert-Equal '--device a1b2c3d4e5f60718_29 --ring' @(Read-Lines $env:FAKE_CALLS)[-1]
+        [void](Invoke-VivacPhoneAction send-clip 'a1b2c3d4e5f60718_29' 'P')
+        Assert-Equal '--device a1b2c3d4e5f60718_29 --send-clipboard' @(Read-Lines $env:FAKE_CALLS)[-1]
+        $f = Join-Path $dir 'a file.txt'
+        [IO.File]::WriteAllText($f, 'x')
+        $r = Invoke-VivacPhoneAction send-file 'a1b2c3d4e5f60718_29' 'P' -File $f
+        Assert-True $r.Ok 'send-file failed'
+        Assert-Equal "--device a1b2c3d4e5f60718_29 --share $f" @(Read-Lines $env:FAKE_CALLS)[-1]
+        [void](Invoke-VivacPhoneAction send-url 'a1b2c3d4e5f60718_29' 'P' -Url 'https://a.b/c')
+        Assert-Equal '--device a1b2c3d4e5f60718_29 --share https://a.b/c' @(Read-Lines $env:FAKE_CALLS)[-1]
+        Reset-Calls
+        $r = Invoke-VivacPhoneAction send-file 'a1b2c3d4e5f60718_29' 'P' -File (Join-Path $dir 'nope.txt')
+        Assert-True (-not $r.Ok) 'a missing file was sent'
+        Assert-Equal (T 'phone.no_file') $r.Message
+        $r = Invoke-VivacPhoneAction send-url 'a1b2c3d4e5f60718_29' 'P' -Url 'file:///c:/x'
+        Assert-Equal (T 'phone.no_link') $r.Message
+        foreach ($bad in '', '../x', '--ring', 'a b') { Assert-True (-not (Invoke-VivacPhoneAction ring $bad 'P').Ok) "device '$bad' accepted" }
+        Assert-True (-not (Invoke-VivacPhoneAction format 'a1b2c3d4e5f60718_29' 'P').Ok) 'an unknown action ran'
+        Assert-Equal 0 @(Read-Lines $env:FAKE_CALLS).Count 'a refused action reached KDE Connect'
+        $env:FAKE_FAIL = '1'
+        try { $r = Invoke-VivacPhoneAction ring 'a1b2c3d4e5f60718_29' 'P' } finally { Remove-Item Env:FAKE_FAIL }
+        Assert-True (-not $r.Ok) 'a failed ring said ok'
+        Assert-Equal 'KDE Connect could not reach P' $r.Message
+    }
+    Case 'the panel: tiles with number keys, an outcome line, the subtitle with the name' {
+        $w = Show-Phone -NoShow
+        Assert-Equal $name $w.FindName('Subtitle').Text
+        foreach ($i in 0..3) { Assert-True ($null -ne $w.FindName("B$i")) "tile $i is missing" }
+        Assert-True ($null -ne $w.FindName('Outcome')) 'no outcome line'
+        Assert-Equal 'Collapsed' $w.FindName('Outcome').Visibility.ToString()
+        $w.Close()
+    }
+    Case 'the panel without a phone: only pairing, and it says so' {
+        [IO.File]::WriteAllText($env:FAKE_DEVICES, '', $utf8)
+        $w = Show-Phone -NoShow
+        Assert-Equal (T 'phone.none') $w.FindName('Subtitle').Text
+        Assert-True ($null -ne $w.FindName('B0')) 'no pairing tile'
+        Assert-True ($null -eq $w.FindName('B1')) 'more than pairing'
+        $w.Close()
+        $env:VIVAC_KDECONNECT_CLI = Join-Path $dir 'no-such-cli.exe'
+        $w = Show-Phone -NoShow
+        Assert-Equal (T 'phone.not_installed') $w.FindName('Subtitle').Text
+        $w.Close()
+        $env:VIVAC_KDECONNECT_CLI = $fake
+        [IO.File]::WriteAllText($env:FAKE_DEVICES, "a1b2c3d4e5f60718_29 $name`n", $utf8)
+    }
     Case 'KDE Connect is an optional package, never part of the base' {
         $phoneIds = @([IO.File]::ReadAllLines((Join-Path $root 'packages\phone.txt')) | Where-Object { $_ -notmatch '^\s*(#|$)' })
         Assert-Equal 'KDE.KDEConnect' ($phoneIds -join ',')

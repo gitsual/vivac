@@ -130,4 +130,61 @@ function Get-VivacPhoneMenuEntries([scriptblock]$NewEntry) {
     )
 }
 
+# A link the phone can open: http or https, one piece, nothing else (a file:
+# or javascript: address, or text with a link in it, is never sent as one).
+function Test-VivacPhoneLink([string]$Text) { $Text -match '^https?://\S+$' }
+
+# The panel's tiles, in order: what a phone in reach allows, then pairing,
+# which is always there (it is also the way in when no phone is). Only what
+# kdeconnect-cli does on Windows: ring, share a file, the clipboard, a link.
+function Get-VivacPhoneTiles([bool]$Installed, [object[]]$Phones, [bool]$HasLink) {
+    $keys = @()
+    if ($Installed -and @($Phones).Count) { $keys += 'ring', 'send-file', 'send-clip', 'send-url' }
+    $keys += 'manage'
+    $glyph = @{ 'ring' = 0xEA8F; 'send-file' = 0xE898; 'send-clip' = 0xE8C8; 'send-url' = 0xE71B; 'manage' = 0xE8EA }
+    @(foreach ($k in $keys) {
+        [pscustomobject]@{ Key = $k; Label = (T ('phone.panel.' + ($k -replace '-', '_'))); Glyph = [string][char]$glyph[$k]; Enabled = ($k -ne 'send-url' -or $HasLink) }
+    })
+}
+
+# The line under the panel's title: the phone's name. No battery or charging
+# state: kdeconnect-cli on Windows does not print them and there is no D-Bus.
+function Get-VivacPhoneSubtitle([bool]$Installed, [object[]]$Phones) {
+    if (-not $Installed) { return (T 'phone.not_installed') }
+    if (-not @($Phones).Count) { return (T 'phone.none') }
+    [string]@($Phones)[0].name
+}
+
+# One action of the panel, with no dialog and no window: what happened as
+# Ok and Message. The device is checked before anything reaches the CLI.
+function Invoke-VivacPhoneAction([string]$Action, [string]$Device, [string]$Name = '', [string]$File = '', [string]$Url = '') {
+    $result = { param($ok, $msg) [pscustomobject]@{ Ok = $ok; Message = $msg } }
+    if ($Action -eq 'manage') {
+        $app = Get-VivacPhoneApp
+        if (-not $app) { return (& $result $false (T 'phone.not_installed')) }
+        Start-Process -FilePath $app
+        return (& $result $true '')
+    }
+    if (-not (Get-VivacPhoneCli)) { return (& $result $false (T 'phone.not_installed')) }
+    if (-not (Test-VivacPhoneId $Device)) { return (& $result $false (T 'phone.none')) }
+    if (-not $Name) { $Name = $Device }
+    $cli = $null; $done = T 'phone.sent' @($Name)
+    switch ($Action) {
+        'ring' { $cli = @('--ring'); $done = T 'phone.ringing' @($Name) }
+        'send-clip' { $cli = @('--send-clipboard') }
+        'send-file' {
+            if (-not $File -or -not (Test-Path -LiteralPath $File -PathType Leaf)) { return (& $result $false (T 'phone.no_file')) }
+            $cli = @('--share', [IO.Path]::GetFullPath($File))
+        }
+        'send-url' {
+            if (-not (Test-VivacPhoneLink $Url)) { return (& $result $false (T 'phone.no_link')) }
+            $cli = @('--share', $Url)
+        }
+        default { return (& $result $false '') }
+    }
+    $r = Invoke-VivacPhoneCli (@('--device', $Device) + $cli)
+    if ($r -and $r.Code -eq 0) { return (& $result $true $done) }
+    & $result $false (T 'phone.failed' @($Name))
+}
+
 Export-ModuleMember -Function *

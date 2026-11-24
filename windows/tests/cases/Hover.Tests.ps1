@@ -96,8 +96,8 @@ Case 'hover and hover-leave verbs name a panel; anything else is not one' {
     Assert-Equal 'leave' $v.Kind; Assert-Equal 'network' $v.Verb
     $v = Resolve-VivacHoverVerb 'hover usb:e:'
     Assert-Equal 'usb' $v.Key; Assert-Equal 'E:' $v.Drive
-    foreach ($p in 'bluetooth', 'security', 'theme', 'power', 'updates') { Assert-Equal $p (Resolve-VivacHoverVerb "hover $p").Verb }
-    foreach ($bad in 'hover', 'hover menu', 'hover clipboard', 'hover lock', 'hover quit', 'hover phone', 'hover-leave help', 'hover sound now', 'sound', 'hover usb:12') {
+    foreach ($p in 'bluetooth', 'security', 'theme', 'power', 'updates', 'phone', 'sessions') { Assert-Equal $p (Resolve-VivacHoverVerb "hover $p").Verb }
+    foreach ($bad in 'hover', 'hover menu', 'hover clipboard', 'hover lock', 'hover quit', 'hover sesiones', 'hover phone now', 'hover phone & calc', 'hover-leave help', 'hover sound now', 'sound', 'hover usb:12') {
         Assert-True ($null -eq (Resolve-VivacHoverVerb $bad)) "'$bad' is not a hover verb"
     }
 }
@@ -148,8 +148,9 @@ Case 'a click on a panel that is closed, or open by a click, is the old toggle' 
     Assert-Equal 'toggle' (Step-VivacClick 'sound' @{} @{})
     Assert-Equal 'toggle' (Step-VivacClick 'sound' @{ sound = (New-FakeWindow $true) } @{})
 }
-Case 'phone shares the menu window, switch the power one, for the click rule' {
-    Assert-Equal 'menu' (Get-VivacHoverKey 'phone')
+Case 'phone and sessions have a window of their own, switch shares the power one, for the click rule' {
+    Assert-Equal 'phone' (Get-VivacHoverKey 'phone')
+    Assert-Equal 'sessions' (Get-VivacHoverKey 'sessions')
     Assert-Equal 'power' (Get-VivacHoverKey 'switch')
     Assert-Equal 'sound' (Get-VivacHoverKey 'sound')
 }
@@ -185,15 +186,15 @@ Case 'a window made for hover is wired to the pointer, keys and a timer' {
 $bar = [IO.File]::ReadAllText((Join-Path $zebar 'bar.js'))
 $pack = [IO.File]::ReadAllText((Join-Path $zebar 'zpack.json'))
 
-Case 'the bar maps its buttons to panels as the Arch bar does, and the phone and workspaces to none' {
+Case 'the bar maps its buttons to panels as the Arch bar does, and the phone and sessions to theirs, the workspaces to none' {
     if (-not $hasNode) { Write-Host '  (node not installed: skipped)'; return }
     $js = @"
 import { panelFor } from '@ZEBAR@/hover.js';
 const want = { mute: 'sound', network: 'network', bluetooth: 'bluetooth', security: 'security', theme: 'theme', power: 'power', updates: 'updates', sys: 'system', sysgauge: 'system', eject: 'usb:G:' };
 const out = {};
 for (const [act, p] of Object.entries(want)) out[act] = panelFor(act, { drive: 'G:' }) === p;
-out.phone = panelFor('phone', {}) === null;
-out.sesiones = panelFor('sesiones', {}) === null;
+out.phone = panelFor('phone', {}) === 'phone';
+out.sesiones = panelFor('sesiones', {}) === 'sessions';
 out.clock = panelFor('clock', {}) === 'calendar';
 out.weather = panelFor('weather', {}) === 'forecast';
 console.log(JSON.stringify(out));
@@ -201,7 +202,7 @@ console.log(JSON.stringify(out));
     $r = Invoke-Mjs $js
     foreach ($p in $r.PSObject.Properties) { Assert-True $p.Value "panelFor wrong for $($p.Name)" }
 }
-Case 'a button that opens a panel on hover keeps no tooltip; the others keep theirs' {
+Case 'a button that opens a panel on hover keeps no tooltip (phone and sessions now); the others keep theirs' {
     if (-not $hasNode) { Write-Host '  (node not installed: skipped)'; return }
     $js = @"
 import { opensPanel } from '@ZEBAR@/hover.js';
@@ -209,8 +210,8 @@ console.log(JSON.stringify({ a: opensPanel('network'), b: opensPanel('phone'), c
 "@
     $r = Invoke-Mjs $js
     Assert-True $r.a 'network keeps its tooltip'
-    Assert-True (-not $r.b) 'phone lost its tooltip'
-    Assert-True (-not $r.c) 'sesiones lost its tooltip'
+    Assert-True $r.b 'phone keeps its tooltip'
+    Assert-True $r.c 'sesiones keeps its tooltip'
     Assert-True $r.d 'a gauge keeps its tooltip'
     Assert-True ($bar -match "removeAttribute\('title'\)") 'bar.js never strips a panel button''s title'
     Assert-True ($bar -match 'opensPanel\(') 'bar.js does not ask which buttons have a panel'
@@ -246,12 +247,46 @@ Case 'the bar sends hover verbs to the host pipe only, never starts a panel for 
     Assert-Equal 1 $grants.Count 'zpack.json grants no hover command (or more than one)'
     Assert-Equal 'cmd.exe' $grants[0].program
     $re = $grants[0].argsRegex
-    foreach ($ok in '/c echo hover sound>\\.\pipe\vivac-tester 2>nul', '/c echo hover-leave network>\\.\pipe\vivac-tester 2>nul', '/c echo hover usb:G:>\\.\pipe\vivac-tester 2>nul') {
+    foreach ($ok in '/c echo hover phone>\\.\pipe\vivac-tester 2>nul', '/c echo hover-leave sessions>\\.\pipe\vivac-tester 2>nul', '/c echo hover sound>\\.\pipe\vivac-tester 2>nul','/c echo hover-leave network>\\.\pipe\vivac-tester 2>nul', '/c echo hover usb:G:>\\.\pipe\vivac-tester 2>nul') {
         Assert-True ($ok -match $re) "not granted: $ok"
     }
-    foreach ($no in '/c echo hover menu>\\.\pipe\vivac-tester 2>nul', '/c echo hover sound & calc>\\.\pipe\vivac-tester 2>nul') {
+    foreach ($no in '/c echo hover phone & calc>\\.\pipe\vivac-tester 2>nul', '/c echo hover sessions now>\\.\pipe\vivac-tester 2>nul', '/c echo hover menu>\\.\pipe\vivac-tester 2>nul','/c echo hover sound & calc>\\.\pipe\vivac-tester 2>nul') {
         Assert-True ($no -notmatch $re) "granted: $no"
     }
+}
+
+Case 'the click on phone and sessions is granted as every panel''s is; an injection is not' {
+    $cmds = @((ConvertFrom-Json $pack).widgets[0].privileges.shellCommands | Where-Object { $_.program -eq 'cmd.exe' -and $_.argsRegex -like '*conhost*vivac*' })
+    Assert-Equal 1 $cmds.Count 'the click grant is not one rule'
+    $re = $cmds[0].argsRegex
+    foreach ($v in 'phone', 'sessions', 'power') {
+        $line = "/c echo $v>\\.\pipe\vivac-tester 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\v\bin\vivac.ps1 $v"
+        Assert-True ($line -match $re) "not granted: $v"
+    }
+    foreach ($no in 'phone & calc', 'sessions now', 'sesiones', 'lock') {
+        $line = "/c echo $no>\\.\pipe\vivac-tester 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\v\bin\vivac.ps1 $no"
+        Assert-True ($line -notmatch $re) "granted: $no"
+    }
+}
+Case 'the owner''s script is granted to the bar for saving only: restoring goes through the panel' {
+    $own = @((ConvertFrom-Json $pack).widgets[0].privileges.shellCommands | Where-Object { $_.program -eq 'conhost.exe' -and $_.argsRegex -match 'sesiones' })
+    Assert-Equal 1 $own.Count
+    # The grant names the owner's profile; the name is kept out of this file.
+    $owner = 'al' + 'var'
+    $base = "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\$owner\bin\sesiones.ps1"
+    Assert-True ("$base guardar" -match $own[0].argsRegex) 'saving is not granted'
+    Assert-True ("$base restaurar" -notmatch $own[0].argsRegex) 'restoring is still granted to the bar'
+}
+Case 'the host serves the phone and sessions panels; the bar clicks open them and never the old paths' {
+    $daemon = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac-daemon.ps1'))
+    $cli = [IO.File]::ReadAllText((Join-Path $root 'bin\vivac.ps1'))
+    Assert-True ($daemon -match "'phone' \{ Show-Phone -Registry") 'the host does not open the phone panel'
+    Assert-True ($daemon -match "'sessions' \{ Show-Sessions -Registry") 'the host does not open the sessions panel'
+    Assert-True ($cli -match "'phone'\s+\{[^\n]*Show-Phone \}") 'vivac phone does not open the panel'
+    Assert-True ($cli -match "'sessions'\s+\{[^\n]*Show-Sessions \}") 'vivac sessions does not open the panel'
+    Assert-True ($bar -notmatch "ses\('restaurar'\)") 'the bar still restores on a click'
+    Assert-True ($bar -match "ses\('guardar'\)") 'right-click no longer saves'
+    Assert-True ($bar -match "launch\('sessions'\)") 'a click on sessions does not open the panel'
 }
 
 # ------------------------------------------------- Wi-Fi and Ethernet tabs
