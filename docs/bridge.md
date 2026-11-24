@@ -675,6 +675,19 @@ property names (`charge`, `isCharging`), the notification's app name
 (`KDE Connect`) that the dunst rule matches, and the Run command list arriving
 on the phone. Still unchecked: KDE Connect for Windows' install path.
 
+### The phone's desktops
+
+`vivac-phone-desk N` (SUPER+ALT+1 … SUPER+ALT+0) opens the phone's desktop N
+on workspace 10+N: a virtual display of the phone of its own, which Android
+(16 and later) dresses as a desktop, with a taskbar, the app launcher and free
+windows, shown by scrcpy in a window Hyprland tiles like any other. Ten of
+them, on workspaces 11 to 20; the phone's own screen stays free. The keyboard
+and mouse are this computer's. A desktop already open is only switched to;
+closing its window hands its apps back to the phone's screen.
+
+It needs scrcpy and the phone over adb (USB debugging on, the cable in, or
+adb over Wi-Fi once paired). Without a phone it says so and opens nothing.
+
 ## 10. vivac ask across machines
 
 `vivac ask` is a feature of each half on its own (`linux/README.md`, `windows/README.md`): a

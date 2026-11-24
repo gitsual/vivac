@@ -47,6 +47,7 @@ ripgrep
 rkhunter
 rofi
 rust
+scrcpy
 seahorse
 shellcheck
 shfmt
