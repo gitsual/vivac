@@ -272,6 +272,11 @@ watch)
 			if ((misses > 0)); then
 				printf '%s\n' "$current" >"$state"
 				connect "$current"
+			elif ! "$ADB" -s "$current" reverse --list 2>/dev/null | grep -q "tcp:$port tcp:$port"; then
+				# The forward lost with no check missing the phone (a blip
+				# between checks, adb's server restarted): made again, and no
+				# more, since whoever holds the phone may be in another app.
+				"$ADB" -s "$current" reverse tcp:$port tcp:$port >/dev/null 2>&1 || true
 			fi
 			misses=0
 		fi

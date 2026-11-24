@@ -43,6 +43,8 @@ fi
 printf 'adb %s\n' "$*" >>"$CALLS"
 # The phone's rotation, as Android prints it: "free", or "lock N".
 [[ "$*" == *'shell cmd window user-rotation' ]] && printf '%s\n' "${ROTATION:-free}"
+# The USB forwards adb holds: the screen's, unless NOFORWARD says it is gone.
+[[ "$*" == *'reverse --list' && -z "${NOFORWARD:-}" ]] && printf 'UsbFfs tcp:5900 tcp:5900\n'
 [[ "$*" == *'shell wm size' ]] && printf 'Physical size: 1080x2400\n'
 # The app in front, as dumpsys prints it: FOCUS names its package.
 [[ "$*" == *'shell dumpsys window' ]] && printf '  mCurrentFocus=Window{93b3450 u0 %s/%s.Main}\n' "${FOCUS:-com.gaurav.avnc}" "${FOCUS:-com.gaurav.avnc}"
@@ -187,6 +189,29 @@ wait "$watcher" 2>/dev/null || true
 has 'adb -s PHONE1 reverse tcp:5900 tcp:5900' "after a USB blip the forward was not made again"
 has 'vnc://127.0.0.1:5900' "after a USB blip the viewer was not reopened"
 SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn off after the blip"
+settle
+
+# The forward lost with the phone still there (a blip shorter than a check, or
+# adb's server restarted): made again, and nothing more, since whoever holds
+# the phone may be in another app. With the forward there, nothing is redone.
+SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn on before the lost forward"
+settle
+: >"$calls"
+NOFORWARD=1 SERIAL=PHONE1 "$tool" watch 2>/dev/null &
+watcher=$!
+sleep 0.7
+kill "$watcher" 2>/dev/null || true
+wait "$watcher" 2>/dev/null || true
+has 'adb -s PHONE1 reverse tcp:5900 tcp:5900' "a forward lost with the phone there was not made again"
+! grep -q 'vnc://' "$calls" || fail "a lost forward opened the viewer over whatever the phone shows"
+: >"$calls"
+SERIAL=PHONE1 "$tool" watch 2>/dev/null &
+watcher=$!
+sleep 0.7
+kill "$watcher" 2>/dev/null || true
+wait "$watcher" 2>/dev/null || true
+! grep -q 'reverse tcp:5900 tcp:5900' "$calls" || fail "a forward still there was made again: $(cat "$calls")"
+SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn off after the lost forward"
 settle
 
 # The phone unplugged while on: everything undone by the watcher.
