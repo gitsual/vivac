@@ -64,4 +64,29 @@ printf 'keymap=bad name\n' >"$sandbox/settings"
 SETTINGS_FILE="$sandbox/settings" bash "$repo_root/scripts/apply-system.sh" --dry-run --keymap >/dev/null 2>&1 &&
 	fail 'apply-system accepted a malformed keymap'
 
+# bar_wifi_interface: which Wi-Fi card the bar shows. wl* (the first one) by
+# default; a host with two cards names the one that carries the traffic.
+# Only an interface name or that glob: the value lands in the bar's JSON.
+(
+	source "$repo_root/lib/settings.sh"
+	settings_defaults
+	[[ "${SETTINGS[bar_wifi_interface]}" == 'wl*' ]] || fail "bar_wifi_interface default: ${SETTINGS[bar_wifi_interface]:-none}"
+	settings_valid bar_wifi_interface wlp2s0f0u4 || fail 'bar_wifi_interface refused an interface name'
+	settings_valid bar_wifi_interface 'wl*' || fail 'bar_wifi_interface refused its default'
+	settings_valid bar_wifi_interface 'wl", "x' && fail 'bar_wifi_interface accepted a quote'
+	settings_valid bar_wifi_interface 'a b' && fail 'bar_wifi_interface accepted a space'
+	true
+)
+
+# bar_owner_scripts: the owner's own bar scripts (sessions, update-system.sh)
+# are not part of vivac; only a machine that has them asks for them.
+(
+	source "$repo_root/lib/settings.sh"
+	settings_defaults
+	[[ "${SETTINGS[bar_owner_scripts]}" == no ]] || fail "bar_owner_scripts default: ${SETTINGS[bar_owner_scripts]:-none}"
+	settings_valid bar_owner_scripts yes || fail 'bar_owner_scripts refused yes'
+	settings_valid bar_owner_scripts maybe && fail 'bar_owner_scripts accepted maybe'
+	true
+)
+
 printf 'settings: defaults, override, 4 refusals, one writer per axis verified\n'

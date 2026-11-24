@@ -12,7 +12,7 @@
 #
 # Sourced, not executed. Requires lib/kv.sh.
 
-SETTINGS_ALLOWED_KEYS=(locale keymap xkb_layout ime theme weather_location shared_settings language ask_url ask_model ask_allow_lan localsend_pin)
+SETTINGS_ALLOWED_KEYS=(locale keymap xkb_layout ime theme weather_location shared_settings language ask_url ask_model ask_allow_lan localsend_pin bar_wifi_interface bar_owner_scripts)
 # The only keys that may travel to the optional shared file. OS locale, keymap
 # and layout stay local: the other OS names them differently.
 SETTINGS_SHARED_KEYS=(theme weather_location language)
@@ -33,6 +33,8 @@ settings_defaults() {
 		[ask_model]=none
 		[ask_allow_lan]=false
 		[localsend_pin]=auto
+		[bar_wifi_interface]='wl*'
+		[bar_owner_scripts]=no
 	)
 }
 
@@ -62,6 +64,15 @@ settings_defaults() {
 #   localsend_pin
 #               auto (the PIN vivac-localsend makes and keeps in its state) or
 #               4 to 32 letters and digits that phones must give to send here
+#   bar_wifi_interface
+#               the Wi-Fi card the bar shows: wl* (the first) or an interface
+#               name, for a host with two cards; it lands in the bar's JSON,
+#               so only the characters an interface name has
+#   bar_owner_scripts
+#               yes when this machine has the owner's own bar scripts, which
+#               are not vivac's: the sessions button ($HOME/bin/sesiones and
+#               the waybar sesiones-*.sh) and update-system.sh on a right click
+#               of the updates button
 settings_valid() {
 	local key="$1" value="$2"
 	case "$key" in
@@ -70,6 +81,8 @@ settings_valid() {
 	xkb_layout) [[ "$value" =~ ^[a-z]{2,8}(,[a-z]{2,8})*$ ]] ;;
 	ime) [[ "$value" == none || "$value" == fcitx5 ]] ;;
 	theme) [[ "$value" =~ ^[a-z][a-z0-9-]*$ ]] ;;
+	bar_owner_scripts) [[ "$value" == yes || "$value" == no ]] ;;
+	bar_wifi_interface) [[ "$value" == 'wl*' || "$value" =~ ^[A-Za-z0-9_.-]{1,15}$ ]] ;;
 	weather_location) [[ "$value" =~ ^[A-Za-z0-9_.,+-]+$ ]] ;;
 	shared_settings) [[ "$value" == none || "$value" =~ ^(/|~/)[[:print:]]+$ ]] ;;
 	language) [[ "$value" == auto || "$value" =~ ^[a-z]{2,3}$ ]] ;;

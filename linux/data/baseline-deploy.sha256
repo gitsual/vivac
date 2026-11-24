@@ -26,7 +26,7 @@ d8693d4cfe2ee4a6ddae2aee5cdfbd02b886ed4aa92630653d0191cb5391d182  dotfiles/bridg
 13c3fb6a28242f0c50b95cd13b0b5bea69d53117385585f5e6f9fdbc155fc037  dotfiles/bridge/.local/bin/vivac-reboot-other
 58575b5cc480a62f49b76b63b50714fde7e6352fd8f29b7359c54e033ab4bb0e  dotfiles/bridge/.local/share/applications/vivac-phone-desk.desktop
 f69058aa3305f02195637654679bd12f2d8ccaae01217764c6e5e3922d11b8b4  dotfiles/bridge/.local/share/vivac/switch-login.sh
-f6c74b1c25aa582c2e45f33431854a945726c8138d2bda7a8eefa1e3511619dd  dotfiles/dunst/.config/dunst/dunstrc
+903fcb24ac16317657876fc74cd9e0734637a8411178986e30386297b6d5fd18  dotfiles/dunst/.config/dunst/dunstrc
 675a3b616ec6bc42bf06674c4b11f3e9e6fc60562d99dc0f6f6d4d255d74be06  dotfiles/hypr/.config/hypr/hypridle.conf
 97ef7998c882bcd4c09d7bbc31a590174fbe3150e1f6ec14eb078a4dd2459088  dotfiles/hypr/.config/hypr/hyprland.lua
 afd161d932eb95dce3f44aced85f64f656913fd02d332d5a3048b4356080b7d6  dotfiles/hypr/.config/hypr/hyprlock.conf
@@ -83,7 +83,7 @@ a7f6d6e31fa8111b724b1b06d46311866ea490845b7377797fca481072550e6d  dotfiles/secur
 ac81224fc768b751e3c5ac3b10ff1c8ef6c6f8b00ab7fd075b40d9dfbc9417ec  dotfiles/waybar/.config/waybar/scripts/ws-refresh.sh
 647f0d9a165bf0db975c3ae7f585931e2fc8e1a9e6a8e2660722e4d4835b4620  dotfiles/waybar/.config/waybar/scripts/ws-render.sh
 2cb9ebfd2ab43185baf760edc9aae6ae675f11fb099077d719575b8b824300af  dotfiles/waybar/.config/waybar/scripts/ws-windows.sh
-035e682978db6339d8b51e1d9e93f373b7e19be0d54a5bd8c701fdeb433d2333  dotfiles/waybar/.config/waybar/style.css
+19984d7a393b4fcb526c47f18061560589f617a594fa9bd41180c7a92d04ba7d  dotfiles/waybar/.config/waybar/style.css
 d92b7d39cd2f0ded3acd33a61edf70a3d9d9fdef9f95c4929cf9bf4d483abc31  dotfiles/waybar/.config/waybar/workspace-icons.json
 b716454b9108b0f4a8d8c13081a1e6277d3e5d29c1b6f27264fc4ff50f009a83  dotfiles/welcome/.local/bin/vivac-welcome
 16e0f8c1f5ed428ec0c8da4e8775f7c3ae967171ab62f337dc365c076514a411  dotfiles/wofi/.config/wofi/style.css
