@@ -64,7 +64,7 @@ f9522fbc197ec8a3fbc9c197bfeeb839f1a5e8307f8b5718f9db53c641a3686d  dotfiles/ricer
 f83792888aaa59994790ed530bb7dafcda08e3a0f3f97774839c8a3faf4dec86  dotfiles/ricer/.config/nwg-bar/icons/suspend.svg
 a163273069081fc3949fea32ed15907e77e00d82a7e570456752ef280409d10c  dotfiles/ricer/.config/nwg-bar/style.css
 71359fb87ea2a74371a1e856de8c657405e18f39093129bc6f6bd683978edaf6  dotfiles/ricer/.local/bin/vivac-ask
-35d73316ee953e5811f632248cc5fd4efc34a5299d49fa157a346123bbb127ab  dotfiles/ricer/.local/bin/vivac-panel
+71a58a367466e3d76ec14f0f9c85bb1b3cd51e0101600a2e9dd6a0bd7fb22c6f  dotfiles/ricer/.local/bin/vivac-panel
 d99519f77dc07b3383977c63393c66a36a80bd53ba2dd70a9c84290d1cb816ab  dotfiles/ricer/.local/bin/vivac-power
 78a926443169e779054a612191012bfca2695c1fd374600b9145b5b398d588b3  dotfiles/ricer/.local/bin/vivac-theme
 090766eccd45ca35ee79c791aeab3c383a6bbd1056b9d1c8ee15ca5dd7121f56  dotfiles/rofi/.config/rofi/config.rasi

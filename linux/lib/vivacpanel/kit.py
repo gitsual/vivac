@@ -219,6 +219,60 @@ window.vivac {{ background: transparent; }}
 """
 
 
+class HoverClose:
+    """When a panel opened by hover closes (lib/bar-hover opens it once the
+    pointer rests on its bar button). Leaving the button without coming into
+    the panel closes it after LEFT_BUTTON_MS; leaving the panel closes it after
+    LEFT_PANEL_MS, unless the pointer comes back or rests on the button again.
+    A click or a key in it pins it, as does opening it by a click: from then on
+    only Esc, a click elsewhere or losing the focus close it. No GTK in here:
+    LATER(ms, fn) -> id and CANCEL(id) are the clock, CLOSE the action."""
+
+    LEFT_BUTTON_MS = 500
+    LEFT_PANEL_MS = 350
+
+    def __init__(self, later, cancel, close, hover: bool) -> None:
+        self.later, self.cancel_timer, self.close = later, cancel, close
+        self.hover = hover
+        self.inside = False
+        self.timer = None
+
+    def _cancel(self) -> None:
+        if self.timer is not None:
+            self.cancel_timer(self.timer)
+            self.timer = None
+
+    def _close_in(self, ms: int) -> None:
+        self._cancel()
+
+        def fire():
+            self.timer = None
+            if self.hover and not self.inside:
+                self.close()
+        self.timer = self.later(ms, fire)
+
+    def button_rested(self) -> None:
+        """The pointer rests on the button again (another --hover)."""
+        self._cancel()
+
+    def button_left(self) -> None:
+        if self.hover and not self.inside:
+            self._close_in(self.LEFT_BUTTON_MS)
+
+    def pointer_in(self) -> None:
+        self.inside = True
+        self._cancel()
+
+    def pointer_out(self) -> None:
+        self.inside = False
+        if self.hover:
+            self._close_in(self.LEFT_PANEL_MS)
+
+    def pin(self) -> None:
+        self.hover = False
+        self._cancel()
+
+
 def gtk_kit():
     """Import GTK 4 and return the graphical half of the kit as a namespace.
     Kept out of module import so `vivac-panel waybar ...` never loads GTK."""
@@ -226,7 +280,7 @@ def gtk_kit():
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Gdk", "4.0")
-    from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+    from gi.repository import Gdk, Gio, GLib, Gtk  # noqa: E402
 
     def available_height(Gdk) -> int:
         """The height under the bar: the monitor's, less the bar's 48 px
@@ -256,12 +310,35 @@ def gtk_kit():
             self.on_build = None  # callable(panel) -> Gtk.Widget body
             self.close_on_blur = True
             self.centred = False  # a launcher sits in the middle of the screen, not under the bar
+            # Opened by resting the pointer on the bar button (vivac-panel
+            # --hover): HoverClose decides when it closes. Read once and
+            # dropped, so nothing this panel starts inherits it.
+            self.hover = HoverClose(
+                lambda ms, fn: GLib.timeout_add(ms, lambda: (fn(), False)[1]),
+                GLib.source_remove,
+                lambda: self.window is not None and self.window.close(),
+                hover=os.environ.pop("VIVAC_PANEL_HOVER", "") == "1")
+            # Both carry the launch's arguments (vivac-panel network ethernet
+            # --hover): a panel with tabs may follow them (on_hover_args).
+            self.on_hover_args = None
+            for name, handler in (("hover", self._hover_rested), ("hover-leave", lambda _args: self.hover.button_left())):
+                action = Gio.SimpleAction.new(name, GLib.VariantType.new("s"))
+                action.connect("activate", lambda _a, p, h=handler: h(p.get_string().split() if p else []))
+                self.app.add_action(action)
+
+        def _hover_rested(self, args) -> None:
+            self.hover.button_rested()
+            if self.on_hover_args is not None:
+                self.on_hover_args(args)
 
         def run(self) -> int:
             return self.app.run([])
 
         def _activate(self, app) -> None:
-            if self.window is not None:  # a second launch toggles it closed
+            if self.window is not None:  # a second launch toggles it closed...
+                if self.hover.hover:  # ...unless hover opened it: a click keeps it
+                    self.hover.pin()
+                    return
                 self.window.close()
                 return
             provider = Gtk.CssProvider()
@@ -299,6 +376,14 @@ def gtk_kit():
             empty = Gtk.GestureClick()
             empty.connect("pressed", lambda g, n, x, y: self._click_outside(root, outer, x, y))
             root.add_controller(empty)
+            motion = Gtk.EventControllerMotion()
+            motion.connect("enter", lambda c, x, y: self.hover.pointer_in())
+            motion.connect("leave", lambda c: self.hover.pointer_out())
+            outer.add_controller(motion)
+            touch = Gtk.GestureClick()
+            touch.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            touch.connect("pressed", lambda g, n, x, y: self.hover.pin())
+            outer.add_controller(touch)
             win.set_child(root)
             keys = Gtk.EventControllerKey()
             keys.connect("key-pressed", self._key)
@@ -334,6 +419,7 @@ def gtk_kit():
                 self.window.close()
 
         def _key(self, _ctl, keyval, _code, _state):
+            self.hover.pin()  # typing into it means staying in it
             if keyval == Gdk.KEY_Escape:
                 self.window.close()
                 return True

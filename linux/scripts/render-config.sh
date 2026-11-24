@@ -109,6 +109,19 @@ for key in "${!SETTINGS[@]}"; do
 	RENDER_FACTS["setting_$key"]="${SETTINGS["$key"]}"
 done
 
+# The bar's hover module (lib/bar-hover) is a shared library Waybar loads by
+# an absolute path (it does not expand ~ or $HOME there). A deploy builds it;
+# the bar names it only when it exists, so a machine without gcc keeps a bar
+# that opens its panels on a click.
+bar_hover_lib="$HOME/.local/lib/vivac/vivac-hover.so"
+if [[ "$mode" == deploy ]]; then
+	"$repo_root/scripts/build-bar-hover.sh" --output "$bar_hover_lib" >/dev/null ||
+		printf 'the bar hover module did not build; the bar opens its panels on a click only\n' >&2
+fi
+DEPLOY_ALLOWED_KEYS=(bar_hover)
+RENDER_FACTS[deploy_bar_hover]="$([[ -f "$bar_hover_lib" ]] && echo yes || echo no)"
+RENDER_TOKENS[HOME]="$HOME"
+
 # inside_checkout PATH — 0 when PATH, or the nearest ancestor that exists,
 # resolves into the repository. A deployed directory that is itself a symlink
 # into the checkout (a folded Stow tree, a hand-made link) would otherwise
