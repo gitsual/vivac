@@ -58,6 +58,48 @@ Case 'prepare-upload is read as data: safe names, texts apart, sizes checked' {
     Assert-Throws { Read-VivacLocalSendPrepare '{"files":{}}' } 'status 400'
     Assert-Throws { Read-VivacLocalSendPrepare 'nope' } 'status 400'
 }
+# LocalSend 1.18 on a phone ends the TLS handshake unless the sender shows a
+# certificate of its own (any self-signed one). The fake phone here does the
+# same; its certificate and the sender's live in the user's store under names
+# made for this run, and are removed after.
+Case 'the sender shows a client certificate over https, as LocalSend 1.18 demands' {
+    $run = [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $env:VIVAC_LOCALSEND_CERT_NAME = "vivac gate client $run"
+    $phoneCert = New-SelfSignedCertificate -CertStoreLocation Cert:\CurrentUser\My -Subject 'CN=phone' -FriendlyName "vivac gate phone $run" -NotAfter (Get-Date).AddDays(1)
+    $listener = New-Object Net.Sockets.TcpListener ([Net.IPAddress]::Loopback, 0)
+    $listener.Start()
+    $port = $listener.LocalEndpoint.Port
+    $ps = [PowerShell]::Create()
+    [void]$ps.AddScript({
+        param($listener, $cert)
+        $tcp = $listener.AcceptTcpClient()
+        $tcp.ReceiveTimeout = 10000
+        $check = [Net.Security.RemoteCertificateValidationCallback] { param($s, $c, $ch, $e) $null -ne $c }
+        $ssl = New-Object Net.Security.SslStream ($tcp.GetStream(), $false, $check)
+        try { $ssl.AuthenticateAsServer($cert, $true, [Security.Authentication.SslProtocols]::Tls12, $false) } catch { $tcp.Close(); return 'refused' }
+        $buffer = New-Object byte[] 4096; $seen = ''
+        while ($seen -notmatch "`r`n`r`n") { $n = $ssl.Read($buffer, 0, $buffer.Length); if ($n -le 0) { break }; $seen += [Text.Encoding]::ASCII.GetString($buffer, 0, $n) }
+        $answer = [Text.Encoding]::ASCII.GetBytes("HTTP/1.1 200 OK`r`nContent-Length: 2`r`nConnection: close`r`n`r`n{}")
+        $ssl.Write($answer, 0, $answer.Length); $ssl.Flush(); $tcp.Close()
+        if ($ssl.RemoteCertificate) { 'client certificate' } else { 'none' }
+    }).AddArgument($listener).AddArgument($phoneCert)
+    $job = $ps.BeginInvoke()
+    try {
+        $mark = Get-VivacLocalSendSha256 $phoneCert.GetRawCertData()
+        $device = [pscustomobject]@{ Alias = 'Phone'; Address = '127.0.0.1'; Port = $port; Protocol = 'https'; Fingerprint = $mark }
+        $answer = Invoke-VivacLocalSendHttp $device 'GET' '/api/localsend/v2/info' $null -TimeoutMs 10000
+        Assert-Equal 200 $answer.Status
+        Assert-Equal 'client certificate' ([string]($ps.EndInvoke($job) | Select-Object -Last 1))
+        $again = Get-VivacLocalSendClientCertificate
+        Assert-True ($again -and $again.HasPrivateKey) 'the client certificate is kept, with its key'
+        Assert-Equal 1 @(Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.FriendlyName -eq $env:VIVAC_LOCALSEND_CERT_NAME }).Count 'made once'
+    } finally {
+        $listener.Stop(); $ps.Dispose()
+        Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.FriendlyName -in @($env:VIVAC_LOCALSEND_CERT_NAME, "vivac gate phone $run") } | Remove-Item -Force -ErrorAction SilentlyContinue
+        Remove-Item Env:\VIVAC_LOCALSEND_CERT_NAME -ErrorAction SilentlyContinue
+    }
+}
+
 Case 'a device is what it announces, or nothing' {
     $d = ConvertTo-VivacLocalSendDevice ('{"alias":"Pixel","fingerprint":"ab","port":53317,"protocol":"https","deviceModel":"Google"}' | ConvertFrom-Json) '192.0.2.7'
     Assert-Equal 'Pixel (Google, 192.0.2.7)' (Format-VivacLocalSendDevice $d)

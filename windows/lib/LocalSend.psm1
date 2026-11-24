@@ -290,6 +290,24 @@ function Get-VivacLocalSendFileSha256([string]$Path) {
 
 function ConvertTo-VivacLocalSendMark([string]$Text) { ($Text.ToLowerInvariant() -replace '[^0-9a-f]', '') }
 
+# The certificate this machine shows when it talks https to a device:
+# LocalSend 1.18 on a phone ends the handshake without one, and any
+# self-signed one does. Made once in the user's store, its key not exportable
+# and kept by the user's profile; found again by its friendly name. $null when
+# it cannot be made: the connection is then tried without one.
+function Get-VivacLocalSendClientCertificate {
+    $name = if ($env:VIVAC_LOCALSEND_CERT_NAME) { $env:VIVAC_LOCALSEND_CERT_NAME } else { 'vivac LocalSend' }
+    $soon = (Get-Date).AddDays(1)
+    $cert = Get-ChildItem Cert:\CurrentUser\My -ErrorAction SilentlyContinue |
+        Where-Object { $_.FriendlyName -eq $name -and $_.HasPrivateKey -and $_.NotAfter -gt $soon } |
+        Sort-Object NotAfter -Descending | Select-Object -First 1
+    if ($cert) { return $cert }
+    try {
+        New-SelfSignedCertificate -CertStoreLocation Cert:\CurrentUser\My -Subject "CN=$(Get-VivacLocalSendAlias)" -FriendlyName $name `
+            -KeyExportPolicy NonExportable -NotAfter (Get-Date).AddYears(10) -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.2') -ErrorAction Stop
+    } catch { $null }
+}
+
 # A stream to a device. Over https its certificate is self-signed, so no
 # authority vouches for it: LocalSend's trust is that its SHA-256 is the
 # fingerprint the device announced, checked here before anything is sent.
@@ -304,10 +322,15 @@ function Open-VivacLocalSendStream($Device, [int]$TimeoutMs = 10000, [switch]$Le
     $stream = $client.GetStream()
     if ($Device.Protocol -eq 'https') {
         $accept = [Net.Security.RemoteCertificateValidationCallback] { $true }
-        $ssl = New-Object Net.Security.SslStream ($stream, $false, $accept)
+        $mine = Get-VivacLocalSendClientCertificate
+        $shown = New-Object Security.Cryptography.X509Certificates.X509CertificateCollection
+        if ($mine) { [void]$shown.Add($mine) }
+        # Offered whatever the device names as acceptable issuers: a phone names none.
+        $select = [Net.Security.LocalCertificateSelectionCallback] { param($s, $target, $local, $remote, $issuers) if ($local.Count) { $local[0] } else { $null } }
+        $ssl = New-Object Net.Security.SslStream ($stream, $false, $accept, $select)
         $protocols = [Security.Authentication.SslProtocols]::Tls12
         if ([Enum]::GetNames([Security.Authentication.SslProtocols]) -contains 'Tls13') { $protocols = $protocols -bor [Security.Authentication.SslProtocols]'Tls13' }
-        try { $ssl.AuthenticateAsClient([string]$Device.Address, $null, $protocols, $false) }
+        try { $ssl.AuthenticateAsClient([string]$Device.Address, $shown, $protocols, $false) }
         catch { $client.Close(); throw "unreachable: TLS with $($Device.Address) failed" }
         $seen = Get-VivacLocalSendSha256 $ssl.RemoteCertificate.GetRawCertData()
         if ($Learn) { $Device.Fingerprint = $seen }
