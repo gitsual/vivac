@@ -71,7 +71,7 @@ Case 'the bar start-up list is merged: Zebar own rewrite of it is not a change' 
 }
 Case 'the bar may only run the verbs it is granted' {
     $pack = Get-Content -Raw -LiteralPath (Join-Path $root 'static\zebar\vivac\zpack.json') | ConvertFrom-Json
-    $grant = ($pack.widgets[0].privileges.shellCommands | Where-Object { $_.program -eq 'cmd.exe' -and $_.argsRegex -match 'pipe' }).argsRegex
+    $grant = ($pack.widgets[0].privileges.shellCommands | Where-Object { $_.program -eq 'cmd.exe' -and $_.argsRegex -match 'pipe' -and $_.argsRegex -notmatch 'hover' }).argsRegex
     Assert-True ($grant -notmatch '\\[1-9]') 'Zebar matches with Rust regex, which has no backreferences'
     # The exact argument line bar.js builds, for each verb.
     $line = '/c echo VERB>\\.\pipe\vivac-someone 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\x\vivac\bin\vivac.ps1 VERB'
