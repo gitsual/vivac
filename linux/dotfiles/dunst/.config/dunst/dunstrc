@@ -3,10 +3,10 @@
     # left, "app" small and dim, the summary bold, the body dim, a thin
     # progress line along the bottom. dunst has no clock line and no
     # per-part colour except through markup, so the time is omitted and the
-    # dim parts are spans. Top right, just under the 48 px bar.
+    # dim parts are spans. Top right, 15 px from both edges, where the owner keeps it.
     width = (340, 440)
     height = (96, 200)
-    offset = (12, 56)
+    offset = (15, 15)
     origin = top-right
     transparency = 0
     corner_radius = 14

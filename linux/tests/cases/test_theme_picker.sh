@@ -22,7 +22,7 @@ grep -Fq 'hl.bind("SUPER + SHIFT + T", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-t
 grep -Fq 'SUPER+SHIFT+T	hypr	exec' "$repo_root/data/help-registry.tsv" ||
 	fail 'the theme picker is not in the help registry, so the help pane never mentions it'
 grep -Fq 'custom/theme' "$bar" || fail 'the bar has no theme button'
-grep -Fq 'vivac-theme' "$bar" || fail 'the bar theme button reaches nothing'
+grep -Fq 'vivac-panel theme' "$bar" || fail 'the bar theme button reaches nothing (it opens the theme panel)'
 grep -Fq '#custom-theme' "$repo_root/templates/waybar/.config/waybar/style.css.in" ||
 	fail 'the bar theme button carries no palette of its own'
 

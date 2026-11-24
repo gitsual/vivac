@@ -32,6 +32,12 @@
 #               the local network (a private address, never a public one).
 #               Ollama has no password: whoever reaches its port can use it,
 #               so only on a network you trust.
+#   bar_owner_scripts
+#               yes when this machine has the owner's own bar scripts
+#               (sessions, update-system.sh), which are not part of vivac
+#   bar_wifi_interface
+#               the Wi-Fi card the bar shows: wl* (the first one) or an
+#               interface name, for a machine with two cards
 #   localsend_pin
 #               the PIN a phone must give to send here with LocalSend
 #               (vivac-localsend, docs/bridge.md): auto keeps the six random
@@ -49,3 +55,5 @@ ask_url=http://localhost:11434
 ask_model=none
 ask_allow_lan=false
 localsend_pin=auto
+bar_wifi_interface=wl*
+bar_owner_scripts=no

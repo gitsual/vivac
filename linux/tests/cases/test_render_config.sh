@@ -39,7 +39,10 @@ stow_referenced() {
 		[[ -n "$source" ]] || fail "no package provides $path"
 		mkdir -p -- "$into/$(dirname -- "$path")"
 		ln -sfn -- "$source" "$into/$path"
-	done < <(grep -o '\$HOME/[A-Za-z0-9._/-]*' "$repo_root/render/waybar/config.in" | sed 's|^\$HOME/||' | sort -u)
+	# Lines behind bar_owner_scripts=yes call the owner's own scripts, which
+	# are not vivac's and no package provides; that setting is off here.
+	done < <(grep -v '^@?setting_bar_owner_scripts=yes@' "$repo_root/render/waybar/config.in" |
+		grep -o '\$HOME/[A-Za-z0-9._/-]*' | sed 's|^\$HOME/||' | sort -u)
 }
 stow_referenced "$home"
 
