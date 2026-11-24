@@ -101,6 +101,10 @@ grep -q '\.bashrc' "$HOME/.bash_profile" || fail "a login shell would not read .
 widget="$HOME/.shortcuts/tasks/Pantalla vivac"
 [[ "$(readlink -- "$widget")" == "$repo_root/shortcuts/vivac-screen" ]] || fail "the widget has no button for the computer's screen"
 [[ -x "$repo_root/shortcuts/vivac-screen" ]] || fail "the widget's script is not executable"
+# Claude Code on the phone learns the developer's kit through a skill.
+skill="$HOME/.claude/skills/android-dev/SKILL.md"
+[[ "$(readlink -- "$skill")" == "$repo_root/data/claude/android-dev/SKILL.md" ]] || fail "Claude's android-dev skill is not linked"
+grep -q '^name: android-dev$' "$repo_root/data/claude/android-dev/SKILL.md" || fail "the skill has no name"
 grep -q 'Written by vivac' "$colors" || fail "colours file not marked as vivac's"
 mine="$(find "$HOME/.local/state/vivac/backups" -type f -name colors.properties)"
 [[ -n "$mine" && "$(cat "$mine")" == 'background=#000000' ]] || fail "the user's own colours were not backed up"

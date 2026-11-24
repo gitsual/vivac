@@ -117,6 +117,33 @@ under `mcp_servers.pixel`.
 
 Not possible without root or ADB: screenshots and listing installed apps.
 
+## Developing apps on the phone: `vivac-dev`
+
+`vivac-dev` is the developer's kit for any app, used by a person or by Claude
+Code running in Termux. It speaks adb to the phone itself: wireless debugging
+on localhost gives the shell user's powers (the screen as a tree, input, every
+app's logs, installs, dumpsys, run-as) with no root. The same commands work
+from a PC over USB.
+
+Once: `pkg install android-tools imagemagick sqlite openjdk-17 aapt2 rsync`, then
+Developer options > Wireless debugging > *Pair device with pairing code* and
+`vivac-dev pair PORT CODE`. After each boot: `vivac-dev connect`.
+`vivac-dev doctor` says what is missing.
+
+| Verbs | What |
+|---|---|
+| `ui`, `shot`, `focus`, `wait` | see the screen: a compact tree with tap coordinates first, a shrunk screenshot with its token cost when that is not enough |
+| `tap`, `type`, `key`, `swipe` | drive it; `--pkg` is required and they refuse while another app has the focus |
+| `apps`, `info`, `launch`, `open`, `stop`, `install`, `clear --yes`, `uninstall --yes` | apps: version, debuggable, deep link schemes, permissions |
+| `log`, `crash`, `anr`, `perf` | one app's log, its Java and native crashes, ANRs, memory and frame timing |
+| `files`, `pull`, `prefs`, `sql` | a debug build's private data; `sql` queries its SQLite/Room database read-only, WAL included |
+| `build` | Gradle here (Termux's aapt2) or `--remote HOST` (rsync, build, APK back); `--pkg` installs, relaunches and reports crash and focus |
+
+The deploy links `data/claude/android-dev/SKILL.md` into
+`~/.claude/skills/android-dev/`, so Claude Code on the phone knows the kit and
+its rules: text before images, small images, never touch an app that is not
+the one named.
+
 ## Development
 
 Everything is tested on the PC against fake `termux-*`, `getprop` and `ssh`. No

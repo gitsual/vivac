@@ -219,6 +219,15 @@ if [[ "$(readlink -- "$button" 2>/dev/null)" != "$here/shortcuts/vivac-screen" ]
 	say "linked $button"
 fi
 
+# 9. Claude Code on the phone: the android-dev skill teaches it vivac-dev.
+skill="$HOME/.claude/skills/android-dev/SKILL.md"
+if [[ "$(readlink -- "$skill" 2>/dev/null)" != "$here/data/claude/android-dev/SKILL.md" ]]; then
+	[[ -e "$skill" || -L "$skill" ]] && backup "$skill"
+	act mkdir -p "$(dirname "$skill")"
+	act ln -s -- "$here/data/claude/android-dev/SKILL.md" "$skill"
+	say "linked $skill"
+fi
+
 if ((reload)); then
 	command -v termux-reload-settings >/dev/null 2>&1 && termux-reload-settings || true
 fi

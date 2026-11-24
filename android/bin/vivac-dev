@@ -1,0 +1,800 @@
+#!/usr/bin/env python3
+"""vivac-dev: build, run, see and debug any Android app from the phone itself.
+
+It speaks adb. On the phone, Termux reaches its own adbd through wireless
+debugging on localhost (`vivac-dev pair`, once per boot `vivac-dev connect`),
+which gives the shell user's powers without root: the screen as a tree,
+taps and typing, any app's logs and crashes, installs, dumpsys, run-as. From
+a PC the same commands work over USB. Every verb prints text meant to be read
+by a person or by an agent: short, one fact per line.
+
+Verbs that touch the screen (tap, type, key, swipe) take --pkg and refuse
+when another app has the focus, so nobody else's session is ever driven by
+mistake. Verbs that lose data (clear, uninstall) want --yes.
+"""
+
+import argparse
+import os
+import re
+import shlex
+import shutil
+import socket
+import struct
+import subprocess
+import sys
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+UI_PATH = "/data/local/tmp/vivac-ui.xml"
+INSTALL_HINT = "pkg install android-tools imagemagick sqlite openjdk-17 aapt2 rsync"
+CONNECT_HINT = (
+    "no device. On the phone: Settings > System > Developer options > Wireless debugging on,\n"
+    "  first time: 'Pair device with pairing code', then  vivac-dev pair PORT CODE\n"
+    "  afterwards (each boot):                             vivac-dev connect\n"
+    "  from a PC: plug the cable in with USB debugging on."
+)
+
+
+class Fail(Exception):
+    pass
+
+
+# --- adb -------------------------------------------------------------------
+
+def run(argv, timeout=60, binary=False, check=False):
+    try:
+        done = subprocess.run(argv, capture_output=True, timeout=timeout, text=not binary)
+    except FileNotFoundError:
+        raise Fail(f"{argv[0]} is not installed ({INSTALL_HINT})")
+    except subprocess.TimeoutExpired:
+        raise Fail(f"timed out: {shlex.join(argv)}")
+    if check and done.returncode != 0:
+        err = done.stderr if not binary else done.stderr.decode(errors="replace")
+        out = done.stdout if not binary else ""
+        raise Fail(f"{shlex.join(argv)} failed: {(err or out).strip()}")
+    return done
+
+
+_serial = None
+
+
+def serial():
+    global _serial
+    if _serial:
+        return _serial
+    if os.environ.get("VIVAC_ADB_SERIAL"):
+        _serial = os.environ["VIVAC_ADB_SERIAL"]
+        return _serial
+    out = run(["adb", "devices"]).stdout
+    found = [ln.split("\t")[0] for ln in out.splitlines() if ln.endswith("\tdevice")]
+    if not found:
+        raise Fail(CONNECT_HINT)
+    local = [s for s in found if s.startswith("localhost:")]
+    _serial = (local or found)[0]
+    return _serial
+
+
+def adb(*args, **kw):
+    return run(["adb", "-s", serial(), *args], **kw)
+
+
+def sh(*argv, **kw):
+    """One command on the device; the arguments survive the device's shell."""
+    return adb("shell", shlex.join(argv), **kw)
+
+
+def sh_out(*argv, **kw):
+    return sh(*argv, **kw).stdout
+
+
+# --- focus and the screen --------------------------------------------------
+
+FOCUS_RE = re.compile(r"mCurrentFocus=Window\{\S+ \S+ ([^/\s}]+)/?([^\s}]*)\}")
+
+
+def focus():
+    out = sh_out("dumpsys", "window")
+    m = FOCUS_RE.search(out)
+    if not m:
+        m = re.search(r"mFocusedApp=.*? ([\w.]+)/([\w.$]+)", out)
+    if not m:
+        return None, None
+    pkg, act = m.group(1), m.group(2)
+    if act.startswith("."):
+        act = pkg + act
+    return pkg, act
+
+
+def require_focus(args):
+    if getattr(args, "any", False):
+        return
+    if not args.pkg:
+        raise Fail("touching the screen needs --pkg PACKAGE (the app that must have the focus), or --any")
+    pkg, _ = focus()
+    if pkg != args.pkg:
+        raise Fail(f"the focus is on {pkg or 'nothing'}, not {args.pkg}: not touching it")
+
+
+BOUNDS_RE = re.compile(r"\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
+
+
+def dump_ui():
+    sh("uiautomator", "dump", UI_PATH)
+    xml = adb("exec-out", "cat", UI_PATH).stdout
+    start = xml.find("<?xml")
+    if start < 0:
+        start = xml.find("<hierarchy")
+    if start < 0:
+        raise Fail("uiautomator gave no hierarchy (the screen may be locked or animating; try again)")
+    return ET.fromstring(xml[start:].strip().encode())
+
+
+def nodes(root):
+    """(depth, node) for every node, depth-first."""
+    def walk(n, d):
+        for c in n.findall("node"):
+            yield d, c
+            yield from walk(c, d + 1)
+    yield from walk(root, 0)
+
+
+def centre(node):
+    m = BOUNDS_RE.match(node.get("bounds", ""))
+    if not m:
+        return None
+    x1, y1, x2, y2 = map(int, m.groups())
+    return (x1 + x2) // 2, (y1 + y2) // 2
+
+
+def short_id(node):
+    rid = node.get("resource-id", "")
+    return rid.split("/", 1)[1] if "/" in rid else rid
+
+
+def meaningful(node):
+    return bool(node.get("text") or node.get("content-desc") or node.get("clickable") == "true"
+                or node.get("scrollable") == "true" or node.get("checkable") == "true")
+
+
+def describe(node):
+    parts = []
+    if node.get("text"):
+        parts.append(f'"{node.get("text")}"')
+    if node.get("content-desc"):
+        parts.append(f'desc="{node.get("content-desc")}"')
+    if short_id(node):
+        parts.append(f"id={short_id(node)}")
+    parts.append(node.get("class", "").rsplit(".", 1)[-1])
+    c = centre(node)
+    if c:
+        parts.append(f"@{c[0]},{c[1]}")
+    for attr, label in (("clickable", "click"), ("long-clickable", "long"), ("scrollable", "scroll"),
+                        ("checked", "checked"), ("focused", "focused"), ("selected", "selected"),
+                        ("password", "password")):
+        if node.get(attr) == "true":
+            parts.append(label)
+    if node.get("enabled") == "false":
+        parts.append("disabled")
+    return " ".join(parts)
+
+
+def find_node(root, target):
+    all_nodes = [n for _, n in nodes(root)]
+    tests = (
+        lambda n: n.get("text") == target,
+        lambda n: n.get("content-desc") == target,
+        lambda n: short_id(n) == target or n.get("resource-id") == target,
+        lambda n: target.lower() in (n.get("text") or "").lower(),
+        lambda n: target.lower() in (n.get("content-desc") or "").lower(),
+    )
+    for test in tests:
+        hits = [n for n in all_nodes if test(n) and centre(n)]
+        if hits:
+            hits.sort(key=lambda n: n.get("clickable") != "true")
+            return hits[0]
+    return None
+
+
+# --- verbs -----------------------------------------------------------------
+
+def v_focus(args):
+    pkg, act = focus()
+    print(f"{pkg}/{act}" if pkg else "nothing has the focus (locked screen?)")
+
+
+def v_ui(args):
+    root = dump_ui()
+    pkg, act = focus()
+    print(f"focus: {pkg}/{act}" if pkg else "focus: none")
+    shown = 0
+    for depth, n in nodes(root):
+        if args.all or meaningful(n):
+            print("  " * min(depth, 12) + describe(n))
+            shown += 1
+    if not shown:
+        print("nothing to read: no text or touchable node (a canvas, a game, a video or a remote desktop);"
+              " look with: vivac-dev shot")
+
+
+def v_tap(args):
+    require_focus(args)
+    m = re.fullmatch(r"(\d+),(\d+)", args.target)
+    if m:
+        x, y = m.groups()
+    else:
+        node = find_node(dump_ui(), args.target)
+        if node is None:
+            raise Fail(f"nothing on screen matches {args.target!r} (see: vivac-dev ui)")
+        x, y = centre(node)
+        print(f"tap {describe(node)}")
+    if args.long:
+        sh("input", "swipe", str(x), str(y), str(x), str(y), "700", check=True)
+    else:
+        sh("input", "tap", str(x), str(y), check=True)
+
+
+def v_type(args):
+    require_focus(args)
+    text = args.text.replace("%", r"\%").replace(" ", "%s")
+    sh("input", "text", text, check=True)
+
+
+def v_key(args):
+    require_focus(args)
+    name = args.key.upper()
+    code = name if name.isdigit() or name.startswith("KEYCODE_") else "KEYCODE_" + name
+    sh("input", "keyevent", code, check=True)
+
+
+def screen_size():
+    sizes = re.findall(r"(\d+)x(\d+)", sh_out("wm", "size"))
+    m = sizes[-1] if sizes else None  # an override, when there is one, comes last
+    return (int(m[0]), int(m[1])) if m else (1080, 2400)
+
+
+def v_swipe(args):
+    require_focus(args)
+    w, h = screen_size()
+    cx, cy = w // 2, h // 2
+    dx, dy = {"up": (0, -h // 3), "down": (0, h // 3), "left": (-w // 3, 0), "right": (w // 3, 0)}[args.direction]
+    # "up" moves the finger up, so the content scrolls down.
+    sh("input", "swipe", str(cx - dx // 2), str(cy - dy // 2), str(cx + dx // 2), str(cy + dy // 2), "300", check=True)
+
+
+def v_wait(args):
+    poll = float(os.environ.get("VIVAC_DEV_POLL", "0.7"))
+    deadline = time.monotonic() + args.timeout
+    while True:
+        node = find_node(dump_ui(), args.text)
+        if node is not None and not args.gone:
+            print(describe(node))
+            return
+        if node is None and args.gone:
+            print(f"{args.text!r} is gone")
+            return
+        if time.monotonic() >= deadline:
+            raise Fail(f"timed out after {args.timeout}s waiting for {args.text!r}" + (" to go" if args.gone else ""))
+        time.sleep(poll)
+
+
+def png_size(data):
+    if data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR":
+        return struct.unpack(">II", data[16:24])
+    return None
+
+
+def magick():
+    want = os.environ.get("VIVAC_MAGICK")
+    if want == "none":
+        return None
+    return want or shutil.which("magick") or shutil.which("convert")
+
+
+def out_dir():
+    d = Path(os.environ.get("VIVAC_DEV_OUT") or Path.home() / ".cache" / "vivac-dev")
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def v_shot(args):
+    data = adb("exec-out", "screencap", "-p", binary=True, check=True).stdout
+    if not png_size(data):
+        raise Fail("screencap gave no PNG (a secure window, such as a banking app, blanks it)")
+    dest = Path(args.out) if args.out else out_dir() / "shot.png"
+    dest.write_bytes(data)
+    tool = magick()
+    if tool:
+        geometry = {"top": "100%x34%+0+0", "middle": "100%x34%+0+33%", "bottom": "100%x34%+0+66%"}
+        cmd = [tool, str(dest)]
+        if args.crop:
+            cmd += ["-gravity", "NorthWest", "-crop", geometry.get(args.crop, args.crop), "+repage"]
+        cmd += ["-resize", f"{args.width}x>", str(dest)]
+        run(cmd, check=True)
+        w, h = identify(tool, dest)
+    else:
+        w, h = png_size(data)
+        print(f"note: full size, no imagemagick to shrink it ({INSTALL_HINT})", file=sys.stderr)
+    print(f"{dest} {w}x{h} ~{w * h // 750} tokens")
+
+
+def identify(tool, path):
+    cmd = ([tool, "identify"] if tool.endswith("magick") else [shutil.which("identify") or "identify"])
+    out = run(cmd + ["-format", "%w %h", str(path)], check=True).stdout.split()
+    return int(out[0]), int(out[1])
+
+
+def uid_of(pkg):
+    m = re.search(r"uid:(\d+)", sh_out("pm", "list", "packages", "-U", pkg))
+    if not m:
+        raise Fail(f"{pkg} is not installed")
+    return m.group(1)
+
+
+def v_log(args):
+    uid = uid_of(args.pkg)
+    tail = ["-d"] if not args.follow else []
+    spec = [f"*:{args.level}"] if args.level else []
+    cmd = ["logcat", *tail, f"--uid={uid}", "-v", "threadtime", *(["-t", str(args.lines)] if not args.follow else []), *spec]
+    if args.follow:
+        os.execvp("adb", ["adb", "-s", serial(), "shell", shlex.join(cmd)])
+    out = sh_out(*cmd)
+    if "unrecognized option" in out or "Invalid" in out[:200]:
+        pid = sh_out("pidof", args.pkg).strip()
+        if not pid:
+            raise Fail(f"{args.pkg} is not running and this logcat has no --uid")
+        out = sh_out("logcat", "-d", f"--pid={pid}", "-v", "threadtime", "-t", str(args.lines), *spec)
+    if not out.strip():
+        print(f"no log lines of {args.pkg} in the buffer (not run lately? launch it, then look again)")
+    sys.stdout.write(out)
+
+
+CRASH_START = re.compile(r"FATAL EXCEPTION|\*\*\* \*\*\* \*\*\* \*\*\*")
+
+
+def crash_blocks(text):
+    blocks, cur = [], []
+    for line in text.splitlines():
+        if CRASH_START.search(line) and cur:
+            blocks.append(cur)
+            cur = []
+        if line.startswith("--------- beginning of"):
+            continue
+        cur.append(line)
+    if cur:
+        blocks.append(cur)
+    return [b for b in blocks if any(CRASH_START.search(ln) for ln in b)]
+
+
+def v_crash(args):
+    blocks = crash_blocks(sh_out("logcat", "-d", "-b", "crash", *(["-T", args.since] if args.since else [])))
+    if args.pkg:
+        blocks = [b for b in blocks if any(f"Process: {args.pkg}," in ln or f">>> {args.pkg} <<<" in ln for ln in b)]
+    if not blocks:
+        print("no crash" + (f" of {args.pkg}" if args.pkg else ""))
+        return
+    for b in blocks[-args.count:]:
+        print("\n".join(b))
+        print()
+
+
+def v_anr(args):
+    out = sh_out("logcat", "-d", "-b", "events", "-s", "am_anr")
+    lines = [ln for ln in out.splitlines() if not args.pkg or args.pkg in ln]
+    print("\n".join(lines[-10:]) or "no ANR")
+
+
+def v_info(args):
+    out = sh_out("dumpsys", "package", args.pkg)
+    if f"Package [{args.pkg}]" not in out:
+        raise Fail(f"{args.pkg} is not installed")
+
+    def grab(pattern):
+        m = re.search(pattern, out)
+        return m.group(1) if m else "?"
+
+    print(f"package: {args.pkg}")
+    name, code = grab(r"versionName=(\S+)"), grab(r"versionCode=(\d+)")
+    target, minimum, uid = grab(r"targetSdk=(\d+)"), grab(r"minSdk=(\d+)"), grab(r"(?:userId|appId)=(\d+)")
+    print(f"version: {name} ({code})")
+    print(f"target sdk: {target}  min sdk: {minimum}")
+    print(f"uid: {uid}")
+    flags = grab(r"flags=\[([^\]]*)\]")
+    print(f"debuggable: {'yes' if 'DEBUGGABLE' in flags else 'no (run-as, files and sql need a debug build)'}")
+    launcher = sh_out("cmd", "package", "resolve-activity", "--brief", "-c",
+                      "android.intent.category.LAUNCHER", args.pkg).strip().splitlines()
+    if launcher and "/" in launcher[-1]:
+        print(f"launcher: {launcher[-1]}")
+    schemes, section, scheme = [], None, None
+    for line in out.splitlines():
+        if re.match(r"^  \S.*:$", line):
+            section = line.strip()
+            continue
+        if section == "Schemes:":
+            if re.match(r"^\s{6}\S.*:$", line):
+                scheme = line.strip()
+            elif scheme and f"{args.pkg}/" in line and scheme not in schemes:
+                schemes.append(scheme)
+    if schemes:
+        print("deep links: " + " ".join(schemes))
+    perms, in_runtime = [], False
+    for line in out.splitlines():
+        if line.strip() == "runtime permissions:":
+            in_runtime = True
+            continue
+        if in_runtime:
+            m = re.match(r"\s+([\w.]+): granted=(true|false)", line)
+            if not m:
+                in_runtime = False
+                continue
+            perms.append(f"  {m.group(1).rsplit('.', 1)[-1]} {'granted' if m.group(2) == 'true' else 'denied'}")
+    if perms:
+        print("runtime permissions:")
+        print("\n".join(perms))
+
+
+def v_apps(args):
+    flag = [] if args.all else ["-3"]
+    for line in sorted(sh_out("pm", "list", "packages", *flag).splitlines()):
+        if line.startswith("package:"):
+            print(line[len("package:"):])
+
+
+def v_launch(args):
+    if args.activity:
+        act = args.activity if "/" in args.activity else f"{args.pkg}/{args.activity}"
+        print(sh_out("am", "start", "-W", "-n", act).strip())
+    else:
+        sh("monkey", "-p", args.pkg, "-c", "android.intent.category.LAUNCHER", "1")
+        print(f"launched {args.pkg}")
+
+
+def v_open(args):
+    cmd = ["am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", args.uri]
+    if args.pkg:
+        cmd += ["-p", args.pkg]
+    print(sh_out(*cmd).strip())
+
+
+def v_stop(args):
+    sh("am", "force-stop", args.pkg, check=True)
+    print(f"stopped {args.pkg}")
+
+
+def want_yes(args, what):
+    if not args.yes:
+        raise Fail(f"{what} loses data: run it again with --yes")
+
+
+def v_clear(args):
+    want_yes(args, f"clearing {args.pkg}")
+    print(sh_out("pm", "clear", args.pkg).strip())
+
+
+def v_install(args):
+    print(adb("install", "-r", "-t", *(["-g"] if args.grant else []), args.apk, timeout=300, check=True).stdout.strip())
+
+
+def v_uninstall(args):
+    want_yes(args, f"uninstalling {args.pkg}")
+    print(adb("uninstall", args.pkg, check=True).stdout.strip())
+
+
+def v_perf(args):
+    mem = sh_out("dumpsys", "meminfo", args.pkg)
+    m = re.search(r"TOTAL PSS:\s+(\d+)", mem) or re.search(r"^\s+TOTAL\s+(\d+)", mem, re.M)
+    print(f"memory: {int(m.group(1)) // 1024} MB PSS" if m else "memory: not running")
+    gfx = sh_out("dumpsys", "gfxinfo", args.pkg)
+    for key in ("Total frames rendered", "Janky frames", "50th percentile", "90th percentile", "99th percentile"):
+        m = re.search(rf"{key}:\s*(.+)", gfx)
+        if m:
+            print(f"{key.lower()}: {m.group(1).strip()}")
+    if args.reset:
+        sh("dumpsys", "gfxinfo", args.pkg, "reset")
+        print("frame stats reset")
+
+
+def v_files(args):
+    out = sh(*["run-as", args.pkg, "ls", "-la", args.path or "."])
+    if out.returncode:
+        raise Fail(f"run-as {args.pkg}: {(out.stderr or out.stdout).strip()} (needs a debuggable build)")
+    sys.stdout.write(out.stdout)
+
+
+def pull_private(pkg, path, dest):
+    done = adb("exec-out", shlex.join(["run-as", pkg, "cat", path]), binary=True)
+    if done.returncode or done.stdout.startswith(b"run-as:"):
+        return False
+    Path(dest).write_bytes(done.stdout)
+    return True
+
+
+def v_pull(args):
+    dest = Path(args.dest) if args.dest else out_dir() / Path(args.path).name
+    if not pull_private(args.pkg, args.path, dest):
+        raise Fail(f"cannot read {args.path} of {args.pkg} (needs a debuggable build)")
+    print(dest)
+
+
+def v_sql(args):
+    if not shutil.which("sqlite3"):
+        raise Fail(f"sqlite3 is not installed ({INSTALL_HINT})")
+    base = out_dir() / "db" / args.pkg
+    base.mkdir(parents=True, exist_ok=True)
+    remote = args.db if "/" in args.db else f"databases/{args.db}"
+    local = base / Path(remote).name
+    if not pull_private(args.pkg, remote, local):
+        raise Fail(f"cannot read {remote} of {args.pkg} (needs a debuggable build; see: vivac-dev files {args.pkg} databases)")
+    for suffix in ("-wal", "-shm"):  # the newest rows live in the WAL until a checkpoint
+        side = Path(str(local) + suffix)
+        if not pull_private(args.pkg, remote + suffix, side):
+            side.unlink(missing_ok=True)
+    done = run(["sqlite3", "-readonly", "-header", "-column", str(local), args.query])
+    sys.stdout.write(done.stdout)
+    if done.returncode:
+        raise Fail(done.stderr.strip())
+
+
+def v_prefs(args):
+    listing = sh_out("run-as", args.pkg, "ls", "shared_prefs")
+    if "run-as:" in listing:
+        raise Fail(f"run-as {args.pkg}: needs a debuggable build")
+    for name in listing.split():
+        print(f"== {name}")
+        sys.stdout.write(sh_out("run-as", args.pkg, "cat", f"shared_prefs/{name}"))
+
+
+# --- connection --------------------------------------------------------------
+
+def connect_to(port):
+    out = run(["adb", "connect", f"localhost:{port}"]).stdout
+    return "connected to" in out
+
+
+def open_ports(lo=30000, hi=50000):
+    found = []
+    for port in range(lo, hi):
+        with socket.socket() as s:
+            s.settimeout(0.02)
+            if s.connect_ex(("localhost", port)) == 0:
+                found.append(port)
+    return found
+
+
+def v_connect(args):
+    if connect_to(5555):
+        print("connected: localhost:5555")
+        return
+    ports = []
+    for line in run(["adb", "mdns", "services"]).stdout.splitlines():
+        if "_adb-tls-connect" in line:
+            m = re.search(r":(\d+)\s*$", line)
+            if m:
+                ports.append(int(m.group(1)))
+    if not ports and os.environ.get("VIVAC_DEV_SCAN", "1") == "1":
+        ports = open_ports()
+    for port in ports:
+        if connect_to(port):
+            print(f"connected: localhost:{port}")
+            if args.fixed:
+                global _serial
+                _serial = f"localhost:{port}"
+                adb("tcpip", "5555")
+                time.sleep(2)
+                connect_to(5555)
+                print("adbd also listens on 5555 until the next reboot")
+            return
+    raise Fail("wireless debugging is not answering. Turn it on (Developer options > Wireless debugging);"
+               " if it was never paired: vivac-dev pair PORT CODE")
+
+
+def v_pair(args):
+    out = run(["adb", "pair", f"localhost:{args.port}", args.code]).stdout
+    print(out.strip())
+    if "Successfully paired" not in out:
+        raise Fail("pairing failed: use the port and code shown under 'Pair device with pairing code'")
+    v_connect(argparse.Namespace(fixed=False))
+
+
+def v_doctor(args):
+    ok = True
+    for name, why in (("adb", "everything"), ("magick", "small screenshots"), ("sqlite3", "sql"),
+                      ("java", "local builds"), ("rsync", "builds on another machine")):
+        here = shutil.which(name) or (name == "magick" and shutil.which("convert"))
+        print(f"{'ok ' if here else 'no '} {name:8} {why}")
+        ok &= bool(here) or name != "adb"
+    prefix = os.environ.get("PREFIX", "")
+    if "com.termux" in prefix:
+        aapt2 = Path(prefix) / "bin" / "aapt2"
+        print(f"{'ok ' if aapt2.exists() else 'no '} aapt2    local builds (Gradle's own aapt2 is x86 only)")
+    try:
+        s = serial()
+        print(f"ok  device   {s}")
+        pkg, _ = focus()
+        print(f"ok  focus    {pkg}")
+    except Fail as e:
+        ok = False
+        print(f"no  device   {e}")
+    if not ok or any(not (shutil.which(n) or (n == "magick" and shutil.which("convert")))
+                     for n in ("magick", "sqlite3", "java", "rsync")):
+        print(f"install what is missing: {INSTALL_HINT}")
+    if not ok:
+        raise Fail("not ready")
+
+
+# --- build and run -------------------------------------------------------------
+
+def newest_apk(root, since):
+    apks = [p for p in Path(root).glob("**/build/outputs/apk/**/*.apk") if p.stat().st_mtime >= since]
+    return max(apks, key=lambda p: p.stat().st_mtime) if apks else None
+
+
+def build_local(project, task):
+    cmd = ["./gradlew", task, "--console=plain"]
+    prefix = os.environ.get("PREFIX", "")
+    if "com.termux" in prefix and (Path(prefix) / "bin" / "aapt2").exists():
+        cmd.append(f"-Pandroid.aapt2FromMavenOverride={prefix}/bin/aapt2")
+    start = time.time() - 1
+    done = subprocess.run(cmd, cwd=project)
+    if done.returncode:
+        raise Fail(f"{task} failed (output above)")
+    apk = newest_apk(project, start)
+    if not apk:
+        raise Fail(f"{task} built no APK under build/outputs/apk")
+    return apk
+
+
+def build_remote(project, task, host):
+    name = Path(project).resolve().name
+    remote = f".cache/vivac-dev/build/{name}"
+    run(["ssh", host, "mkdir", "-p", remote], check=True)
+    sync = subprocess.run(["rsync", "-az", "--delete", "--exclude", "build/", "--exclude", ".gradle/",
+                           "--exclude", "local.properties", f"{project}/", f"{host}:{remote}/"])
+    if sync.returncode:
+        raise Fail("rsync to the build machine failed")
+    script = (f"cd {shlex.quote(remote)} && touch .vivac-start && ./gradlew {shlex.quote(task)} --console=plain "
+              f"&& find . -path '*/build/outputs/apk/*' -name '*.apk' -newer .vivac-start | head -1")
+    done = subprocess.run(["ssh", host, script], stdout=subprocess.PIPE, text=True)
+    lines = done.stdout.strip().splitlines()
+    if done.returncode or not lines:
+        sys.stdout.write(done.stdout)
+        raise Fail(f"{task} failed on {host}")
+    sys.stdout.write("\n".join(lines[:-1]) + "\n")
+    local = out_dir() / "apk" / f"{name}.apk"
+    local.parent.mkdir(parents=True, exist_ok=True)
+    run(["scp", "-q", f"{host}:{remote}/{lines[-1]}", str(local)], timeout=600, check=True)
+    return local
+
+
+def v_build(args):
+    project = args.dir
+    if not (Path(project) / "gradlew").exists():
+        raise Fail(f"{project} has no gradlew")
+    apk = build_remote(project, args.task, args.remote) if args.remote else build_local(project, args.task)
+    print(f"apk: {apk}")
+    if args.install or args.pkg:
+        print(adb("install", "-r", "-t", str(apk), timeout=300, check=True).stdout.strip())
+    if args.pkg:
+        since = sh_out("date", "+%m-%d %H:%M:%S.000").strip()
+        sh("am", "force-stop", args.pkg)
+        sh("monkey", "-p", args.pkg, "-c", "android.intent.category.LAUNCHER", "1")
+        time.sleep(args.settle)
+        print(f"launched {args.pkg}; after {args.settle}s:")
+        v_crash(argparse.Namespace(pkg=args.pkg, since=since, count=1))
+        pkg, act = focus()
+        print(f"focus: {pkg}/{act}")
+
+
+# --- command line ---------------------------------------------------------------
+
+def parser():
+    p = argparse.ArgumentParser(prog="vivac-dev", description=__doc__.split("\n\n")[0])
+    sub = p.add_subparsers(dest="verb", required=True, metavar="VERB")
+
+    def verb(name, fn, help_):
+        s = sub.add_parser(name, help=help_)
+        s.set_defaults(fn=fn)
+        return s
+
+    def touching(s):
+        s.add_argument("--pkg", help="the app that must have the focus")
+        s.add_argument("--any", action="store_true", help="touch whatever has the focus")
+
+    verb("pair", v_pair, "pair with wireless debugging once (port and code from its pairing screen)").add_argument("port")
+    sub.choices["pair"].add_argument("code")
+    verb("connect", v_connect, "connect to this phone's adbd (each boot)").add_argument(
+        "--fixed", action="store_true", help="also make adbd listen on 5555 until reboot")
+    verb("doctor", v_doctor, "what is installed and connected")
+
+    verb("focus", v_focus, "the app and activity in front")
+    verb("ui", v_ui, "the screen as a compact tree with tap coordinates").add_argument(
+        "--all", action="store_true", help="every node, not only meaningful ones")
+    s = verb("tap", v_tap, "tap a node by text, description, id, or X,Y")
+    s.add_argument("target")
+    s.add_argument("--long", action="store_true")
+    touching(s)
+    s = verb("type", v_type, "type text into the focused field")
+    s.add_argument("text")
+    touching(s)
+    s = verb("key", v_key, "press a key: back, home, enter, tab, del, app_switch, or a keycode")
+    s.add_argument("key")
+    touching(s)
+    s = verb("swipe", v_swipe, "swipe the finger up, down, left or right")
+    s.add_argument("direction", choices=["up", "down", "left", "right"])
+    touching(s)
+    s = verb("wait", v_wait, "wait until text is on screen (or --gone)")
+    s.add_argument("text")
+    s.add_argument("--timeout", type=float, default=10)
+    s.add_argument("--gone", action="store_true")
+    s = verb("shot", v_shot, "screenshot, shrunk; prints path, size and token cost")
+    s.add_argument("--width", type=int, default=480)
+    s.add_argument("--crop", help="top, middle, bottom, or an imagemagick geometry")
+    s.add_argument("--out")
+
+    verb("apps", v_apps, "installed apps (--all: system ones too)").add_argument("--all", action="store_true")
+    verb("info", v_info, "version, debuggable, deep links, permissions").add_argument("pkg")
+    s = verb("launch", v_launch, "start an app")
+    s.add_argument("pkg")
+    s.add_argument("--activity")
+    s = verb("open", v_open, "open a URI (deep link) through an intent")
+    s.add_argument("uri")
+    s.add_argument("--pkg")
+    verb("stop", v_stop, "force-stop an app").add_argument("pkg")
+    s = verb("clear", v_clear, "wipe an app's data (--yes)")
+    s.add_argument("pkg")
+    s.add_argument("--yes", action="store_true")
+    s = verb("install", v_install, "install or update an APK")
+    s.add_argument("apk")
+    s.add_argument("--grant", action="store_true", help="grant every runtime permission")
+    s = verb("uninstall", v_uninstall, "remove an app (--yes)")
+    s.add_argument("pkg")
+    s.add_argument("--yes", action="store_true")
+
+    s = verb("log", v_log, "one app's log")
+    s.add_argument("pkg")
+    s.add_argument("--lines", type=int, default=300)
+    s.add_argument("--level", choices=list("VDIWEF"))
+    s.add_argument("--follow", "-f", action="store_true")
+    s = verb("crash", v_crash, "the last crashes (Java and native), of one app or all")
+    s.add_argument("pkg", nargs="?")
+    s.add_argument("--count", type=int, default=3)
+    s.add_argument("--since", help="logcat time, 'MM-DD hh:mm:ss.mmm'")
+    verb("anr", v_anr, "recent ANRs").add_argument("pkg", nargs="?")
+    s = verb("perf", v_perf, "memory and frame timing")
+    s.add_argument("pkg")
+    s.add_argument("--reset", action="store_true", help="reset frame stats after reading")
+    s = verb("files", v_files, "list an app's private files (debug builds)")
+    s.add_argument("pkg")
+    s.add_argument("path", nargs="?")
+    s = verb("pull", v_pull, "copy one private file out (debug builds)")
+    s.add_argument("pkg")
+    s.add_argument("path")
+    s.add_argument("dest", nargs="?")
+    s = verb("sql", v_sql, "query an app's SQLite/Room database, read-only (debug builds)")
+    s.add_argument("pkg")
+    s.add_argument("db", help="name under databases/, or a path")
+    s.add_argument("query")
+    verb("prefs", v_prefs, "an app's shared preferences (debug builds)").add_argument("pkg")
+
+    s = verb("build", v_build, "gradle build; --pkg also installs, relaunches and reports crash and focus")
+    s.add_argument("dir", nargs="?", default=".")
+    s.add_argument("--task", default="assembleDebug")
+    s.add_argument("--remote", metavar="HOST", help="build on another machine over ssh and rsync")
+    s.add_argument("--install", action="store_true")
+    s.add_argument("--pkg", help="install, relaunch it and check for a crash")
+    s.add_argument("--settle", type=float, default=3)
+    return p
+
+
+def main(argv=None):
+    args = parser().parse_args(argv)
+    try:
+        args.fn(args)
+    except Fail as e:
+        print(f"vivac-dev: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
