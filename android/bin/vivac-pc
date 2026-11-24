@@ -3,5 +3,9 @@
 # any, are the command to run there:  vivac-pc claude --continue
 set -Eeuo pipefail
 [[ "$(vivac-pair status 2>/dev/null)" != none ]] || vivac-pair >/dev/null
-if (($#)); then exec ssh -t pc "$(printf '%q ' "$@")"; fi
+if (($#)); then
+	tty=-T
+	[[ -t 0 ]] && tty=-t
+	exec ssh "$tty" pc "$(printf '%q ' "$@")"
+fi
 exec ssh -t pc
