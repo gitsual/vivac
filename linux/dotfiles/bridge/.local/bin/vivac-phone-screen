@@ -13,7 +13,11 @@
 # there across the right edge and the keyboard follows: an extension, not a
 # remote control of what is here. wayvnc serves that monitor alone, on
 # 127.0.0.1 only; the phone reaches it over the USB cable (adb reverse) and
-# its VNC viewer (AVNC) is opened on it. Off: all of it undone, and the
+# its VNC viewer (AVNC) is opened on it, the phone turned to landscape and
+# held there, awake (it does not dim or sleep, nor does this computer lock or
+# blank its screens meanwhile), and Alt+number /
+# Alt+Shift+number reach its workspaces. Off: all of it undone (the phone's
+# rotation and stay-awake setting as they were), and the
 # windows that were on the phone's workspaces come back to this monitor.
 set -Eeuo pipefail
 
@@ -31,6 +35,10 @@ output=VIVAC-PHONE
 port=5900
 scale="${VIVAC_PHONE_SCREEN_SCALE:-2}"
 state="${XDG_RUNTIME_DIR:-/tmp}/vivac-phone-screen.pid"
+rotation="${XDG_RUNTIME_DIR:-/tmp}/vivac-phone-screen.rotation"
+stayon="${XDG_RUNTIME_DIR:-/tmp}/vivac-phone-screen.stayon"
+inhibit="${XDG_RUNTIME_DIR:-/tmp}/vivac-phone-screen.inhibit"
+viewer=com.gaurav.avnc
 bar_config="${XDG_CONFIG_HOME:-$HOME/.config}/waybar/phone/config"
 bar_style="${XDG_CONFIG_HOME:-$HOME/.config}/waybar/phone/style.css"
 if [[ -z "${ADB:-}" ]]; then
@@ -53,8 +61,17 @@ phone() {
 mode_on() { [[ -s "$state" ]]; }
 rule() { hyprctl eval "$1" >/dev/null 2>&1 || true; }
 
+# connect SERIAL — the screen to the phone over USB, and its viewer opened
+# afresh (one left open keeps the zoom it had in portrait). Again after the
+# phone comes back from a USB blip: the forward goes with the old connection.
+connect() {
+	"$ADB" -s "$1" reverse tcp:$port tcp:$port >/dev/null 2>&1 || true
+	"$ADB" -s "$1" shell am force-stop "$viewer" >/dev/null 2>&1 || true
+	"$ADB" -s "$1" shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$port" >/dev/null 2>&1 || true
+}
+
 on() {
-	local serial size w h monitors right primary n
+	local serial size w h monitors right primary n cutout inset
 	serial="$(phone)" || serial=""
 	[[ -n "$serial" ]] || {
 		tell "$(i18n_get phone.screen_none)"
@@ -64,6 +81,13 @@ on() {
 	size="$("$ADB" -s "$serial" shell wm size 2>/dev/null | sed -n 's/^Physical size: \([0-9]*\)x\([0-9]*\).*/\1 \2/p' | tail -1)" || size=""
 	read -r w h <<<"${size:-1080 2400}"
 	((w < h)) && read -r w h <<<"$h $w"
+	# Less the camera cutout (the largest of its insets): the viewer keeps clear
+	# of it, so a screen as wide as the whole panel would be shrunk to fit.
+	cutout="$("$ADB" -s "$serial" shell dumpsys window displays 2>/dev/null |
+		sed -n 's/.*mDisplayCutout=DisplayCutout{insets=Rect(\([0-9]*\), \([0-9]*\) - \([0-9]*\), \([0-9]*\)).*/\1 \2 \3 \4/p' | head -n 1)" || cutout=""
+	inset=0
+	for n in $cutout; do ((n > inset && n < w / 4)) && inset=$n; done
+	w=$((w - inset))
 
 	monitors="$(hyprctl monitors -j)"
 	primary="$(jq -r '[.[] | select(.name != "'"$output"'")][0].name' <<<"$monitors")"
@@ -75,14 +99,56 @@ on() {
 	done < <(jq -r '.[] | select(.name != "'"$output"'") |
 		[.name, "\(.width)x\(.height)@\(.refreshRate | round)", "\(.x)x\(.y)", (if .scale == (.scale | floor) then (.scale | floor) else .scale end | tostring)] | @tsv' <<<"$monitors")
 	rule "hl.monitor({ output = \"$output\", mode = \"${w}x${h}@60\", position = \"${right}x0\", scale = \"$scale\" })"
+	# Adding/removing an output disables owb's input-capture session (shared
+	# mouse/keyboard with the laptop) and owb never re-arms it: restart it.
+	systemctl --user try-restart owb.service >/dev/null 2>&1 || true
 	rule "hl.workspace_rule({ workspace = \"11\", monitor = \"$output\", default = true })"
 	for n in 12 13 14 15 16 17 18 19 20; do rule "hl.workspace_rule({ workspace = \"$n\", monitor = \"$output\" })"; done
 	for n in 1 2 3 4 5 6 7 8 9 10; do rule "hl.workspace_rule({ workspace = \"$n\", monitor = \"$primary\" })"; done
+	# Alt+number to the phone's workspaces, Alt+Shift+number to send a window
+	# there: bound only while the phone is a screen, since many programs take
+	# Alt+number (a browser's tabs) and get it back once this ends.
+	for n in 1 2 3 4 5 6 7 8 9 10; do
+		rule "hl.bind(\"ALT + $((n % 10))\", hl.dsp.focus({ workspace = $((10 + n)) }))"
+		rule "hl.bind(\"ALT + SHIFT + $((n % 10))\", hl.dsp.window.move({ workspace = $((10 + n)) }))"
+	done
 
 	setsid -f waybar -c "$bar_config" -s "$bar_style" >/dev/null 2>&1 </dev/null
 	setsid -f wayvnc -o "$output" 127.0.0.1 "$port" >/dev/null 2>&1 </dev/null
-	"$ADB" -s "$serial" reverse tcp:$port tcp:$port >/dev/null
-	"$ADB" -s "$serial" shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$port" >/dev/null 2>&1 || true
+	# The screen is landscape: the phone is turned and held there, or a phone
+	# in portrait shows it small between black bands. Its own setting ("free",
+	# or "lock N") is kept to give back when this ends.
+	# A rotation still kept from a phone unplugged while on is the phone's
+	# own; the one it shows now is the landscape this left it in.
+	[[ -s "$rotation" ]] ||
+		"$ADB" -s "$serial" shell cmd window user-rotation 2>/dev/null | tr -d '\r' | head -n 1 >"$rotation" || true
+	"$ADB" -s "$serial" shell cmd window user-rotation lock 1 >/dev/null 2>&1 || true
+	# A screen in use does not go dark: awake on the cable, and woken now. Its
+	# own stay-awake setting is kept to give back, as the rotation is.
+	# Awake is not enough: a Pixel still dims after its screen timeout, so the
+	# timeout is stretched and the brightness raised too. Each setting the
+	# phone had is kept (once: one kept from an unplug is the phone's own).
+	if [[ ! -s "$stayon" ]]; then
+		local key value
+		for key in "global stay_on_while_plugged_in" "system screen_off_timeout" "system screen_brightness"; do
+			# shellcheck disable=SC2086  # namespace and key, two words on purpose
+			value="$("$ADB" -s "$serial" shell settings get $key 2>/dev/null | tr -d '\r' | head -n 1)" || value=""
+			[[ "$value" =~ ^[0-9]+$ ]] && printf '%s %s\n' "$key" "$value" >>"$stayon"
+		done
+	fi
+	"$ADB" -s "$serial" shell svc power stayon usb >/dev/null 2>&1 || true
+	"$ADB" -s "$serial" shell settings put system screen_off_timeout 1800000 >/dev/null 2>&1 || true
+	"$ADB" -s "$serial" shell settings put system screen_brightness 255 >/dev/null 2>&1 || true
+	"$ADB" -s "$serial" shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+	# Nor does this computer lock or turn its screens off meanwhile: reading on
+	# the phone is no input here (the owner chose this; hypridle honours
+	# systemd's idle locks). Held until the mode ends.
+	if command -v systemd-inhibit >/dev/null; then
+		systemd-inhibit --what=idle --who=vivac --why="$(i18n_get phone.screen_awake)" sleep infinity </dev/null >/dev/null 2>&1 &
+		printf '%s\n' "$!" >"$inhibit"
+		disown
+	fi
+	connect "$serial"
 	printf '%s\n' "$serial" >"$state"
 	setsid -f "$self" watch </dev/null >/dev/null 2>&1
 	tell "$(i18n_get phone.screen_on)"
@@ -95,7 +161,37 @@ off() {
 	pkill -f -- "^wayvnc -o $output " 2>/dev/null || true
 	pkill -f -- "^waybar -c $bar_config" 2>/dev/null || true
 	[[ -n "$serial" ]] && { "$ADB" -s "$serial" reverse --remove tcp:$port >/dev/null 2>&1 || true; }
+	# The phone's rotation back as it was: only a value Android printed itself,
+	# and only to a phone still there; unplugged, it is kept for next time.
+	local was
+	was="$(cat "$rotation" 2>/dev/null)" || was=""
+	if [[ -n "$serial" && "$(phone)" == "$serial" ]]; then
+		rm -f -- "$rotation"
+		"$ADB" -s "$serial" shell am force-stop "$viewer" >/dev/null 2>&1 || true
+		local ns key value
+		while read -r ns key value; do
+			[[ "$ns" =~ ^(global|system)$ && "$key" =~ ^[a-z_]+$ && "$value" =~ ^[0-9]+$ ]] || continue
+			"$ADB" -s "$serial" shell settings put "$ns" "$key" "$value" >/dev/null 2>&1 || true
+		done <"$stayon" 2>/dev/null || true
+		rm -f -- "$stayon"
+		if [[ "$was" =~ ^lock\ [0-3]$ ]]; then
+			"$ADB" -s "$serial" shell cmd window user-rotation $was >/dev/null 2>&1 || true
+		else
+			"$ADB" -s "$serial" shell cmd window user-rotation free >/dev/null 2>&1 || true
+		fi
+	fi
+	local lock
+	lock="$(cat "$inhibit" 2>/dev/null)" || lock=""
+	rm -f -- "$inhibit"
+	[[ "$lock" =~ ^[0-9]+$ ]] && kill "$lock" 2>/dev/null || true
+	for n in 0 1 2 3 4 5 6 7 8 9; do
+		rule "hl.unbind(\"ALT + $n\")"
+		rule "hl.unbind(\"ALT + SHIFT + $n\")"
+	done
 	hyprctl output remove "$output" >/dev/null 2>&1 || true
+	# Adding/removing an output disables owb's input-capture session (shared
+	# mouse/keyboard with the laptop) and owb never re-arms it: restart it.
+	systemctl --user try-restart owb.service >/dev/null 2>&1 || true
 }
 
 case "${1:-}" in
@@ -108,12 +204,28 @@ toggle)
 	fi
 	;;
 watch)
-	# Every few seconds while on: the phone gone ends it.
+	# Every few seconds while on: the phone gone ends it. Gone means missing
+	# several checks in a row: a USB blip (the phone re-enumerating, adb
+	# reconnecting) must not tear the screen down under whoever is using it.
+	# Missing for a minute, not three checks: the phone also drops off USB on
+	# its own (it switches USB mode and re-enumerates). Back from such a blip
+	# it is connected again: the USB forward went with the old connection.
+	misses=0
 	while mode_on; do
-		if [[ -z "$(phone)" ]]; then
-			off
-			tell "$(i18n_get phone.screen_off)"
-			break
+		current="$(phone)" || current=""
+		if [[ -z "$current" ]]; then
+			misses=$((misses + 1))
+			if ((misses >= ${VIVAC_PHONE_SCREEN_MISSES:-12})); then
+				off
+				tell "$(i18n_get phone.screen_off)"
+				break
+			fi
+		else
+			if ((misses > 0)); then
+				printf '%s\n' "$current" >"$state"
+				connect "$current"
+			fi
+			misses=0
 		fi
 		sleep "${VIVAC_PHONE_SCREEN_CHECK:-5}"
 	done

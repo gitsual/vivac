@@ -269,4 +269,38 @@ for action in '' 'rm -rf ~' 'lock; true' '../vivac-link' 'sh'; do
 done
 grep -q '^\(cli\|open\)' "$calls" && fail 'a refused action ran something'
 
+# --- status and do: what the phone panel (vivac-panel phone) reads and runs -----------------------------------------
+# status: one JSON object, the reachable phones with their battery, and what
+# this machine can do with them; never an error.
+printf 'a1b2c3d4e5f60718_29 Pixel 8\n' >"$devices"
+out="$(CHARGE=54 CHARGING=true phone status)"
+python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["installed"] and d["daemon"], d; p=d["phones"]; assert p==[{"id":"a1b2c3d4e5f60718_29","name":"Pixel 8","charge":54,"charging":True}], p; assert d["can_browse"] is True, d' "$out" ||
+	fail "status: $out"
+out="$(DAEMON=no phone status)"
+python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["phones"]==[] and d["daemon"] is False, d' "$out" || fail "status without the daemon: $out"
+out="$(CLI=/nonexistent phone status)"
+python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert d["installed"] is False and d["phones"]==[], d' "$out" || fail "status without KDE Connect: $out"
+
+# do: one action on one phone, no rofi; the panel says what happened, so it
+# prints a line instead of a notification, and exits non-zero on failure.
+: >"$calls"
+phone do ring --device a1b2c3d4e5f60718_29 >"$sandbox/out" || fail 'do ring failed'
+grep -qx 'cli -d a1b2c3d4e5f60718_29 --ring' "$calls" || fail "do ring: $(cat "$calls")"
+grep -q 'Pixel 8' "$sandbox/out" || fail "do ring said: $(cat "$sandbox/out")"
+grep -q '^rofi\|^notify' "$calls" && fail 'do asked rofi or notified'
+printf 'x\n' >"$sandbox/me/f.txt"
+: >"$calls"
+phone do send-file --device a1b2c3d4e5f60718_29 "$sandbox/me/f.txt" >/dev/null || fail 'do send-file failed'
+grep -qx "cli -d a1b2c3d4e5f60718_29 --share $sandbox/me/f.txt" "$calls" || fail "do send-file: $(cat "$calls")"
+if phone do send-file --device a1b2c3d4e5f60718_29 "$sandbox/me/missing" >/dev/null 2>&1; then fail 'do sent a missing file'; fi
+: >"$calls"
+CLIP='https://example.org/a' phone do send-url --device a1b2c3d4e5f60718_29 >/dev/null || fail 'do send-url failed'
+grep -qx 'cli -d a1b2c3d4e5f60718_29 --share https://example.org/a' "$calls" || fail "do send-url: $(cat "$calls")"
+if CLIP='file:///etc/passwd' phone do send-url --device a1b2c3d4e5f60718_29 >/dev/null 2>&1; then fail 'do shared a non-http link'; fi
+if FAIL=1 phone do send-clip --device a1b2c3d4e5f60718_29 >/dev/null 2>&1; then fail 'a failed send-clip reported success'; fi
+for bad in 'rm' 'ring;id' '--ring'; do
+	if phone do "$bad" --device a1b2c3d4e5f60718_29 >/dev/null 2>&1; then fail "do accepted: $bad"; fi
+done
+if phone do ring --device '-x' >/dev/null 2>&1; then fail 'do accepted a device id that is an option'; fi
+
 printf 'phone: bar JSON and silence, menu actions on the chosen phone, runcommand presets merged and idempotent, run refuses the rest\n'
