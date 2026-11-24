@@ -22,7 +22,7 @@ a6e7674979d2751e40c52a0b0f984bfe601ac21438eaeb4831fc078a48abc23f  dotfiles/bridg
 901374e5bfed46f823646709ca31f47ec31f91fbc06945a430079dfed778c978  dotfiles/bridge/.local/bin/vivac-mouse
 3e236351ab946d96290d6ee9fcdb8f9bf7afc2917f4bf001914d72361cfeef7a  dotfiles/bridge/.local/bin/vivac-phone
 d8693d4cfe2ee4a6ddae2aee5cdfbd02b886ed4aa92630653d0191cb5391d182  dotfiles/bridge/.local/bin/vivac-phone-pull
-d3e62949bbedffd512df7148db96c7a27458c767a3fc405fddf2734b3a25efc4  dotfiles/bridge/.local/bin/vivac-phone-screen
+0e02f8f403769e8087be588a53d295cfeab09120532e826746f9ef1c1ebdb0cb  dotfiles/bridge/.local/bin/vivac-phone-screen
 13c3fb6a28242f0c50b95cd13b0b5bea69d53117385585f5e6f9fdbc155fc037  dotfiles/bridge/.local/bin/vivac-reboot-other
 cc2a1bbf6d1907f1d1c05b776a0213cc3bc5b9747939784f9a85dd4d9348ff57  dotfiles/bridge/.local/share/applications/vivac-phone-screen.desktop
 f69058aa3305f02195637654679bd12f2d8ccaae01217764c6e5e3922d11b8b4  dotfiles/bridge/.local/share/vivac/switch-login.sh

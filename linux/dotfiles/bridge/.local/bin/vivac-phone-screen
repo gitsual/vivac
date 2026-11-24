@@ -3,6 +3,8 @@
 # as a screen").
 #
 #   vivac-phone-screen toggle   on or off
+#   vivac-phone-screen switch   the phone swaps between this screen's viewer
+#                               and Termux (Super+Tab while it is a screen)
 #   vivac-phone-screen watch    (started by toggle) turns it off once the
 #                               phone is unplugged
 #   vivac-phone-screen auto     (started with the session) the phone plugged
@@ -135,6 +137,9 @@ on() {
 		rule "hl.bind(\"ALT + $((n % 10))\", hl.dsp.focus({ workspace = $((10 + n)) }))"
 		rule "hl.bind(\"ALT + SHIFT + $((n % 10))\", hl.dsp.window.move({ workspace = $((10 + n)) }))"
 	done
+	# Super+Tab swaps the phone between the viewer and Termux: the computer's
+	# mouse lives only inside the viewer, so the way back is a key.
+	rule "hl.bind(\"SUPER + Tab\", hl.dsp.exec_cmd(\"$self switch\"))"
 
 	mv -f -- "$keeping" "$fragment"
 	keeping=""
@@ -217,6 +222,7 @@ off() {
 		rule "hl.unbind(\"ALT + $n\")"
 		rule "hl.unbind(\"ALT + SHIFT + $n\")"
 	done
+	rule "hl.unbind(\"SUPER + Tab\")"
 	rm -f -- "$fragment"
 	hyprctl output remove "$output" >/dev/null 2>&1 || true
 	# Adding/removing an output disables owb's input-capture session (shared
@@ -231,6 +237,18 @@ toggle)
 		tell "$(i18n_get phone.screen_off)"
 	else
 		on
+	fi
+	;;
+switch)
+	# The viewer in front: Termux. Anything else: the viewer, its open session
+	# brought to the front by the vnc:// it was opened with (Android hands the
+	# intent to the task already there; nothing reconnects).
+	serial="$(phone)" || exit 0
+	front="$("$ADB" -s "$serial" shell dumpsys window 2>/dev/null | sed -n 's/.*mCurrentFocus=Window{[^ ]* [^ ]* \([^/}]*\).*/\1/p' | head -n 1)" || front=""
+	if [[ "$front" == "$viewer" ]]; then
+		"$ADB" -s "$serial" shell am start -n com.termux/.app.TermuxActivity >/dev/null 2>&1 || true
+	else
+		"$ADB" -s "$serial" shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$port" >/dev/null 2>&1 || true
 	fi
 	;;
 watch)

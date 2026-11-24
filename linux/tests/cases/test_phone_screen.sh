@@ -44,6 +44,8 @@ printf 'adb %s\n' "$*" >>"$CALLS"
 # The phone's rotation, as Android prints it: "free", or "lock N".
 [[ "$*" == *'shell cmd window user-rotation' ]] && printf '%s\n' "${ROTATION:-free}"
 [[ "$*" == *'shell wm size' ]] && printf 'Physical size: 1080x2400\n'
+# The app in front, as dumpsys prints it: FOCUS names its package.
+[[ "$*" == *'shell dumpsys window' ]] && printf '  mCurrentFocus=Window{93b3450 u0 %s/%s.Main}\n' "${FOCUS:-com.gaurav.avnc}" "${FOCUS:-com.gaurav.avnc}"
 [[ "$*" == *'shell settings get global stay_on_while_plugged_in' ]] && printf '%s\n' "${STAYON:-0}"
 [[ "$*" == *'shell settings get system screen_off_timeout' ]] && printf '30000\n'
 [[ "$*" == *'shell settings get system screen_brightness' ]] && printf '60\n'
@@ -119,6 +121,10 @@ has 'hl.bind("ALT + 1", hl.dsp.focus({ workspace = 11 }))' "Alt+1 does not go to
 has 'hl.bind("ALT + 0", hl.dsp.focus({ workspace = 20 }))' "Alt+0 does not go to workspace 20"
 has 'hl.bind("ALT + SHIFT + 1", hl.dsp.window.move({ workspace = 11 }))' "Alt+Shift+1 does not send the window to 11"
 has 'hl.bind("ALT + SHIFT + 0", hl.dsp.window.move({ workspace = 20 }))' "Alt+Shift+0 does not send the window to 20"
+# Super+Tab swaps the phone between this screen's viewer and Termux: the
+# computer's mouse lives only inside the viewer, so the way back is a key.
+has 'hl.bind("SUPER + Tab", hl.dsp.exec_cmd(' "Super+Tab does not swap the phone's app"
+grep -F 'hl.bind("SUPER + Tab"' "$calls" | grep -qF 'vivac-phone-screen switch' || fail "Super+Tab does not run the switch"
 # The viewer starts afresh, after the turn: one left open from before keeps
 # the zoom it had in portrait and shows the screen small.
 stop="$(grep -n 'am force-stop com.gaurav.avnc' "$calls" | head -1 | cut -d: -f1)"
@@ -150,6 +156,7 @@ has 'adb -s PHONE1 shell settings put global stay_on_while_plugged_in 0' "the ph
 has 'adb -s PHONE1 shell settings put system screen_off_timeout 30000' "the phone's own screen timeout was not given back"
 has 'adb -s PHONE1 shell settings put system screen_brightness 60' "the phone's own brightness was not given back"
 has 'hl.unbind("ALT + 1")' "Alt+1 was left bound"
+has 'hl.unbind("SUPER + Tab")' "Super+Tab was left bound"
 kill -0 "$inhibitor" 2>/dev/null && fail "the idle lock outlived the phone screen"
 [[ ! -e "$sandbox/run/vivac-phone-screen.inhibit" ]] || fail "the idle lock left its record"
 has 'hl.unbind("ALT + SHIFT + 0")' "Alt+Shift+0 was left bound"
@@ -287,4 +294,17 @@ assert all(k == v for k, v in icons.items()), icons
 assert c["modules-left"][0] == "hyprland/workspaces", c["modules-left"]
 assert "custom/weather" in c and "vivac-panel waybar forecast" in c["custom/weather"]["exec"], c.get("custom/weather")
 ' "$repo_root/dotfiles/waybar/.config/waybar/phone/config" "$repo_root/render/waybar/config.in" || fail "the phone's bar does not have the time and the weather in the middle"
+# switch: from the viewer to Termux, and from anything else back to the
+# viewer, whose open session is brought to the front (the same vnc:// it was
+# opened with), not started again. No phone: nothing is sent.
+: >"$calls"
+SERIAL=PHONE1 FOCUS=com.gaurav.avnc "$tool" switch || fail "switch failed"
+has 'adb -s PHONE1 shell am start -n com.termux/.app.TermuxActivity' "switch from the viewer did not open Termux"
+: >"$calls"
+SERIAL=PHONE1 FOCUS=com.termux "$tool" switch || fail "switch failed"
+has 'adb -s PHONE1 shell am start -a android.intent.action.VIEW -d vnc://127.0.0.1:5900' "switch from Termux did not bring the viewer back"
+! grep -q 'force-stop' "$calls" || fail "switch restarted the viewer"
+: >"$calls"
+SERIAL= "$tool" switch >/dev/null 2>&1 || true
+! grep -q ' am start' "$calls" || fail "switch sent something with no phone"
 echo "phone screen: its own monitor, workspaces 11-20 and bar, served over USB only, undone off or unplugged"
