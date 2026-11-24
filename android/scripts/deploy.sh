@@ -235,7 +235,7 @@ link "$here/data/desk/i3.config" "$HOME/.config/i3/config"
 link "$here/data/desk/polybar.ini" "$HOME/.config/polybar/config.ini"
 [[ -f "$font" ]] && link "$font" "$HOME/.local/share/fonts/vivac-FiraCode-Regular.ttf"
 
-# 9. Claude Code on the phone (bin/claude) reads what this phone is and how
+# 10. Claude Code on the phone (bin/claude) reads what this phone is and how
 # it reaches the computer and the rest of the phone (vivac-pair, vivac-adb).
 link "$here/data/claude/CLAUDE.md" "$HOME/.claude/CLAUDE.md"
 

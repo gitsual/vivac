@@ -7,7 +7,8 @@
 # Over the USB cable the computer's own sshd for the phone (vivac-phone-ssh,
 # port 8222) is reached on 127.0.0.1 through adb reverse, with no network at
 # all; without the cable, over Tailscale, by the name pc_host in
-# ~/.config/vivac/settings (arch by default). The route is a marked block in
+# ~/.config/vivac/settings (arch by default), as pc_user there (else
+# prompt_user). The route is a marked block in
 # ~/.ssh/config, rewritten on each pairing; the rest of the file is kept.
 # The phone's key is ~/.ssh/id_ed25519, made the first time; the computer
 # lets it in once authorised there (vivac-phone-ssh authorize).
@@ -18,10 +19,16 @@ key="$HOME/.ssh/id_ed25519"
 config="$HOME/.ssh/config"
 pc_host="$(sed -n 's/^pc_host=//p' "$HOME/.config/vivac/settings" 2>/dev/null | tail -1)" || pc_host=""
 [[ "$pc_host" =~ ^[A-Za-z0-9.-]+$ ]] || pc_host=arch
+# The login on the computer: pc_user, else prompt_user (the name the prompt
+# already shows), else the phone's own.
+setting() { sed -n "s/^$1=//p" "$HOME/.config/vivac/settings" 2>/dev/null | tail -1; }
+pc_user="$(setting pc_user)" || pc_user=""
+[[ -n "$pc_user" ]] || pc_user="$(setting prompt_user)" || pc_user=""
+[[ "$pc_user" =~ ^[A-Za-z0-9._-]+$ ]] || pc_user="$(id -un)"
 
 reaches() {
 	ssh -o BatchMode=yes -o ConnectTimeout=4 -o StrictHostKeyChecking=accept-new \
-		-i "$key" -p "$port" "$1" true >/dev/null 2>&1 </dev/null
+		-i "$key" -p "$port" -l "$pc_user" "$1" true >/dev/null 2>&1 </dev/null
 }
 
 route_block() {
@@ -29,6 +36,7 @@ route_block() {
 		"Host pc" \
 		"  HostName $1" \
 		"  Port $port" \
+		"  User $pc_user" \
 		"  IdentityFile $key" \
 		"  StrictHostKeyChecking accept-new" \
 		"  ControlMaster auto" \

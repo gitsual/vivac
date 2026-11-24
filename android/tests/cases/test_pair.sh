@@ -26,7 +26,7 @@ trap 'rm -rf -- "$sandbox"' EXIT
 export PREFIX="$sandbox/usr" HOME="$sandbox/home" CALLS="$sandbox/calls"
 mkdir -p "$PREFIX/bin" "$HOME/.ssh" "$HOME/.config/vivac"
 printf 'Host other\n  HostName example.org\n' >"$HOME/.ssh/config"
-printf 'pc_host=arch\n' >"$HOME/.config/vivac/settings"
+printf 'pc_host=arch\nprompt_user=lorty\n' >"$HOME/.config/vivac/settings"
 
 fakes="$sandbox/fakes"
 mkdir -p "$fakes"
@@ -40,6 +40,7 @@ host="" port=22 args=()
 while (($#)); do
 	case "$1" in
 	-p) port="$2"; shift 2 ;;
+	-l) printf 'user %s\n' "$2" >>"$CALLS"; shift 2 ;;
 	-o|-F|-i) shift 2 ;;
 	-t|-T|-q|-n) shift ;;
 	*) if [[ -z "$host" ]]; then host="$1"; else args+=("$1"); fi; shift ;;
@@ -70,12 +71,14 @@ out="$(REACH='' bash "$bin/vivac-pair" 2>&1)" && fail "paired with nothing reach
 [[ "$out" == *"vivac-phone-ssh authorize"* ]] || fail "no hint on how to authorise it: $out"
 ! grep -q '>>> vivac pc' "$HOME/.ssh/config" || fail "a route was written with none reachable"
 
+grep -q '^user lorty' "$CALLS" || fail "probed the computer as the phone's own user"
+
 # 2. Over the cable: 127.0.0.1:8222, with no network at all.
 : >"$CALLS"
 REACH='usb' bash "$bin/vivac-pair" >/dev/null || fail "did not pair over USB"
 ! grep -q '^ssh-keygen' "$CALLS" || fail "made a new key although it had one"
 block="$(sed -n '/^# >>> vivac pc/,/^# <<< vivac pc/p' "$HOME/.ssh/config")"
-[[ "$block" == *"HostName 127.0.0.1"* && "$block" == *"Port 8222"* ]] || fail "USB route not written: $block"
+[[ "$block" == *"HostName 127.0.0.1"* && "$block" == *"Port 8222"* && "$block" == *"User lorty"* ]] || fail "USB route not written: $block"
 grep -q '^Host other' "$HOME/.ssh/config" || fail "the user's own ssh config was lost"
 [[ "$(REACH='usb' bash "$bin/vivac-pair" status)" == *usb* ]] || fail "status does not say usb"
 
