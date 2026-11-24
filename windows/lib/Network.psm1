@@ -794,6 +794,8 @@ function Show-Network([switch]$NoShow, [hashtable]$Registry, [ValidateSet('wifi'
             if ($k -eq 'Return' -and $i -ge 0) { & $connect $list[$i]; & $renderNets; $e.Handled = $true; return }
         })
 
+    # The host turns an open panel to the other tab when the pointer rests on the other pill.
+    $window.Resources['vivac.setTab'] = $setTab
     & $setTab $Tab
     & $renderWifi
     & $renderEth

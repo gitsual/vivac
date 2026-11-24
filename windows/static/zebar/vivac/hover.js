@@ -20,8 +20,13 @@ export function panelFor(act, ctx = {}) {
   if (act === 'clock') return 'calendar';
   if (act === 'weather') return 'forecast';
   if (act === 'eject') return ctx.drive ? `usb:${ctx.drive}` : null;
+  // Both network pills open the one panel, each on its own tab.
+  if (act === 'network') return ctx.tab ? `network:${ctx.tab}` : 'network';
   return BY_ACT[act] ?? null;
 }
+
+// The words the host is told: network:wifi is "network wifi", usb:G: goes as it is.
+export const verbOf = (key) => (key.startsWith('network:') ? key.replace(':', ' ') : key);
 
 // A button with a panel shows no tooltip: the panel is its tooltip.
 export const opensPanel = (act) => act === 'eject' || act in BY_ACT;

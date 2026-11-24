@@ -7,7 +7,7 @@
 // NVIDIA card). This file only knows how to draw each one.
 import * as zebar from './zebar-client.js';
 import { config } from './config.js';
-import { createHoverIntent, opensPanel, panelFor, isHostPanel } from './hover.js';
+import { createHoverIntent, opensPanel, panelFor, isHostPanel, verbOf } from './hover.js';
 
 const icons = await fetch('./workspace-icons.json').then((r) => r.json());
 
@@ -199,23 +199,25 @@ function drawTitle(wm) {
 const realAddress = (i) => (i.ipv4Addresses || []).find((a) => !a.startsWith('169.254.'));
 const selfAssigned = (i) => (i.ipv4Addresses || []).some((a) => a.startsWith('169.254.'));
 // A click opens vivac's network panel (lib/Network.psm1).
-const netPill = (cls, glyph, title) =>
-  `<button class="pill ${cls}" data-act="network" title="${esc(title)}"><span class="glyph">${glyph}</span></button>`;
+const netPill = (cls, glyph, title, tab) =>
+  `<button class="pill ${cls}" data-act="network" data-tab="${tab}" title="${esc(title)}"><span class="glyph">${glyph}</span></button>`;
 function networkPill(net, kind) {
   const ifaces = (net?.interfaces || []).filter((i) => i.type === (kind === 'wired' ? 'ethernet' : 'wifi'));
   const up = ifaces.find(realAddress);
   const linked = ifaces.find(selfAssigned);
   const glyph = kind === 'wired' ? G.wired : G.wifi;
+  // Each pill opens the panel on its own tab.
+  const tab = kind === 'wired' ? 'ethernet' : 'wifi';
   // Glyph only, the state in its colour and the detail on hover: the clock
   // stays at the true middle only if the right half fits in half the bar.
   if (up) {
     let tip = up.friendlyName || up.name;
     if (kind === 'wireless' && net.defaultGateway?.ssid) tip = `${net.defaultGateway.ssid} ${net.defaultGateway.signalStrength ?? ''}%  ${tip}`;
-    return netPill('net', glyph, `${realAddress(up)}  ${tip}`);
+    return netPill('net', glyph, `${realAddress(up)}  ${tip}`, tab);
   }
-  if (linked) return netPill('net linked', glyph, `${config.labels.no_address}  ${linked.friendlyName || linked.name}`);
-  if (kind === 'wired') return netPill('net disconnected', G.wiredOff, `${config.labels.wired}: ${config.labels.no_link}`);
-  return netPill('net disconnected', G.wifiOff, `Wi-Fi: ${config.labels.not_connected}`);
+  if (linked) return netPill('net linked', glyph, `${config.labels.no_address}  ${linked.friendlyName || linked.name}`, tab);
+  if (kind === 'wired') return netPill('net disconnected', G.wiredOff, `${config.labels.wired}: ${config.labels.no_link}`, tab);
+  return netPill('net disconnected', G.wifiOff, `Wi-Fi: ${config.labels.not_connected}`, tab);
 }
 
 let gpuTemp = null;
@@ -571,7 +573,7 @@ function drawRight(out) {
         setTimeout(pollUpdates, 300000);
       });
     } else {
-      b.addEventListener('click', () => launch(act));
+      b.addEventListener('click', () => launch(act === 'network' && b.dataset.tab ? `network ${b.dataset.tab}` : act));
     }
   });
 }
@@ -639,14 +641,14 @@ const intent = createHoverIntent({
   clearTimer: (id) => clearTimeout(id),
   onRest(key) {
     const panel = popupOf(key);
-    if (isHostPanel(panel)) { hostSay(`hover ${key}`); return; }
+    if (isHostPanel(panel)) { hostSay(`hover ${verbOf(key)}`); return; }
     if (panel === 'system') { try { localStorage.setItem('system.tab', key.split(':')[1] || 'cpu'); } catch {} }
     mark(`popup.${panel}.hot`, 1);
     startPopup(panel);
   },
   onLeave(key) {
     const panel = popupOf(key);
-    if (isHostPanel(panel)) hostSay(`hover-leave ${key}`);
+    if (isHostPanel(panel)) hostSay(`hover-leave ${verbOf(key)}`);
     else mark(`popup.${panel}.hot`, 0);
   },
 });
@@ -658,7 +660,7 @@ function keyAt(target) {
   const b = target.closest?.('[data-act]');
   if (!b) return null;
   const act = b.dataset.act;
-  const panel = panelFor(act, { drive: b.dataset.drive });
+  const panel = panelFor(act, { drive: b.dataset.drive, tab: b.dataset.tab });
   if (!panel) return null;
   return act === 'sys' ? 'system:cpu' : act === 'sysgauge' ? `system:${b.dataset.tab}` : panel;
 }

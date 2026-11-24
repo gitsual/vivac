@@ -58,13 +58,24 @@ function Get-VivacHoverNow { [long]([Diagnostics.Stopwatch]::GetTimestamp() * 10
 # as resident windows are named, so the pipe cannot be made to open anything
 # else this way; usb carries the drive (usb:G:) its menu is about.
 function Resolve-VivacHoverVerb([string]$Text) {
-    $m = [regex]::Match($Text, '^hover(-leave)? (network|bluetooth|sound|security|theme|power|updates|usb:[a-z]:)$')
+    $m = [regex]::Match($Text, '^hover(-leave)? (network(?: (?:wifi|ethernet))?|bluetooth|sound|security|theme|power|updates|usb:[a-z]:)$')
     if (-not $m.Success) { return $null }
     $panel = $m.Groups[2].Value
-    $r = @{ Kind = 'rest'; Verb = $panel; Key = $panel; Drive = '' }
+    # The network panel has two tabs, named by the pill the pointer is on.
+    $tab = ''
+    if ($panel -like 'network *') { $tab = $panel.Substring(8); $panel = 'network' }
+    $r = @{ Kind = 'rest'; Verb = $panel; Key = $panel; Drive = ''; Tab = $tab }
     if ($m.Groups[1].Success) { $r.Kind = 'leave' }
     if ($panel -like 'usb:*') { $r.Verb = 'usb'; $r.Key = 'usb'; $r.Drive = $panel.Substring(4).ToUpperInvariant() }
     $r
+}
+
+# A click's verb may carry the tab too ("network ethernet"): the verb and
+# the tab, apart. Anything else comes back whole, with no tab.
+function Resolve-VivacPanelTab([string]$Text) {
+    $m = [regex]::Match($Text, '^network (wifi|ethernet)$')
+    if ($m.Success) { return @{ Verb = 'network'; Tab = $m.Groups[1].Value } }
+    @{ Verb = $Text; Tab = '' }
 }
 
 # Verbs that share a window share its slot in the host's registry.
@@ -84,7 +95,10 @@ function Step-VivacHover($Verb, [hashtable]$Open, [hashtable]$States, [long]$Now
     if (-not $live) { $States.Remove($key) }
     if ($Verb.Kind -eq 'rest') {
         if (-not $live) { return 'open' }
-        if ($States.ContainsKey($key)) { $States[$key].ButtonRested($Now); return 'rested' }
+        if ($States.ContainsKey($key)) { $States[$key].ButtonRested($Now) }
+        # An open panel with tabs follows the pill the pointer rests on.
+        if ($Verb.Tab) { return 'switch' }
+        if ($States.ContainsKey($key)) { return 'rested' }
         return 'ignored'
     }
     if ($live -and $States.ContainsKey($key)) { $States[$key].ButtonLeft($Now); return 'left' }
@@ -103,4 +117,4 @@ function Step-VivacClick([string]$Key, [hashtable]$Open, [hashtable]$States) {
     'toggle'
 }
 
-Export-ModuleMember -Function New-VivacHoverClose, Get-VivacHoverRestMs, Get-VivacHoverNow, Resolve-VivacHoverVerb, Get-VivacHoverKey, Step-VivacHover, Step-VivacClick
+Export-ModuleMember -Function New-VivacHoverClose, Get-VivacHoverRestMs, Get-VivacHoverNow, Resolve-VivacHoverVerb, Get-VivacHoverKey, Step-VivacHover, Step-VivacClick, Resolve-VivacPanelTab

@@ -254,6 +254,57 @@ Case 'the bar sends hover verbs to the host pipe only, never starts a panel for 
     }
 }
 
+# ------------------------------------------------- Wi-Fi and Ethernet tabs
+
+Case 'the network verbs carry the tab, for hover and for a click' {
+    $v = Resolve-VivacHoverVerb 'hover network ethernet'
+    Assert-Equal 'rest' $v.Kind; Assert-Equal 'network' $v.Key; Assert-Equal 'ethernet' $v.Tab
+    Assert-Equal 'wifi' (Resolve-VivacHoverVerb 'hover-leave network wifi').Tab
+    Assert-Equal '' (Resolve-VivacHoverVerb 'hover network').Tab
+    Assert-True ($null -eq (Resolve-VivacHoverVerb 'hover network bogus')) 'a made-up tab was accepted'
+    Assert-True ($null -eq (Resolve-VivacHoverVerb 'hover sound wifi')) 'a tab on a panel without tabs'
+    $c = Resolve-VivacPanelTab 'network wifi'
+    Assert-Equal 'network' $c.Verb; Assert-Equal 'wifi' $c.Tab
+    $c = Resolve-VivacPanelTab 'sound'
+    Assert-Equal 'sound' $c.Verb; Assert-Equal '' $c.Tab
+    Assert-Equal 'network x' (Resolve-VivacPanelTab 'network x').Verb
+}
+Case 'resting on the other pill switches an open network panel, hover-opened or not' {
+    $eth = Resolve-VivacHoverVerb 'hover network ethernet'
+    $open = @{ network = (New-FakeWindow $true) }; $states = @{ network = (New-VivacHoverClose) }
+    $states.network.ButtonRested(0); $states.network.ButtonLeft(10)
+    Assert-Equal 'switch' (Step-VivacHover $eth $open $states 100)
+    Assert-True (-not $states.network.Tick(9999)) 'the switch did not cancel the pending close'
+    Assert-Equal 'switch' (Step-VivacHover $eth @{ network = (New-FakeWindow $true) } @{} 0)
+    Assert-Equal 'rested' (Step-VivacHover (Resolve-VivacHoverVerb 'hover network') $open $states 100)
+    Assert-Equal 'open' (Step-VivacHover $eth @{} @{} 0)
+}
+Case 'the bar puts the tab on both network pills, and hover and click carry it' {
+    $js = [IO.File]::ReadAllText((Join-Path $zebar 'bar.js'))
+    Assert-True ($js -match 'data-act="network" data-tab="\$\{tab\}"') 'the pills carry no tab'
+    Assert-True ($js -match "launch\(act === 'network'") 'a click does not carry the tab'
+    if ($hasNode) {
+        $r = Invoke-Mjs @"
+import { panelFor, verbOf } from '@ZEBAR@/hover.js';
+console.log(JSON.stringify([panelFor('network', { tab: 'ethernet' }), panelFor('network', {}), verbOf('network:wifi'), verbOf('usb:G:'), verbOf('sound')]));
+"@
+        Assert-Equal @('network:ethernet', 'network', 'network wifi', 'usb:G:', 'sound') $r
+    }
+    $cmds = (ConvertFrom-Json $pack).widgets[0].privileges.shellCommands
+    $click = ($cmds | Where-Object { $_.program -eq 'cmd.exe' -and $_.argsRegex -match 'conhost' }).argsRegex
+    $line = '/c echo network ethernet>\\.\pipe\vivac-x 2>nul || conhost.exe --headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\x\bin\vivac.ps1 network ethernet'
+    Assert-True ($line -match $click) 'the click with a tab is not granted'
+    Assert-True (($line -replace 'ethernet', 'bogus') -notmatch $click) 'a made-up tab is granted'
+    $hover = ($cmds | Where-Object { $_.argsRegex -like '^/c echo (hover|hover-leave)*' }).argsRegex
+    Assert-True ('/c echo hover network wifi>\\.\pipe\vivac-x 2>nul' -match $hover) 'hover with a tab is not granted'
+}
+Case 'a network panel can be switched to a tab by the host, and opened on one' {
+    $net = [IO.File]::ReadAllText((Join-Path $root 'lib\Network.psm1'))
+    Assert-True ($net -match "Resources\['vivac\.setTab'\]") 'Show-Network does not expose its tab switch'
+    Assert-True ($daemon -match 'vivac\.setTab') 'the host never switches the tab'
+    Assert-True ($daemon -match '(?s)\$netArgs\.Tab = \$tab.{0,40}Show-Network @netArgs') 'the host does not open on the tab'
+}
+
 # ------------------------------------------------- the Zebar popups' rule
 
 Case 'the popups'' rule (hover-rule.js) is the same contract as the host''s' {

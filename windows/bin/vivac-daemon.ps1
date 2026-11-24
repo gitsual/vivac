@@ -177,11 +177,24 @@ function Invoke-Verb([string]$Verb) {
     # bar button. Opening is the click's verb, in hover mode.
     $hoverVerb = Resolve-VivacHoverVerb $Verb
     $driveForUsb = ''
+    $tab = ''
     if ($hoverVerb) {
         $step = Step-VivacHover $hoverVerb $open $hoverStates (Get-VivacHoverNow)
+        if ($step -eq 'switch') {
+            # Resting on the other pill (Wi-Fi, Ethernet) turns the open panel to its tab.
+            $w = $open[$hoverVerb.Key]
+            if ($w -and $w.Resources['vivac.setTab']) { & $w.Resources['vivac.setTab'] $hoverVerb.Tab }
+            return
+        }
         if ($step -ne 'open') { return }
         $Verb = $hoverVerb.Verb
         $driveForUsb = $hoverVerb.Drive
+        $tab = $hoverVerb.Tab
+    } else {
+        # A click on a pill names its tab too: "network ethernet".
+        $split = Resolve-VivacPanelTab $Verb
+        $Verb = $split.Verb
+        $tab = $split.Tab
     }
     if (@('menu', 'phone', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security', 'usb') -notcontains $Verb) { return }
     # The phone is the menu, open on its category: one window for both. The
@@ -224,7 +237,11 @@ function Invoke-Verb([string]$Verb) {
         'theme' { Show-ThemePicker -Registry $open }
         'sound' { Show-Sound -Registry $open }
         'bluetooth' { Show-Bluetooth -Registry $open }
-        'network' { Show-Network -Registry $open }
+        'network' {
+            $netArgs = @{ Registry = $open }
+            if ($tab) { $netArgs.Tab = $tab }
+            Show-Network @netArgs
+        }
         'updates' { Show-Updates -Registry $open }
         'clipboard' { Show-Clipboard -Registry $open }
         'security' { Show-Security -Registry $open }
