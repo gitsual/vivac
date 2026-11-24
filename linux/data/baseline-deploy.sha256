@@ -13,6 +13,7 @@ d41c8a7443dca0a4871539a652020666549f453c6d6c10f10e49661e132d687b  dotfiles/audio
 97a20e1e58ac4e9f1f63bac63468d392e89d987210079be0823e4131e712c0dc  dotfiles/bridge/.config/systemd/user/vivac-link.service
 3bb181ae038b38796647ff21a8ee30906615f80dcafda24fff55de799cc7ce9d  dotfiles/bridge/.config/systemd/user/vivac-localsend.service
 cd7f3a00fef835c822d8cc3db2fa85a447431c0f78a96349f392ceb322e41177  dotfiles/bridge/.config/systemd/user/vivac-mouse.service
+74f3b9db915ace4424c88a523c35965b8ad3ad215deec1e9024e681fde761d69  dotfiles/bridge/.config/systemd/user/vivac-phone-ssh.service
 5a358276f8df8db104346516e4925d6cebf219434379875259e937c1f82e7c77  dotfiles/bridge/.local/bin/vivac-bridge
 085c2a11464dac78cd539b858f67d9dfa7fe262722b7ac89c02cd56e5eef54c1  dotfiles/bridge/.local/bin/vivac-bt-sync
 0f52e24a87149a37819272b9669ae47db02fc9fe57d47ce1f84558ecd4e8091a  dotfiles/bridge/.local/bin/vivac-drop
@@ -23,6 +24,7 @@ a6e7674979d2751e40c52a0b0f984bfe601ac21438eaeb4831fc078a48abc23f  dotfiles/bridg
 3e236351ab946d96290d6ee9fcdb8f9bf7afc2917f4bf001914d72361cfeef7a  dotfiles/bridge/.local/bin/vivac-phone
 d8693d4cfe2ee4a6ddae2aee5cdfbd02b886ed4aa92630653d0191cb5391d182  dotfiles/bridge/.local/bin/vivac-phone-pull
 6b75144fddc3e7b3a1ea3de0d86c5f9feae144a2e514dde05b26250a3cd2e9df  dotfiles/bridge/.local/bin/vivac-phone-screen
+f07b0a8498f646e66b515414577188cfecdc34bc36c7c76680047503a67b50e1  dotfiles/bridge/.local/bin/vivac-phone-ssh
 13c3fb6a28242f0c50b95cd13b0b5bea69d53117385585f5e6f9fdbc155fc037  dotfiles/bridge/.local/bin/vivac-reboot-other
 cc2a1bbf6d1907f1d1c05b776a0213cc3bc5b9747939784f9a85dd4d9348ff57  dotfiles/bridge/.local/share/applications/vivac-phone-screen.desktop
 f69058aa3305f02195637654679bd12f2d8ccaae01217764c6e5e3922d11b8b4  dotfiles/bridge/.local/share/vivac/switch-login.sh
