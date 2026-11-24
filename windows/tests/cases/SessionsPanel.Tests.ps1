@@ -24,7 +24,7 @@ Add-Content -LiteralPath $env:FAKE_SES_CALLS -Value $Accion -Encoding UTF8
 if ($env:FAKE_SES_FAIL -and $Accion -eq 'guardar') { exit 1 }
 if ($Accion -eq 'ver') {
     'Foto del 2026-11-13T10:20:30'
-    '  [1] Terminal: Claude «trabajo» + Hermes abc'
+    '  [1] Terminal: Claude 'work' + Hermes abc'
     '  [2] chrome: Correo'
     '  [1] code: proyecto'
 }
@@ -33,11 +33,12 @@ if ($Accion -eq 'ver') {
     function Read-Calls { if (Test-Path -LiteralPath $calls) { @([IO.File]::ReadAllLines($calls)) } else { @() } }
 
     Case 'the photo is read from what ver prints: when it was taken, and the windows with their workspace' {
-        $photo = ConvertFrom-VivacSessionsView "Foto del 2026-11-13T10:20:30`n  [1] Terminal: Claude «a» + Hermes x`n  [12] chrome: Correo`n"
+        $q = [string][char]0x00AB
+        $photo = ConvertFrom-VivacSessionsView "Foto del 2026-11-13T10:20:30`n  [1] Terminal: Claude ${q}a${q} + Hermes x`n  [12] chrome: Correo`n"
         Assert-Equal '2026-11-13 10:20' $photo.Taken
         Assert-Equal 2 @($photo.Windows).Count
         Assert-Equal '1' @($photo.Windows)[0].Workspace
-        Assert-Equal 'Terminal: Claude «a» + Hermes x' @($photo.Windows)[0].Title
+        Assert-Equal "Terminal: Claude ${q}a${q} + Hermes x" @($photo.Windows)[0].Title
         $none = ConvertFrom-VivacSessionsView ''
         Assert-Equal '' $none.Taken
         Assert-Equal 0 @($none.Windows).Count

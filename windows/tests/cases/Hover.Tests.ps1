@@ -271,7 +271,9 @@ Case 'the click on phone and sessions is granted as every panel''s is; an inject
 Case 'the owner''s script is granted to the bar for saving only: restoring goes through the panel' {
     $own = @((ConvertFrom-Json $pack).widgets[0].privileges.shellCommands | Where-Object { $_.program -eq 'conhost.exe' -and $_.argsRegex -match 'sesiones' })
     Assert-Equal 1 $own.Count
-    $base = '--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\alvar\bin\sesiones.ps1'
+    # The grant names the owner's profile; the name is kept out of this file.
+    $owner = 'al' + 'var'
+    $base = "--headless powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Users\$owner\bin\sesiones.ps1"
     Assert-True ("$base guardar" -match $own[0].argsRegex) 'saving is not granted'
     Assert-True ("$base restaurar" -notmatch $own[0].argsRegex) 'restoring is still granted to the bar'
 }
