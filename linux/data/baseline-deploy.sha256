@@ -20,7 +20,7 @@ a6e7674979d2751e40c52a0b0f984bfe601ac21438eaeb4831fc078a48abc23f  dotfiles/bridg
 5284f27d93bbbf730ed9bc3b53ebbf021528505ef46f630e6068445f83af00a1  dotfiles/bridge/.local/bin/vivac-link
 7bd7a30ecb9076f1290b8e93567e8a01439dae0b549fec9473d985d24890e070  dotfiles/bridge/.local/bin/vivac-localsend
 901374e5bfed46f823646709ca31f47ec31f91fbc06945a430079dfed778c978  dotfiles/bridge/.local/bin/vivac-mouse
-226fb543182a787bd2a873168b6fcaa05f23e240f953b8404dab05819fa7f32f  dotfiles/bridge/.local/bin/vivac-phone
+6acbc55c01b449d7c458f7f272d3262d52c003e9886c7a7a5800603700bf7b03  dotfiles/bridge/.local/bin/vivac-phone
 cc23e5ad1ee9950f43f8fd42de9560c79cc1e20f47723fc652fb683676c06fe3  dotfiles/bridge/.local/bin/vivac-phone-desk
 d8693d4cfe2ee4a6ddae2aee5cdfbd02b886ed4aa92630653d0191cb5391d182  dotfiles/bridge/.local/bin/vivac-phone-pull
 13c3fb6a28242f0c50b95cd13b0b5bea69d53117385585f5e6f9fdbc155fc037  dotfiles/bridge/.local/bin/vivac-reboot-other

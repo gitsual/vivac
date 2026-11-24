@@ -655,7 +655,9 @@ The list is fixed: `lock` (`loginctl lock-session`), `suspend`, `clip-other`
 and `reboot-windows` (when the firmware has a Windows entry; it runs
 `vivac-reboot-other`, which asks its two questions on the computer's
 screen like any restart, section 2: a tap on a phone is not a yes from
-whoever is working there, and with nobody at the screen nothing happens). Each entry only names one of these,
+whoever is working there, and with nobody at the screen nothing happens) and
+`phone-desk` (when scrcpy is installed: the phone as ten more desktops, on or
+off, `vivac-phone-desk toggle`). Each entry only names one of these,
 and `vivac-phone run` refuses any other name, so what the phone can do is
 decided by vivac, not by the file. Entries whose key starts `vivac-` are
 replaced on every run; any other is the user's own and is kept. A second run
@@ -684,6 +686,13 @@ windows, shown by scrcpy in a window Hyprland tiles like any other. Ten of
 them, on workspaces 11 to 20; the phone's own screen stays free. The keyboard
 and mouse are this computer's. A desktop already open is only switched to;
 closing its window hands its apps back to the phone's screen.
+
+The usual way in is the mode, `vivac-phone-desk toggle`: the app *Phone as
+desktops* in the launcher, or *Phone as desktops (on or off)* in KDE
+Connect's Run command on the phone. On, the phone's desktop 1 opens on
+workspace 11 and the view goes there; each of the others opens by itself the
+first time its workspace (12 to 20) is visited, following Hyprland's event
+socket, and stays. Running it again, or unplugging the phone, closes them all.
 
 It needs scrcpy and the phone over adb (USB debugging on, the cable in, or
 adb over Wi-Fi once paired). Without a phone it says so and opens nothing.
