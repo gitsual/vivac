@@ -3,7 +3,8 @@
 # does for Zebar. Hyprland starts this instead of waybar itself.
 #
 # Every KEEP_INTERVAL seconds (3) it looks for a waybar of this user and starts
-# one when there is none; a bar started by hand or reloaded with SIGUSR2 is left
+# one when there is none; the phone's own bar (vivac-phone-screen starts it with
+# -c .../waybar/phone/config) is not the main bar and does not count; a bar started by hand or reloaded with SIGUSR2 is left
 # alone. A bar that dies KEEP_MAX_RESTARTS times (5) in a row without ever being
 # seen running is given up on for KEEP_BACKOFF rounds (100, about five minutes),
 # with one notice, so a broken config does not flash the bar forever. One keeper
@@ -27,6 +28,15 @@ language="${VIVAC_LANG:-${LANG:-en}}"
 language="${language%%[._@]*}"
 i18n_load "$language" "${I18N_DIR:-$repo/i18n}" 2>/dev/null || i18n_load en "${I18N_DIR:-$repo/i18n}" 2>/dev/null || true
 
+# The main bar is any waybar of this user that is not the phone's.
+main_bar_runs() {
+	local line
+	while IFS= read -r line; do
+		[[ "$line" == */waybar/phone/* ]] || return 0
+	done < <(pgrep -u "$(id -u)" -a -x waybar 2>/dev/null)
+	return 1
+}
+
 exec 9>"$lock"
 flock -n 9 || exit 0
 
@@ -37,7 +47,7 @@ while :; do
 	fi
 	if ((quiet > 0)); then
 		((quiet--)) || true
-	elif pgrep -u "$(id -u)" -x waybar >/dev/null 2>&1; then
+	elif main_bar_runs; then
 		restarts=0
 	elif ((restarts >= max)); then
 		if ((!told)); then
@@ -46,7 +56,7 @@ while :; do
 		fi
 		restarts=0 quiet=$backoff
 	else
-		setsid -f "$bin" >/dev/null 2>&1 || true
+		setsid -f "$bin" >/dev/null 2>&1 9>&- || true
 		((++restarts))
 	fi
 	sleep "$interval"

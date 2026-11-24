@@ -81,7 +81,7 @@ a4353be654658716d3d23fd03c646cef654fe470c0d22b7e0f6e398cc55d9013  dotfiles/wayba
 3dd7b22883046fc9bc9a568611223443456ebcaf17425cb0c17870e98370d666  dotfiles/waybar/.config/waybar/phone/style.css
 25c572c4b4f84a8342bd763e4429f6f3c5025f3fef2c3ec77232eb71aab30012  dotfiles/waybar/.config/waybar/scripts/net-wired.sh
 6688b4714fa5be29c249fbc72567e3de67c908df0a8daa3c0e8afdc5a24f7c95  dotfiles/waybar/.config/waybar/scripts/net-wireless.sh
-5ca0f70a23bf1b312f3cd58d12a36ed5b77970834346f70ebf55fb66128c862a  dotfiles/waybar/.config/waybar/scripts/waybar-keep.sh
+0f77e067186447b30609cb084431ab0952d8c6b3ef31ca875d4f66f9dad3ca7f  dotfiles/waybar/.config/waybar/scripts/waybar-keep.sh
 ac81224fc768b751e3c5ac3b10ff1c8ef6c6f8b00ab7fd075b40d9dfbc9417ec  dotfiles/waybar/.config/waybar/scripts/ws-refresh.sh
 647f0d9a165bf0db975c3ae7f585931e2fc8e1a9e6a8e2660722e4d4835b4620  dotfiles/waybar/.config/waybar/scripts/ws-render.sh
 2cb9ebfd2ab43185baf760edc9aae6ae675f11fb099077d719575b8b824300af  dotfiles/waybar/.config/waybar/scripts/ws-windows.sh
