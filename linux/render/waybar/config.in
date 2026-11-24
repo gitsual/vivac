@@ -78,6 +78,6 @@
   "custom/usb": {"exec": "$HOME/.local/bin/vivac-panel waybar usb", "return-type": "json", "format": "{}", "interval": 5, "on-click": "$HOME/.local/bin/vivac-panel usb"},
   "custom/security": {"exec": "$HOME/.local/bin/vivac-panel waybar security", "return-type": "json", "format": "{}", "interval": 300, "on-click": "$HOME/.local/bin/vivac-panel security"},
   "tray": {"icon-size": 16, "spacing": 8, "show-passive-items": true},
-  "custom/theme": {"format": "◐", "on-click": "$HOME/.local/bin/vivac-theme", "tooltip": false},
-  "custom/power": {"format": "⏻", "on-click": "$HOME/.config/rofi/power/powermenu.sh", "tooltip": false}
+  "custom/theme": {"format": "◐", "on-click": "$HOME/.local/bin/vivac-panel theme", "tooltip": false},
+  "custom/power": {"format": "⏻", "on-click": "$HOME/.local/bin/vivac-panel power", "tooltip": false}
 }
