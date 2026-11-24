@@ -82,6 +82,8 @@ devices) printf 'List of devices attached\nlocalhost:5555\tdevice\n\n' ;;
 "connect localhost:5555") echo 'failed to connect to localhost:5555'; exit 1 ;;
 "mdns services") printf 'List of discovered mdns services\nadb-39071FDJ-abc\t_adb-tls-connect._tcp\tadb-host.local:41234\n' ;;
 "connect localhost:41234") echo 'connected to localhost:41234' ;;
+*"shell dumpsys input"*) printf '      Viewport INTERNAL: displayId=0, orientation=1, logicalFrame=[0, 0, 2400, 1080], isActive=[1]\n' ;;
+*"shell wm size"*) echo 'Physical size: 1080x2400' ;;
 *"shell dumpsys window"*) printf '  mCurrentFocus=Window{abc u0 %s/%s.MainActivity}\n' "$(cat "$FAKE_DIR/focus.txt")" "$(cat "$FAKE_DIR/focus.txt")" ;;
 *"shell uiautomator dump"*) echo 'UI hierchary dumped to: /sdcard/window_dump.xml' ;;
 *"exec-out cat"*) cat "$FAKE_DIR/ui.xml" ;;
@@ -146,6 +148,11 @@ not_logged 'input tap'
 : >"$log"
 dev type 'hola mundo' --pkg com.example.app >/dev/null || fail "type failed"
 logged 'shell input text hola%smundo'
+
+# A swipe uses the screen as it is turned now, not its portrait size.
+: >"$log"
+dev swipe up --pkg com.example.app >/dev/null || fail "swipe failed"
+logged 'shell input swipe 1200 720 1200 360 300'
 
 # Waiting for text already on screen returns at once.
 dev wait Save --timeout 1 >/dev/null || fail "wait did not see Save"

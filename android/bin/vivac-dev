@@ -248,6 +248,12 @@ def v_key(args):
 
 
 def screen_size():
+    """The screen as it is turned now: the logical frame of display 0, else wm size."""
+    for line in sh_out("dumpsys", "input").splitlines():
+        if "displayId=0" in line and "isActive=[1]" in line:
+            m = re.search(r"logicalFrame=\[0, 0, (\d+), (\d+)\]", line)
+            if m:
+                return int(m.group(1)), int(m.group(2))
     sizes = re.findall(r"(\d+)x(\d+)", sh_out("wm", "size"))
     m = sizes[-1] if sizes else None  # an override, when there is one, comes last
     return (int(m[0]), int(m[1])) if m else (1080, 2400)
