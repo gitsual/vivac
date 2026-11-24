@@ -25,7 +25,8 @@ printf 'old mine\n' >"$PREFIX/bin/vivac-facts"
 printf 'Port 8022\n#PasswordAuthentication yes\nPrintMotd yes\n' >"$PREFIX/etc/ssh/sshd_config"
 mkdir -p "$HOME/.termux" "$HOME/.config/vivac"
 printf 'background=#000000\n' >"$HOME/.termux/colors.properties"
-printf 'theme=metropolis\n' >"$HOME/.config/vivac/settings"
+printf 'theme=metropolis\nprompt_user=someone\n' >"$HOME/.config/vivac/settings"
+printf 'alias ll="ls -l"\n' >"$HOME/.bashrc"
 printf 'extra-keys = [[ESC, TAB]]\nterminal-cursor-style = block\n' >"$HOME/.termux/termux.properties"
 
 # The font comes from the network: a fake curl hands over a fixture, whose
@@ -34,6 +35,11 @@ fakes="$sandbox/fakes"
 mkdir -p "$fakes"
 printf 'not really a font\n' >"$sandbox/font.fixture"
 python3 -c 'import sys,zipfile; zipfile.ZipFile(sys.argv[1],"w").write(sys.argv[2],"ttf/FiraCode-Regular.ttf")' "$sandbox/font.zip" "$sandbox/font.fixture"
+cat >"$fakes/getprop" <<'FAKE'
+#!/usr/bin/env bash
+[[ "$1" == ro.product.model ]] && echo 'Pixel 8'
+FAKE
+chmod +x "$fakes/getprop"
 cat >"$fakes/curl" <<'FAKE'
 #!/usr/bin/env bash
 out=""
@@ -83,6 +89,12 @@ grep -qx 'terminal-cursor-style = bar' "$props" || fail "Termux cursor is not ki
 grep -qx 'terminal-cursor-blink-rate = 500' "$props" || fail "Termux cursor does not blink like kitty's"
 grep -qx 'extra-keys = \[\[ESC, TAB\]\]' "$props" || fail "deploy lost the user's termux.properties"
 [[ "$(grep -c '^terminal-cursor-style' "$props")" == 1 ]] || fail "cursor style set twice"
+# The prompt Linux's bash wears: user in salmon, host in olive, directory in sand.
+grep -qx 'alias ll="ls -l"' "$HOME/.bashrc" || fail "deploy lost the user's .bashrc"
+grep -qF '\[\e[38;5;203m\]someone\[\e[0m\]@\[\e[38;5;143m\]pixel-8\[\e[0m\] \[\e[38;5;180m\]\w\[\e[0m\] \$ ' "$HOME/.bashrc" ||
+    fail "Termux prompt is not Linux's: $(grep PS1 "$HOME/.bashrc")"
+[[ "$(grep -c '>>> vivac prompt' "$HOME/.bashrc")" == 1 ]] || fail "prompt block written twice"
+grep -q '\.bashrc' "$HOME/.bash_profile" || fail "a login shell would not read .bashrc"
 grep -q 'Written by vivac' "$colors" || fail "colours file not marked as vivac's"
 mine="$(find "$HOME/.local/state/vivac/backups" -type f -name colors.properties)"
 [[ -n "$mine" && "$(cat "$mine")" == 'background=#000000' ]] || fail "the user's own colours were not backed up"

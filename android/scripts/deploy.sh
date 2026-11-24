@@ -171,6 +171,42 @@ for kv in 'terminal-cursor-style = bar' 'terminal-cursor-blink-rate = 500'; do
 	reload=1
 done
 
+# 7. The prompt Linux's bash wears: user@host directory $, in salmon, olive
+# and sand. The user is prompt_user from the vivac settings (the phone's
+# login name otherwise), the host the phone's model. A marked block in
+# ~/.bashrc, replaced on every deploy; the rest of the file is kept. A login
+# shell reads ~/.bash_profile, so that one sources ~/.bashrc.
+prompt_user="$(sed -n 's/^prompt_user=//p' "$HOME/.config/vivac/settings" 2>/dev/null | tail -1)" || prompt_user=""
+[[ "$prompt_user" =~ ^[A-Za-z0-9._-]+$ ]] || prompt_user="$(id -un 2>/dev/null || echo termux)"
+prompt_host="$(getprop ro.product.model 2>/dev/null | tr 'A-Z ' 'a-z-' | tr -cd 'a-z0-9-')" || prompt_host=""
+[[ -n "$prompt_host" ]] || prompt_host=android
+ps1="\\[\\e[38;5;203m\\]$prompt_user\\[\\e[0m\\]@\\[\\e[38;5;143m\\]$prompt_host\\[\\e[0m\\] \\[\\e[38;5;180m\\]\\w\\[\\e[0m\\] \\\$ "
+prompt_block="# >>> vivac prompt (written by android/scripts/deploy.sh; rewritten on every deploy)
+PS1='$ps1'
+# <<< vivac prompt"
+rc="$HOME/.bashrc"
+current="$(sed -n '/^# >>> vivac prompt/,/^# <<< vivac prompt/p' "$rc" 2>/dev/null)" || current=""
+if [[ "$current" != "$prompt_block" ]]; then
+	if ((dry)); then
+		say "would: write the prompt into $rc"
+	else
+		tmp="$(mktemp)"
+		{ [[ -f "$rc" ]] && sed '/^# >>> vivac prompt/,/^# <<< vivac prompt/d' "$rc"; printf '%s\n' "$prompt_block"; } >"$tmp"
+		cat "$tmp" >"$rc"
+		rm -f -- "$tmp"
+		say "wrote the prompt into $rc"
+	fi
+fi
+profile="$HOME/.bash_profile"
+if ! grep -qs '\.bashrc' "$profile"; then
+	if ((dry)); then
+		say "would: make $profile read ~/.bashrc"
+	else
+		printf '%s\n' '[ -f ~/.bashrc ] && . ~/.bashrc' >>"$profile"
+		say "made $profile read ~/.bashrc"
+	fi
+fi
+
 if ((reload)); then
 	command -v termux-reload-settings >/dev/null 2>&1 && termux-reload-settings || true
 fi
