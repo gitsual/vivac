@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Phone as a screen
+Name[es]=Móvil como pantalla
+Comment=The phone as one more screen, right of this one, with workspaces 11 to 20 of its own; open again to turn it off
+Comment[es]=El móvil como una pantalla más, a la derecha de esta, con sus escritorios 11 a 20; ábrelo otra vez para apagarlo
+Exec=sh -c "\\$HOME/.local/bin/vivac-phone-screen toggle"
+Icon=smartphone
+Terminal=false
+Categories=Utility;
+Keywords=phone;android;vnc;screen;monitor;móvil;pantalla;

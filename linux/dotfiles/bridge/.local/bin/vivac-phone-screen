@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# The phone as one more screen of this computer (docs/bridge.md, "The phone
+# as a screen").
+#
+#   vivac-phone-screen toggle   on or off
+#   vivac-phone-screen watch    (started by toggle) turns it off once the
+#                               phone is unplugged
+#
+# On: Hyprland gets a virtual monitor, VIVAC-PHONE, right of the monitors
+# there are, at the phone's resolution (landscape) and scale 2, so it reads
+# well on a phone. It carries a set of workspaces of its own, 11 to 20 (1 to
+# 10 stay on the computer's monitor), and a bar of its own. The pointer goes
+# there across the right edge and the keyboard follows: an extension, not a
+# remote control of what is here. wayvnc serves that monitor alone, on
+# 127.0.0.1 only; the phone reaches it over the USB cable (adb reverse) and
+# its VNC viewer (AVNC) is opened on it. Off: all of it undone, and the
+# windows that were on the phone's workspaces come back to this monitor.
+set -Eeuo pipefail
+
+self="$(readlink -f -- "${BASH_SOURCE[0]}")"
+repo_root="${VIVAC_REPO:-$(cd -- "$(dirname -- "$self")/../../../.." && pwd -P)}"
+# shellcheck source=lib/kv.sh
+source "$repo_root/lib/kv.sh"
+# shellcheck source=lib/i18n.sh
+source "$repo_root/lib/i18n.sh"
+language="$(i18n_session_language)"
+i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
+	i18n_load en "${I18N_DIR:-$repo_root/i18n}"
+
+output=VIVAC-PHONE
+port=5900
+scale="${VIVAC_PHONE_SCREEN_SCALE:-2}"
+state="${XDG_RUNTIME_DIR:-/tmp}/vivac-phone-screen.pid"
+bar_config="${XDG_CONFIG_HOME:-$HOME/.config}/waybar/phone/config"
+bar_style="${XDG_CONFIG_HOME:-$HOME/.config}/waybar/phone/style.css"
+if [[ -z "${ADB:-}" ]]; then
+	if command -v adb >/dev/null; then ADB=adb; else ADB="$HOME/Android/Sdk/platform-tools/adb"; fi
+fi
+
+tell() {
+	printf 'vivac-phone-screen: %s\n' "$1" >&2
+	[[ -t 2 ]] && return 0
+	command -v notify-send >/dev/null || return 0
+	notify-send --app-name=vivac -- "$(i18n_get phone.title)" "$1" || true
+}
+
+# phone — the adb serial of the phone, or nothing.
+phone() {
+	local serial
+	serial="$("$ADB" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" { print $1; exit }')" || serial=""
+	[[ "$serial" =~ ^[A-Za-z0-9._:-]+$ ]] && printf '%s\n' "$serial"
+}
+mode_on() { [[ -s "$state" ]]; }
+rule() { hyprctl eval "$1" >/dev/null 2>&1 || true; }
+
+on() {
+	local serial size w h monitors right primary n
+	serial="$(phone)" || serial=""
+	[[ -n "$serial" ]] || {
+		tell "$(i18n_get phone.screen_none)"
+		return 1
+	}
+	# The phone's panel, landscape: "Physical size: 1080x2400" is 2400x1080.
+	size="$("$ADB" -s "$serial" shell wm size 2>/dev/null | sed -n 's/^Physical size: \([0-9]*\)x\([0-9]*\).*/\1 \2/p' | tail -1)" || size=""
+	read -r w h <<<"${size:-1080 2400}"
+	((w < h)) && read -r w h <<<"$h $w"
+
+	monitors="$(hyprctl monitors -j)"
+	primary="$(jq -r '[.[] | select(.name != "'"$output"'")][0].name' <<<"$monitors")"
+	right="$(jq -r '[.[] | select(.name != "'"$output"'") | .x + (.width / .scale)] | max | floor' <<<"$monitors")"
+	hyprctl output create headless "$output" >/dev/null
+	# Pinned where they are: a new monitor would otherwise lay them out again.
+	while IFS=$'\t' read -r name mode pos mscale; do
+		rule "hl.monitor({ output = \"$name\", mode = \"$mode\", position = \"$pos\", scale = \"$mscale\" })"
+	done < <(jq -r '.[] | select(.name != "'"$output"'") |
+		[.name, "\(.width)x\(.height)@\(.refreshRate | round)", "\(.x)x\(.y)", (if .scale == (.scale | floor) then (.scale | floor) else .scale end | tostring)] | @tsv' <<<"$monitors")
+	rule "hl.monitor({ output = \"$output\", mode = \"${w}x${h}@60\", position = \"${right}x0\", scale = \"$scale\" })"
+	rule "hl.workspace_rule({ workspace = \"11\", monitor = \"$output\", default = true })"
+	for n in 12 13 14 15 16 17 18 19 20; do rule "hl.workspace_rule({ workspace = \"$n\", monitor = \"$output\" })"; done
+	for n in 1 2 3 4 5 6 7 8 9 10; do rule "hl.workspace_rule({ workspace = \"$n\", monitor = \"$primary\" })"; done
+
+	setsid -f waybar -c "$bar_config" -s "$bar_style" >/dev/null 2>&1 </dev/null
+	setsid -f wayvnc -o "$output" 127.0.0.1 "$port" >/dev/null 2>&1 </dev/null
+	"$ADB" -s "$serial" reverse tcp:$port tcp:$port >/dev/null
+	"$ADB" -s "$serial" shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$port" >/dev/null 2>&1 || true
+	printf '%s\n' "$serial" >"$state"
+	setsid -f "$self" watch </dev/null >/dev/null 2>&1
+	tell "$(i18n_get phone.screen_on)"
+}
+
+off() {
+	local serial
+	serial="$(cat "$state" 2>/dev/null)" || serial=""
+	rm -f -- "$state"
+	pkill -f -- "^wayvnc -o $output " 2>/dev/null || true
+	pkill -f -- "^waybar -c $bar_config" 2>/dev/null || true
+	[[ -n "$serial" ]] && { "$ADB" -s "$serial" reverse --remove tcp:$port >/dev/null 2>&1 || true; }
+	hyprctl output remove "$output" >/dev/null 2>&1 || true
+}
+
+case "${1:-}" in
+toggle)
+	if mode_on; then
+		off
+		tell "$(i18n_get phone.screen_off)"
+	else
+		on
+	fi
+	;;
+watch)
+	# Every few seconds while on: the phone gone ends it.
+	while mode_on; do
+		if [[ -z "$(phone)" ]]; then
+			off
+			tell "$(i18n_get phone.screen_off)"
+			break
+		fi
+		sleep "${VIVAC_PHONE_SCREEN_CHECK:-5}"
+	done
+	;;
+*)
+	printf 'usage: vivac-phone-screen toggle\n' >&2
+	exit 2
+	;;
+esac

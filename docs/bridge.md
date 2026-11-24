@@ -656,8 +656,8 @@ and `reboot-windows` (when the firmware has a Windows entry; it runs
 `vivac-reboot-other`, which asks its two questions on the computer's
 screen like any restart, section 2: a tap on a phone is not a yes from
 whoever is working there, and with nobody at the screen nothing happens) and
-`phone-desk` (when scrcpy is installed: the phone as ten more desktops, on or
-off, `vivac-phone-desk toggle`). Each entry only names one of these,
+`phone-screen` (when wayvnc is installed: the phone as one more screen, on or
+off, `vivac-phone-screen toggle`). Each entry only names one of these,
 and `vivac-phone run` refuses any other name, so what the phone can do is
 decided by vivac, not by the file. Entries whose key starts `vivac-` are
 replaced on every run; any other is the user's own and is kept. A second run
@@ -677,25 +677,31 @@ property names (`charge`, `isCharging`), the notification's app name
 (`KDE Connect`) that the dunst rule matches, and the Run command list arriving
 on the phone. Still unchecked: KDE Connect for Windows' install path.
 
-### The phone's desktops
+### The phone as a screen
 
-`vivac-phone-desk N` (SUPER+ALT+1 … SUPER+ALT+0) opens the phone's desktop N
-on workspace 10+N: a virtual display of the phone of its own, which Android
-(16 and later) dresses as a desktop, with a taskbar, the app launcher and free
-windows, shown by scrcpy in a window Hyprland tiles like any other. Ten of
-them, on workspaces 11 to 20; the phone's own screen stays free. The keyboard
-and mouse are this computer's. A desktop already open is only switched to;
-closing its window hands its apps back to the phone's screen.
+`vivac-phone-screen toggle` (the app *Phone as a screen*, or *Phone as a
+screen (on or off)* in KDE Connect's Run command on the phone) makes the
+phone one more screen of this computer, the way a second monitor is: an
+extension, not a remote control of what is here.
 
-The usual way in is the mode, `vivac-phone-desk toggle`: the app *Phone as
-desktops* in the launcher, or *Phone as desktops (on or off)* in KDE
-Connect's Run command on the phone. On, the phone's desktop 1 opens on
-workspace 11 and the view goes there; each of the others opens by itself the
-first time its workspace (12 to 20) is visited, following Hyprland's event
-socket, and stays. Running it again, or unplugging the phone, closes them all.
+- Hyprland gets a virtual monitor, `VIVAC-PHONE`, right of the monitors there
+  are (which stay pinned where they were), at the phone's resolution in
+  landscape and scale 2, so it reads well on a phone. The pointer goes there
+  across the right edge and the keyboard follows; on the phone, touch works
+  too.
+- It carries a set of workspaces of its own, 11 to 20, numbered 1 to 10 on
+  its own bar (`~/.config/waybar/phone/`); 1 to 10 stay on the computer's
+  monitor, whose bar leaves the phone out (`"output": "!VIVAC-PHONE"`).
+  SUPER+ALT+1 … SUPER+ALT+0 go to them.
+- wayvnc serves that monitor alone, on 127.0.0.1 only: nothing listens on
+  the network. The phone reaches it over the USB cable (`adb reverse`), and
+  its VNC viewer, AVNC, is opened on it at `vnc://127.0.0.1:5900`.
+- Off (toggle again, or the phone unplugged): the monitor, the bar, the
+  server and the forward go, and the windows that were on the phone's
+  workspaces come back to this monitor.
 
-It needs scrcpy and the phone over adb (USB debugging on, the cable in, or
-adb over Wi-Fi once paired). Without a phone it says so and opens nothing.
+It needs wayvnc, jq, the phone over adb (USB debugging on, the cable in) and
+a VNC viewer on the phone (AVNC, from F-Droid or its GitHub release).
 
 ## 10. vivac ask across machines
 

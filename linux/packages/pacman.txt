@@ -47,7 +47,6 @@ ripgrep
 rkhunter
 rofi
 rust
-scrcpy
 seahorse
 shellcheck
 shfmt
@@ -62,6 +61,7 @@ ttf-jetbrains-mono-nerd
 ufw
 unzip
 waybar
+wayvnc
 wireplumber
 wl-clipboard
 wofi

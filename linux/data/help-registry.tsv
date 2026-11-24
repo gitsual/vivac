@@ -66,16 +66,16 @@ SUPER+SHIFT+7	hypr	dispatch	movetoworkspace 7	help.hypr.ws_move_7
 SUPER+SHIFT+8	hypr	dispatch	movetoworkspace 8	help.hypr.ws_move_8
 SUPER+SHIFT+9	hypr	dispatch	movetoworkspace 9	help.hypr.ws_move_9
 SUPER+SHIFT+0	hypr	dispatch	movetoworkspace 10	help.hypr.ws_move_10
-SUPER+ALT+1	hypr	exec	$HOME/.local/bin/vivac-phone-desk 1	help.hypr.phone_desk_1
-SUPER+ALT+2	hypr	exec	$HOME/.local/bin/vivac-phone-desk 2	help.hypr.phone_desk_2
-SUPER+ALT+3	hypr	exec	$HOME/.local/bin/vivac-phone-desk 3	help.hypr.phone_desk_3
-SUPER+ALT+4	hypr	exec	$HOME/.local/bin/vivac-phone-desk 4	help.hypr.phone_desk_4
-SUPER+ALT+5	hypr	exec	$HOME/.local/bin/vivac-phone-desk 5	help.hypr.phone_desk_5
-SUPER+ALT+6	hypr	exec	$HOME/.local/bin/vivac-phone-desk 6	help.hypr.phone_desk_6
-SUPER+ALT+7	hypr	exec	$HOME/.local/bin/vivac-phone-desk 7	help.hypr.phone_desk_7
-SUPER+ALT+8	hypr	exec	$HOME/.local/bin/vivac-phone-desk 8	help.hypr.phone_desk_8
-SUPER+ALT+9	hypr	exec	$HOME/.local/bin/vivac-phone-desk 9	help.hypr.phone_desk_9
-SUPER+ALT+0	hypr	exec	$HOME/.local/bin/vivac-phone-desk 10	help.hypr.phone_desk_10
+SUPER+ALT+1	hypr	dispatch	workspace 11	help.hypr.phone_ws_1
+SUPER+ALT+2	hypr	dispatch	workspace 12	help.hypr.phone_ws_2
+SUPER+ALT+3	hypr	dispatch	workspace 13	help.hypr.phone_ws_3
+SUPER+ALT+4	hypr	dispatch	workspace 14	help.hypr.phone_ws_4
+SUPER+ALT+5	hypr	dispatch	workspace 15	help.hypr.phone_ws_5
+SUPER+ALT+6	hypr	dispatch	workspace 16	help.hypr.phone_ws_6
+SUPER+ALT+7	hypr	dispatch	workspace 17	help.hypr.phone_ws_7
+SUPER+ALT+8	hypr	dispatch	workspace 18	help.hypr.phone_ws_8
+SUPER+ALT+9	hypr	dispatch	workspace 19	help.hypr.phone_ws_9
+SUPER+ALT+0	hypr	dispatch	workspace 20	help.hypr.phone_ws_10
 SUPER+bracketright	hypr	dispatch	workspace e+1	help.hypr.ws_next
 SUPER+bracketleft	hypr	dispatch	workspace e-1	help.hypr.ws_prev
 Ctrl+T	browser	doc	docs/keys.md#browser	help.browser.new_tab

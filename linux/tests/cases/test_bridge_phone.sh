@@ -217,12 +217,12 @@ out="$(phone commands)" || fail "commands failed: $out"
 expected="$sandbox/expected"
 cat >"$expected" <<'CONF'
 [General]
-commands="@ByteArray({\"0f1e2d\":{\"command\":\"echo \\\"hi\\\" > /tmp/x\",\"name\":\"Mine\"},\"vivac-clip-other\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run clip-other\",\"name\":\"Send the clipboard to the other machine\"},\"vivac-lock\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run lock\",\"name\":\"Lock the screen\"},\"vivac-phone-desk\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run phone-desk\",\"name\":\"Phone as desktops (on or off)\"},\"vivac-reboot-windows\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run reboot-windows\",\"name\":\"Restart in Windows\"},\"vivac-suspend\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run suspend\",\"name\":\"Suspend\"}})"
+commands="@ByteArray({\"0f1e2d\":{\"command\":\"echo \\\"hi\\\" > /tmp/x\",\"name\":\"Mine\"},\"vivac-clip-other\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run clip-other\",\"name\":\"Send the clipboard to the other machine\"},\"vivac-lock\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run lock\",\"name\":\"Lock the screen\"},\"vivac-phone-screen\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run phone-screen\",\"name\":\"Phone as a screen (on or off)\"},\"vivac-reboot-windows\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run reboot-windows\",\"name\":\"Restart in Windows\"},\"vivac-suspend\":{\"command\":\"\\\"$HOME/.local/bin/vivac-phone\\\" run suspend\",\"name\":\"Suspend\"}})"
 CONF
 diff -u "$expected" "$config" >&2 || fail 'the runcommand config is not the expected one'
 grep -Fxq 'busctl --user emit /kdeconnect/a1b2c3d4e5f60718_29/kdeconnect_runcommand org.kde.kdeconnect.config configChanged' "$calls" ||
 	fail "the daemon was not told the config changed: $(cat "$calls")"
-grep -q 'vivac-clip-other vivac-lock vivac-phone-desk vivac-reboot-windows vivac-suspend' <<<"$out" || fail "what was written is not said: $out"
+grep -q 'vivac-clip-other vivac-lock vivac-phone-screen vivac-reboot-windows vivac-suspend' <<<"$out" || fail "what was written is not said: $out"
 
 # Read back as QSettings and QJsonDocument would: every command is one of
 # the fixed actions, or the user's own, untouched.
@@ -233,9 +233,9 @@ value = re.sub(r'\\(.)', r'\1', line[1:-1])
 blob = json.loads(value[len("@ByteArray("):-1])
 assert blob["0f1e2d"] == {"command": 'echo "hi" > /tmp/x', "name": "Mine"}, blob["0f1e2d"]
 ours = {k: v for k, v in blob.items() if k.startswith("vivac-")}
-assert set(ours) == {"vivac-lock", "vivac-suspend", "vivac-clip-other", "vivac-reboot-windows", "vivac-phone-desk"}, ours
+assert set(ours) == {"vivac-lock", "vivac-suspend", "vivac-clip-other", "vivac-reboot-windows", "vivac-phone-screen"}, ours
 for v in ours.values():
-    assert re.fullmatch(r'"\$HOME/\.local/bin/vivac-phone" run (lock|suspend|clip-other|reboot-windows|phone-desk)', v["command"]), v
+    assert re.fullmatch(r'"\$HOME/\.local/bin/vivac-phone" run (lock|suspend|clip-other|reboot-windows|phone-screen)', v["command"]), v
 PY
 
 # Idempotent: a second run changes nothing and says so.
@@ -250,12 +250,12 @@ grep -q 'already up to date' <<<"$out" || fail "a second run did not say it was 
 rm -f "$sandbox/state/vivac/link.conf"
 printf '#!/usr/bin/env bash\nexit 0\n' >"$sandbox/bin/efibootmgr"
 printf '[ffff0000]\nname=Other\n' >>"$sandbox/cfg/kdeconnect/trusted_devices"
-VIVAC_SCRCPY=no-such-scrcpy PHONE_LANG=es phone commands --device ffff0000 >/dev/null || fail 'commands for one device failed'
+VIVAC_WAYVNC=no-such-wayvnc PHONE_LANG=es phone commands --device ffff0000 >/dev/null || fail 'commands for one device failed'
 fresh="$sandbox/cfg/kdeconnect/ffff0000/kdeconnect_runcommand/config"
 [[ "$(head -n 1 "$fresh")" == '[General]' ]] || fail 'a fresh config has no [General] group'
 LC_ALL=C grep -q '[^[:print:]]' "$fresh" && fail 'the config is not plain ASCII'
 grep -Fq 'Bloquear la pantalla' "$fresh" || fail 'the names are not in the session language'
-grep -q 'clip-other\|reboot-windows\|phone-desk' "$fresh" && fail 'presets for what is not set up were written'
+grep -q 'clip-other\|reboot-windows\|phone-screen' "$fresh" && fail 'presets for what is not set up were written'
 [[ "$(sha256sum "$config")" == "$sum" ]] || fail '--device touched another device'
 
 # A config it cannot read is left alone.

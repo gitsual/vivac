@@ -229,27 +229,27 @@ hl.bind("SUPER + SHIFT + 9", hl.dsp.window.move({ workspace = 9 }))
 -- @help: hypr help.hypr.ws_move_10
 hl.bind("SUPER + SHIFT + 0", hl.dsp.window.move({ workspace = 10 }))
 
--- The phone's desktops 1-10 on workspaces 11-20 (vivac-phone-desk).
--- @help: hypr help.hypr.phone_desk_1
-hl.bind("SUPER + ALT + 1", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 1"))
--- @help: hypr help.hypr.phone_desk_2
-hl.bind("SUPER + ALT + 2", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 2"))
--- @help: hypr help.hypr.phone_desk_3
-hl.bind("SUPER + ALT + 3", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 3"))
--- @help: hypr help.hypr.phone_desk_4
-hl.bind("SUPER + ALT + 4", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 4"))
--- @help: hypr help.hypr.phone_desk_5
-hl.bind("SUPER + ALT + 5", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 5"))
--- @help: hypr help.hypr.phone_desk_6
-hl.bind("SUPER + ALT + 6", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 6"))
--- @help: hypr help.hypr.phone_desk_7
-hl.bind("SUPER + ALT + 7", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 7"))
--- @help: hypr help.hypr.phone_desk_8
-hl.bind("SUPER + ALT + 8", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 8"))
--- @help: hypr help.hypr.phone_desk_9
-hl.bind("SUPER + ALT + 9", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 9"))
--- @help: hypr help.hypr.phone_desk_10
-hl.bind("SUPER + ALT + 0", hl.dsp.exec_cmd("$HOME/.local/bin/vivac-phone-desk 10"))
+-- The phone's screen (vivac-phone-screen): its workspaces 11-20.
+-- @help: hypr help.hypr.phone_ws_1
+hl.bind("SUPER + ALT + 1", hl.dsp.focus({ workspace = 11 }))
+-- @help: hypr help.hypr.phone_ws_2
+hl.bind("SUPER + ALT + 2", hl.dsp.focus({ workspace = 12 }))
+-- @help: hypr help.hypr.phone_ws_3
+hl.bind("SUPER + ALT + 3", hl.dsp.focus({ workspace = 13 }))
+-- @help: hypr help.hypr.phone_ws_4
+hl.bind("SUPER + ALT + 4", hl.dsp.focus({ workspace = 14 }))
+-- @help: hypr help.hypr.phone_ws_5
+hl.bind("SUPER + ALT + 5", hl.dsp.focus({ workspace = 15 }))
+-- @help: hypr help.hypr.phone_ws_6
+hl.bind("SUPER + ALT + 6", hl.dsp.focus({ workspace = 16 }))
+-- @help: hypr help.hypr.phone_ws_7
+hl.bind("SUPER + ALT + 7", hl.dsp.focus({ workspace = 17 }))
+-- @help: hypr help.hypr.phone_ws_8
+hl.bind("SUPER + ALT + 8", hl.dsp.focus({ workspace = 18 }))
+-- @help: hypr help.hypr.phone_ws_9
+hl.bind("SUPER + ALT + 9", hl.dsp.focus({ workspace = 19 }))
+-- @help: hypr help.hypr.phone_ws_10
+hl.bind("SUPER + ALT + 0", hl.dsp.focus({ workspace = 20 }))
 -- Walk the numbered workspaces in order and wrap at the ends (e = existing,
 -- with wraparound). Special workspaces are never part of this sequence.
 -- @help: hypr help.hypr.ws_next
@@ -273,16 +273,6 @@ hl.window_rule({ name = "vivac-ask", match = { class = "^(vivac-ask)$" }, float 
 -- the calendar and the forecast drop from the middle, where the clock and weather are.
 hl.window_rule({ name = "vivac-panel", match = { class = "^(org\\.vivac\\.panel\\..*)$" }, float = true, pin = true, decorate = false, no_shadow = true, move = "(monitor_w-window_w-12) 48" })
 hl.window_rule({ name = "vivac-panel-centre", match = { class = "^(org\\.vivac\\.panel\\.(calendar|forecast|menu|clipboard|theme|power))$" }, move = "((monitor_w-window_w)/2) 48" })
-hl.window_rule({ name = "vivac-phone-desk-1", match = { title = "^(vivac-movil-1)$" }, workspace = "11" })
-hl.window_rule({ name = "vivac-phone-desk-2", match = { title = "^(vivac-movil-2)$" }, workspace = "12" })
-hl.window_rule({ name = "vivac-phone-desk-3", match = { title = "^(vivac-movil-3)$" }, workspace = "13" })
-hl.window_rule({ name = "vivac-phone-desk-4", match = { title = "^(vivac-movil-4)$" }, workspace = "14" })
-hl.window_rule({ name = "vivac-phone-desk-5", match = { title = "^(vivac-movil-5)$" }, workspace = "15" })
-hl.window_rule({ name = "vivac-phone-desk-6", match = { title = "^(vivac-movil-6)$" }, workspace = "16" })
-hl.window_rule({ name = "vivac-phone-desk-7", match = { title = "^(vivac-movil-7)$" }, workspace = "17" })
-hl.window_rule({ name = "vivac-phone-desk-8", match = { title = "^(vivac-movil-8)$" }, workspace = "18" })
-hl.window_rule({ name = "vivac-phone-desk-9", match = { title = "^(vivac-movil-9)$" }, workspace = "19" })
-hl.window_rule({ name = "vivac-phone-desk-10", match = { title = "^(vivac-movil-10)$" }, workspace = "20" })
 hl.window_rule({ name = "vivac-panel-osd", match = { class = "^(org\\.vivac\\.panel\\.osd)$" }, move = "((monitor_w-window_w)/2) (monitor_h-window_h-96)", no_focus = true })
 
 -- Started with the session, in this order, once the compositor is up.

@@ -11,7 +11,7 @@
 #                       into KDE Connect's Run command list for each paired
 #                       device; other commands there are kept
 #   run ACTION          what those entries call: lock, suspend, clip-other,
-#                       reboot-windows or phone-desk, and nothing else
+#                       reboot-windows or phone-screen, and nothing else
 #   --available         exit 0 when KDE Connect is installed, 1 otherwise
 #   --print             list the menu's rows, one per line, and exit
 #
@@ -269,9 +269,9 @@ menu() {
 command_entries() {
 	printf 'vivac-lock\t%s\tlock\n' "$(i18n_get phone.cmd_lock)"
 	printf 'vivac-suspend\t%s\tsuspend\n' "$(i18n_get phone.cmd_suspend)"
-	# The phone as ten more desktops (vivac-phone-desk), when scrcpy is here.
-	command -v "${VIVAC_SCRCPY:-scrcpy}" >/dev/null &&
-		printf 'vivac-phone-desk\t%s\tphone-desk\n' "$(i18n_get phone.cmd_phone_desk)"
+	# The phone as one more screen (vivac-phone-screen), when wayvnc is here.
+	command -v "${VIVAC_WAYVNC:-wayvnc}" >/dev/null &&
+		printf 'vivac-phone-screen\t%s\tphone-screen\n' "$(i18n_get phone.cmd_phone_screen)"
 	# The other machine, once vivac link is paired.
 	[[ -f "${XDG_STATE_HOME:-$HOME/.local/state}/vivac/link.conf" ]] &&
 		printf 'vivac-clip-other\t%s\tclip-other\n' "$(i18n_get phone.cmd_clip_other)"
@@ -459,7 +459,7 @@ run() {
 	# The two questions of any restart are asked on this screen: a tap on a
 	# phone is not a yes from whoever is working here.
 	reboot-windows) exec "$bin/vivac-reboot-other" ;;
-	phone-desk) exec "$bin/vivac-phone-desk" toggle ;;
+	phone-screen) exec "$bin/vivac-phone-screen" toggle ;;
 	clip-other)
 		output="$("$bin/vivac-link" send-clip 2>&1)" || true
 		command -v notify-send >/dev/null && notify-send --app-name=vivac -- "$(i18n_get link.title)" "$output"

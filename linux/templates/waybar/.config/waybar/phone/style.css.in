@@ -1,0 +1,7 @@
+@import "../style.css";
+/* The phone's own bar (vivac-phone-screen): its ten workspaces, the window,
+   the time. The buttons are numbered 1 to 10: the phone's own set. */
+#workspaces button { color: #@COLOR_FG@; padding: 0 6px; border-radius: 8px; min-width: 0; }
+#workspaces button.empty { color: #@COLOR_MUTED@; }
+#workspaces button.active { font-weight: bold; box-shadow: inset 0 -2px #@COLOR_ACCENT@; }
+#workspaces button.urgent { font-style: italic; box-shadow: inset 0 -2px #@COLOR_URGENT@; }
