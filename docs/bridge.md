@@ -622,7 +622,7 @@ no paired phone is in reach: no bar module, no menu entry, no error.
 
 | | Linux | Windows |
 |---|---|---|
-| Install | `kdeconnect` in the base packages; `kdeconnectd` starts with the session | optional: `bootstrap.ps1 -Phone` (winget `KDE.KDEConnect`) |
+| Install | `kdeconnect` in the base packages; `kdeconnectd` starts with the session; `apply-system.sh --bridge` opens its range (TCP and UDP 1714-1764) to the local subnets | optional: `bootstrap.ps1 -Phone` (winget `KDE.KDEConnect`) |
 | The phone's notifications | through the notification daemon, as any program's; dunst marks them with a phone glyph (rule `vivac-phone`) | KDE Connect's own Windows notifications |
 | The bar | `custom/phone`: the first reachable phone's battery, `charging` and `low` (20 % or less) classes, every phone in the tooltip | a phone glyph while a phone is reachable, a count when there are several, the names on hover; no battery (the Windows build has no D-Bus client to read it with) |
 | The menu | **Phone…** in the bridge menu (`vivac-phone menu`): ring, send a file, send the clipboard, open the link on the clipboard on the phone (http and https only), browse the phone's files (sshfs), pair | a **Phone** category in the menu, also opened by a click on the bar: ring, send a file, send the clipboard, pair |

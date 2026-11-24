@@ -315,6 +315,11 @@ plan="$(PATH="$sandbox/bin:$PATH" VIVAC_SYS_CLASS_NET="$sandbox/net" HOME="$sand
 for expected in 'tcp 53317 from 198.51.100.0/24 in UFW (vivac phone drop)' 'udp 53317 from 198.51.100.0/24 in UFW (vivac phone drop)'; do
 	grep -qF "would allow $expected" <<<"$plan" || fail "the plan does not open $expected: $plan"
 done
+# KDE Connect (docs/bridge.md section 9): its whole range, TCP and UDP, or a
+# paired phone is never seen from the Wi-Fi.
+for expected in 'tcp 1714:1764 from 198.51.100.0/24 in UFW (kde connect)' 'udp 1714:1764 from 198.51.100.0/24 in UFW (kde connect)'; do
+	grep -qF "would allow $expected" <<<"$plan" || fail "the plan does not open $expected: $plan"
+done
 grep -q "vivac-localsend" <<<"$plan" && fail "--bridge turned the phone drop on: $plan"
 menu="$(PATH="$sandbox/bin:$PATH" VIVAC_REPO="$repo_root" VIVAC_LANG=en "$repo_root/dotfiles/bridge/.local/bin/vivac-bridge" --print)"
 grep -q '^Send to phone…$' <<<"$menu" || fail "the bridge menu lacks Send to phone: $menu"
