@@ -4,7 +4,7 @@ Import-Module (Join-Path $PSScriptRoot 'Vivac.psm1')
 Import-Module (Join-Path $PSScriptRoot 'Surfaces.psm1')
 
 function Show-UsbDriveMenu {
-    param([ValidatePattern('^[A-Za-z]:$')][string]$Drive, [switch]$NoShow)
+    param([ValidatePattern('^[A-Za-z]:$')][string]$Drive, [switch]$NoShow, [hashtable]$Registry)
     Update-SurfaceContext
     $p = Get-Palette
     $drive = $Drive.ToUpperInvariant()
@@ -25,6 +25,7 @@ function Show-UsbDriveMenu {
     $eject.Add_Click({ $window.Tag = 'eject'; $window.Close() })
     $window.Add_PreviewKeyDown({ param($sender, $eventArgs) if ($eventArgs.Key -eq 'Escape') { $window.Close(); $eventArgs.Handled = $true } })
     if ($NoShow) { return $window }
+    if ($Registry) { $Registry['usb'] = $window }
     [void]$window.ShowDialog()
     # The caller performs the action after the panel has closed, so Explorer
     # and the removal status panel can take focus without interrupting it.

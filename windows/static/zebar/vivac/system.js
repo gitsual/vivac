@@ -7,7 +7,7 @@
 // for the graphs, since a panel lives only while it is open.
 import * as zebar from './zebar-client.js';
 import { config } from './config.js';
-import { closeOnEscapeOrBlur, esc, fmt, human } from './popup.js';
+import { closeByHover, esc, fmt, human } from './popup.js';
 
 const L = config.labels;
 const el = document.getElementById('system');
@@ -21,7 +21,7 @@ const SERIES = ['var(--s1)', 'var(--s2)', 'var(--s3)', 'var(--s4)', 'var(--s5)',
 let tab = 'cpu';
 try { const t = localStorage.getItem('system.tab'); if (TABS.includes(t)) tab = t; } catch {}
 
-const close = closeOnEscapeOrBlur('system');
+const close = closeByHover('system');
 let info = null; // the processor's name and counts, asked once
 let cores = null; // per-thread use, processes, threads
 let top = null; // programs by processor and memory

@@ -7,9 +7,9 @@
 // bar's pill does. Both answers are kept in localStorage for a while, so
 // hovering again is instant and does not ask again.
 import { config } from './config.js';
-import { keepOpenWhileHovered, names, esc, fmt } from './popup.js';
+import { closeByHover, names, esc, fmt } from './popup.js';
 
-keepOpenWhileHovered('forecast');
+closeByHover('forecast');
 const L = config.labels;
 const N = names(config.locale);
 const el = document.getElementById('forecast');

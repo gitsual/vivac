@@ -12,7 +12,8 @@
                 a new palette from a picture (scripts\theme-from-image.ps1)
     sound       the sound panel: devices, volumes and the mixer
     bluetooth   the Bluetooth panel: the radio, paired devices, pairing new ones
-    network     the network panel: Wi-Fi networks and the wired adapters
+    network [wifi|ethernet]
+                the network panel: Wi-Fi networks and the wired adapters
     updates     the updates panel: Windows Update and the installed programs
     clipboard   without the resident host: Windows' clipboard history
     lock        lock the session (the lock screen wears the theme)
@@ -54,7 +55,10 @@ switch ($Verb) {
     }
     'sound'     { Show-Sound }
     'bluetooth' { Import-Module (Join-Path $root 'lib\Bluetooth.psm1') -Force; Show-Bluetooth }
-    'network'   { Import-Module (Join-Path $root 'lib\Network.psm1') -Force; Show-Network }
+    'network'   {
+        Import-Module (Join-Path $root 'lib\Network.psm1') -Force
+        if ($Rest) { Show-Network -Tab $Rest[0] } else { Show-Network }
+    }
     'updates'   { Import-Module (Join-Path $root 'lib\Updates.psm1') -Force; Show-Updates }
     'security'  { Import-Module (Join-Path $root 'lib\Security.psm1') -Force; Show-Security }
     'clipboard' { Open-ClipboardHistory }
