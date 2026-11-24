@@ -16,6 +16,7 @@ Import-Module (Join-Path $PSScriptRoot 'PanelKit.psm1')
 Import-Module (Join-Path $PSScriptRoot 'KitDraw.psm1')
 Import-Module (Join-Path $PSScriptRoot 'SoundLogic.psm1')
 Import-Module (Join-Path $PSScriptRoot 'ClipLogic.psm1')
+Import-Module (Join-Path $PSScriptRoot 'Hover.psm1')
 
 $root = Split-Path -Parent $PSScriptRoot
 $script:VivacEntry = Join-Path $root 'bin\vivac.ps1'
@@ -74,6 +75,35 @@ function Set-VivacForeground($Window) {
     }
 }
 
+# The rule of the panel about to be built, when the host is opening it
+# because the pointer rested on its bar button. New-VivacWindow takes it (and
+# leaves none behind), so no panel needs to know about hover.
+$script:HoverNext = $null
+function Set-VivacHoverNext($State) { $script:HoverNext = $State }
+
+# Hover mode for one window: the pointer's comings and goings and the first
+# click or key feed the rule, and a timer asks it whether the panel is due
+# to close. Only windows opened by hover get this; one opened by a click is
+# pinned from the start, as it always was.
+function Connect-VivacHover($Window, $State) {
+    $Window.Resources['vivac.hover'] = $State
+    $Window.Add_MouseEnter({ param($s) $s.Resources['vivac.hover'].PointerIn((Get-VivacHoverNow)) })
+    $Window.Add_MouseLeave({ param($s) $s.Resources['vivac.hover'].PointerOut((Get-VivacHoverNow)) })
+    $Window.Add_PreviewMouseDown({ param($s) $s.Resources['vivac.hover'].Pin() })
+    $Window.Add_PreviewKeyDown({ param($s) $s.Resources['vivac.hover'].Pin() })
+    $timer = New-Object Windows.Threading.DispatcherTimer
+    $timer.Interval = [TimeSpan]::FromMilliseconds(50)
+    $timer.Tag = $Window
+    $timer.Add_Tick({
+            param($t)
+            $w = $t.Tag
+            try { if ($w.Resources['vivac.hover'].Tick((Get-VivacHoverNow))) { $t.Stop(); $w.Close() } } catch { $t.Stop() }
+        })
+    $Window.Resources['vivac.hoverTimer'] = $timer
+    $Window.Add_Closed({ param($s) $s.Resources['vivac.hoverTimer'].Stop() })
+    $timer.Start()
+}
+
 function New-VivacWindow([string]$Xaml) {
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
     $window = [Windows.Markup.XamlReader]::Parse($Xaml)
@@ -105,6 +135,9 @@ function New-VivacWindow([string]$Xaml) {
             if ($s.Resources['vivac.keep']) { return }
             try { $s.Close() } catch { }
         })
+    $hover = $script:HoverNext
+    $script:HoverNext = $null
+    if ($hover) { Connect-VivacHover $window $hover }
     $window
 }
 

@@ -30,6 +30,10 @@
             "argsRegex": "^/c echo (theme|power|help|sound|bluetooth|security|network|updates|phone)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul \\|\\| conhost\\.exe --headless powershell\\.exe -NoProfile -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac\\.ps1 (theme|power|help|sound|bluetooth|security|network|updates|phone)$"
           },
           {
+            "program": "cmd.exe",
+            "argsRegex": "^/c echo (hover|hover-leave) (network|bluetooth|sound|security|theme|power|updates|usb:[A-Za-z]:)>\\\\\\\\\\.\\\\pipe\\\\vivac-[a-z0-9_.-]+ 2>nul$"
+          },
+          {
             "program": "powershell.exe",
             "argsRegex": "^-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \\S+\\\\bin\\\\vivac-security\\.ps1 -Status$"
           },

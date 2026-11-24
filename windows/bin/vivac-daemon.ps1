@@ -20,6 +20,12 @@
   lets other accounts read but only its owner (and administrators) write.
 
   Pressing a surface's key while it is open closes it, as rofi does.
+
+  The bar also writes "hover <panel>" when the pointer has rested 300 ms on a
+  button and "hover-leave <panel>" when it goes (panels: network, bluetooth,
+  sound, security, theme, power, updates, usb:<drive>). A panel opened that
+  way closes itself by the rule in lib\Hover.psm1; a click on its button, or
+  a click or key inside it, pins it, and a pinned panel closes as any other.
 #>
 # -LockAtStart: the host itself covers the screens at once and opens vivac's
 # greeter (the lock, in the source's ReGreet frame) as soon as it can. The
@@ -52,7 +58,9 @@ if ($LockAtStart) {
     Import-Module (Join-Path $root 'lib\Greeter.psm1') -Force
     try { [void](Start-VivacSigninGreeter); $LockAtStart = $false } catch { Write-DaemonLog "the greeter could not be started, the host holds the sign-in: $_" }
 }
+Import-Module (Join-Path $root 'lib\Hover.psm1') -Force
 Import-Module (Join-Path $root 'lib\Surfaces.psm1') -Force
+Import-Module (Join-Path $root 'lib\UsbPanel.psm1') -Force
 Import-Module (Join-Path $root 'lib\Security.psm1') -Force
 Import-Module (Join-Path $root 'lib\Bluetooth.psm1') -Force
 Import-Module (Join-Path $root 'lib\Network.psm1') -Force
@@ -134,10 +142,25 @@ $pending = $reader.BeginInvoke()
 # those only live while that function is on the stack. The modal loop keeps
 # pumping this thread's timer, so the pipe is still served while one is open.
 $open = @{}
+# The rule of each panel opened by hover (see lib\Hover.psm1). A panel a
+# click opened has none, and so is never closed by the pointer.
+$hoverStates = @{}
 # A theme or location that came in from the shared file while a lock was up is
 # waiting; the session is open again, so the pull that applies it runs now.
 function Resume-SharedSync {
     try { if (@(Get-VivacDeferredKeys).Count) { [void](Start-VivacSharedSync) } } catch { Write-DaemonLog "shared settings resume failed: $_" }
+}
+# The drive menu the USB button opens by hover: browse the drive or remove it.
+# The choice is carried out after the panel is gone, so Explorer and the
+# removal status can take the focus.
+function Invoke-UsbMenu([string]$Drive) {
+    if ($Drive -notmatch '^[A-Z]:$') { return }
+    $choice = Show-UsbDriveMenu -Drive $Drive -Registry $open
+    if ($choice -eq 'browse') { Start-Process -FilePath 'explorer.exe' -ArgumentList "$Drive\" }
+    elseif ($choice -eq 'eject') {
+        Start-Process -WindowStyle Hidden -FilePath powershell.exe -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File',
+            "`"$(Join-Path $PSScriptRoot 'vivac-tray.ps1')`"", '-Eject', $Drive)
+    }
 }
 function Invoke-Verb([string]$Verb) {
     if ($Verb -eq 'quit') {
@@ -150,14 +173,33 @@ function Invoke-Verb([string]$Verb) {
     # Whatever happens to the greeter, the cover put up at start comes down:
     # a sign-in must never end behind blank windows.
     if ($Verb -eq 'greet') { try { Invoke-VivacLock -Greeter } finally { Hide-VivacLockCover; Clear-VivacLockMarker; Resume-SharedSync }; return }
-    if (@('menu', 'phone', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security') -notcontains $Verb) { return }
-    # The phone is the menu, open on its category: one window for both.
-    $key = $Verb
-    if ($Verb -eq 'phone') { $key = 'menu' }
-    # The switch key is the power menu, opened on Restart in the other system.
-    if ($Verb -eq 'switch') { $key = 'power' }
-    $current = $open[$key]
-    if ($current -and $current.IsVisible) { $current.Close(); return }
+    # hover <panel> / hover-leave <panel>: the pointer rests on, or leaves, a
+    # bar button. Opening is the click's verb, in hover mode.
+    $hoverVerb = Resolve-VivacHoverVerb $Verb
+    $driveForUsb = ''
+    if ($hoverVerb) {
+        $step = Step-VivacHover $hoverVerb $open $hoverStates (Get-VivacHoverNow)
+        if ($step -ne 'open') { return }
+        $Verb = $hoverVerb.Verb
+        $driveForUsb = $hoverVerb.Drive
+    }
+    if (@('menu', 'phone', 'help', 'power', 'switch', 'theme', 'sound', 'bluetooth', 'network', 'updates', 'clipboard', 'security', 'usb') -notcontains $Verb) { return }
+    # The phone is the menu, open on its category: one window for both. The
+    # switch key is the power menu, opened on Restart in the other system.
+    $key = Get-VivacHoverKey $Verb
+    if (-not $hoverVerb) {
+        # A click on a button whose panel is open by hover keeps it open and
+        # pins it; the next click closes it as always.
+        if ((Step-VivacClick $key $open $hoverStates) -eq 'pinned') { return }
+        $current = $open[$key]
+        if ($current -and $current.IsVisible) { $current.Close(); return }
+    } else {
+        $state = New-VivacHoverClose
+        $state.ButtonRested((Get-VivacHoverNow))
+        $hoverStates[$key] = $state
+        Set-VivacHoverNext $state
+    }
+    try {
     switch ($Verb) {
         'menu'  {
             # A menu this host cannot build is still a menu: it opens in a
@@ -186,6 +228,13 @@ function Invoke-Verb([string]$Verb) {
         'updates' { Show-Updates -Registry $open }
         'clipboard' { Show-Clipboard -Registry $open }
         'security' { Show-Security -Registry $open }
+        'usb'   { Invoke-UsbMenu $driveForUsb }
+    }
+    } finally {
+        # Whatever the panel did, the next window is not a hover one, and the
+        # rule of one that has closed goes with it.
+        Set-VivacHoverNext $null
+        $hoverStates.Remove($key)
     }
 }
 

@@ -7,6 +7,7 @@
 // NVIDIA card). This file only knows how to draw each one.
 import * as zebar from './zebar-client.js';
 import { config } from './config.js';
+import { createHoverIntent, opensPanel, panelFor, isHostPanel } from './hover.js';
 
 const icons = await fetch('./workspace-icons.json').then((r) => r.json());
 
@@ -511,6 +512,8 @@ function drawRight(out) {
     .filter(Boolean);
   const el = document.getElementById('right');
   el.innerHTML = groups.join('<span class="sep"></span>');
+  // The panel a button opens on hover is its tooltip; the others keep theirs.
+  el.querySelectorAll('[data-act]').forEach((b) => { if (opensPanel(b.dataset.act)) b.removeAttribute('title'); });
   el.querySelectorAll('[data-act]').forEach((b) => {
     const act = b.dataset.act;
     if (act === 'mute') {
@@ -597,55 +600,96 @@ function draw() {
   drawRight(out);
 }
 
-// Hovering the clock opens the month, hovering the weather the forecast, as
-// the source bar's tooltips did. Each is a widget of its own (calendar.html,
-// forecast.html), since this one is only as tall as the bar, and the two
-// sides talk through localStorage, which every widget of the pack shares:
-// while the pointer is on the pill the bar stamps popup.<name>.hover, the
-// popup stamps popup.<name>.alive, and the popup closes itself once the
-// pointer is neither on the pill nor on it. Opening is delayed a little so
-// crossing the bar does not flash one open.
+// Resting the pointer on a button opens its panel, the one a click opens: the
+// WPF panels (network, sound, ...) through the resident host, the month, the
+// forecast and the system gauges as popups of their own (calendar.html,
+// forecast.html, system.html), since this widget is only as tall as the bar.
+// hover.js decides what a button opens and times the rest (300 ms); how the
+// panel closes again is the panel's (lib\Hover.psm1, popup.js). The two sides
+// of a popup talk through localStorage, which every widget of the pack
+// shares: popup.<name>.hot says the pointer rested on ("1:<ms>") or left
+// ("0:<ms>") the button, popup.<name>.pin says it was clicked, and the popup
+// stamps popup.<name>.alive while it is open.
 const stamp = (key) => { try { localStorage.setItem(key, String(Date.now())); } catch {} };
+const mark = (key, value) => { try { localStorage.setItem(key, `${value}:${Date.now()}`); } catch {} };
 const fresh = (key, ms) => { try { return Date.now() - Number(localStorage.getItem(key) || 0) < ms; } catch { return false; } };
-let hovered = null;
-let beat = null;
-let opener = null;
-function hover(widget) {
-  if (widget === hovered) return;
-  clearInterval(beat);
-  clearTimeout(opener);
-  hovered = widget;
-  if (!widget) return;
-  stamp(`popup.${widget}.hover`);
-  beat = setInterval(() => stamp(`popup.${widget}.hover`), 200);
-  opener = setTimeout(() => {
-    if (fresh(`popup.${widget}.alive`, 800)) return;
-    // Opened by preset, the path the CLI takes too: zebar 3.0.3's
-    // startWidget with a placement built here never opened a window. The
-    // presets in zpack.json sit each popup under its pill, which keeps its
-    // place because the middle column is centred on the screen.
-    stamp(`popup.${widget}.alive`);
-    zebar.startWidgetPreset(widget, 'default', {}).catch((e) => {
-      try { localStorage.setItem('popup.error', `${widget}: ${e?.message ?? e}`); } catch {}
-    });
-  }, 250);
+
+// A line for the resident host. Only the pipe: with no host running there is
+// nothing to open by hover, and starting a panel for a mere rest would be
+// worse than doing nothing.
+const hostSay = (line) => zebar.shellSpawn('cmd.exe', `/c echo ${line}>\\\\.\\pipe\\${config.pipe} 2>nul`);
+
+// A key is a panel, and for the system panel the tab as well: system:disk.
+const popupOf = (key) => key.split(':')[0];
+
+function startPopup(widget) {
+  if (fresh(`popup.${widget}.alive`, 1200)) return;
+  stamp(`popup.${widget}.alive`);
+  // Opened by preset, the path the CLI takes too: zebar 3.0.3's
+  // startWidget with a placement built here never opened a window. The
+  // presets in zpack.json sit each popup under its pill, which keeps its
+  // place because the middle column is centred on the screen.
+  zebar.startWidgetPreset(widget, 'default', {}).catch((e) => {
+    try { localStorage.setItem('popup.error', `${widget}: ${e?.message ?? e}`); } catch {}
+  });
 }
-for (const [id, widget] of [['clock', 'calendar'], ['weather', 'forecast']]) {
+
+const intent = createHoverIntent({
+  setTimer: (fn, ms) => setTimeout(fn, ms),
+  clearTimer: (id) => clearTimeout(id),
+  onRest(key) {
+    const panel = popupOf(key);
+    if (isHostPanel(panel)) { hostSay(`hover ${key}`); return; }
+    if (panel === 'system') { try { localStorage.setItem('system.tab', key.split(':')[1] || 'cpu'); } catch {} }
+    mark(`popup.${panel}.hot`, 1);
+    startPopup(panel);
+  },
+  onLeave(key) {
+    const panel = popupOf(key);
+    if (isHostPanel(panel)) hostSay(`hover-leave ${key}`);
+    else mark(`popup.${panel}.hot`, 0);
+  },
+});
+
+// The key of the button under the pointer, or null. The right-hand side is
+// drawn again on every sample, so the pointer is followed through the
+// container (events of a button that is replaced under it would be lost).
+function keyAt(target) {
+  const b = target.closest?.('[data-act]');
+  if (!b) return null;
+  const act = b.dataset.act;
+  const panel = panelFor(act, { drive: b.dataset.drive });
+  if (!panel) return null;
+  return act === 'sys' ? 'system:cpu' : act === 'sysgauge' ? `system:${b.dataset.tab}` : panel;
+}
+const right = document.getElementById('right');
+right.addEventListener('pointermove', (e) => intent.target(keyAt(e.target)));
+right.addEventListener('pointerleave', () => intent.target(null));
+for (const [id, act] of [['clock', 'clock'], ['weather', 'weather']]) {
   const el = document.getElementById(id);
-  el.addEventListener('mouseenter', () => hover(widget));
-  el.addEventListener('mouseleave', () => hover(null));
+  el.addEventListener('mouseenter', () => intent.target(panelFor(act)));
+  el.addEventListener('mouseleave', () => intent.target(null));
 }
-// The system panel is opened on purpose, by a right click on the chip or on
-// one of its gauges, and holds the keyboard (Escape or a click elsewhere
-// closes it), so it needs no hover handshake. The tab it opens on goes by
-// localStorage, which a panel already open follows too.
+// A click is the old behaviour (the verbs above), and pins a popup that is
+// open by hover: the host does the same for its panels, on the verb.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('[data-act], #clock, #weather');
+  if (!b) return;
+  intent.click();
+  const panel = b.id === 'clock' ? 'calendar' : b.id === 'weather' ? 'forecast' : keyAt(b) && popupOf(keyAt(b));
+  if (panel && !isHostPanel(panel)) mark(`popup.${panel}.pin`, 1);
+}, true);
+
+// The system panel is also opened on purpose, by a right click on the chip or
+// on one of its gauges, and then holds the keyboard (Escape or a click
+// elsewhere closes it). The tab it opens on goes by localStorage, which a
+// panel already open follows too.
 function openSystem(tab) {
   try { localStorage.setItem('system.tab', tab); } catch {}
+  mark('popup.system.pin', 1);
   if (fresh('popup.system.alive', 1200)) return;
-  stamp('popup.system.alive');
-  zebar.startWidgetPreset('system', 'default', {}).catch((e) => {
-    try { localStorage.setItem('popup.error', `system: ${e?.message ?? e}`); } catch {}
-  });
+  mark('popup.system.hot', 0);
+  startPopup('system');
 }
 
 // The last two minutes of processor and memory use, for the graph in their

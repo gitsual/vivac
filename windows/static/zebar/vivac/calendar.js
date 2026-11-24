@@ -4,9 +4,9 @@
 // shaded and this week's row banded. The wheel moves a month either way, the
 // arrows too, and "Today" comes back to this one.
 import { config } from './config.js';
-import { keepOpenWhileHovered, names, esc, fmt } from './popup.js';
+import { closeByHover, names, esc, fmt } from './popup.js';
 
-keepOpenWhileHovered('calendar');
+closeByHover('calendar');
 const L = config.labels;
 const N = names(config.locale);
 const el = document.getElementById('calendar');
