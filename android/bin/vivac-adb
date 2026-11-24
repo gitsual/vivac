@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# The computer's adb, run from this phone once paired (vivac-pair): through
+# it this phone's Termux reaches the whole phone (other apps, settings, the
+# screen, taps), which Termux on its own cannot. Every argument is kept as
+# typed:  vivac-adb shell input text "hello world"
+set -Eeuo pipefail
+[[ "$(vivac-pair status 2>/dev/null)" != none ]] || vivac-pair >/dev/null
+exec ssh -T pc "adb $(printf '%q ' "$@")"

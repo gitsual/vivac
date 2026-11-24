@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Pair this phone with the vivac computer: the "pc" ssh host.
+#
+#   vivac-pair           find the computer and write the route to it
+#   vivac-pair status    say which route is in use: usb, tailscale or none
+#
+# Over the USB cable the computer's own sshd for the phone (vivac-phone-ssh,
+# port 8222) is reached on 127.0.0.1 through adb reverse, with no network at
+# all; without the cable, over Tailscale, by the name pc_host in
+# ~/.config/vivac/settings (arch by default). The route is a marked block in
+# ~/.ssh/config, rewritten on each pairing; the rest of the file is kept.
+# The phone's key is ~/.ssh/id_ed25519, made the first time; the computer
+# lets it in once authorised there (vivac-phone-ssh authorize).
+set -Eeuo pipefail
+
+port=8222
+key="$HOME/.ssh/id_ed25519"
+config="$HOME/.ssh/config"
+pc_host="$(sed -n 's/^pc_host=//p' "$HOME/.config/vivac/settings" 2>/dev/null | tail -1)" || pc_host=""
+[[ "$pc_host" =~ ^[A-Za-z0-9.-]+$ ]] || pc_host=arch
+
+reaches() {
+	ssh -o BatchMode=yes -o ConnectTimeout=4 -o StrictHostKeyChecking=accept-new \
+		-i "$key" -p "$port" "$1" true >/dev/null 2>&1 </dev/null
+}
+
+route_block() {
+	printf '%s\n' "# >>> vivac pc (written by vivac-pair; rewritten on every pairing)" \
+		"Host pc" \
+		"  HostName $1" \
+		"  Port $port" \
+		"  IdentityFile $key" \
+		"  StrictHostKeyChecking accept-new" \
+		"  ControlMaster auto" \
+		"  ControlPath ${TMPDIR:-$PREFIX/tmp}/ssh-pc-%C" \
+		"  ControlPersist 10m" \
+		"# <<< vivac pc"
+}
+
+write_route() {
+	local tmp
+	mkdir -p "$(dirname "$config")"
+	tmp="$(mktemp)"
+	{
+		route_block "$1"
+		[[ -f "$config" ]] && sed '/^# >>> vivac pc/,/^# <<< vivac pc/d' "$config"
+	} >"$tmp"
+	cat "$tmp" >"$config"
+	rm -f -- "$tmp"
+	chmod 600 "$config"
+}
+
+if [[ ! -f "$key" ]]; then
+	mkdir -p "$(dirname "$key")"
+	ssh-keygen -q -t ed25519 -N '' -C vivac-phone -f "$key" >/dev/null
+fi
+
+case "${1:-pair}" in
+status)
+	host="$(awk '/^# >>> vivac pc/{b=1} b&&/HostName/{print $2; exit}' "$config" 2>/dev/null)" || host=""
+	if [[ -n "$host" ]] && reaches "$host"; then
+		[[ "$host" == 127.0.0.1 ]] && echo usb || echo tailscale
+	else
+		echo none
+	fi
+	;;
+pair)
+	for host in 127.0.0.1 "$pc_host"; do
+		if reaches "$host"; then
+			write_route "$host"
+			[[ "$host" == 127.0.0.1 ]] && echo "paired with the computer over USB" ||
+				echo "paired with the computer over Tailscale ($host)"
+			exit 0
+		fi
+	done
+	{
+		echo "the computer did not answer (USB: 127.0.0.1:$port, Tailscale: $pc_host:$port)."
+		echo "If this phone is new to it, authorise this key on the computer:"
+		echo
+		echo "  vivac-phone-ssh authorize '$(cat "$key.pub")'"
+	} >&2
+	exit 1
+	;;
+*)
+	echo 'usage: vivac-pair [status]' >&2
+	exit 2
+	;;
+esac

@@ -113,6 +113,8 @@ mine="$(find "$HOME/.local/state/vivac/backups" -type f -name colors.properties)
     fail "i3 config not linked to the repository's"
 [[ "$(readlink -- "$HOME/.config/polybar/config.ini")" == "$repo_root/data/desk/polybar.ini" ]] ||
     fail "polybar config not linked to the repository's"
+[[ "$(readlink -- "$HOME/.claude/CLAUDE.md")" == "$repo_root/data/claude/CLAUDE.md" ]] ||
+    fail "Claude Code on the phone does not read the phone's CLAUDE.md"
 mine="$(find "$HOME/.local/state/vivac/backups" -type f -path '*i3/config')"
 [[ -n "$mine" && "$(cat "$mine")" == 'my own i3' ]] || fail "the user's own i3 config was not backed up"
 

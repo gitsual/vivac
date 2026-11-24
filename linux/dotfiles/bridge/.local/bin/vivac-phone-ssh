@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# The computer's own sshd for the phone (docs/bridge.md, "The phone's own
+# desktop"): what the phone's vivac-pair, vivac-adb and vivac-pc reach.
+#
+#   vivac-phone-ssh serve           (vivac-phone-ssh.service) sshd, and the
+#                                   USB route for every phone plugged in
+#   vivac-phone-ssh authorize KEY   let a phone's ssh public key in
+#   vivac-phone-ssh config          print the sshd configuration it runs
+#
+# It runs as this user, not root, so only this user can log in. Port 8222, on
+# 127.0.0.1 (the phone reaches it over the USB cable through adb reverse,
+# with no network at all) and on this computer's Tailscale address when it
+# has one. Keys only, and only the phone keys authorised here, kept apart
+# from ~/.ssh/authorized_keys in ${XDG_STATE_HOME:-~/.local/state}/vivac/phone-ssh.
+set -Eeuo pipefail
+
+port=8222
+dir="${XDG_STATE_HOME:-$HOME/.local/state}/vivac/phone-ssh"
+hostkey="$dir/host_ed25519"
+keys="$dir/authorized_keys"
+sshd_bin="${SSHD:-/usr/bin/sshd}"
+if [[ -z "${ADB:-}" ]]; then
+	if command -v adb >/dev/null; then ADB=adb; else ADB="$HOME/Android/Sdk/platform-tools/adb"; fi
+fi
+
+config() {
+	local ts
+	ts="$(tailscale ip -4 2>/dev/null | head -n 1)" || ts=""
+	printf '%s\n' "# Written by vivac-phone-ssh; rewritten every time it starts." \
+		"Port $port" \
+		"ListenAddress 127.0.0.1"
+	[[ "$ts" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && printf 'ListenAddress %s\n' "$ts"
+	printf '%s\n' "HostKey $hostkey" \
+		"AuthorizedKeysFile $keys" \
+		"PasswordAuthentication no" \
+		"KbdInteractiveAuthentication no" \
+		"PubkeyAuthentication yes" \
+		"UsePAM no" \
+		"PidFile none" \
+		"PrintMotd no" \
+		"Subsystem sftp internal-sftp"
+}
+
+case "${1:-}" in
+config) config ;;
+authorize)
+	key="${2:-}"
+	if [[ "$key" == *$'\n'* || ! "$key" =~ ^(ssh-ed25519|ecdsa-sha2-nistp256|ssh-rsa)\ [A-Za-z0-9+/=]+(\ [^[:cntrl:]]*)?$ ]]; then
+		echo 'vivac-phone-ssh: not one ssh public key' >&2
+		exit 1
+	fi
+	mkdir -p "$dir" && chmod 700 "$dir"
+	touch "$keys" && chmod 600 "$keys"
+	body="$(cut -d' ' -f1,2 <<<"$key")"
+	if ! cut -d' ' -f1,2 "$keys" | grep -qxF -- "$body"; then
+		printf '%s\n' "$key" >>"$keys"
+	fi
+	echo "authorised: $key"
+	;;
+serve)
+	mkdir -p "$dir" && chmod 700 "$dir"
+	[[ -f "$hostkey" ]] || ssh-keygen -q -t ed25519 -N '' -C vivac-phone-ssh -f "$hostkey" >/dev/null
+	touch "$keys" && chmod 600 "$keys"
+	config >"$dir/sshd_config"
+	"$sshd_bin" -D -e -f "$dir/sshd_config" &
+	sshd=$!
+	trap 'kill "$sshd" 2>/dev/null || true; wait "$sshd" 2>/dev/null || true; exit 0' TERM INT EXIT
+	# Every phone plugged in gets the USB route to this sshd, once: adb
+	# forgets it when the phone goes, so it is checked again every round.
+	while kill -0 "$sshd" 2>/dev/null; do
+		while read -r serial; do
+			"$ADB" -s "$serial" reverse --list 2>/dev/null | grep -q "tcp:$port tcp:$port" ||
+				"$ADB" -s "$serial" reverse "tcp:$port" "tcp:$port" >/dev/null 2>&1 || true
+		done < <("$ADB" devices 2>/dev/null | awk 'NR > 1 && $2 == "device" && $1 ~ /^[A-Za-z0-9._:-]+$/ { print $1 }')
+		sleep "${VIVAC_PHONE_SSH_CHECK:-3}"
+	done
+	;;
+*)
+	echo 'usage: vivac-phone-ssh serve | authorize KEY | config' >&2
+	exit 2
+	;;
+esac

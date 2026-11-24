@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Claude Code on this phone. There is no Android build, so the linux-arm64
+# one (installed by vivac-claude update) runs through glibc-runner, with its
+# own auto-updater off: it would fetch a build that cannot run here directly.
+set -Eeuo pipefail
+exe="$HOME/.local/lib/vivac-claude/current/claude"
+if [[ ! -x "$exe" ]]; then
+	echo 'Claude Code is not installed on this phone yet: run  vivac-claude update' >&2
+	exit 1
+fi
+export DISABLE_AUTOUPDATER=1
+exec grun "$exe" "$@"

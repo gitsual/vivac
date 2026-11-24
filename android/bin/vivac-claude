@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Install or update Claude Code on this phone (run it with `claude`).
+#
+#   vivac-claude update    the latest version from npm, if it is not the one
+#                          in use; the one before it is kept, older ones go
+#   vivac-claude version   the version in use
+set -Eeuo pipefail
+root="$HOME/.local/lib/vivac-claude"
+versions="$root/versions"
+
+case "${1:-update}" in
+version) basename "$(readlink -- "$root/current" 2>/dev/null)" 2>/dev/null || echo none ;;
+update)
+	# What the linux-arm64 build needs on Android: glibc-runner (grun) to run
+	# it, npm to fetch it.
+	if ! command -v grun >/dev/null 2>&1; then pkg install -y glibc-repo && pkg install -y glibc-runner; fi
+	command -v npm >/dev/null 2>&1 || pkg install -y nodejs-lts
+	latest="$(npm view @anthropic-ai/claude-code version)"
+	[[ "$latest" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "npm gave no version: $latest" >&2; exit 1; }
+	if [[ ! -x "$versions/$latest/claude" ]]; then
+		work="$(mktemp -d)"
+		trap 'rm -rf -- "$work"' EXIT
+		(cd "$work" && npm pack "@anthropic-ai/claude-code-linux-arm64@$latest" --silent >/dev/null &&
+			tar xzf ./*.tgz)
+		[[ -x "$work/package/claude" ]] || { echo "the download had no claude binary" >&2; exit 1; }
+		mkdir -p "$versions"
+		rm -rf -- "$versions/$latest.part"
+		mv -- "$work/package" "$versions/$latest.part"
+		mv -- "$versions/$latest.part" "$versions/$latest"
+	fi
+	previous="$(basename "$(readlink -- "$root/current" 2>/dev/null)" 2>/dev/null)" || previous=""
+	ln -sfn "versions/$latest" "$root/current"
+	for v in "$versions"/*; do
+		name="$(basename "$v")"
+		[[ "$name" == "$latest" || "$name" == "$previous" ]] || rm -rf -- "$v"
+	done
+	echo "Claude Code $latest"
+	;;
+*)
+	echo 'usage: vivac-claude [update|version]' >&2
+	exit 2
+	;;
+esac

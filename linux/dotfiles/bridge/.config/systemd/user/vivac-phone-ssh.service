@@ -1,0 +1,12 @@
+[Unit]
+Description=vivac: the computer's own sshd for the phone (USB and Tailscale, port 8222)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/vivac-phone-ssh serve
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=default.target
