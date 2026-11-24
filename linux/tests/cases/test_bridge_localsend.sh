@@ -241,12 +241,30 @@ fi
 # --- the sender against a phone over https: the certificate must be its fingerprint -----------------------------
 if command -v openssl >/dev/null; then
 	openssl req -x509 -newkey rsa:2048 -nodes -keyout "$sandbox/key.pem" -out "$sandbox/cert.pem" -days 1 -subj /CN=phone >/dev/null 2>&1
+	# LocalSend 1.18 on a phone ends the handshake unless the sender shows a
+	# certificate of its own (any self-signed one): the fake phone does the same,
+	# trusting the sender's, which is made once and kept private.
+	env XDG_STATE_HOME="$sandbox/sender" HOME="$sandbox/user" VIVAC_REPO="$repo_root" VIVAC_LANG=en python3 -c '
+import importlib.machinery, importlib.util, sys
+sys.dont_write_bytecode = True
+loader = importlib.machinery.SourceFileLoader("vls", sys.argv[1])
+module = importlib.util.module_from_spec(importlib.util.spec_from_loader("vls", loader))
+sys.modules["vls"] = module
+loader.exec_module(module)
+first, again = module.client_identity(), module.client_identity()
+assert first == again, (first, again)
+' "$tool" || fail 'the sender could not make its client certificate'
+	client="$sandbox/sender/vivac/localsend-client.pem"
+	[[ -s "$client" ]] || fail "no client certificate at $client"
+	[[ "$(stat -c %a "$client")" == 600 ]] || fail "the client certificate (with its key) is not private: $(stat -c %a "$client")"
 	cat >"$sandbox/https-phone.py" <<'PY'
 import hashlib, json, os, ssl, sys, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 folder = sys.argv[1]
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 context.load_cert_chain(f"{folder}/cert.pem", f"{folder}/key.pem")
+context.verify_mode = ssl.CERT_REQUIRED
+context.load_verify_locations(f"{folder}/sender/vivac/localsend-client.pem")
 der = ssl.PEM_cert_to_DER_cert(open(f"{folder}/cert.pem").read())
 mark = hashlib.sha256(der).hexdigest()
 class Phone(BaseHTTPRequestHandler):
@@ -313,6 +331,11 @@ chmod +x "$sandbox/bin/ip"
 mkdir -p "$sandbox/net/eth0/device"
 plan="$(PATH="$sandbox/bin:$PATH" VIVAC_SYS_CLASS_NET="$sandbox/net" HOME="$sandbox" "$repo_root/scripts/apply-system.sh" --dry-run --bridge)" || fail 'apply-system.sh --dry-run --bridge failed'
 for expected in 'tcp 53317 from 198.51.100.0/24 in UFW (vivac phone drop)' 'udp 53317 from 198.51.100.0/24 in UFW (vivac phone drop)'; do
+	grep -qF "would allow $expected" <<<"$plan" || fail "the plan does not open $expected: $plan"
+done
+# KDE Connect (docs/bridge.md section 9): its whole range, TCP and UDP, or a
+# paired phone is never seen from the Wi-Fi.
+for expected in 'tcp 1714:1764 from 198.51.100.0/24 in UFW (kde connect)' 'udp 1714:1764 from 198.51.100.0/24 in UFW (kde connect)'; do
 	grep -qF "would allow $expected" <<<"$plan" || fail "the plan does not open $expected: $plan"
 done
 grep -q "vivac-localsend" <<<"$plan" && fail "--bridge turned the phone drop on: $plan"

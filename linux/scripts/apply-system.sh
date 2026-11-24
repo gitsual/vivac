@@ -42,8 +42,8 @@ the only writers of those files in this repository.
 root of the product): the sudoers rule that lets wheel set the firmware's
 BootNext for "Restart in Windows", UFW rules that open the vivac link port
 (TCP and UDP 47321), the shared mouse's port (lan-mouse, UDP 4242) and the
-LocalSend port of the phone drop (TCP and UDP 53317) to the local IPv4
-subnets only, and the user's vivac-link service, which stays idle until the
+LocalSend port of the phone drop (TCP and UDP 53317) and KDE Connect's range
+(TCP and UDP 1714-1764) to the local IPv4 subnets only, and the user's vivac-link service, which stays idle until the
 machine is paired. lan-mouse runs only once vivac-mouse enable asks for it,
 and the phone drop only once vivac-localsend on (or the bridge menu) turns
 it on, with a PIN.
@@ -247,8 +247,10 @@ if $bridge; then
 	((${#subnets[@]})) || printf '%s\n' 'no IPv4 network is up: the vivac link, mouse and phone drop ports stay closed; run --bridge again once connected'
 	# 47321 is vivac link; 53317 is LocalSend's, for the phone drop: HTTP on
 	# TCP, discovery on UDP (multicast to 224.0.0.167 from the same subnet).
+	# 1714-1764 is KDE Connect's range (the phone, docs/bridge.md section 9):
+	# without it a paired phone is never seen from the Wi-Fi.
 	for subnet in "${subnets[@]}"; do
-		for opening in '47321 vivac link' '53317 vivac phone drop'; do
+		for opening in '47321 vivac link' '53317 vivac phone drop' '1714:1764 kde connect'; do
 			for protocol in tcp udp; do
 				if $dry_run; then
 					printf 'would allow %s %s from %s in UFW (%s)\n' "$protocol" "${opening%% *}" "$subnet" "${opening#* }"

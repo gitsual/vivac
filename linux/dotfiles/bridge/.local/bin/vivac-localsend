@@ -15,7 +15,8 @@ no vivac app on it: the protocol is LocalSend's v2 (github.com/localsend/protoco
 multicast discovery on 224.0.0.167:53317 and HTTP on TCP 53317. This side
 serves plain http, so phones send to it over http; it sends to phones over
 whatever they announce, https with a self-signed certificate as a rule, and
-only once the certificate's SHA-256 is the fingerprint the phone announced.
+only once the certificate's SHA-256 is the fingerprint the phone announced,
+showing a self-signed certificate of its own (LocalSend 1.18 requires one).
 
 Receiving needs the PIN (localsend_pin in the settings, else the one in
 ${XDG_STATE_HOME:-~/.local/state}/vivac/localsend.pin, six random digits made
@@ -457,16 +458,52 @@ def normal_fingerprint(text: str) -> str:
     return re.sub(r"[^0-9a-f]", "", text.lower())
 
 
+def client_identity() -> Path | None:
+    """The certificate this machine shows when it talks https to a device: LocalSend
+    1.18 on a phone ends the handshake without one. Any self-signed one does, so it is
+    made once with openssl and kept, key included, readable by this user only. None
+    when openssl is missing: the connection is then tried without one."""
+    path = state_dir() / "localsend-client.pem"
+    if path.is_file() and path.stat().st_size:
+        return path
+    if not shutil.which("openssl"):
+        return None
+    scratch = state_dir() / f".localsend-client.{os.getpid()}"
+    scratch.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        made = subprocess.run(
+            ["openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes",
+             "-days", "3650", "-subj", f"/CN={alias()}", "-keyout", str(scratch / "key"), "-out", str(scratch / "cert")],
+            capture_output=True, timeout=30)
+        if made.returncode != 0:
+            return None
+        write_private(path, (scratch / "cert").read_text(encoding="ascii") + (scratch / "key").read_text(encoding="ascii"))
+        return path
+    except (OSError, subprocess.SubprocessError):
+        return None
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def client_context() -> ssl.SSLContext:
+    """TLS to a device: its self-signed certificate is checked against its fingerprint
+    by the caller, and this machine shows its own (client_identity)."""
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    identity = client_identity()
+    if identity:
+        context.load_cert_chain(str(identity))
+    return context
+
+
 def connect(device: Device, timeout: float) -> http.client.HTTPConnection:
     """A connection to DEVICE. Over https the certificate is self-signed, so no authority
     vouches for it: LocalSend's trust is that its SHA-256 is the fingerprint the device
     announced, checked here before anything is sent."""
     if device.protocol == "http":
         return http.client.HTTPConnection(device.address, device.port, timeout=timeout)
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-    connection = http.client.HTTPSConnection(device.address, device.port, timeout=timeout, context=context)
+    connection = http.client.HTTPSConnection(device.address, device.port, timeout=timeout, context=client_context())
     connection.connect()
     der = connection.sock.getpeercert(binary_form=True) if connection.sock else None
     if not der or not hmac.compare_digest(hashlib.sha256(der).hexdigest(), normal_fingerprint(device.fingerprint)):
@@ -971,10 +1008,7 @@ def probe(peer: str) -> Device | None:
     for protocol in [match.group(1)] if match.group(1) else ["https", "http"]:
         try:
             if protocol == "https":
-                context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-                context.check_hostname = False
-                context.verify_mode = ssl.CERT_NONE
-                connection: http.client.HTTPConnection = http.client.HTTPSConnection(host, port, timeout=5, context=context)
+                connection: http.client.HTTPConnection = http.client.HTTPSConnection(host, port, timeout=5, context=client_context())
                 connection.connect()
                 der = connection.sock.getpeercert(binary_form=True) if connection.sock else b""
                 seen = hashlib.sha256(der or b"").hexdigest()
