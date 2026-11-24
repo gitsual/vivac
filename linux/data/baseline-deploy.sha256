@@ -20,9 +20,9 @@ a6e7674979d2751e40c52a0b0f984bfe601ac21438eaeb4831fc078a48abc23f  dotfiles/bridg
 5284f27d93bbbf730ed9bc3b53ebbf021528505ef46f630e6068445f83af00a1  dotfiles/bridge/.local/bin/vivac-link
 7bd7a30ecb9076f1290b8e93567e8a01439dae0b549fec9473d985d24890e070  dotfiles/bridge/.local/bin/vivac-localsend
 901374e5bfed46f823646709ca31f47ec31f91fbc06945a430079dfed778c978  dotfiles/bridge/.local/bin/vivac-mouse
-89e6beed2ae49ce2164bad6d6780ae5bb0aebc2972b503a7c895008b9e4ba636  dotfiles/bridge/.local/bin/vivac-phone
+3e236351ab946d96290d6ee9fcdb8f9bf7afc2917f4bf001914d72361cfeef7a  dotfiles/bridge/.local/bin/vivac-phone
 d8693d4cfe2ee4a6ddae2aee5cdfbd02b886ed4aa92630653d0191cb5391d182  dotfiles/bridge/.local/bin/vivac-phone-pull
-1c68a59b1d5b23be021e2d7fe18312a7f6a916634f2d0eb6ca948ca467305237  dotfiles/bridge/.local/bin/vivac-phone-screen
+cca8c79dd5e4145f2253532cb4dea278dbb257f988ec04f0d2d9f9570c2e249d  dotfiles/bridge/.local/bin/vivac-phone-screen
 13c3fb6a28242f0c50b95cd13b0b5bea69d53117385585f5e6f9fdbc155fc037  dotfiles/bridge/.local/bin/vivac-reboot-other
 cc2a1bbf6d1907f1d1c05b776a0213cc3bc5b9747939784f9a85dd4d9348ff57  dotfiles/bridge/.local/share/applications/vivac-phone-screen.desktop
 f69058aa3305f02195637654679bd12f2d8ccaae01217764c6e5e3922d11b8b4  dotfiles/bridge/.local/share/vivac/switch-login.sh
@@ -64,7 +64,7 @@ f9522fbc197ec8a3fbc9c197bfeeb839f1a5e8307f8b5718f9db53c641a3686d  dotfiles/ricer
 f83792888aaa59994790ed530bb7dafcda08e3a0f3f97774839c8a3faf4dec86  dotfiles/ricer/.config/nwg-bar/icons/suspend.svg
 a163273069081fc3949fea32ed15907e77e00d82a7e570456752ef280409d10c  dotfiles/ricer/.config/nwg-bar/style.css
 71359fb87ea2a74371a1e856de8c657405e18f39093129bc6f6bd683978edaf6  dotfiles/ricer/.local/bin/vivac-ask
-71a58a367466e3d76ec14f0f9c85bb1b3cd51e0101600a2e9dd6a0bd7fb22c6f  dotfiles/ricer/.local/bin/vivac-panel
+d79c367b408c6d1ebc9aef81ec849935458b59ac158509648d4e5843c615316a  dotfiles/ricer/.local/bin/vivac-panel
 d99519f77dc07b3383977c63393c66a36a80bd53ba2dd70a9c84290d1cb816ab  dotfiles/ricer/.local/bin/vivac-power
 78a926443169e779054a612191012bfca2695c1fd374600b9145b5b398d588b3  dotfiles/ricer/.local/bin/vivac-theme
 090766eccd45ca35ee79c791aeab3c383a6bbd1056b9d1c8ee15ca5dd7121f56  dotfiles/rofi/.config/rofi/config.rasi
@@ -77,8 +77,8 @@ a7f6d6e31fa8111b724b1b06d46311866ea490845b7377797fca481072550e6d  dotfiles/secur
 497102907be39a6e82346d1f24ab4f7b34c36cab1fd3eb2a271d812066414993  dotfiles/theme/.config/gtk-3.0/settings.ini
 497102907be39a6e82346d1f24ab4f7b34c36cab1fd3eb2a271d812066414993  dotfiles/theme/.config/gtk-4.0/settings.ini
 7120b38f5a9ec3b00e22fac420218c406c8fddd8c62ff5359a275102a70e303c  dotfiles/theme/.config/kdeglobals
-454c79adc93a9b17b73b01d57dad52985ce440f7b80960df28ce673e34e5bfb3  dotfiles/waybar/.config/waybar/phone/config
-6f16e63a489f55e006e8230b63946d09b33f9db4c5b288a6e8f8e64b52f990bc  dotfiles/waybar/.config/waybar/phone/style.css
+a4353be654658716d3d23fd03c646cef654fe470c0d22b7e0f6e398cc55d9013  dotfiles/waybar/.config/waybar/phone/config
+3dd7b22883046fc9bc9a568611223443456ebcaf17425cb0c17870e98370d666  dotfiles/waybar/.config/waybar/phone/style.css
 25c572c4b4f84a8342bd763e4429f6f3c5025f3fef2c3ec77232eb71aab30012  dotfiles/waybar/.config/waybar/scripts/net-wired.sh
 6688b4714fa5be29c249fbc72567e3de67c908df0a8daa3c0e8afdc5a24f7c95  dotfiles/waybar/.config/waybar/scripts/net-wireless.sh
 5ca0f70a23bf1b312f3cd58d12a36ed5b77970834346f70ebf55fb66128c862a  dotfiles/waybar/.config/waybar/scripts/waybar-keep.sh

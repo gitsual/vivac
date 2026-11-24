@@ -1,7 +1,18 @@
 @import "../style.css";
-/* The phone's own bar (vivac-phone-screen): its ten workspaces, the window,
-   the time. The buttons are numbered 1 to 10: the phone's own set. */
+/* The phone's own bar (vivac-phone-screen): its ten workspaces and the
+   window on the left, the time and the weather in the middle, as on the
+   computer's. The buttons are numbered 1 to 10: the phone's own set. */
 #workspaces button { color: #@COLOR_FG@; padding: 0 6px; border-radius: 8px; min-width: 0; }
 #workspaces button.empty { color: #@COLOR_MUTED@; }
 #workspaces button.active { font-weight: bold; box-shadow: inset 0 -2px #@COLOR_ACCENT@; }
 #workspaces button.urgent { font-style: italic; box-shadow: inset 0 -2px #@COLOR_URGENT@; }
+
+/* Half as wide as the computer's bar, so tighter: smaller text and padding,
+   and the gauges folded into one chip (group/phone-status) that unfolds on
+   hover or a tap. */
+window#waybar { font-size: 12px; }
+#workspaces button { padding: 0 4px; }
+#clock, #custom-weather, #network, #pulseaudio, #custom-system, #custom-security,
+#custom-theme, #custom-fold { padding: 0 8px; margin: 4px 1px; }
+#custom-fold { background: rgba(@COLOR_SURFACE:rgb@, 0.7); border-radius: 10px; border-bottom: 2px solid #@COLOR_MUTED@; }
+#custom-power { margin: 4px 2px; padding: 0 8px; }

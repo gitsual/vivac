@@ -6,6 +6,11 @@
 #                       reachable phone's battery; empty (hidden) without one
 #   menu                rofi: ring, send a file, the clipboard or the link on
 #                       it, browse the phone's files, pair
+#   status              JSON for the phone panel (vivac-panel phone): the
+#                       reachable phones and their battery, what can be done
+#   do ACTION --device ID [FILE]
+#                       one of ring, send-file, send-clip, send-url, browse,
+#                       without rofi; prints what happened
 #   commands [--dry-run] [--device ID]
 #                       write the fixed vivac actions the phone may trigger
 #                       into KDE Connect's Run command list for each paired
@@ -229,24 +234,35 @@ menu() {
 		[[ -n "$id" ]] || tell "$(i18n_get phone.none)"
 		manage
 		;;
-	ring)
-		if cli -d "$id" --ring >/dev/null; then tell "$(i18n_format phone.ringing "$name")"; else tell "$(i18n_format phone.failed "$name")"; fi
-		;;
 	send-file)
 		file="$(pick_file)" || return 0
-		if cli -d "$id" --share "$file" >/dev/null; then tell "$(i18n_format phone.sent "$name")"; else tell "$(i18n_format phone.failed "$name")"; fi
+		tell "$(act send-file "$id" "$name" "$file")" || true
+		;;
+	*) tell "$(act "$action" "$id" "$name")" || true ;;
+	esac
+}
+
+# act ACTION ID NAME [FILE] — one action on one phone, without asking anything:
+# the menu above picks it in rofi, the phone panel (vivac-panel phone) with a
+# button. Prints what happened, in a sentence; non-zero when it did not.
+act() {
+	local action="$1" id="$2" name="$3" file="${4:-}" clip mount
+	case "$action" in
+	ring)
+		cli -d "$id" --ring >/dev/null && { i18n_format phone.ringing "$name"; return 0; }
+		;;
+	send-file)
+		[[ -f "$file" ]] || { i18n_get phone.no_file; return 1; }
+		cli -d "$id" --share "$file" >/dev/null && { i18n_format phone.sent "$name"; return 0; }
 		;;
 	send-clip)
-		if cli -d "$id" --send-clipboard >/dev/null; then tell "$(i18n_format phone.sent "$name")"; else tell "$(i18n_format phone.failed "$name")"; fi
+		cli -d "$id" --send-clipboard >/dev/null && { i18n_format phone.sent "$name"; return 0; }
 		;;
 	send-url)
 		# Only a link, and only http(s): the phone opens what it is shared.
 		clip="$(wl-paste --no-newline --type text 2>/dev/null || true)"
-		[[ "$clip" =~ ^https?://[^[:space:]]+$ ]] || {
-			tell "$(i18n_get phone.no_link)"
-			return 0
-		}
-		if cli -d "$id" --share "$clip" >/dev/null; then tell "$(i18n_format phone.sent "$name")"; else tell "$(i18n_format phone.failed "$name")"; fi
+		[[ "$clip" =~ ^https?://[^[:space:]]+$ ]] || { i18n_get phone.no_link; return 1; }
+		cli -d "$id" --share "$clip" >/dev/null && { i18n_format phone.sent "$name"; return 0; }
 		;;
 	browse)
 		cli -d "$id" --mount >/dev/null || true
@@ -254,11 +270,71 @@ menu() {
 		if [[ -n "$mount" && -d "$mount" ]]; then
 			xdg-open "$mount" >/dev/null 2>&1 &
 			disown
-		else
-			tell "$(i18n_format phone.no_mount "$name")"
+			return 0
 		fi
+		i18n_format phone.no_mount "$name"
+		return 1
 		;;
+	*) return 2 ;;
 	esac
+	i18n_format phone.failed "$name"
+	return 1
+}
+
+# status — the phone panel's view, as one JSON object: whether KDE Connect is
+# installed and running, the reachable phones with their battery (charge -1:
+# unknown), and what this machine can do besides (browse needs sshfs, screen
+# needs wayvnc). Never an error: a missing piece is false or an empty list.
+status() {
+	local id name charge charging first=1 phones=''
+	local inst=false daemon=false
+	installed && inst=true
+	if $inst && pgrep -u "$(id -u)" -x kdeconnectd >/dev/null 2>&1; then
+		daemon=true
+		while IFS=$'\t' read -r id name; do
+			read -r charge charging < <(battery "$id")
+			((first)) || phones+=','
+			first=0
+			phones+="{\"id\":$(json "$id"),\"name\":$(json "$name"),\"charge\":$charge,\"charging\":$charging}"
+		done < <(devices)
+	fi
+	local browse=false screen=false
+	command -v sshfs >/dev/null && browse=true
+	command -v "${VIVAC_WAYVNC:-wayvnc}" >/dev/null && screen=true
+	printf '{"installed":%s,"daemon":%s,"phones":[%s],"can_browse":%s,"can_screen":%s}\n' \
+		"$inst" "$daemon" "$phones" "$browse" "$screen"
+}
+
+# do ACTION --device ID [FILE] — act on a phone that is in reach, by id.
+do_action() {
+	local action="${1:-}" id='' file='' name='' line_id line_name
+	shift || true
+	[[ "$action" =~ ^(ring|send-file|send-clip|send-url|browse)$ ]] || {
+		printf 'vivac-phone: not an action: %s\n' "$action" >&2
+		return 2
+	}
+	while (($#)); do
+		case "$1" in
+		--device)
+			id="${2:-}"
+			shift 2 || true
+			;;
+		*)
+			file="$1"
+			shift
+			;;
+		esac
+	done
+	valid_id "$id" || {
+		printf 'vivac-phone: not a device id: %s\n' "$id" >&2
+		return 2
+	}
+	installed || { i18n_get phone.not_installed; return 1; }
+	while IFS=$'\t' read -r line_id line_name; do
+		[[ "$line_id" == "$id" ]] && name="$line_name"
+	done < <(devices)
+	[[ -n "$name" ]] || { i18n_get phone.none; return 1; }
+	act "$action" "$id" "$name" "$file"
 }
 
 # ----------------------------------------------------------------- commands
@@ -475,6 +551,11 @@ run() {
 case "${1:-}" in
 waybar) waybar_json ;;
 menu) menu ;;
+status) status ;;
+do)
+	shift
+	do_action "$@"
+	;;
 commands)
 	shift
 	commands "$@"
@@ -486,9 +567,9 @@ run) run "${2:-}" ;;
 	if [[ -n "$(devices)" ]]; then menu_rows paired; else menu_rows; fi
 	menu_labels
 	;;
--h | --help) sed -n '2,21p' "$self" ;;
+-h | --help) sed -n '2,26p' "$self" ;;
 *)
-	printf 'Usage: vivac-phone waybar | menu | commands [--dry-run] [--device ID] | run ACTION | --available | --print\n' >&2
+	printf 'Usage: vivac-phone waybar | menu | status | do ACTION --device ID [FILE] | commands [--dry-run] [--device ID] | run ACTION | --available | --print\n' >&2
 	exit 2
 	;;
 esac
