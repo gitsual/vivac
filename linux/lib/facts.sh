@@ -55,6 +55,14 @@ facts_key_allowed() {
 			[[ "setting_$key" == "$candidate" ]] && return 0
 		done
 	fi
+	# ...or what the deploy itself works out, as deploy_<key>, when the
+	# caller lists DEPLOY_ALLOWED_KEYS (render-config.sh: whether a module it
+	# builds is there). Never written to a facts file either.
+	if [[ "$candidate" == deploy_* && -v DEPLOY_ALLOWED_KEYS ]]; then
+		for key in "${DEPLOY_ALLOWED_KEYS[@]}"; do
+			[[ "deploy_$key" == "$candidate" ]] && return 0
+		done
+	fi
 	return 1
 }
 

@@ -12,6 +12,10 @@
     vivac-panel updates        what is pending, by origin, and whether to restart
     vivac-panel menu           everything to open, by category, with a calculator
     vivac-panel waybar KIND    one line of JSON for the bar (usb, security)
+    vivac-panel PANEL ... --hover        opened by resting the pointer on its
+                               bar button (lib/bar-hover): it closes on its own
+                               once the pointer leaves, until a click pins it
+    vivac-panel PANEL --hover-leave      the pointer left that button
 
 Each panel is a floating GTK 4 window of app id org.vivac.panel.<kind>, which
 Hyprland places under the bar; Esc or a click elsewhere closes it, and
@@ -30,6 +34,29 @@ sys.path.insert(0, str(REPO / "lib"))
 PANELS = ("sound", "usb", "security", "clipboard", "calendar", "forecast", "system", "osd", "updates", "menu", "power", "theme", "network", "bluetooth")
 
 
+HOVER_FLAGS = ("--hover", "--hover-leave")
+
+
+def tell_open_panel(kind: str, action: str, args: list[str]) -> bool:
+    """Run ACTION, with the launch's ARGS, in the open panel of KIND, through its GApplication's
+    org.gtk.Actions on the session bus; False when no such panel is open (or
+    there is no bus). Gio only: no GTK is loaded for this."""
+    try:
+        from gi.repository import Gio, GLib
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        name = f"org.vivac.panel.{kind}"
+        owned = bus.call_sync("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                              "NameHasOwner", GLib.Variant("(s)", (name,)), GLib.VariantType("(b)"),
+                              Gio.DBusCallFlags.NONE, 1000, None).unpack()[0]
+        if not owned:
+            return False
+        bus.call_sync(name, f"/org/vivac/panel/{kind}", "org.gtk.Actions", "Activate",
+                      GLib.Variant("(sava{sv})", (action, [GLib.Variant("s", " ".join(args))], {})), None, Gio.DBusCallFlags.NONE, 1000, None)
+        return True
+    except Exception:  # no bus, no gi, a panel closing as it is asked
+        return False
+
+
 def main(argv: list[str]) -> int:
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip())
@@ -43,6 +70,14 @@ def main(argv: list[str]) -> int:
     if kind not in PANELS:
         print(f"vivac-panel: unknown panel {kind!r}", file=sys.stderr)
         return 2
+    flag = rest.pop() if rest and rest[-1] in HOVER_FLAGS else None
+    if flag == "--hover-leave":
+        tell_open_panel(kind, "hover-leave", rest)
+        return 0
+    if flag == "--hover":
+        if tell_open_panel(kind, "hover", rest):  # already open: keep it open
+            return 0
+        os.environ["VIVAC_PANEL_HOVER"] = "1"  # kit.Panel reads it
     module = importlib.import_module(f"vivacpanel.{kind}")
     return module.main(*rest) if rest else module.main()
 

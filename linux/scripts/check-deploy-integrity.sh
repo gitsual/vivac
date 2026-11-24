@@ -100,6 +100,14 @@ declare -A deploy_records=([.config/vivac/repo]=1)
 [[ "$(cat -- "$home/.config/vivac/repo" 2>/dev/null)" == "$repo_root" ]] ||
 	problem 'deploy did not record the checkout in .config/vivac/repo'
 
+# What render-config.sh builds: the bar's hover module (lib/bar-hover), when
+# this machine can compile it. Built into HOME, never into the checkout.
+if [[ -e "$home/.local/lib/vivac/vivac-hover.so" ]]; then
+	deploy_records[.local/lib/vivac/vivac-hover.so]=1
+	[[ -f "$home/.local/lib/vivac/vivac-hover.so" && ! -L "$home/.local/lib/vivac/vivac-hover.so" ]] ||
+		problem 'the bar hover module is not a regular file'
+fi
+
 # The paths together left no file that none owns: a stray would be a write
 # nobody can account for.
 while IFS= read -r -d '' file; do

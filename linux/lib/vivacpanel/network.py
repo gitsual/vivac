@@ -290,7 +290,13 @@ def _css(p: dict[str, str]) -> str:
 """
 
 
-def main() -> int:
+def tab_for(args: list[str]) -> str:
+    """The tab a launch names: "ethernet" (or "eth") for the wired button,
+    anything else Wi-Fi, the panel's first tab."""
+    return "eth" if args and args[0] in ("ethernet", "eth") else "wifi"
+
+
+def main(*args: str) -> int:
     import threading
 
     from .kit import SETTINGS, T, gtk_kit
@@ -304,7 +310,7 @@ def main() -> int:
     provider.load_from_string(_css(panel.p))
     Gtk.StyleContext.add_provider_for_display(k.Gdk.Display.get_default(), provider,
                                               Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
-    st = {"tab": "wifi", "root": None, "ask": None, "err": "", "busy": False, "sig": None}
+    st = {"tab": tab_for(list(args)), "root": None, "ask": None, "err": "", "busy": False, "sig": None}
 
     def clear(box):
         c = box.get_first_child()
@@ -520,6 +526,15 @@ def main() -> int:
         return root
 
     panel.on_build = build
+
+    # Open already, and the pointer rests on the other network button: go to
+    # its tab (lib/bar-hover passes the button's arguments with --hover).
+    def to_tab(hover_args):
+        tab = tab_for(hover_args)
+        if tab != st["tab"] and st["root"] is not None:
+            st.update(tab=tab, ask=None, err="")
+            fill(True)
+    panel.on_hover_args = to_tab
     return panel.run()
 
 
