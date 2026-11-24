@@ -67,7 +67,7 @@ for prog in wayvnc waybar pkill notify-send; do
 done
 chmod +x "$sandbox/bin"/*
 export PATH="$sandbox/bin:$PATH" CALLS="$calls" ADB="$sandbox/bin/adb" XDG_RUNTIME_DIR="$sandbox/run"
-export XDG_STATE_HOME="$sandbox/state" I18N_DIR="$repo_root/i18n" LANG=en_US.UTF-8 VIVAC_PHONE_SCREEN_CHECK=0.2
+export XDG_STATE_HOME="$sandbox/state" XDG_CONFIG_HOME="$sandbox/cfg-hypr" I18N_DIR="$repo_root/i18n" LANG=en_US.UTF-8 VIVAC_PHONE_SCREEN_CHECK=0.2
 export MONITORS='[{"name":"HDMI-A-1","width":1920,"height":1080,"refreshRate":60.0,"x":0,"y":0,"scale":1.0}]'
 state="$sandbox/run/vivac-phone-screen.pid"
 settle() { sleep 0.4; }
@@ -126,6 +126,14 @@ view="$(grep -n 'vnc://127.0.0.1:5900' "$calls" | head -1 | cut -d: -f1)"
 turn="$(grep -n 'user-rotation lock 1' "$calls" | head -1 | cut -d: -f1)"
 [[ -n "$stop" && "$turn" -lt "$view" && "$stop" -lt "$view" ]] || fail "the viewer was not started afresh after the turn: $(cat "$calls")"
 
+# A reload of Hyprland keeps all of it: the rules are also written to a
+# fragment the configuration reads on every reload.
+fragment="$sandbox/cfg-hypr/hypr/generated/phone_screen.lua"
+grep -q 'hl.monitor({ output = "VIVAC-PHONE", mode = "[0-9]*x1080@60", position = "1920x0", scale = "2" })' "$fragment" 2>/dev/null ||
+	fail "the phone's monitor would not survive a reload of Hyprland"
+grep -qF 'hl.workspace_rule({ workspace = "11", monitor = "VIVAC-PHONE", default = true })' "$fragment" ||
+	fail "the phone's workspaces would not survive a reload"
+
 # Off: everything undone.
 : >"$calls"
 SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn off"
@@ -135,6 +143,7 @@ grep -q '^pkill .*wayvnc' "$calls" || fail "the screen was still served"
 grep -q '^pkill .*waybar/phone/config' "$calls" || fail "the phone's bar was left"
 has 'adb -s PHONE1 reverse --remove tcp:5900' "the USB forward was left"
 [[ ! -e "$state" ]] || fail "the watcher was left"
+[[ ! -e "$fragment" ]] || fail "the phone's rules would come back on the next reload"
 has 'adb -s PHONE1 shell cmd window user-rotation free' "the phone's own rotation was not given back"
 has 'adb -s PHONE1 shell am force-stop com.gaurav.avnc' "the viewer was left open on a screen that is gone"
 has 'adb -s PHONE1 shell settings put global stay_on_while_plugged_in 0' "the phone's own stay-awake setting was not given back"
@@ -243,6 +252,7 @@ for n in 1 2 3 4 5 6 7 8 9 10; do
 	grep -qF "hl.bind(\"SUPER + ALT + $((n % 10))\", hl.dsp.focus({ workspace = $((10 + n)) }))" "$hypr" ||
 		fail "SUPER+ALT+$((n % 10)) does not go to the phone's workspace $((10 + n))"
 done
+grep -qF 'pcall(require, "generated.phone_screen")' "$hypr" || fail "the configuration does not read the phone's rules on a reload"
 grep -qF 'cmd = "$HOME/.local/bin/vivac-phone-screen auto"' "$hypr" || fail "the session does not start watching for the phone"
 grep -q '"output": "!VIVAC-PHONE"' "$repo_root/render/waybar/config.in" || fail "the computer's bar would show on the phone too"
 # The phone's bar reads as the computer's: the time and the weather in the

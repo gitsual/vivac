@@ -67,7 +67,16 @@ phone() {
 	[[ "$serial" =~ ^[A-Za-z0-9._:-]+$ ]] && printf '%s\n' "$serial"
 }
 mode_on() { [[ -s "$state" ]]; }
-rule() { hyprctl eval "$1" >/dev/null 2>&1 || true; }
+# rule LUA — applied now and, while on() runs, kept for the fragment the
+# configuration reads on every reload (hyprctl reload drops what eval set,
+# and the phone's screen would fall back to 1920x1080 at scale 1).
+fragment="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/generated/phone_screen.lua"
+keeping=""
+rule() {
+	hyprctl eval "$1" >/dev/null 2>&1 || true
+	[[ -n "$keeping" ]] && printf '%s\n' "$1" >>"$keeping"
+	return 0
+}
 
 # connect SERIAL [auto] — the screen to the phone over USB, and its viewer opened
 # afresh (one left open keeps the zoom it had in portrait). Again after the
@@ -104,6 +113,9 @@ on() {
 	primary="$(jq -r '[.[] | select(.name != "'"$output"'")][0].name' <<<"$monitors")"
 	right="$(jq -r '[.[] | select(.name != "'"$output"'") | .x + (.width / .scale)] | max | floor' <<<"$monitors")"
 	hyprctl output create headless "$output" >/dev/null
+	mkdir -p "$(dirname "$fragment")"
+	keeping="$fragment.tmp"
+	printf '%s\n' '-- Written by vivac-phone-screen while the phone is a screen; removed when it ends.' >"$keeping"
 	# Pinned where they are: a new monitor would otherwise lay them out again.
 	while IFS=$'\t' read -r name mode pos mscale; do
 		rule "hl.monitor({ output = \"$name\", mode = \"$mode\", position = \"$pos\", scale = \"$mscale\" })"
@@ -124,6 +136,8 @@ on() {
 		rule "hl.bind(\"ALT + SHIFT + $((n % 10))\", hl.dsp.window.move({ workspace = $((10 + n)) }))"
 	done
 
+	mv -f -- "$keeping" "$fragment"
+	keeping=""
 	setsid -f waybar -c "$bar_config" -s "$bar_style" >/dev/null 2>&1 </dev/null
 	setsid -f wayvnc -o "$output" 127.0.0.1 "$port" >/dev/null 2>&1 </dev/null
 	# The screen is landscape: the phone is turned and held there, or a phone
@@ -203,6 +217,7 @@ off() {
 		rule "hl.unbind(\"ALT + $n\")"
 		rule "hl.unbind(\"ALT + SHIFT + $n\")"
 	done
+	rm -f -- "$fragment"
 	hyprctl output remove "$output" >/dev/null 2>&1 || true
 	# Adding/removing an output disables owb's input-capture session (shared
 	# mouse/keyboard with the laptop) and owb never re-arms it: restart it.

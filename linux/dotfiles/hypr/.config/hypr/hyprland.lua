@@ -57,6 +57,9 @@ hl.env("XCURSOR_SIZE", "24")
 fragment("hardware")
 fragment("monitors")
 fragment("input")
+-- The phone as a screen, while it is one (vivac-phone-screen): absent otherwise.
+package.loaded["generated.phone_screen"] = nil
+pcall(require, "generated.phone_screen")
 
 -- Where the checkout lives, for the programs started below. A checkout that is
 -- not at ~/vivac names itself in <config>/vivac/repo (scripts/deploy-host.sh).
