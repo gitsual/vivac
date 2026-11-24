@@ -77,7 +77,7 @@ fi
 # background and foreground) and the accent as the cursor, from the theme
 # named in ~/.config/vivac/settings (the same setting the other halves read),
 # the default palette when none is named or the name is not a shipped one.
-theme="$(sed -n 's/^theme=//p' "$HOME/.config/vivac/settings" 2>/dev/null | tail -1)"
+theme="$(sed -n 's/^theme=//p' "$HOME/.config/vivac/settings" 2>/dev/null | tail -1)" || theme=""
 palette="$here/data/theme.conf"
 if [[ "$theme" =~ ^[a-z][a-z0-9-]*$ && -f "$here/data/themes/$theme.conf" ]]; then
 	palette="$here/data/themes/$theme.conf"

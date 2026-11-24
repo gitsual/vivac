@@ -63,3 +63,12 @@ mine="$(find "$HOME/.local/state/vivac/backups" -type f -name colors.properties)
 after="$(snapshot)"
 bash "$deploy" >/dev/null || fail "second deploy failed"
 [[ "$(snapshot)" == "$after" ]] || fail "second deploy is not idempotent"
+
+# A phone with no vivac settings file (a fresh Termux) still gets the
+# colours, from the default palette: the missing file is not an error.
+rm -rf -- "$HOME" && mkdir -p "$HOME"
+out="$(bash "$deploy" 2>&1)" || fail "deploy without a settings file failed: $out"
+grep -q 'Written by vivac' "$HOME/.termux/colors.properties" 2>/dev/null ||
+    fail "deploy without a settings file wrote no Termux colours"
+grep -q '^background=#[0-9a-f]\{6\}$' "$HOME/.termux/colors.properties" ||
+    fail "default palette gave no terminal background"
