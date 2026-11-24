@@ -602,6 +602,16 @@ else the only one it begins), else in rofi (Linux) or a list in vivac's style
 lists the clipboard's text and the newest files of the usual folders
 (Shift+Enter for several); Windows opens its own file picker.
 
+### Sending over https
+
+LocalSend 1.18 on a phone ends the TLS handshake unless the sender shows a
+certificate of its own; any self-signed one does. Linux makes one once with
+`openssl` and keeps it, key included, in `localsend-client.pem` in its state
+folder (mode 0600); Windows makes one once in `Cert:\CurrentUser\My`, friendly
+name `vivac LocalSend`, its key not exportable. Checked on 2026-11-24 against
+a Pixel 8 with LocalSend 1.18.2 both ways from Linux and from Windows to the
+phone.
+
 ### Gates
 
 `VIVAC_LOCALSEND_SINK=<file>` writes each notification as a line
@@ -655,15 +665,15 @@ it to one phone. After writing, the daemon is told (D-Bus signal
 `/kdeconnect/<device id>/kdeconnect_runcommand`) and sends the new list to
 the phone. On Windows the phone runs nothing of vivac's.
 
-### Not verified with a real phone
+### Checked with a real phone
 
 The gates exercise all of it against fake `kdeconnect-cli`, `busctl` and
 `rofi` (Linux) and a fake `kdeconnect-cli` (Windows). The runcommand file is
-read back by Qt's own QSettings and rewritten byte for byte. What still needs
-a phone: the battery property names (`charge`, `isCharging` on
-`org.kde.kdeconnect.device.battery`, taken from the 26.x sources), the
-notification's app name (`KDE Connect`, from its notifyrc) that the dunst rule
-matches, and KDE Connect for Windows' install path.
+read back by Qt's own QSettings and rewritten byte for byte. On 2026-11-24 a
+Pixel 8 with KDE Connect 1.37.3 (F-Droid) confirmed on Linux the battery
+property names (`charge`, `isCharging`), the notification's app name
+(`KDE Connect`) that the dunst rule matches, and the Run command list arriving
+on the phone. Still unchecked: KDE Connect for Windows' install path.
 
 ## 10. vivac ask across machines
 
