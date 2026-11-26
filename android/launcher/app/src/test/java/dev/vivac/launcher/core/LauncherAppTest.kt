@@ -1478,5 +1478,57 @@ class LauncherAppTest {
         assertTrue("first cell ${(first.top - gear.bottom) / dp}dp under the bar", first.top - gear.bottom < WidgetSizeRow * dp)
     }
 
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "w914dp-h411dp-land-420dpi")
+    fun `turned on its side, the camp puts the bar across the top, hour and facts left, pages in the middle and the dock down the right edge`() {
+        store.values["dock"] = "com.android.settings,com.termux"
+        store.values["pinned"] = "com.termux,app.organicmaps"
+        show()
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val hour = compose.onNodeWithText("15:48").fetchSemanticsNode().boundsInRoot
+        val dock = compose.onNodeWithContentDescription("Dock").fetchSemanticsNode().boundsInRoot
+        val route = compose.onNodeWithTag("via").fetchSemanticsNode().boundsInRoot
+        val lamp = compose.onNodeWithContentDescription("Ajustes del sistema").fetchSemanticsNode().boundsInRoot
+        // The bar runs the whole width, as upright: the lamp in the top right corner, above everything else.
+        assertTrue("lamp $lamp on $screen", lamp.right > screen.width * 0.9f && lamp.bottom <= route.top)
+        // Hour left of the route, the dock right of it: a rail down the edge, taller than wide.
+        assertTrue("hour $hour, route $route", hour.right <= route.left)
+        assertTrue("dock $dock, route $route", dock.left >= route.right && dock.height > dock.width * 2)
+        assertTrue("dock $dock on $screen", dock.bottom <= screen.bottom)
+        // The dock's apps have room: one above the other, apart.
+        val tiles = compose.onAllNodesWithContentDescription("Ajustes").fetchSemanticsNodes().map { it.boundsInRoot }.filter { it.left >= dock.left }
+        val other = compose.onAllNodesWithContentDescription("Termux").fetchSemanticsNodes().map { it.boundsInRoot }.filter { it.left >= dock.left }
+        assertTrue("dock tiles $tiles $other", tiles.size == 1 && other.size == 1 && other.single().top - tiles.single().bottom > 0f)
+        // Names do not fit a rail: icons, and TalkBack still reads the names.
+        compose.onNodeWithText("Ajustes").assertDoesNotExist()
+        // The pages have most of the height to themselves.
+        val dots = compose.onNode(androidx.compose.ui.test.hasContentDescription("página 1 de", substring = true)).fetchSemanticsNode().boundsInRoot
+        assertTrue("dots $dots", dots.top > screen.height * 0.6f && dots.left >= hour.right)
+        // Hour and facts read as one block: the facts sit right under the hour, not at the bottom of the room.
+        val battery = compose.onNodeWithContentDescription("Batería al 99 %, cargando").fetchSemanticsNode().boundsInRoot
+        val dp = compose.activity.resources.displayMetrics.density
+        assertTrue("hour $hour, battery $battery", battery.top - hour.bottom < 48 * dp)
+    }
+
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "w914dp-h411dp-land-420dpi")
+    fun `turned on its side, a swipe across the pages goes to the next ladera and its apps show whole`() {
+        store.values["widgets"] = "@com.termux:1,@app.organicmaps:1"
+        store.values["pinned"] = "com.android.settings"
+        show()
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        val via = compose.onNodeWithTag("via").fetchSemanticsNode().boundsInRoot
+        compose.onRoot().performTouchInput { swipe(Offset(via.right - 40f, via.center.y), Offset(via.left + 40f, via.center.y), 250) }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        assertEquals(1, launcher.page)
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val tile = compose.onAllNodesWithText("Organic Maps").fetchSemanticsNodes().map { it.boundsInRoot }.first { it.left > via.left - 40f }
+        assertTrue("tile $tile on $screen", tile.top >= 0f && tile.bottom <= screen.bottom)
+    }
+
     private val WidgetSizeRow = dev.vivac.launcher.campamento.WidgetSize.ROW_DP.toFloat()
 }

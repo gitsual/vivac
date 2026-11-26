@@ -210,14 +210,17 @@ fun CampamentoScreen(
         val lampHere = lamp?.minus(rootOrigin)
         Contours(Modifier.fillMaxSize(), color = Ink.surface, centre = lampHere, innerRadius = LAMP_RING)
         Beam(Modifier.fillMaxSize(), lampHere)
-        Column(
+        BoxWithConstraints(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Header(onOpenSettings, noticeApps, onOpenAvisos, status) { lamp = it }
+            // On its side the phone is short: the hour, the facts and the dock go to a column of their own on the
+            // left, and the pages get the whole height beside it. Upright, everything is stacked as ever.
+            val wide = maxWidth > maxHeight
+            val side = maxWidth * 0.34f
+            val header: @Composable () -> Unit = { Header(onOpenSettings, noticeApps, onOpenAvisos, status) { lamp = it } }
             val pager = rememberPagerState(initialPage = page) { shownPages }
             // The launcher decides the page (home, a widget sent elsewhere); a swipe tells it where you went.
             LaunchedEffect(page) { if (pager.currentPage != page) pager.animateScrollToPage(page) }
@@ -239,15 +242,15 @@ fun CampamentoScreen(
             }
             // While something is carried, every page stays composed: the page it came from holds the finger (a
             // widget's own view, a tile's gesture), and tearing it down when the page turns would drop it.
-            HorizontalPager(
+            val pages: @Composable (Modifier) -> Unit = { into -> HorizontalPager(
                 pager,
-                Modifier.weight(1f),
+                into,
                 pageSpacing = 24.dp,
                 verticalAlignment = Alignment.Top,
                 beyondViewportPageCount = if (drag.held != null) shownPages else 0,
             ) { p ->
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    if (p == 0) Clock(stamp)
+                    if (p == 0 && !wide) Clock(stamp)
                     if (p >= 1 && board.onPage(p).isEmpty()) NewLadera(p, drag, onAddApps, Modifier.weight(1f))
                     else BoxWithConstraints(Modifier.weight(1f)) {
                     // How tall the page is: a ladera's grid of empty cells reaches down to its bottom.
@@ -271,7 +274,7 @@ fun CampamentoScreen(
                             var abovePx by remember { mutableIntStateOf(0) }
                             var routePx by remember { mutableIntStateOf(0) }
                             Column(Modifier.fillMaxWidth().onSizeChanged { abovePx = it.height }, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                FactsStrip(facts, onOpenAbout)
+                                if (!wide) FactsStrip(facts, onOpenAbout)
                                 board.onPage(0).filterIsInstance<Placed>().forEach { card(it) }
                             }
                             // Part of the room goes between the route's rows, so they breathe; the rest above and below.
@@ -311,8 +314,39 @@ fun CampamentoScreen(
                     }
                 }
             }
-            PageDots(shownPages, page)
-            DockCard(apps, home, onOpenApp, onAppMenu, drag, drop)
+            }
+            if (wide) {
+                // The bar runs the whole width, as upright; under it the hour and facts on the left, the pages in the
+                // middle and the dock as a rail down the right edge, where its apps have room one above the other.
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    header()
+                    Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        // The hour and the facts are one block, in the middle of the height: no dead room between them.
+                        Column(
+                            Modifier.width(side).fillMaxHeight().padding(bottom = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
+                        ) {
+                            Clock(stamp)
+                            FactsStrip(facts, onOpenAbout)
+                        }
+                        Column(Modifier.weight(1f).fillMaxHeight().padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            pages(Modifier.weight(1f))
+                            PageDots(shownPages, page)
+                        }
+                        // Names do not fit a rail: icons only (TalkBack still reads the names).
+                        androidx.compose.runtime.CompositionLocalProvider(dev.vivac.launcher.theme.LocalLabels provides false) {
+                            DockRail(apps, home, onOpenApp, onAppMenu, drag, drop, Modifier.fillMaxHeight().padding(top = 14.dp, bottom = 12.dp))
+                        }
+                    }
+                }
+            } else {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    header()
+                    pages(Modifier.weight(1f))
+                    PageDots(shownPages, page)
+                    DockCard(apps, home, onOpenApp, onAppMenu, drag, drop)
+                }
+            }
         }
         // A carried widget follows the finger as a picture of itself, just where the finger took it.
         (drag.held as? HeldWidget)?.takeIf { it.look != null }?.let { w ->
@@ -1051,9 +1085,12 @@ private fun FitHour(time: String, modifier: Modifier) {
     BoxWithConstraints(modifier) {
         val measurer = androidx.compose.ui.text.rememberTextMeasurer()
         val room = constraints.maxWidth
-        val style = remember(time, room) {
+        // Upright the hour has all the height it wants; on its side it also keeps within the room it is given.
+        val tall = if (constraints.hasBoundedHeight) constraints.maxHeight else Int.MAX_VALUE
+        val style = remember(time, room, tall) {
             var size = Type.hour.fontSize.value
-            fun fits(sp: Float) = measurer.measure(time, Type.hour.copy(fontSize = sp.sp, lineHeight = sp.sp), maxLines = 1, softWrap = false).size.width <= room
+            fun fits(sp: Float) = measurer.measure(time, Type.hour.copy(fontSize = sp.sp, lineHeight = sp.sp), maxLines = 1, softWrap = false).size
+                .let { it.width <= room && it.height <= tall }
             while (size > 24f && !fits(size)) size *= 0.96f
             Type.hour.copy(fontSize = size.sp, lineHeight = size.sp)
         }
@@ -1305,5 +1342,44 @@ private fun DockCard(
             // Room is always kept for five, so a short dock does not stretch its tiles.
             repeat(Home.DOCK_MAX - slots.size) { Spacer(Modifier.weight(1f)) }
         }
+    }
+}
+
+/** The cordada on its side: the same apps as [DockCard], one above the other down the right edge. */
+@Composable
+private fun DockRail(
+    apps: List<InstalledApp>,
+    home: Home,
+    onOpenApp: (String) -> Unit,
+    onAppMenu: (String) -> Unit,
+    drag: DragBoard,
+    onDrop: (Held, Spot) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val byPackage = apps.associateBy { it.packageName }
+    val slots = Dock.pick(byPackage.keys, home.dock, home.dockChosen)
+    Column(
+        modifier
+            .width(76.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(Ink.surface)
+            .border(1.dp, Ink.field, RoundedCornerShape(28.dp))
+            .padding(vertical = 10.dp)
+            .semantics { contentDescription = "Dock" }
+            .spot(drag, Spot(Zone.Dock, Spot.END)),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        slots.forEachIndexed { i, packageName ->
+            val app = byPackage.getValue(packageName)
+            val deep = app.packageName == "com.termux"
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                CarriedTile(
+                    app, Zone.Dock, i, drag, if (deep) Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)],
+                    if (deep) Ink.deep else Ink.field, onOpenApp, onAppMenu, onDrop, tile = 52.dp,
+                )
+            }
+        }
+        // Room is always kept for five, so a short dock does not bunch its apps.
+        repeat(Home.DOCK_MAX - slots.size) { Spacer(Modifier.weight(1f)) }
     }
 }
