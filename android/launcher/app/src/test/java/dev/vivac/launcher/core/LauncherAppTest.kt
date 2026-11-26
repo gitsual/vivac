@@ -1449,18 +1449,34 @@ class LauncherAppTest {
 
     @Test
     @org.robolectric.annotation.Config(qualifiers = "w411dp-h914dp-420dpi")
-    fun `a ladera's things sit in the middle of the page, as much room above as below`() {
+    fun `a ladera's grid starts right under the top bar, so its first row is always there to use`() {
         store.values["widgets"] = "@com.termux:1,@app.organicmaps:1,@com.android.settings:1"
         show()
         compose.runOnUiThread { launcher.showPage(1) }
         compose.mainClock.advanceTimeBy(2_000)
         compose.waitForIdle()
         val gear = compose.onNodeWithContentDescription("Ajustes del sistema").fetchSemanticsNode().boundsInRoot
-        val dots = compose.onNode(androidx.compose.ui.test.hasContentDescription("Ladera 1, página 2", substring = true)).fetchSemanticsNode().boundsInRoot
         val tile = compose.onAllNodesWithText("Organic Maps").fetchSemanticsNodes().map { it.boundsInRoot }.first { it.left > 0 && it.top > gear.bottom }
-        val above = tile.top - gear.bottom
-        val below = dots.top - tile.bottom
         val dp = compose.activity.resources.displayMetrics.density
-        assertTrue("above ${above / dp}dp below ${below / dp}dp", kotlin.math.abs(above - below) < 64 * dp)
+        // No dead room above the first row: less than one row between the top bar and the first tile.
+        assertTrue("first row ${(tile.top - gear.bottom) / dp}dp under the bar", tile.top - gear.bottom < WidgetSizeRow * dp)
+        // The free cell beside the apps in that first row takes things too.
+        val free = compose.onNodeWithTag("cell:1:3").fetchSemanticsNode().boundsInRoot
+        assertTrue(kotlin.math.abs(free.top - tile.top) < WidgetSizeRow * dp)
     }
+
+    @Test
+    fun `a ladera whose first row is empty shows that row as free cells at the top`() {
+        store.values["widgets"] = "_:1,_:1,_:1,_:1,@com.termux:1"
+        show()
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        val gear = compose.onNodeWithContentDescription("Ajustes del sistema").fetchSemanticsNode().boundsInRoot
+        val first = compose.onNodeWithTag("cell:1:0").fetchSemanticsNode().boundsInRoot
+        val dp = compose.activity.resources.displayMetrics.density
+        assertTrue("first cell ${(first.top - gear.bottom) / dp}dp under the bar", first.top - gear.bottom < WidgetSizeRow * dp)
+    }
+
+    private val WidgetSizeRow = dev.vivac.launcher.campamento.WidgetSize.ROW_DP.toFloat()
 }

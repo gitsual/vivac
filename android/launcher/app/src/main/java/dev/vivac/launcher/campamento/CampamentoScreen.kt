@@ -481,9 +481,8 @@ private fun Ladera(
     var usedPx by remember { mutableIntStateOf(0) }
     // Every row of apps is one cell tall, so a widget of n rows ends where n rows of apps end.
     val cellHeight = WidgetSize.CELL_DP.dp
-    // What the ladera holds sits in the middle of the page: as much room above it as below, down to the dots.
-    val topPx = with(density) { ((viewport.toPx() - usedPx) / 2 - WidgetSize.GAP_DP.dp.toPx()).coerceAtLeast(0f) }
-    if (usedPx > 0 && topPx > 0f) Spacer(Modifier.height(with(density) { topPx.toDp() }))
+    // The grid starts at the top of the page, like any home screen: its first row is always there to put things in,
+    // and the free cells fill the room below. (Centring it left dead room above that nothing could land in.)
     Column(Modifier.fillMaxWidth().onSizeChanged { usedPx = it.height }, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         blocks.forEachIndexed { b, block ->
             if (block is Placed) card(block)
@@ -541,7 +540,7 @@ private fun Ladera(
     val tail = (blocks.lastOrNull() as? List<Any>)?.let { (4 - it.size % 4) % 4 } ?: 0
     val gap = WidgetSize.GAP_DP.dp
     val free = with(density) {
-        val room = viewport.toPx() - usedPx - gap.toPx() - (if (usedPx > 0 && topPx > 0f) topPx + gap.toPx() else 0f)
+        val room = viewport.toPx() - usedPx - gap.toPx()
         (room / (cellHeight.toPx() + gap.toPx())).toInt().coerceAtLeast(0)
     }
     repeat(free) { r ->
