@@ -72,4 +72,15 @@ class MotifsTest {
     fun `the rings travel slowly`() {
         assertTrue(Rings.STEP_MS >= 6_000)
     }
+
+    @Test
+    fun `the last full ring reaches past the screen's far side, wherever the lamp is`() {
+        val inner = 26f * 2.625f
+        // On its side the lamp is far from the left edge: the rings spread to cross it.
+        val wide = Rings.spread(inner, reach = 868f * 2.625f)
+        val last = Rings.points((Rings.COUNT - 1).toFloat(), Offset(0f, 0f), inner, wide).map { it.getDistance() }.average()
+        assertTrue("last ring $last", last >= 868f * 2.625f)
+        // Upright they already cross it: nothing changes.
+        assertEquals(1f, Rings.spread(inner, reach = 365f * 2.625f), 0f)
+    }
 }

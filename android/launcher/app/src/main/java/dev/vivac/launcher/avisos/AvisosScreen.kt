@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -102,47 +106,77 @@ fun AvisosScreen(
 ) {
     val shelf = Avisos.shelf(avisos)
     val byPackage = apps.associateBy { it.packageName }
-    Box(Modifier.fillMaxSize().background(Ink.deep)) {
-        Contours(Modifier.fillMaxSize(), color = Ink.surface)
-        Column(
-            Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 24.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text("Avisos", style = Type.title.copy(fontSize = 44.sp, lineHeight = 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
-            // Pulling up past the end of the list (or anywhere, when it is short) closes the shade, as Android's does.
-            val density = androidx.compose.ui.platform.LocalDensity.current.density
-            val closing = remember(act) { PullToClose(threshold = 80f * density, onClose = act.close) }
-            LazyColumn(
-                Modifier.fillMaxWidth().weight(1f).nestedScroll(closing).testTag("avisos:list"),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                item(key = "quick") { QuickSection(quick, byPackage, isOn, editing, act) }
-                if (!editing) item(key = "brightness") { Brightness(brightness, act.brightness) }
-                if (shelf.isEmpty()) {
-                    item(key = "calm") {
-                        Text(
-                            "Sin avisos. Todo en calma en el campamento.",
-                            style = Type.body.copy(color = Ink.textMuted),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                        )
-                    }
-                }
-                items(shelf, key = { it.packageName }) { group ->
-                    // The whole card swiped to the right takes the app's notices away; each notice inside still
-                    // goes on its own with a swipe either way.
-                    if (group.avisos.any { it.clearable }) {
-                        Swiped(
-                            group.packageName,
-                            { act.dismissApp(it) },
-                            toLeft = false,
-                            modifier = Modifier.testTag("card:${group.packageName}").systemGestureExclusion(),
-                        ) { GroupCard(group, byPackage[group.packageName], now, act) }
-                    } else GroupCard(group, byPackage[group.packageName], now, act)
-                }
-            }
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(Ink.deep)) {
+        // The rings travel outwards from where the camp's lamp is, top right, as they do on the camp: the shade is
+        // pulled down from there.
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val top = WindowInsets.safeDrawing.getTop(density)
+        val lamp = with(density) { Offset((maxWidth - 46.dp).toPx(), top + 30.dp.toPx()) }
+        Contours(Modifier.fillMaxSize(), color = Ink.surface, centre = lamp, innerRadius = 26.dp)
+        // Pulling up past the end of the list (or anywhere, when it is short) closes the shade, as Android's does.
+        val closing = remember(act) { PullToClose(threshold = 80f * density.density, onClose = act.close) }
+        val wide = maxWidth > maxHeight
+        val title: @Composable () -> Unit = {
+            // On its side height is short: the title a size down.
+            Text("Avisos", style = Type.title.copy(fontSize = if (wide) 36.sp else 44.sp, lineHeight = if (wide) 38.sp else 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
+        }
+        val clear: @Composable () -> Unit = {
             if (Avisos.anyClearable(avisos)) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Pill("Borrar todo", act.dismissAll) }
+            }
+        }
+        val notices: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
+            if (shelf.isEmpty()) {
+                item(key = "calm") {
+                    Text(
+                        "Sin avisos. Todo en calma en el campamento.",
+                        style = Type.body.copy(color = Ink.textMuted),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                    )
+                }
+            }
+            items(shelf, key = { it.packageName }) { group ->
+                // The whole card swiped to the right takes the app's notices away; each notice inside still
+                // goes on its own with a swipe either way.
+                if (group.avisos.any { it.clearable }) {
+                    Swiped(
+                        group.packageName,
+                        { act.dismissApp(it) },
+                        toLeft = false,
+                        modifier = Modifier.testTag("card:${group.packageName}").systemGestureExclusion(),
+                    ) { GroupCard(group, byPackage[group.packageName], now, act) }
+                } else GroupCard(group, byPackage[group.packageName], now, act)
+            }
+        }
+        val list = Modifier.fillMaxWidth().nestedScroll(closing).testTag("avisos:list")
+        val padded = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(horizontal = 24.dp, vertical = 8.dp)
+        if (wide) {
+            // On its side: the switches and the brightness on the left, the notices beside them with the whole
+            // height, so both are in sight at once and no notice hides below the switches.
+            Row(padded, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(
+                    Modifier.weight(0.42f).fillMaxHeight().verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    title()
+                    QuickSection(quick, byPackage, isOn, editing, act, tileHeight = 86.dp)
+                    if (!editing) Brightness(brightness, act.brightness)
+                }
+                Column(Modifier.weight(0.58f).fillMaxHeight().padding(top = 46.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LazyColumn(list.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { notices() }
+                    clear()
+                }
+            }
+        } else {
+            Column(padded, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                title()
+                LazyColumn(list.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item(key = "quick") { QuickSection(quick, byPackage, isOn, editing, act) }
+                    if (!editing) item(key = "brightness") { Brightness(brightness, act.brightness) }
+                    notices()
+                }
+                clear()
             }
         }
     }
@@ -153,7 +187,7 @@ fun AvisosScreen(
  * four to a row; a tapped switch is chosen to move or take out, and the ones not in the shade (and apps) wait below.
  */
 @Composable
-private fun QuickSection(quick: List<Quick>, byPackage: Map<String, InstalledApp>, isOn: (Quick) -> Boolean, editing: Boolean, act: AvisosActions) {
+private fun QuickSection(quick: List<Quick>, byPackage: Map<String, InstalledApp>, isOn: (Quick) -> Boolean, editing: Boolean, act: AvisosActions, tileHeight: Dp = TILE_HEIGHT) {
     var chosen by remember { mutableStateOf<Quick?>(null) }
     // A switch whose app is gone is not shown.
     val present = quick.filter { it !is Quick.App || it.packageName in byPackage }
@@ -170,7 +204,7 @@ private fun QuickSection(quick: List<Quick>, byPackage: Map<String, InstalledApp
                 Column {
                     pages[p].chunked(4).forEach { row ->
                         Row(Modifier.fillMaxWidth()) {
-                            row.forEach { q -> QuickTile(q, byPackage, on = isOn(q), chosen = false, Modifier.weight(1f).height(TILE_HEIGHT)) { act.run(q) } }
+                            row.forEach { q -> QuickTile(q, byPackage, on = isOn(q), chosen = false, Modifier.weight(1f).height(tileHeight)) { act.run(q) } }
                             repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }

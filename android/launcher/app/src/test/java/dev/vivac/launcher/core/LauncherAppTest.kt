@@ -1187,6 +1187,33 @@ class LauncherAppTest {
     }
 
     @Test
+    @org.robolectric.annotation.Config(qualifiers = "w914dp-h411dp-land-420dpi")
+    fun `turned on its side, the shade puts its switches left and the notices right, at full height`() {
+        withNotices(aviso("a", "Ana"), aviso("b", "Bea", minutesAgo = 1))
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val wifi = compose.onNodeWithText("Wi-Fi").fetchSemanticsNode().boundsInRoot
+        val list = compose.onNodeWithTag("avisos:list").fetchSemanticsNode().boundsInRoot
+        val ana = compose.onNodeWithText("Ana").fetchSemanticsNode().boundsInRoot
+        // The switches on the left, the notices beside them: both in sight at once, the notices whole.
+        assertTrue("wifi $wifi, list $list", wifi.right <= list.left)
+        assertTrue("list $list on $screen", list.width > screen.width * 0.45f && list.height > screen.height * 0.6f)
+        assertTrue("ana $ana on $screen", ana.bottom <= screen.bottom && ana.left >= list.left)
+        // "Borrar todo" belongs to the notices, under them, not over the switches.
+        val clear = compose.onNodeWithText("Borrar todo").fetchSemanticsNode().boundsInRoot
+        assertTrue("clear $clear, list $list", clear.left >= list.left && clear.top >= list.bottom - 1f)
+    }
+
+    @Test
+    fun `the shade's contour lines travel outwards from the lamp's corner, as on the camp`() {
+        withNotices(aviso("a", "Ana"))
+        val rings = compose.onNodeWithTag("rings").fetchSemanticsNode().boundsInRoot
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        assertEquals(screen.width, rings.width, 1f)
+    }
+
+    @Test
     fun `pulling up past the end of the notices closes the shade back to the camp`() {
         withNotices(aviso("a", "Ana"))
         compose.onNodeWithTag("avisos:list").performTouchInput { swipeUp() }

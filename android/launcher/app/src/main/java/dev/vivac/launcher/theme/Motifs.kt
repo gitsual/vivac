@@ -1,5 +1,6 @@
 package dev.vivac.launcher.theme
 
+import androidx.compose.ui.platform.testTag
 import android.content.Context
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
@@ -45,13 +46,15 @@ private fun RingsAround(modifier: Modifier, color: Color, centre: Offset, innerR
     val phase = if (moving) {
         rememberLoop(Rings.STEP_MS)
     } else null
-    Canvas(modifier.graphicsLayer { }) {
+    Canvas(modifier.graphicsLayer { }.testTag("rings")) {
         val inner = innerRadius.toPx()
         val stroke = Stroke(width = density)
+        // Out to the far side of the screen, which on its side is a long way left of the lamp.
+        val spread = Rings.spread(inner, reach = maxOf(centre.x, size.width - centre.x))
         drawCircle(color, inner, centre, style = stroke)
         Rings.travelling(phase?.value ?: 0.5f).forEach { (u, alpha) ->
             if (alpha <= 0f) return@forEach
-            val outline = Rings.points(u, centre, inner)
+            val outline = Rings.points(u, centre, inner, spread)
             // A polyline of short segments, not a stroked path: the GPU draws the segments straight away, where a
             // ring larger than the screen, stroked with antialiasing, was rasterized on the CPU into a mask the
             // size of the ring at every tick, more than half a core while the camp sat idle.
@@ -142,8 +145,8 @@ object Rings {
      * The outline of the ring [u] steps out from [centre] (0 is the circle itself, [inner] pixels in radius): bigger
      * and more uneven as [u] grows, its shape changing continuously, so a ring can travel smoothly outwards.
      */
-    fun points(u: Float, centre: Offset, inner: Float): List<Offset> {
-        val radius = inner * size(u)
+    fun points(u: Float, centre: Offset, inner: Float, spread: Float = 1f): List<Offset> {
+        val radius = inner * (1f + (size(u) - 1f) * spread)
         val uneven = UNEVEN * u
         return (0 until STEPS).map { i ->
             val a = 2.0 * PI * i / STEPS
@@ -157,6 +160,13 @@ object Rings {
      * The rings travelling out at [phase] (0..1 of one step): each one's place in steps and how visible it is. One
      * is born at the circle, faint, as the furthest fades away, so the end of a step is the start of the next.
      */
+    /**
+     * How much further apart the rings travel so the last full one gets past [reach] pixels (the screen's side
+     * furthest from the centre), with a tenth to spare: 1 when they already do (upright), more on its side.
+     */
+    fun spread(inner: Float, reach: Float): Float =
+        ((reach * 1.1f / inner - 1f) / (size(COUNT - 1f) - 1f)).coerceAtLeast(1f)
+
     fun travelling(phase: Float): List<Pair<Float, Float>> = (0 until COUNT).map { i ->
         val u = i + phase
         val alpha = when {
