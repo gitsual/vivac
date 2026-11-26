@@ -23,11 +23,11 @@
 # there across the right edge and the keyboard follows: an extension, not a
 # remote control of what is here. wayvnc serves that monitor alone, on
 # 127.0.0.1 only; the phone reaches it over the USB cable (adb reverse) and
-# its VNC viewer (AVNC) is opened on it, the phone turned to landscape and
-# held there, awake (it does not dim or sleep, nor does this computer lock or
+# its VNC viewer (AVNC) is opened on it, the viewer turning to landscape by
+# its own setting (the phone itself is not turned), awake (it does not dim or sleep, nor does this computer lock or
 # blank its screens meanwhile), and Alt+number /
 # Alt+Shift+number reach its workspaces. Off: all of it undone (the phone's
-# rotation and stay-awake setting as they were), and the
+# stay-awake setting as it was), and the
 # windows that were on the phone's workspaces come back to this monitor.
 set -Eeuo pipefail
 
@@ -37,6 +37,8 @@ repo_root="${VIVAC_REPO:-$(cd -- "$(dirname -- "$self")/../../../.." && pwd -P)}
 source "$repo_root/lib/kv.sh"
 # shellcheck source=lib/i18n.sh
 source "$repo_root/lib/i18n.sh"
+# shellcheck source=lib/hypr-ipc.sh
+source "$repo_root/lib/hypr-ipc.sh"
 language="$(i18n_session_language)"
 i18n_load "$language" "${I18N_DIR:-$repo_root/i18n}" 2>/dev/null ||
 	i18n_load en "${I18N_DIR:-$repo_root/i18n}"
@@ -90,6 +92,11 @@ connect() {
 	"$ADB" -s "$1" shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$port" >/dev/null 2>&1 || true
 }
 
+# front SERIAL — the package of the app in front on the phone.
+front() {
+	"$ADB" -s "$1" shell dumpsys window 2>/dev/null | sed -n 's/.*mCurrentFocus=Window{[^ ]* [^ ]* \([^/}]*\).*/\1/p' | head -n 1
+}
+
 # on [auto] — with auto, nothing is opened on the phone (its home-screen
 # widget opens the viewer) and the notification says it is ready.
 on() {
@@ -130,29 +137,37 @@ on() {
 	rule "hl.workspace_rule({ workspace = \"11\", monitor = \"$output\", default = true })"
 	for n in 12 13 14 15 16 17 18 19 20; do rule "hl.workspace_rule({ workspace = \"$n\", monitor = \"$output\" })"; done
 	for n in 1 2 3 4 5 6 7 8 9 10; do rule "hl.workspace_rule({ workspace = \"$n\", monitor = \"$primary\" })"; done
-	# Alt+number to the phone's workspaces, Alt+Shift+number to send a window
-	# there: bound only while the phone is a screen, since many programs take
-	# Alt+number (a browser's tabs) and get it back once this ends.
-	for n in 1 2 3 4 5 6 7 8 9 10; do
-		rule "hl.bind(\"ALT + $((n % 10))\", hl.dsp.focus({ workspace = $((10 + n)) }))"
-		rule "hl.bind(\"ALT + SHIFT + $((n % 10))\", hl.dsp.window.move({ workspace = $((10 + n)) }))"
-	done
 	# Super+Tab swaps the phone between the viewer and Termux: the computer's
 	# mouse lives only inside the viewer, so the way back is a key.
 	rule "hl.bind(\"SUPER + Tab\", hl.dsp.exec_cmd(\"$self switch\"))"
 
 	mv -f -- "$keeping" "$fragment"
 	keeping=""
+	# The new monitor got the first free workspace (often 2) before the rules
+	# above existed, and rules only place workspaces made later: whatever of
+	# 1-10 is on it goes back, 11-20 opened here with no phone (Alt+number)
+	# go to it, and the phone shows 11. The computer keeps the workspace it
+	# was showing, or 1 if that one went to the phone.
+	# The computer's second set (11-20 under Super+number) ends: they are the
+	# phone's now.
+	"$repo_root/dotfiles/hypr/.config/hypr/scripts/ws-set.sh" reset >/dev/null 2>&1 || true
+	local was_shown id on
+	was_shown="$(jq -r '.[] | select(.name == "'"$primary"'") | .activeWorkspace.id' <<<"$monitors")"
+	((was_shown >= 11 && was_shown <= 20)) 2>/dev/null && was_shown=1
+	while IFS=$'\t' read -r id on; do
+		if ((id >= 1 && id <= 10)) && [[ "$on" == "$output" ]]; then
+			hypr_dispatch moveworkspacetomonitor "$id" "$primary" >/dev/null 2>&1 || true
+		elif ((id >= 11 && id <= 20)) && [[ "$on" != "$output" ]]; then
+			hypr_dispatch moveworkspacetomonitor "$id" "$output" >/dev/null 2>&1 || true
+		fi
+	done < <(hyprctl workspaces -j | jq -r '.[] | select(.id >= 1 and .id <= 20) | [.id, .monitor] | @tsv')
+	hypr_dispatch workspace 11 >/dev/null 2>&1 || true
+	[[ "$was_shown" =~ ^[0-9]+$ ]] && { hypr_dispatch workspace "$was_shown" >/dev/null 2>&1 || true; }
 	setsid -f waybar -c "$bar_config" -s "$bar_style" >/dev/null 2>&1 </dev/null
 	setsid -f wayvnc -o "$output" 127.0.0.1 "$port" >/dev/null 2>&1 </dev/null
-	# The screen is landscape: the phone is turned and held there, or a phone
-	# in portrait shows it small between black bands. Its own setting ("free",
-	# or "lock N") is kept to give back when this ends.
-	# A rotation still kept from a phone unplugged while on is the phone's
-	# own; the one it shows now is the landscape this left it in.
-	[[ -s "$rotation" ]] ||
-		"$ADB" -s "$serial" shell cmd window user-rotation 2>/dev/null | tr -d '\r' | head -n 1 >"$rotation" || true
-	"$ADB" -s "$serial" shell cmd window user-rotation lock 1 >/dev/null 2>&1 || true
+	# The phone is not turned: plugged in, it stays as its owner holds it. Only
+	# the viewer turns to landscape, by its own setting (AVNC: Screen
+	# orientation = Landscape), and only while it is open.
 	# A screen in use does not go dark: awake on the cable, and woken now. Its
 	# own stay-awake setting is kept to give back, as the rotation is.
 	# Awake is not enough: a Pixel still dims after its screen timeout, so the
@@ -195,8 +210,9 @@ off() {
 	pkill -f -- "^wayvnc -o $output " 2>/dev/null || true
 	pkill -f -- "^waybar -c $bar_config" 2>/dev/null || true
 	[[ -n "$serial" ]] && { "$ADB" -s "$serial" reverse --remove tcp:$port >/dev/null 2>&1 || true; }
-	# The phone's rotation back as it was: only a value Android printed itself,
-	# and only to a phone still there; unplugged, it is kept for next time.
+	# A rotation kept by an older version of this (which held the whole phone
+	# in landscape) goes back once: only a value Android printed itself, and
+	# only to a phone still there; unplugged, it is kept for next time.
 	local was
 	was="$(cat "$rotation" 2>/dev/null)" || was=""
 	if [[ -n "$serial" && "$(phone)" == "$serial" ]]; then
@@ -210,7 +226,7 @@ off() {
 		rm -f -- "$stayon"
 		if [[ "$was" =~ ^lock\ [0-3]$ ]]; then
 			"$ADB" -s "$serial" shell cmd window user-rotation $was >/dev/null 2>&1 || true
-		else
+		elif [[ "$was" == free ]]; then
 			"$ADB" -s "$serial" shell cmd window user-rotation free >/dev/null 2>&1 || true
 		fi
 	fi
@@ -218,10 +234,6 @@ off() {
 	lock="$(cat "$inhibit" 2>/dev/null)" || lock=""
 	rm -f -- "$inhibit"
 	[[ "$lock" =~ ^[0-9]+$ ]] && kill "$lock" 2>/dev/null || true
-	for n in 0 1 2 3 4 5 6 7 8 9; do
-		rule "hl.unbind(\"ALT + $n\")"
-		rule "hl.unbind(\"ALT + SHIFT + $n\")"
-	done
 	rule "hl.unbind(\"SUPER + Tab\")"
 	rm -f -- "$fragment"
 	hyprctl output remove "$output" >/dev/null 2>&1 || true
@@ -244,8 +256,7 @@ switch)
 	# brought to the front by the vnc:// it was opened with (Android hands the
 	# intent to the task already there; nothing reconnects).
 	serial="$(phone)" || exit 0
-	front="$("$ADB" -s "$serial" shell dumpsys window 2>/dev/null | sed -n 's/.*mCurrentFocus=Window{[^ ]* [^ ]* \([^/}]*\).*/\1/p' | head -n 1)" || front=""
-	if [[ "$front" == "$viewer" ]]; then
+	if [[ "$(front "$serial")" == "$viewer" ]]; then
 		"$ADB" -s "$serial" shell am start -n com.termux/.app.TermuxActivity >/dev/null 2>&1 || true
 	else
 		"$ADB" -s "$serial" shell am start -a android.intent.action.VIEW -d "vnc://127.0.0.1:$port" >/dev/null 2>&1 || true

@@ -58,6 +58,7 @@ FAKE
 cat >"$sandbox/bin/hyprctl" <<'FAKE'
 #!/usr/bin/env bash
 [[ "$*" == 'monitors -j' ]] && { printf '%s\n' "$MONITORS"; exit 0; }
+[[ "$*" == 'workspaces -j' ]] && { printf '%s\n' "${WORKSPACES:-[]}"; exit 0; }
 printf 'hyprctl %s\n' "$*" >>"$CALLS"
 FAKE
 # systemd-inhibit holds its lock for as long as the command it runs.
@@ -71,8 +72,8 @@ for prog in wayvnc waybar pkill notify-send; do
 done
 chmod +x "$sandbox/bin"/*
 export PATH="$sandbox/bin:$PATH" CALLS="$calls" ADB="$sandbox/bin/adb" XDG_RUNTIME_DIR="$sandbox/run"
-export XDG_STATE_HOME="$sandbox/state" XDG_CONFIG_HOME="$sandbox/cfg-hypr" I18N_DIR="$repo_root/i18n" LANG=en_US.UTF-8 VIVAC_PHONE_SCREEN_CHECK=0.2
-export MONITORS='[{"name":"HDMI-A-1","width":1920,"height":1080,"refreshRate":60.0,"x":0,"y":0,"scale":1.0}]'
+export XDG_STATE_HOME="$sandbox/state" XDG_CONFIG_HOME="$sandbox/cfg-hypr" I18N_DIR="$repo_root/i18n" LANG=en_US.UTF-8 VIVAC_PHONE_SCREEN_CHECK=0.2 VIVAC_HYPR_IPC_MODE=lua
+export MONITORS='[{"name":"HDMI-A-1","width":1920,"height":1080,"refreshRate":60.0,"x":0,"y":0,"scale":1.0,"activeWorkspace":{"id":3}}]'
 state="$sandbox/run/vivac-phone-screen.pid"
 settle() { sleep 0.4; }
 has() { grep -qF -- "$1" "$calls" || fail "$2: $(cat "$calls")"; }
@@ -83,9 +84,12 @@ SERIAL='' "$tool" toggle 2>/dev/null && fail "the screen turned on without a pho
 settle
 ! grep -q 'output create\|^wayvnc\|^waybar' "$calls" || fail "something started without a phone: $(cat "$calls")"
 
-# On.
+# On. The new monitor grabbed workspace 2 before any rule placed it, and the
+# computer was on its second set (11-20).
+mkdir -p "$sandbox/cfg-hypr/hypr/generated"
+printf -- '-- second set\n' >"$sandbox/cfg-hypr/hypr/generated/ws_set.lua"
 : >"$calls"
-SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn on"
+WORKSPACES='[{"id":2,"monitor":"VIVAC-PHONE"},{"id":3,"monitor":"HDMI-A-1"},{"id":13,"monitor":"HDMI-A-1"}]' SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn on"
 settle
 has 'hyprctl output create headless VIVAC-PHONE' "no virtual monitor was created"
 has 'hl.monitor({ output = "HDMI-A-1", mode = "1920x1080@60", position = "0x0", scale = "1" })' "the computer's monitor was not pinned where it was"
@@ -96,14 +100,23 @@ has 'hl.workspace_rule({ workspace = "11", monitor = "VIVAC-PHONE", default = tr
 has 'hl.workspace_rule({ workspace = "20", monitor = "VIVAC-PHONE" })' "workspace 20 is not the phone's"
 has 'hl.workspace_rule({ workspace = "1", monitor = "HDMI-A-1" })' "workspace 1 does not stay on the computer"
 has 'hl.workspace_rule({ workspace = "10", monitor = "HDMI-A-1" })' "workspace 10 does not stay on the computer"
+# Rules only place workspaces made later: the one it grabbed goes back, the
+# phone shows 11 and the computer keeps showing what it was.
+has 'hyprctl dispatch hl.dsp.workspace.move({ workspace = "2", monitor = "HDMI-A-1" })' "workspace 2 stayed on the phone"
+! grep -qF 'workspace.move({ workspace = "3"' "$calls" || fail "a workspace already on the computer was moved: $(cat "$calls")"
+# 11-20 opened on the computer while there was no phone go to the phone.
+has 'hyprctl dispatch hl.dsp.workspace.move({ workspace = "13", monitor = "VIVAC-PHONE" })' "workspace 13 stayed on the computer"
+has 'hyprctl dispatch hl.dsp.focus({ workspace = 11 })' "the phone does not show workspace 11"
+[[ "$(grep -F 'hyprctl dispatch hl.dsp.focus' "$calls" | tail -1)" == 'hyprctl dispatch hl.dsp.focus({ workspace = 3 })' ]] ||
+	fail "the computer does not keep the workspace it showed: $(cat "$calls")"
 grep -q '^waybar .*waybar/phone/config' "$calls" || fail "the phone has no bar of its own: $(cat "$calls")"
 has 'wayvnc -o VIVAC-PHONE 127.0.0.1 5900' "the screen is not served on 127.0.0.1 only"
 has 'adb -s PHONE1 reverse tcp:5900 tcp:5900' "the phone does not reach the screen over USB"
 has 'vnc://127.0.0.1:5900' "the viewer was not opened on the phone"
 [[ -s "$state" ]] || fail "the mode left no watcher"
-# The screen is landscape, so the phone is turned to landscape and held there:
-# a phone left in portrait shows it small, between black bands.
-has 'adb -s PHONE1 shell cmd window user-rotation lock 1' "the phone was not turned to landscape"
+# Plugging the phone in does not turn it: the phone stays as its owner holds
+# it. Only the viewer turns to landscape (its own setting), while it is open.
+! grep -q 'user-rotation' "$calls" || fail "plugging the phone in turned it: $(cat "$calls")"
 # A screen does not go dark while it is in use: the phone stays awake on the
 # cable and is woken now.
 has 'adb -s PHONE1 shell svc power stayon usb' "the phone may sleep while it is a screen"
@@ -117,22 +130,20 @@ has 'adb -s PHONE1 shell settings put system screen_brightness 255' "the phone s
 has 'systemd-inhibit --what=idle --who=vivac' "the computer may still go idle while the phone is a screen"
 inhibitor="$(cat "$sandbox/run/vivac-phone-screen.inhibit" 2>/dev/null)"
 [[ "$inhibitor" =~ ^[0-9]+$ ]] && kill -0 "$inhibitor" 2>/dev/null || fail "no idle lock is held: ${inhibitor:-none}"
-# Alt+number goes to the phone's workspaces, Alt+Shift+number sends the window
-# there: only while the phone is a screen, since many programs take Alt+number.
-has 'hl.bind("ALT + 1", hl.dsp.focus({ workspace = 11 }))' "Alt+1 does not go to workspace 11"
-has 'hl.bind("ALT + 0", hl.dsp.focus({ workspace = 20 }))' "Alt+0 does not go to workspace 20"
-has 'hl.bind("ALT + SHIFT + 1", hl.dsp.window.move({ workspace = 11 }))' "Alt+Shift+1 does not send the window to 11"
-has 'hl.bind("ALT + SHIFT + 0", hl.dsp.window.move({ workspace = 20 }))' "Alt+Shift+0 does not send the window to 20"
+# Alt+number and Alt+Shift+number are the configuration's own (always 11-20,
+# wherever they are): the phone leaves them alone.
+! grep -qF '"ALT + ' "$calls" || fail "the phone touched Alt+number: $(cat "$calls")"
+# The computer's second set goes back to 1-10: 11-20 are the phone's now.
+[[ ! -e "$sandbox/cfg-hypr/hypr/generated/ws_set.lua" ]] || fail "the computer kept its 11-20 set with the phone on"
 # Super+Tab swaps the phone between this screen's viewer and Termux: the
 # computer's mouse lives only inside the viewer, so the way back is a key.
 has 'hl.bind("SUPER + Tab", hl.dsp.exec_cmd(' "Super+Tab does not swap the phone's app"
 grep -F 'hl.bind("SUPER + Tab"' "$calls" | grep -qF 'vivac-phone-screen switch' || fail "Super+Tab does not run the switch"
-# The viewer starts afresh, after the turn: one left open from before keeps
-# the zoom it had in portrait and shows the screen small.
+# The viewer starts afresh: one left open from before keeps the zoom it had
+# and shows the screen small.
 stop="$(grep -n 'am force-stop com.gaurav.avnc' "$calls" | head -1 | cut -d: -f1)"
 view="$(grep -n 'vnc://127.0.0.1:5900' "$calls" | head -1 | cut -d: -f1)"
-turn="$(grep -n 'user-rotation lock 1' "$calls" | head -1 | cut -d: -f1)"
-[[ -n "$stop" && "$turn" -lt "$view" && "$stop" -lt "$view" ]] || fail "the viewer was not started afresh after the turn: $(cat "$calls")"
+[[ -n "$stop" && "$stop" -lt "$view" ]] || fail "the viewer was not started afresh: $(cat "$calls")"
 
 # A reload of Hyprland keeps all of it: the rules are also written to a
 # fragment the configuration reads on every reload.
@@ -152,25 +163,27 @@ grep -q '^pkill .*waybar/phone/config' "$calls" || fail "the phone's bar was lef
 has 'adb -s PHONE1 reverse --remove tcp:5900' "the USB forward was left"
 [[ ! -e "$state" ]] || fail "the watcher was left"
 [[ ! -e "$fragment" ]] || fail "the phone's rules would come back on the next reload"
-has 'adb -s PHONE1 shell cmd window user-rotation free' "the phone's own rotation was not given back"
+! grep -q 'user-rotation' "$calls" || fail "turning off touched a rotation it never took: $(cat "$calls")"
 has 'adb -s PHONE1 shell am force-stop com.gaurav.avnc' "the viewer was left open on a screen that is gone"
 has 'adb -s PHONE1 shell settings put global stay_on_while_plugged_in 0' "the phone's own stay-awake setting was not given back"
 has 'adb -s PHONE1 shell settings put system screen_off_timeout 30000' "the phone's own screen timeout was not given back"
 has 'adb -s PHONE1 shell settings put system screen_brightness 60' "the phone's own brightness was not given back"
-has 'hl.unbind("ALT + 1")' "Alt+1 was left bound"
 has 'hl.unbind("SUPER + Tab")' "Super+Tab was left bound"
+! grep -qF '"ALT + ' "$calls" || fail "turning the phone off took Alt+number away: $(cat "$calls")"
 kill -0 "$inhibitor" 2>/dev/null && fail "the idle lock outlived the phone screen"
 [[ ! -e "$sandbox/run/vivac-phone-screen.inhibit" ]] || fail "the idle lock left its record"
-has 'hl.unbind("ALT + SHIFT + 0")' "Alt+Shift+0 was left bound"
 
-# A phone that was held in a rotation of its own gets that one back.
+# A rotation kept by an older version (which held the whole phone in
+# landscape) is given back once, at the next off with the phone there.
 : >"$calls"
-ROTATION='lock 0' SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn on (held rotation)"
+SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn on (kept rotation)"
 settle
+printf 'lock 0\n' >"$sandbox/run/vivac-phone-screen.rotation"
 : >"$calls"
-SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn off (held rotation)"
+SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn off (kept rotation)"
 settle
-has 'adb -s PHONE1 shell cmd window user-rotation lock 0' "the phone's held rotation was not given back"
+has 'adb -s PHONE1 shell cmd window user-rotation lock 0' "a rotation kept by an older version was not given back"
+[[ ! -e "$sandbox/run/vivac-phone-screen.rotation" ]] || fail "the kept rotation outlived its return"
 
 # A USB blip (the phone gone for one check, then back) leaves it on: only a
 # phone missing several checks in a row is taken as unplugged.
@@ -220,19 +233,7 @@ settle
 : >"$calls"
 SERIAL='' "$tool" watch 2>/dev/null || true
 has 'hyprctl output remove VIVAC-PHONE' "unplugging the phone left the virtual monitor"
-# Unplugged, the phone cannot be given its rotation back: it is kept, and the
-# next time the screen goes off with the phone there it gets that one, not the
-# landscape this held it in meanwhile.
-grep -qx 'free' "$sandbox/run/vivac-phone-screen.rotation" || fail "unplugged, the phone's own rotation was lost"
-: >"$calls"
-ROTATION='lock 1' SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn on after the unplug"
-settle
-grep -qx 'free' "$sandbox/run/vivac-phone-screen.rotation" || fail "turning on again overwrote the phone's own rotation"
-: >"$calls"
-SERIAL=PHONE1 "$tool" toggle 2>/dev/null || fail "the screen did not turn off after the unplug"
-settle
-has 'adb -s PHONE1 shell cmd window user-rotation free' "after an unplug, the phone's own rotation was not given back"
-[[ ! -e "$sandbox/run/vivac-phone-screen.rotation" ]] || fail "the saved rotation outlived its return"
+[[ ! -e "$sandbox/run/vivac-phone-screen.rotation" ]] || fail "unplugging kept a rotation that was never taken"
 
 # auto, started with the session: the phone plugged in turns the screen on
 # by itself, without opening anything on the phone, and says it is ready;
@@ -284,6 +285,7 @@ for n in 1 2 3 4 5 6 7 8 9 10; do
 	grep -qF "hl.bind(\"SUPER + ALT + $((n % 10))\", hl.dsp.focus({ workspace = $((10 + n)) }))" "$hypr" ||
 		fail "SUPER+ALT+$((n % 10)) does not go to the phone's workspace $((10 + n))"
 done
+
 grep -qF 'pcall(require, "generated.phone_screen")' "$hypr" || fail "the configuration does not read the phone's rules on a reload"
 grep -qF 'cmd = "$HOME/.local/bin/vivac-phone-screen auto"' "$hypr" || fail "the session does not start watching for the phone"
 grep -q '"output": "!VIVAC-PHONE"' "$repo_root/render/waybar/config.in" || fail "the computer's bar would show on the phone too"
