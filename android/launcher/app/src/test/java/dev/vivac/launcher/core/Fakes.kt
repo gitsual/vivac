@@ -22,7 +22,7 @@ class FakeNotices(avisos: List<dev.vivac.launcher.avisos.Aviso> = emptyList()) :
     override val live = kotlinx.coroutines.flow.MutableStateFlow(avisos)
     override fun open(key: String) { calls += "open:$key" }
     override fun dismiss(key: String) { calls += "dismiss:$key"; live.value = live.value.filterNot { it.key == key } }
-    override fun dismissAll() { calls += "dismissAll"; live.value = live.value.filterNot { it.clearable } }
+    override fun act(key: String, index: Int) { calls += "act:$key:$index" }
     override fun reply(key: String, text: String): Boolean { calls += "reply:$key:$text"; return replies }
     var quietOn = false
     var quietWorks = true

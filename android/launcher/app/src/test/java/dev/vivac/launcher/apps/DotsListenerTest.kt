@@ -62,7 +62,6 @@ class DotsListenerTest {
         AndroidNotices.open(ana.key)
         AndroidNotices.open("nope")
         AndroidNotices.dismiss(ana.key)
-        AndroidNotices.dismissAll()
         assertEquals(true, AndroidNotices.setQuiet(true))
         AndroidNotices.quiet()
         service.onListenerDisconnected()
@@ -70,8 +69,57 @@ class DotsListenerTest {
         assertEquals(false, AndroidNotices.quiet())
         assertEquals(false, AndroidNotices.setQuiet(true))
         // Without a connected listener the shade's buttons do nothing.
-        AndroidNotices.open("x"); AndroidNotices.dismiss("x"); AndroidNotices.dismissAll()
+        AndroidNotices.open("x"); AndroidNotices.dismiss("x"); AndroidNotices.act("x", 0)
         assertEquals(false, AndroidNotices.reply("x", "y"))
+    }
+
+    @Test
+    fun `the shade's notices carry who wrote, the picture, the detail, the chat's messages and the app's own buttons`() {
+        val service = Robolectric.buildService(DotsListener::class.java).create().get()
+        val shadow = shadowOf(service)
+        val face = android.graphics.Bitmap.createBitmap(400, 400, android.graphics.Bitmap.Config.ARGB_8888)
+        val photo = android.graphics.Bitmap.createBitmap(2000, 1000, android.graphics.Bitmap.Config.ARGB_8888)
+        val read = android.app.PendingIntent.getBroadcast(app, 2, android.content.Intent("x.read").setPackage(app.packageName), android.app.PendingIntent.FLAG_IMMUTABLE)
+        val sent = android.app.PendingIntent.getBroadcast(app, 3, android.content.Intent("x.reply").setPackage(app.packageName), android.app.PendingIntent.FLAG_MUTABLE)
+        val reply = Notification.Action.Builder(null, "Responder", sent).addRemoteInput(android.app.RemoteInput.Builder("text").build()).build()
+        val pic = Notification.Builder(app, "c").setSmallIcon(android.R.drawable.star_on)
+            .setContentTitle("Ana").setContentText("una foto").setSubText("Familia")
+            .setLargeIcon(android.graphics.drawable.Icon.createWithBitmap(face))
+            .setStyle(Notification.BigPictureStyle().bigPicture(photo))
+            .addAction(reply).addAction(Notification.Action.Builder(null, "Marcar leído", read).build()).build()
+        val luis = android.app.Person.Builder().setName("Luis").build()
+        val eva = android.app.Person.Builder().setName("Eva").build()
+        val chat = Notification.Builder(app, "c").setSmallIcon(android.R.drawable.star_on).setContentTitle("Grupo")
+            .setStyle(Notification.MessagingStyle(luis).setGroupConversation(true).addMessage("hola", 1, luis).addMessage("vale", 2, eva)).build()
+        val alone = Notification.Builder(app, "c").setSmallIcon(android.R.drawable.star_on).setContentTitle("Eva")
+            .setStyle(Notification.MessagingStyle(luis).addMessage("¿vienes?", 1, eva)).build()
+        val mail = Notification.Builder(app, "c").setSmallIcon(android.R.drawable.star_on).setContentTitle("2 correos")
+            .setStyle(Notification.InboxStyle().addLine("Factura").addLine("Recibo")).build()
+        shadow.addActiveNotification("org.signal", 1, pic)
+        shadow.addActiveNotification("org.chat", 2, chat)
+        shadow.addActiveNotification("org.one", 3, alone)
+        shadow.addActiveNotification("com.mail", 4, mail)
+        service.onListenerConnected()
+        val avisos = AndroidNotices.live.value.associateBy { it.packageName }
+        val ana = avisos.getValue("org.signal")
+        assertEquals("Familia", ana.detail)
+        assertEquals(listOf("Marcar leído"), ana.actions)
+        // Pictures are scaled down to what the shade shows, so a full-size photo does not sit in memory.
+        assertEquals(96 to 96, ana.avatar!!.width to ana.avatar!!.height)
+        assertEquals(720 to 360, ana.picture!!.width to ana.picture!!.height)
+        // A group chat says who wrote each message; a chat with one person does not repeat the name.
+        assertEquals("Luis: hola\nEva: vale", avisos.getValue("org.chat").text)
+        assertEquals("¿vienes?", avisos.getValue("org.one").text)
+        assertEquals("Factura\nRecibo", avisos.getValue("com.mail").text)
+        assertEquals(null, avisos.getValue("com.mail").picture)
+        AndroidNotices.act(ana.key, 0)
+        AndroidNotices.act(ana.key, 7)
+        AndroidNotices.act("nope", 0)
+        assertEquals(listOf("x.read"), shadowOf(app).broadcastIntents.map { it.action })
+        // A notice that has not changed keeps its pictures: they are not decoded again.
+        service.onNotificationPosted(null)
+        assertEquals(true, ana.picture === AndroidNotices.live.value.single { it.packageName == "org.signal" }.picture)
+        service.onListenerDisconnected()
     }
 
     @Test

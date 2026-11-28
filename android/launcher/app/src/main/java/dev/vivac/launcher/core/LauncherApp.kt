@@ -225,7 +225,7 @@ fun LauncherApp(
                     editing = launcher.editingQuick,
                     brightness = launcher.brightness,
                     act = dev.vivac.launcher.avisos.AvisosActions(
-                        open = launcher::openAviso, dismiss = launcher::dismissAviso, dismissAll = launcher::dismissAllAvisos,
+                        open = launcher::openAviso, dismiss = launcher::dismissAviso, act = launcher::actAviso,
                         reply = launcher::replyAviso, run = launcher::runQuick, edit = launcher::toggleQuickEditing,
                         add = launcher::addQuick, remove = launcher::removeQuick, move = launcher::moveQuick, pickApps = launcher::openQuickApps, brightness = launcher::changeBrightness,
                         dismissApp = launcher::dismissApp, noticeSettings = launcher::noticeSettings, close = { launcher.back() },

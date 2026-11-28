@@ -425,7 +425,7 @@ class Launcher(
 
     fun dismissAviso(key: String) { notices?.dismiss(key) }
 
-    fun dismissAllAvisos() { notices?.dismissAll() }
+    fun actAviso(key: String, index: Int) { notices?.act(key, index) }
 
     fun replyAviso(key: String, text: String) {
         val said = text.trim().takeIf { it.isNotEmpty() } ?: return

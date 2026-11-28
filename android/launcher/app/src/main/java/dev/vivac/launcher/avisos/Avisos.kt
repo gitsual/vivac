@@ -1,8 +1,8 @@
 package dev.vivac.launcher.avisos
 
 /**
- * A notification as vivac's own shade shows it. Its title and text live only in memory while the shade can show
- * them; vivac never stores them.
+ * A notification as vivac's own shade shows it. Its title, text and pictures live only in memory while the shade
+ * can show them; vivac never stores them.
  */
 data class Aviso(
     val key: String,
@@ -19,6 +19,14 @@ data class Aviso(
     val canReply: Boolean,
     /** The app's name as Android gives it, for apps (the system's) that are not on the home screen. */
     val appLabel: String = "",
+    /** The line apps put beside the title: an account, a group, a count. */
+    val detail: String = "",
+    /** Who it is from, or what it is about: the notification's large icon. */
+    val avatar: androidx.compose.ui.graphics.ImageBitmap? = null,
+    /** The picture a notification shows when opened out (a photo, a screenshot). */
+    val picture: androidx.compose.ui.graphics.ImageBitmap? = null,
+    /** The app's own buttons, by name, in its order; the written reply is not one of them. */
+    val actions: List<String> = emptyList(),
 )
 
 /** One app's notices in the shade, newest first. */
@@ -34,8 +42,6 @@ object Avisos {
             .groupBy { it.packageName }
             .map { (pkg, avisos) -> AvisoGroup(pkg, avisos.sortedByDescending { it.postedAt }) }
             .sortedWith(compareBy<AvisoGroup> { g -> g.avisos.all { it.ongoing } }.thenByDescending { it.avisos.first().postedAt })
-
-    fun anyClearable(all: List<Aviso>): Boolean = all.any { it.clearable }
 
     /** How long ago, as people say it: ahora, hace 5 min, hace 2 h, ayer, hace 3 d. */
     fun ago(postedAt: Long, now: Long): String {

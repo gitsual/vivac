@@ -1031,7 +1031,7 @@ class LauncherAppTest {
         dev.vivac.launcher.avisos.Aviso(key, pkg, title, "texto de $title", System.currentTimeMillis() - minutesAgo * 60_000, ongoing = false, clearable = true, summary = false, canReply = reply)
 
     @Test
-    fun `vivac's shade shows each app's notices, which open, go, are answered, or all go at once`() {
+    fun `vivac's shade shows each app's notices, which open, go or are answered, with no button to clear them all`() {
         val notices = withNotices(aviso("a", "Ana", reply = true), aviso("b", "Bea", minutesAgo = 1), aviso("c", "Ruta", pkg = "app.organicmaps", minutesAgo = 5))
         compose.onNodeWithText("Avisos").assertExists()
         compose.onNodeWithText("TERMUX").assertExists()
@@ -1043,10 +1043,27 @@ class LauncherAppTest {
         compose.onNodeWithContentDescription("Enviar respuesta").performClick()
         compose.onAllNodesWithContentDescription("Descartar")[0].performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("Borrar todo").performClick()
+        compose.onNodeWithText("Borrar todo").assertDoesNotExist()
+        assertEquals(listOf("reply:a:voy", "dismiss:a"), notices.calls)
+    }
+
+    @Test
+    fun `a notice shows who wrote, its picture, its detail and the app's own buttons, which do their thing`() {
+        val face = androidx.compose.ui.graphics.ImageBitmap(96, 96)
+        val photo = androidx.compose.ui.graphics.ImageBitmap(720, 360)
+        val notices = withNotices(aviso("a", "Ana", reply = true).copy(detail = "Familia", avatar = face, picture = photo, actions = listOf("Marcar leído", "Silenciar")))
+        compose.onNodeWithText("Familia").assertExists()
+        val picture = compose.onNodeWithContentDescription("Imagen del aviso", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText("Ana", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val who = compose.onNodeWithTag("avatar:a", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        // The face beside the name, the picture under the text, wide.
+        assertTrue("who $who, title $title, picture $picture", who.right <= title.left && picture.top >= title.bottom && picture.width > picture.height)
+        compose.onNodeWithText("Silenciar").performClick()
         compose.waitForIdle()
-        assertEquals(listOf("reply:a:voy", "dismiss:a", "dismissAll"), notices.calls)
-        compose.onNodeWithText("Sin avisos. Todo en calma en el campamento.").assertExists()
+        assertEquals(listOf("act:a:1"), notices.calls)
+        // Answering still works beside the app's buttons.
+        compose.onNodeWithText("Responder").performClick()
+        compose.onNodeWithContentDescription("Respuesta").assertExists()
     }
 
     @Test
@@ -1202,9 +1219,6 @@ class LauncherAppTest {
         assertTrue("wifi $wifi, list $list", wifi.right <= list.left)
         assertTrue("list $list on $screen", list.width > screen.width * 0.45f && list.height > screen.height * 0.6f)
         assertTrue("ana $ana on $screen", ana.bottom <= screen.bottom && ana.left >= list.left)
-        // "Borrar todo" belongs to the notices, under them, not over the switches.
-        val clear = compose.onNodeWithText("Borrar todo").fetchSemanticsNode().boundsInRoot
-        assertTrue("clear $clear, list $list", clear.left >= list.left && clear.top >= list.bottom - 1f)
     }
 
     @Test

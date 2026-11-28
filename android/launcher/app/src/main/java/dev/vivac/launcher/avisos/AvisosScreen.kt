@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -64,7 +66,8 @@ import dev.vivac.launcher.theme.Type
 data class AvisosActions(
     val open: (String) -> Unit = {},
     val dismiss: (String) -> Unit = {},
-    val dismissAll: () -> Unit = {},
+    /** One of a notice's own buttons pressed: the notice and the button's place. */
+    val act: (String, Int) -> Unit = { _, _ -> },
     val reply: (String, String) -> Unit = { _, _ -> },
     /** A quick switch tapped. */
     val run: (Quick) -> Unit = {},
@@ -120,11 +123,6 @@ fun AvisosScreen(
             // On its side height is short: the title a size down.
             Text("Avisos", style = Type.title.copy(fontSize = if (wide) 36.sp else 44.sp, lineHeight = if (wide) 38.sp else 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
         }
-        val clear: @Composable () -> Unit = {
-            if (Avisos.anyClearable(avisos)) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Pill("Borrar todo", act.dismissAll) }
-            }
-        }
         val notices: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
             if (shelf.isEmpty()) {
                 item(key = "calm") {
@@ -165,7 +163,6 @@ fun AvisosScreen(
                 }
                 Column(Modifier.weight(0.58f).fillMaxHeight().padding(top = 46.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     LazyColumn(list.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { notices() }
-                    clear()
                 }
             }
         } else {
@@ -176,7 +173,6 @@ fun AvisosScreen(
                     if (!editing) item(key = "brightness") { Brightness(brightness, act.brightness) }
                     notices()
                 }
-                clear()
             }
         }
     }
@@ -426,22 +422,49 @@ private fun Notice(aviso: Aviso, act: AvisosActions) {
             .padding(start = 12.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(verticalAlignment = Alignment.Top) {
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Who it is from, when the app says: a face reads faster than a name.
+            aviso.avatar?.let {
+                androidx.compose.foundation.Image(
+                    it, null,
+                    Modifier.padding(top = 2.dp).size(36.dp).clip(CircleShape).testTag("avatar:${aviso.key}"),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                )
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (aviso.title.isNotBlank()) Text(aviso.title, style = Type.body.copy(color = Ink.text), maxLines = 1)
-                if (aviso.text.isNotBlank()) Text(aviso.text, style = Type.small, maxLines = 4)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (aviso.title.isNotBlank()) Text(aviso.title, style = Type.body.copy(color = Ink.text), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (aviso.detail.isNotBlank()) Text(aviso.detail, style = Type.small, maxLines = 1)
+                }
+                if (aviso.text.isNotBlank()) Text(aviso.text, style = Type.small, maxLines = 10, overflow = TextOverflow.Ellipsis)
             }
             if (aviso.clearable) Round(Glyph.CLOSE, "Descartar") { act.dismiss(aviso.key) }
         }
-        if (aviso.canReply) {
+        aviso.picture?.let {
+            androidx.compose.foundation.Image(
+                it, "Imagen del aviso",
+                Modifier.fillMaxWidth().padding(end = 8.dp).heightIn(max = 200.dp).clip(RoundedCornerShape(12.dp)),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            )
+        }
+        if (aviso.canReply || aviso.actions.isNotEmpty()) {
             if (!replying) {
-                Row(
-                    Modifier.clip(RoundedCornerShape(999.dp)).clickable(role = Role.Button) { replying = true }.padding(horizontal = 6.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    LineIcon(Glyph.REPLY, Ink.accentText, 16.dp)
-                    Text("Responder", style = Type.small.copy(color = Ink.accentText))
+                // The written reply first, then the app's own buttons, as it names them.
+                Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (aviso.canReply) Row(
+                        Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(999.dp)).clickable(role = Role.Button) { replying = true }.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        LineIcon(Glyph.REPLY, Ink.accentText, 16.dp)
+                        Text("Responder", style = Type.small.copy(color = Ink.accentText))
+                    }
+                    aviso.actions.forEachIndexed { i, name ->
+                        Box(
+                            Modifier.heightIn(min = 36.dp).clip(RoundedCornerShape(999.dp)).clickable(role = Role.Button) { act.act(aviso.key, i) }.padding(horizontal = 8.dp, vertical = 4.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { Text(name, style = Type.small.copy(color = Ink.accentText), maxLines = 1) }
+                    }
                 }
             } else {
                 Row(

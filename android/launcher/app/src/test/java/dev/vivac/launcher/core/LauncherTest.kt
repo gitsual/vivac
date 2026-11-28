@@ -1237,7 +1237,7 @@ class LauncherTest {
     }
 
     @Test
-    fun `in the shade a notice opens and takes you home, is cleared, cleared with the rest, or answered`() {
+    fun `in the shade a notice opens and takes you home, is cleared, answered, or does what its own button says`() {
         actions.dotsOn = true
         val notices = FakeNotices(listOf(aviso("a"), aviso("b"), aviso("music", "x.music", clearable = false)))
         val l = Launcher(source, store, actions, widgets, notices = notices).also { it.refresh() }
@@ -1245,8 +1245,8 @@ class LauncherTest {
         l.dismissAviso("a")
         l.replyAviso("b", "  vale  ")
         l.replyAviso("b", "   ")
-        l.dismissAllAvisos()
-        assertEquals(listOf("dismiss:a", "reply:b:vale", "dismissAll"), notices.calls)
+        l.actAviso("b", 1)
+        assertEquals(listOf("dismiss:a", "reply:b:vale", "act:b:1"), notices.calls)
         notices.replies = false
         l.replyAviso("b", "otra")
         assertEquals("say:No se pudo responder desde aquí: ábrelo para contestar.", actions.calls.last())

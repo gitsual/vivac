@@ -101,8 +101,8 @@ interface Notices {
     /** Runs the notice's own action (opens the chat, the mail...). */
     fun open(key: String)
     fun dismiss(key: String)
-    /** Clears every notice that can be cleared, as Android's "Clear all" does. */
-    fun dismissAll()
+    /** Presses one of the notice's own buttons, by its place in [dev.vivac.launcher.avisos.Aviso.actions]. */
+    fun act(key: String, index: Int)
     /** Answers a notice that takes a written reply; false when it could not. */
     fun reply(key: String, text: String): Boolean
     /** Whether Do Not Disturb is on. */

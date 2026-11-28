@@ -36,10 +36,4 @@ class AvisosTest {
         assertEquals("hace 3 d", Avisos.ago(0, 3 * 24 * 60 * min))
         assertEquals("ahora", Avisos.ago(100, 0))
     }
-
-    @Test
-    fun `whether anything can be cleared`() {
-        assertEquals(true, Avisos.anyClearable(listOf(aviso("1", "chat", 1))))
-        assertEquals(false, Avisos.anyClearable(listOf(aviso("1", "music", 1, ongoing = true))))
-    }
 }
