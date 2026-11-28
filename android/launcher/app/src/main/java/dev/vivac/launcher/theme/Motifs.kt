@@ -150,7 +150,9 @@ object Rings {
         val uneven = UNEVEN * u
         return (0 until STEPS).map { i ->
             val a = 2.0 * PI * i / STEPS
-            val wave = 0.55 * kotlin.math.sin(2 * a + 0.7 * u) + 0.3 * kotlin.math.sin(3 * a + 1.9 * u) + 0.15 * kotlin.math.sin(5 * a + 0.4 * u)
+            // The bumps drift round slowly as the ring goes out. Any faster and, far out, a bump sliding sideways
+            // pulls its stretch of the ring back towards the centre while the rest moves on: it looked like a bounce.
+            val wave = 0.55 * kotlin.math.sin(2 * a + 0.105 * u) + 0.3 * kotlin.math.sin(3 * a + 0.285 * u) + 0.15 * kotlin.math.sin(5 * a + 0.06 * u)
             val r = radius * (1 + uneven * wave).toFloat()
             Offset(centre.x + r * kotlin.math.cos(a).toFloat(), centre.y + r * kotlin.math.sin(a).toFloat())
         }

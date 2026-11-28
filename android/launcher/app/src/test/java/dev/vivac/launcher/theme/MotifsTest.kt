@@ -83,4 +83,20 @@ class MotifsTest {
         // Upright they already cross it: nothing changes.
         assertEquals(1f, Rings.spread(inner, reach = 365f * 2.625f), 0f)
     }
+
+    @Test
+    fun `every part of a ring keeps moving outwards the whole way, none turns back as it nears the edge`() {
+        val centre = Offset(0f, 0f)
+        // Upright (rings as designed) and on its side (stretched to reach the far edge).
+        listOf(1f, Rings.spread(79f, reach = 868f * 2.625f)).forEach { spread ->
+            var before = Rings.points(0f, centre, 79f, spread).map { it.getDistance() }
+            var u = 0.05f
+            while (u <= Rings.COUNT) {
+                val now = Rings.points(u, centre, 79f, spread).map { it.getDistance() }
+                now.forEachIndexed { i, r -> assertTrue("spread $spread, step $u, direction $i: ${before[i]} then $r", r > before[i]) }
+                before = now
+                u += 0.05f
+            }
+        }
+    }
 }
