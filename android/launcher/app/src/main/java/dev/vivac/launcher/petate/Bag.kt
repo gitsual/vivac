@@ -105,22 +105,28 @@ fun BagHem() {
     }
 }
 
-/** "Petate", sewn on as a woven label, and the strap loop beside it. */
+/** "Petate", sewn on as a woven label. */
+@Composable
+fun BagTag() {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Ink.raised)
+            .drawBehind {
+                val inset = 3.dp.toPx()
+                drawRoundRect(Seam, Offset(inset, inset), Size(size.width - 2 * inset, size.height - 2 * inset), CornerRadius(6.dp.toPx()), style = Stroke(1.5.dp.toPx(), pathEffect = Stitch))
+            }
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    ) {
+        Text("Petate", style = Type.title.copy(fontSize = 22.sp, lineHeight = 26.sp, letterSpacing = (-0.03).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
+    }
+}
+
+/** The woven label and the strap loop beside it. */
 @Composable
 fun BagLabel() {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .clip(RoundedCornerShape(8.dp))
-                .background(Ink.raised)
-                .drawBehind {
-                    val inset = 3.dp.toPx()
-                    drawRoundRect(Seam, Offset(inset, inset), Size(size.width - 2 * inset, size.height - 2 * inset), CornerRadius(6.dp.toPx()), style = Stroke(1.5.dp.toPx(), pathEffect = Stitch))
-                }
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-        ) {
-            Text("Petate", style = Type.title.copy(fontSize = 22.sp, lineHeight = 26.sp, letterSpacing = (-0.03).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
-        }
+        BagTag()
         Box(Modifier.weight(1f))
         Box(Modifier.size(width = 34.dp, height = 12.dp).clip(RoundedCornerShape(6.dp)).background(Ink.field).border(1.dp, Ink.borderControl, RoundedCornerShape(6.dp)))
     }

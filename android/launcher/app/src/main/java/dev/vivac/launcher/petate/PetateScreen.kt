@@ -21,8 +21,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -35,6 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -88,7 +87,6 @@ import dev.vivac.launcher.theme.LineIcon
 import dev.vivac.launcher.theme.Monogram
 import dev.vivac.launcher.theme.Type
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun PetateScreen(
     apps: List<InstalledApp>,
@@ -159,23 +157,24 @@ fun PetateScreen(
 
     var searching by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize().background(Ink.deep)) {
-        // On its side the phone is short: the search and the label go to a column of their own on the
-        // left, and the pockets get the whole height beside it. Upright, everything is stacked as ever.
+        // On its side the phone is short: the search, the pulls and the label share one thin bar, and the apps
+        // get the whole width and the rest of the height under it. Upright, everything is stacked as ever.
         val wide = maxWidth > maxHeight
         // On its side a tile stays about as wide as it is upright, so a row holds more of them.
         val cell = maxHeight / columns * 0.8f
         Contours(Modifier.fillMaxSize(), color = Ink.surface)
         BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-        // On its side with the keyboard up there is room for one row: the bag sheds its trim (cord, hem, zip,
-        // altimeter) so the search and what it finds both show.
+        // On its side with the keyboard up there is room for one row: the apps move beside the search, so it
+        // and what it finds both show.
         val cramped = wide && maxHeight < 200.dp
         Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (cramped) 4.dp else 12.dp)) {
-        // The drawcord closes the bag's mouth; inside, the search, the label, the zip pulls.
-        if (!cramped) BagCord(Modifier.padding(horizontal = 18.dp))
+        // The drawcord closes the bag's mouth; inside, the search, the label, the zip pulls. On its side the
+        // cord and the hem give their height to a third row of apps.
+        if (!wide) BagCord(Modifier.padding(horizontal = 18.dp))
         Column(Modifier.weight(1f).fillMaxWidth().bagCloth()) {
-        if (!cramped) BagHem()
+        if (!wide) BagHem()
         val field: @Composable () -> Unit = {
-            SearchField(query, { query = it }, focus, { searching = it }) { run.singleOrNull()?.let { openApp(it.packageName) } }
+            SearchField(query, { query = it }, focus, { searching = it }, if (wide) 44.dp else 50.dp) { run.singleOrNull()?.let { openApp(it.packageName) } }
         }
         val past: @Composable () -> Unit = {
             if (searches.isNotEmpty() && searching && query.isBlank() && !showHidden && profile == null) {
@@ -218,6 +217,8 @@ fun PetateScreen(
                 Text("Nada en el petate con «$query».", style = Type.body.copy(color = Ink.textMuted))
             }
         }
+        // On its side an open profile's bar and the past searches ride on top of the apps, as their first row.
+        val lead = if (wide && (profile != null || (searches.isNotEmpty() && searching && query.isBlank() && !showHidden))) 1 else 0
         val pockets: @Composable (Modifier) -> Unit = { into ->
             Column(into) {
                 if (!cramped) Zipper()
@@ -225,9 +226,15 @@ fun PetateScreen(
                     columns = if (wide) GridCells.Adaptive(cell) else GridCells.Fixed(columns),
                     state = grid,
                     modifier = Modifier.weight(1f).padding(end = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (wide) 12.dp else 14.dp),
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
+                    if (lead == 1) item(key = "lead", span = { GridItemSpan(maxLineSpan) }) {
+                        Column(Modifier.padding(end = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
+                            past()
+                        }
+                    }
                     items(run, key = { it.packageName }) { app ->
                         val deep = app.packageName.startsWith("com.termux")
                         val tone = if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]
@@ -245,31 +252,39 @@ fun PetateScreen(
                             AppFace(app, tone)
                         }
                     }
+                    // On its side, what the search finds besides apps comes after them, in the same run.
+                    if (wide && query.isNotBlank()) item(key = "answers", span = { GridItemSpan(maxLineSpan) }) {
+                        Column(Modifier.padding(end = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { answers() }
+                    }
                 }
             }
         }
         val altimeter: @Composable () -> Unit = {
             Altimeter(jumps.keys, letter, tight = wide) { ch ->
                 letter = ch
-                jumps[ch]?.let { scope.launch { grid.scrollToItem(it) } }
+                jumps[ch]?.let { scope.launch { grid.scrollToItem(it + lead) } }
             }
         }
         if (wide) {
-            Row(Modifier.weight(1f).padding(start = 14.dp, top = if (cramped) 6.dp else 14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Column(
-                    Modifier.fillMaxWidth(0.3f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+            // The search keeps its place whether the apps are under the bar or, with the keyboard up, beside it:
+            // moving it would take the keyboard away.
+            val fieldWidth = 300.dp
+            Box(Modifier.weight(1f).padding(start = 14.dp, top = if (cramped) 6.dp else 8.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().height(44.dp).padding(end = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    field()
-                    if (!cramped) BagLabel()
-                    if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
-                    past()
-                    // Wrapped, so every pull is in sight without sliding the row.
-                    if (pulled) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { pulls() }
-                    answers()
+                    Box(Modifier.width(fieldWidth)) { field() }
+                    if (!cramped) {
+                        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { pulls() }
+                        BagTag()
+                    }
                 }
-                pockets(Modifier.weight(1f))
-                if (!cramped) altimeter()
+                Row(Modifier.fillMaxSize().padding(top = if (cramped) 0.dp else 52.dp, start = if (cramped) fieldWidth + 16.dp else 0.dp)) {
+                    pockets(Modifier.weight(1f))
+                    if (!cramped) altimeter()
+                }
             }
         } else {
             Column(
@@ -458,12 +473,12 @@ private fun Altimeter(present: Set<Char>, current: Char?, tight: Boolean = false
 }
 
 @Composable
-private fun SearchField(query: String, onChange: (String) -> Unit, focus: FocusRequester, onFocus: (Boolean) -> Unit, onGo: () -> Unit) {
+private fun SearchField(query: String, onChange: (String) -> Unit, focus: FocusRequester, onFocus: (Boolean) -> Unit, height: androidx.compose.ui.unit.Dp = 50.dp, onGo: () -> Unit) {
     // The bag's mouth: dark inside, the cord's coral around it.
     Row(
         Modifier
             .fillMaxWidth()
-            .height(50.dp)
+            .height(height)
             .clip(RoundedCornerShape(25.dp))
             .background(Ink.deep)
             .border(1.5.dp, Ink.primary, RoundedCornerShape(25.dp))

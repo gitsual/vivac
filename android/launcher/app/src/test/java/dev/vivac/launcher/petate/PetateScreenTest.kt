@@ -312,7 +312,7 @@ class PetateScreenTest {
 
     @Test
     @org.robolectric.annotation.Config(qualifiers = "w914dp-h411dp-land-420dpi")
-    fun `turned on its side, the search and the pulls go left and the pockets get the whole height beside them`() {
+    fun `turned on its side, the search, the pulls and the label share one bar and the apps take the whole width under it`() {
         val work = Profile(10, Profile.Kind.WORK, locked = false, apps = listOf(InstalledApp("Slack", "com.slack", false)))
         compose.setContent {
             PetateScreen(many + maps, setOf("app.organicmaps"), focusSearch = false, onOpenApp = { opened += it }, onAppMenu = {}, profiles = listOf(work))
@@ -320,18 +320,20 @@ class PetateScreenTest {
         val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
         val search = compose.onNodeWithContentDescription("Buscar en el petate").fetchSemanticsNode().boundsInRoot
         val first = bounds("A-app 1")
-        // The apps are in sight, whole, beside the search: not squeezed out under it.
-        compose.onNodeWithText("A-app 1").assertIsDisplayed()
-        assertTrue("search $search, first $first", search.right <= first.left)
-        assertTrue("first $first on $screen", first.top < screen.height * 0.6f && first.bottom <= screen.bottom)
-        // More than one row of apps shows whole.
+        // One section: the apps start at the left edge, right under the bar, and three rows show whole.
+        assertTrue("search $search, first $first", first.top >= search.bottom && first.left < screen.width * 0.1f)
         val rows = compose.onAllNodes(hasText("-app", substring = true)).fetchSemanticsNodes().map { it.boundsInRoot }.filter { it.bottom <= screen.bottom }.map { it.top }.distinct()
-        assertTrue("rows $rows", rows.size >= 2)
-        // The pulls sit under the search, in sight, and still open what is kept apart.
-        val pulls = listOf("Ocultas · 1", "Trabajo").map { bounds(it) }
-        pulls.forEach { assertTrue("pull $it, search $search, first $first", it.top >= search.bottom && it.right <= first.left && it.bottom <= screen.bottom) }
+        assertTrue("rows $rows", rows.size >= 3)
+        // A row runs the width of the screen: at least eight apps.
+        val row = compose.onAllNodes(hasText("-app", substring = true)).fetchSemanticsNodes().map { it.boundsInRoot }.count { it.top == first.top }
+        assertTrue("$row apps in a row", row >= 8)
+        // The pulls and the label sit in the bar beside the search.
+        (listOf("Ocultas · 1", "Trabajo", "Petate").map { bounds(it) }).forEach {
+            assertTrue("in the bar: $it, search $search", it.left >= search.right && it.bottom <= first.top)
+        }
         compose.onNodeWithText("Trabajo").performClick()
         compose.onNodeWithText("Slack").assertIsDisplayed()
+        compose.onNodeWithText("Perfil de trabajo · 1 apps").assertIsDisplayed()
     }
 
     @Test
