@@ -553,6 +553,24 @@ class LauncherTest {
     }
 
     @Test
+    fun `choosing Avisos over Android's shade is remembered and asks for the accessibility service once`() {
+        val l = many()
+        assertFalse(l.ownShade)
+        actions.lockService = false
+        l.toggleOwnShade()
+        assertTrue(l.ownShade)
+        assertTrue(many().ownShade)
+        assertEquals(listOf("accessibility"), actions.calls.filterNot { it.startsWith("say:") })
+        actions.calls.clear()
+        l.toggleOwnShade()
+        assertFalse(many().ownShade)
+        actions.lockService = true
+        l.toggleOwnShade()
+        assertTrue(l.ownShade)
+        assertEquals(emptyList<String>(), actions.calls)
+    }
+
+    @Test
     fun `the camp is copied to a file and restored from one, every choice coming back at once`() {
         store.values["pinned"] = "app.organicmaps"
         val l = many()

@@ -199,7 +199,7 @@ fun LauncherApp(
                 SettingsState(
                     locked = launcher.locked, wallpaper = launcher.showWallpaper, labels = launcher.labels, tintWidgets = launcher.tintWidgets, columns = launcher.columns,
                     dotsAllowed = dotsAllowed, counts = launcher.showCounts, swipeUp = launcher.swipeUp, swipeDown = launcher.swipeDown,
-                    doubleTapLock = launcher.doubleTapLock, isHome = actions.isHome(),
+                    doubleTapLock = launcher.doubleTapLock, ownShade = launcher.ownShade, isHome = actions.isHome(),
                     iconStyle = launcher.iconStyle, iconPack = launcher.iconPack, packs = actions.iconPacks(),
                     contacts = launcher.searchContacts, calendar = launcher.searchCalendar, files = launcher.searchFiles, protectHidden = launcher.protectHidden, veil = launcher.veil, blurSheets = launcher.blurSheets, blurWallpaper = launcher.blurWallpaper, twoFinger = launcher.twoFinger, camps = launcher.camps, currentCamp = launcher.currentCamp,
                     apps = launcher.visibleApps(), swipeUpApp = launcher.swipeUpApp, swipeDownApp = launcher.swipeDownApp,
@@ -209,7 +209,7 @@ fun LauncherApp(
                     paintLock = launcher::paintLockScreen, restoreLock = launcher::restoreLockScreen, toggleProtectHidden = launcher::toggleProtectHidden, toggleFiles = launcher::toggleFiles, chooseVeil = launcher::chooseVeil, useLockAdmin = launcher::useLockAdmin, toggleBlurSheets = launcher::toggleBlurSheets, toggleBlurWallpaper = launcher::toggleBlurWallpaper, saveCamp = launcher::saveCamp, importLayout = launcher::askImport, chooseTwoFinger = launcher::chooseTwoFinger, switchCamp = launcher::switchCamp, deleteCamp = launcher::deleteCamp,
                     toggleLabels = launcher::toggleLabels, toggleTintWidgets = launcher::toggleTintWidgets, setColumns = launcher::chooseColumns, allowDots = launcher::allowDots,
                     toggleCounts = launcher::toggleCounts, setSwipeUp = launcher::chooseSwipeUp, setSwipeDown = launcher::chooseSwipeDown,
-                    toggleDoubleTap = launcher::toggleDoubleTapLock, backUp = launcher::backUp, restore = launcher::askRestore,
+                    toggleDoubleTap = launcher::toggleDoubleTapLock, toggleOwnShade = launcher::toggleOwnShade, backUp = launcher::backUp, restore = launcher::askRestore,
                     becomeHome = launcher::becomeHome, close = { launcher.back() },
                     chooseIcons = launcher::chooseIcons, chooseIconPack = launcher::chooseIconPack,
                     toggleContacts = launcher::toggleContacts, toggleCalendar = launcher::toggleCalendar,

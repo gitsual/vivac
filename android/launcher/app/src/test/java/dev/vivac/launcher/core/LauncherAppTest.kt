@@ -803,6 +803,8 @@ class LauncherAppTest {
         compose.onNodeWithText("5").performScrollTo().performClick()
         compose.onNodeWithText("Activar los puntos de aviso").performScrollTo().performClick()
         compose.onNodeWithText("Número de avisos").performScrollTo().performClick()
+        compose.onNodeWithText("Avisos en vez de la cortina de Android").performScrollTo().performClick()
+        assertTrue(launcher.ownShade)
         compose.onAllNodesWithText("Buscar")[0].tap()
         compose.onAllNodesWithText("Nada")[1].tap()
         compose.onNodeWithText("Doble toque apaga la pantalla").performScrollTo().performClick()

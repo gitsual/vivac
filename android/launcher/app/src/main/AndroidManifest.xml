@@ -32,6 +32,8 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Only to read what SystemUI calls its shade, so Avisos can take its place. -->
+        <package android:name="com.android.systemui" />
     </queries>
 
     <application

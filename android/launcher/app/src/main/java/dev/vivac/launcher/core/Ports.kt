@@ -54,6 +54,8 @@ interface Actions {
     /** Android's accessibility page, where vivac's lock service is switched on. */
     fun accessibilitySettings()
     fun lockScreenReady(): Boolean
+    /** Whether vivac's accessibility service is switched on. */
+    fun accessibilityOn(): Boolean
     /** One of Android's global actions through the same accessibility service; false while it is off. */
     fun global(action: GlobalAction): Boolean
     /** Android's dialog to make vivac a device admin that can only turn the screen off. */

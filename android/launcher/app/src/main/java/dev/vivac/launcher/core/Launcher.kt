@@ -198,6 +198,17 @@ class Launcher(
     /** Double tap on the camp's ground turns the screen off; off until you choose it. */
     var doubleTapLock by mutableStateOf(store.get(KEY_DOUBLE_TAP) == "1"); private set
 
+    /** Android's shade gives way to Avisos wherever you pull it down; off until you choose it. */
+    var ownShade by mutableStateOf(store.get(KEY_OWN_SHADE) == "1"); private set
+
+    fun toggleOwnShade() {
+        ownShade = !ownShade
+        store.put(mapOf(KEY_OWN_SHADE to if (ownShade) "1" else "0"))
+        if (!ownShade || actions.accessibilityOn()) return
+        actions.say("Para cambiar la cortina de Android por Avisos, activa «vivac» en Accesibilidad. Solo se entera de cuándo se abre la cortina; no lee nada.")
+        actions.accessibilitySettings()
+    }
+
     /** The device-admin way to turn the screen off, for those who would rather not switch on accessibility. */
     fun useLockAdmin() = actions.askLockAdmin()
 
@@ -940,6 +951,7 @@ class Launcher(
         pauseFor = store.get(KEY_PAUSE_FOR).orEmpty().split(",").filter { it.isNotBlank() }.toSet()
         locked = store.get(KEY_LOCKED) == "1"
         doubleTapLock = store.get(KEY_DOUBLE_TAP) == "1"
+        ownShade = store.get(KEY_OWN_SHADE) == "1"
         showWallpaper = store.get(KEY_WALLPAPER) == "1"
         veil = readVeil()
         blurSheets = store.get(KEY_BLUR_SHEETS) != "0"
@@ -1269,6 +1281,7 @@ class Launcher(
         const val KEY_NAMES = "names"
         const val KEY_LOCKED = "locked"
         const val KEY_DOUBLE_TAP = "doubleTapLock"
+        const val KEY_OWN_SHADE = "ownShade"
         const val KEY_WALLPAPER = "wallpaper"
         const val KEY_VEIL = "veil"
         const val KEY_BLUR_SHEETS = "blurSheets"

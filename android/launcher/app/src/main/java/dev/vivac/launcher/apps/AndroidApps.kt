@@ -153,6 +153,7 @@ class AppActions(private val context: Context) : Actions {
      */
     @android.annotation.SuppressLint("WrongConstant")
     override fun showNotifications() {
+        LockService.letShade()
         runCatching {
             val bar = context.getSystemService("statusbar") ?: return
             bar.javaClass.getMethod("expandNotificationsPanel").invoke(bar)
@@ -348,6 +349,7 @@ class AppActions(private val context: Context) : Actions {
     }
 
     override fun lockScreenReady(): Boolean = LockService.running || adminActive()
+    override fun accessibilityOn(): Boolean = LockService.running
 
     override fun global(action: dev.vivac.launcher.core.GlobalAction): Boolean = LockService.perform(action)
 

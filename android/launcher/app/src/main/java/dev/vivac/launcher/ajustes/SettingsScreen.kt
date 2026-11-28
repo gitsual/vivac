@@ -57,6 +57,7 @@ data class SettingsState(
     val swipeUp: Gesture,
     val swipeDown: Gesture,
     val doubleTapLock: Boolean,
+    val ownShade: Boolean = false,
     val isHome: Boolean,
     val iconStyle: IconStyle = IconStyle.GLYPHS,
     val iconPack: String? = null,
@@ -103,6 +104,7 @@ class SettingsActions(
     val setSwipeUp: (Gesture, String?) -> Unit = { _, _ -> },
     val setSwipeDown: (Gesture, String?) -> Unit = { _, _ -> },
     val toggleDoubleTap: () -> Unit = {},
+    val toggleOwnShade: () -> Unit = {},
     val backUp: () -> Unit = {},
     val restore: () -> Unit = {},
     val becomeHome: () -> Unit = {},
@@ -180,6 +182,7 @@ fun SettingsScreen(state: SettingsState, act: SettingsActions) {
             Section("AVISOS")
             if (!state.dotsAllowed) Action("Activar los puntos de aviso", act.allowDots)
             Toggle("Número de avisos", "En vez del punto, cuántos tiene cada app.", state.counts, act.toggleCounts)
+            Toggle("Avisos en vez de la cortina de Android", "Al bajar la cortina en cualquier app se abre Avisos. Usa el servicio de accesibilidad de vivac, que no lee nada.", state.ownShade, act.toggleOwnShade)
 
             Section("GESTOS")
             GestureRow("Deslizar hacia arriba", state.swipeUp, state.swipeUpApp, state.apps, act.setSwipeUp)

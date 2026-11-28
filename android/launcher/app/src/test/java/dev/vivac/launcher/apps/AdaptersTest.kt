@@ -250,6 +250,53 @@ class AdaptersTest {
     }
 
     @Test
+    fun `Android's shade gives way to Avisos once you choose that and the phone is unlocked`() {
+        val service = org.robolectric.Robolectric.setupService(LockService::class.java)
+        LockService.titles = { setOf("Notification shade.") }
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(3))
+        val dismiss = android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE
+        fun pull(title: String = "Notification shade.") = service.onAccessibilityEvent(
+            android.view.accessibility.AccessibilityEvent.obtain(android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED).apply { packageName = Shade.SYSTEM_UI; text.add(title) },
+        )
+        fun replaced(): Boolean {
+            val went = nextIntent()
+            val closed = shadowOf(service).globalActionsPerformed.toList() == listOf(dismiss)
+            shadowOf(service).globalActionsPerformed.clear()
+            if (went != null) {
+                assertEquals(dev.vivac.launcher.MainActivity.ACTION_OPEN_AVISOS, went.action)
+                assertEquals(dev.vivac.launcher.MainActivity::class.java.name, went.component?.className)
+            }
+            return went != null && closed
+        }
+        val prefs = app.getSharedPreferences("home", android.content.Context.MODE_PRIVATE)
+        val keyguard = shadowOf(app.getSystemService(android.app.KeyguardManager::class.java))
+        pull()
+        assertFalse(replaced())
+        prefs.edit().putString(dev.vivac.launcher.core.Launcher.KEY_OWN_SHADE, "1").commit()
+        pull()
+        assertFalse("without notification access Avisos has nothing to show", replaced())
+        Settings.Secure.putString(app.contentResolver, "enabled_notification_listeners", ComponentName(app, DotsListener::class.java).flattenToString())
+        pull()
+        assertTrue(replaced())
+        pull("Quick settings.")
+        assertFalse(replaced())
+        keyguard.setKeyguardLocked(true)
+        pull()
+        assertFalse(replaced())
+        keyguard.setKeyguardLocked(false)
+        AppActions(app).showNotifications()
+        pull()
+        assertFalse("the shade vivac itself asked for stays", replaced())
+        org.robolectric.shadows.ShadowSystemClock.advanceBy(java.time.Duration.ofSeconds(3))
+        pull()
+        assertTrue(replaced())
+        LockService.perform(dev.vivac.launcher.core.GlobalAction.QUICK_SETTINGS)
+        pull()
+        assertFalse(replaced())
+        LockService.titles = Shade::titles
+    }
+
+    @Test
     fun `asking to be home uses the role dialog from an activity, else the default apps page`() {
         val actions = AppActions(app)
         assertFalse(actions.isHome())

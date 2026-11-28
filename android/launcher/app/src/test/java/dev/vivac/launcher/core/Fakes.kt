@@ -66,6 +66,7 @@ class FakeActions : Actions {
     override fun lockScreen(): Boolean { if (lockService) calls += "lock"; return lockService }
     override fun accessibilitySettings() { calls += "accessibility" }
     override fun lockScreenReady() = lockService
+    override fun accessibilityOn() = lockService
     override fun askLockAdmin() { calls += "lockAdmin" }
     val usage = mutableMapOf<String, Long>()
     var alarm: Long? = null
