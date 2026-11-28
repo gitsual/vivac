@@ -327,6 +327,11 @@ class PetateScreenTest {
         // A row runs the width of the screen: at least eight apps.
         val row = compose.onAllNodes(hasText("-app", substring = true)).fetchSemanticsNodes().map { it.boundsInRoot }.count { it.top == first.top }
         assertTrue("$row apps in a row", row >= 8)
+        // The search takes what the bar has left: most of it.
+        assertTrue("search $search on $screen", search.width > screen.width * 0.4f)
+        // The apps do not touch the zip above them.
+        val dp = screen.width / 914f
+        assertTrue("first $first under search $search", first.top - search.bottom >= 24 * dp)
         // The pulls and the label sit in the bar beside the search.
         (listOf("Ocultas · 1", "Trabajo", "Petate").map { bounds(it) }).forEach {
             assertTrue("in the bar: $it, search $search", it.left >= search.right && it.bottom <= first.top)
@@ -359,13 +364,14 @@ class PetateScreenTest {
 
     @Test
     @org.robolectric.annotation.Config(qualifiers = "w914dp-h130dp-land-420dpi")
-    fun `on its side with the keyboard up, what the search finds still shows whole beside it`() {
+    fun `on its side with the keyboard up, the bar stays as it was and what the search finds shows whole under it`() {
         show()
         compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("organic")
         val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
         val search = compose.onNodeWithContentDescription("Buscar en el petate").fetchSemanticsNode().boundsInRoot
         val tile = bounds("Organic Maps")
-        assertTrue("tile $tile, search $search on $screen", tile.left >= search.right && tile.top >= 0f && tile.bottom <= screen.bottom)
+        assertTrue("tile $tile, search $search on $screen", tile.top >= search.bottom && tile.left < screen.width * 0.1f && tile.bottom <= screen.bottom)
+        assertTrue("search $search on $screen", search.width > screen.width * 0.6f)
         // No room for the pocket's name or the altimeter: the apps take it.
         compose.onNodeWithText("Día a día").assertDoesNotExist()
         compose.onNodeWithContentDescription("Altímetro: desliza para saltar de letra").assertDoesNotExist()

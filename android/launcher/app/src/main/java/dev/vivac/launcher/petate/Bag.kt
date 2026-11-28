@@ -76,11 +76,14 @@ fun BagCord(modifier: Modifier = Modifier) {
     }
 }
 
-private val BagShape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp, bottomStart = 34.dp, bottomEnd = 34.dp)
+val BagShape = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp, bottomStart = 34.dp, bottomEnd = 34.dp)
+
+/** The bag seen from its mouth down, its base off the screen's edge: the phone on its side. */
+val BagMouth = RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp)
 
 /** The bag's cloth: ripstop grid, a hairline edge and a reinforced, darker base. */
-fun Modifier.bagCloth(): Modifier = this
-    .clip(BagShape)
+fun Modifier.bagCloth(shape: RoundedCornerShape = BagShape): Modifier = this
+    .clip(shape)
     .background(Ink.surface)
     .drawBehind {
         val step = 7.dp.toPx()
@@ -91,7 +94,7 @@ fun Modifier.bagCloth(): Modifier = this
         while (y < size.height) { drawLine(thread, Offset(0f, y), Offset(size.width, y), 1f); y += step }
         drawRect(Ink.deep.copy(alpha = 0.35f), Offset(0f, size.height - 10.dp.toPx()), Size(size.width, 10.dp.toPx()))
     }
-    .border(1.dp, Ink.field, BagShape)
+    .border(1.dp, Ink.field, shape)
 
 /** The gathered hem under the cord: folds of cloth and the seam that holds them. */
 @Composable

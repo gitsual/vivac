@@ -25,6 +25,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -163,18 +168,22 @@ fun PetateScreen(
         // On its side a tile stays about as wide as it is upright, so a row holds more of them.
         val cell = maxHeight / columns * 0.8f
         Contours(Modifier.fillMaxSize(), color = Ink.surface)
-        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-        // On its side with the keyboard up there is room for one row: the apps move beside the search, so it
-        // and what it finds both show.
+        // On its side the cloth runs down to the screen's edge, under the navigation bar; only the keyboard lifts it.
+        val safe = if (wide) {
+            Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)).windowInsetsPadding(WindowInsets.ime)
+        } else Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
+        val navBar = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        BoxWithConstraints(Modifier.fillMaxSize().then(safe)) {
+        // On its side with the keyboard up there is room for the bar and one row: smaller tiles, no zip, no altimeter.
         val cramped = wide && maxHeight < 200.dp
-        Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (cramped) 4.dp else 12.dp)) {
+        Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (wide) 0.dp else 12.dp)) {
         // The drawcord closes the bag's mouth; inside, the search, the label, the zip pulls. On its side the
         // cord and the hem give their height to a third row of apps.
         if (!wide) BagCord(Modifier.padding(horizontal = 18.dp))
-        Column(Modifier.weight(1f).fillMaxWidth().bagCloth()) {
+        Column(Modifier.weight(1f).fillMaxWidth().bagCloth(if (wide) BagMouth else BagShape)) {
         if (!wide) BagHem()
         val field: @Composable () -> Unit = {
-            SearchField(query, { query = it }, focus, { searching = it }, if (wide) 44.dp else 50.dp) { run.singleOrNull()?.let { openApp(it.packageName) } }
+            SearchField(query, { query = it }, focus, { searching = it }, when { cramped -> 40.dp; wide -> 44.dp; else -> 50.dp }) { run.singleOrNull()?.let { openApp(it.packageName) } }
         }
         val past: @Composable () -> Unit = {
             if (searches.isNotEmpty() && searching && query.isBlank() && !showHidden && profile == null) {
@@ -227,7 +236,8 @@ fun PetateScreen(
                     state = grid,
                     modifier = Modifier.weight(1f).padding(end = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(if (wide) 12.dp else 14.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp),
+                    // Air between the zip and the first row; on its side the last row clears the navigation bar.
+                    contentPadding = PaddingValues(top = if (cramped) 0.dp else 12.dp, bottom = if (wide) 24.dp + navBar else 24.dp),
                 ) {
                     if (lead == 1) item(key = "lead", span = { GridItemSpan(maxLineSpan) }) {
                         Column(Modifier.padding(end = 6.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -242,6 +252,7 @@ fun PetateScreen(
                             label = app.label,
                             background = if (deep) Ink.deep else Ink.surface,
                             border = Ink.field,
+                            tile = if (cramped) 48.dp else 56.dp,
                             onClick = { if (profile != null) onOpenInProfile(app.packageName, profile.id) else openApp(app.packageName) },
                             onLongClick = { if (profile == null) onAppMenu(app.packageName) },
                             dot = profile == null && app.packageName in LocalDots.current,
@@ -266,24 +277,24 @@ fun PetateScreen(
             }
         }
         if (wide) {
-            // The search keeps its place whether the apps are under the bar or, with the keyboard up, beside it:
-            // moving it would take the keyboard away.
-            val fieldWidth = 300.dp
-            Box(Modifier.weight(1f).padding(start = 14.dp, top = if (cramped) 6.dp else 8.dp)) {
+            Column(
+                Modifier.weight(1f).padding(start = 14.dp, top = if (cramped) 4.dp else 8.dp),
+                verticalArrangement = Arrangement.spacedBy(if (cramped) 4.dp else 8.dp),
+            ) {
+                // The search takes all the bar the pulls and the label leave it.
                 Row(
-                    Modifier.fillMaxWidth().height(44.dp).padding(end = 14.dp),
+                    Modifier.fillMaxWidth().padding(end = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Box(Modifier.width(fieldWidth)) { field() }
-                    if (!cramped) {
-                        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { pulls() }
-                        BagTag()
-                    }
+                    Box(Modifier.weight(1f)) { field() }
+                    if (pulled && !cramped) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { pulls() }
+                    if (!cramped) BagTag()
                 }
-                Row(Modifier.fillMaxSize().padding(top = if (cramped) 0.dp else 52.dp, start = if (cramped) fieldWidth + 16.dp else 0.dp)) {
+                Row(Modifier.weight(1f)) {
                     pockets(Modifier.weight(1f))
-                    if (!cramped) altimeter()
+                    // The strap stops above the navigation bar, so its last letters are not under the home gesture.
+                    if (!cramped) Box(Modifier.padding(bottom = navBar)) { altimeter() }
                 }
             }
         } else {
