@@ -3,7 +3,7 @@ package dev.vivac.launcher.apps
 /**
  * vivac's own icon for each app: one-ink line glyphs on a 24-unit grid, 1.75 stroke, round caps and joins,
  * drawn in the tile's tone. Every tile looks like it came from the same hand; an app without one here gets
- * its monogram. Approved set: the "vivac · glifos de apps" canvas (17-11-2026).
+ * its monogram. Approved set: the "vivac · glifos de apps" canvas (17-11-2026); seven more on 28-11-2026.
  */
 object Glyphs {
     val all: Map<String, String> = mapOf(
@@ -31,6 +31,7 @@ object Glyphs {
         "com.caixabankpc.nowpay" to "M3 6h18v12H3z M3 10h18 M6.5 14.5h4", // CaixaBank
         "com.correos.prepago" to "M2 7h12v9H2z M14 10h4l3 3v3h-7z M4.2 18a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0 M15.2 18a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0", // Correos
         "com.divisait.quironsalud" to "M9 3h6v6h6v6h-6v6H9v-6H3V9h6z", // Quirónsalud
+        "com.gaurav.avnc" to "M3 4h18v13H3z M12 17v4 M8 21h8 M9.5 7.5l5.5 3-2.4.8-.9 2.4z", // AVNC
         "com.google.android.GoogleCamera" to "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0 M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 3.5V8 M20.5 12H16 M12 20.5V16 M3.5 12H8", // Cámara Pixel
         "com.google.android.apps.authenticator2" to "M3 7h18v10H3z M7 12h.01 M10.5 12h.01 M14 12h.01 M17.5 12h.01", // Authenticator G
         "com.google.android.apps.docs" to "M9 4h6l6 10-3 6H6l-3-6z M3 14h18 M9 4l6 10", // Drive
@@ -56,11 +57,14 @@ object Glyphs {
         "com.shazam.android" to "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M8 11v2 M11 8.5v7 M14 7v10 M17 10.5v3", // Shazam
         "com.sportmaniac_live_app_android.evedeport" to "M4.5 13.5a7.5 7.5 0 1 0 15.0 0a7.5 7.5 0 1 0 -15.0 0 M12 13.5V9.5 M10 3h4 M12 3v3 M18.5 6.5l1.5-1.5", // Evedeport (Sportmaniacs race timing)
         "com.spotify.music" to "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M7 9.5c3.5-1 7-.6 10 1 M7.8 12.8c2.8-.7 5.6-.4 8 .9 M8.6 15.8c2.1-.5 4.2-.3 6 .7", // Spotify
+        "com.starbucks.es" to "M6 5h12v3H6z M7 8l1.2 13h7.6L17 8 M7.5 12.5h9 M7.9 16.5h8.2", // Starbucks
         "com.stremio.one" to "M12 3l9 9-9 9-9-9z M10.5 9.5l4 2.5-4 2.5z", // Stremio
         "com.tailscale.ipn" to "M4.4 6a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M10.4 6a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M16.4 6a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M4.4 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M10.4 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M16.4 12a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M4.4 18a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M10.4 18a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0 M16.4 18a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0", // Tailscale
         "com.termux" to "M5 7l5 5-5 5 M12 18h7", // Termux
         "com.termux.api" to "M3 8l4 4-4 4 M9 17h3 M16 4v3 M20 4v3 M15 7h6v3a3 3 0 0 1-6 0z M18 13v6", // Termux:API
         "com.termux.boot" to "M3 8l4 4-4 4 M9 17h3 M18 5v5 M15 7a5 5 0 1 0 6 0", // Termux:Boot
+        "com.termux.widget" to "M3 8l4 4-4 4 M9 17h3 M14 4h7v7h-7z M17.5 6v3 M16 7.5h3", // Termux:Widget
+        "com.termux.x11" to "M3 8l4 4-4 4 M9 17h3 M15 5l6 6 M21 5l-6 6", // Termux:X11
         "com.tplink.tpm5" to "M2.5 9a14 14 0 0 1 19 0 M5.5 12.5a9.5 9.5 0 0 1 13 0 M8.5 16a5 5 0 0 1 7 0 M12 19.5h.01", // Deco
         "com.tribab.tricount.android" to "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0 M12 3.5V12l7.4 4.2 M12 12l-7.4 4.2", // tricount
         "com.twitter.android" to "M5 4l14 16 M19 4L5 20", // X
@@ -73,6 +77,7 @@ object Glyphs {
         "de.traderepublic.app" to "M3 20h18 M5 16l4-5 4 3 6-8 M15 6h4v4", // Trade Republic
         "dev.lorty.cocina" to "M4 10h16 M5 10v6a4 4 0 0 0 4 4h6a4 4 0 0 0 4-4v-6 M2 10h2 M20 10h2 M9 7c0-1 1-1 1-2.5 M14 7c0-1 1-1 1-2.5", // Cocina
         "dev.lorty.locapp" to "M3.5 12a8.5 8.5 0 1 0 17 0a8.5 8.5 0 1 0 -17 0 M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 12l5.5-5.5", // LocApp
+        "dev.vivac.launcher" to "M2 17L5.9 12.6l2.2 1.6 3.3-5.5 1.7 1.6L15.3 7l2.8 5L22 17z M6 5h.01", // vivac
         "es.aeat.pin24h" to "M4 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M12 12h9 M17 12v3 M20 12v2", // Cl@ve PIN
         "es.gob.carpeta" to "M3 6h6l2 2h10v11H3z M8 14h8", // Carpeta ciudadana
         "es.gob.interior.policia.midni" to "M3 6h18v12H3z M6.5 11a2 2 0 1 0 4 0a2 2 0 1 0 -4 0 M5.5 15.5a3 3 0 0 1 6 0 M14 10h4 M14 13h4", // MiDNI
@@ -80,6 +85,8 @@ object Glyphs {
         "io.heckel.ntfy" to "M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z M10 20.5a2 2 0 0 0 4 0", // ntfy
         "me.kavishdevar.librepods" to "M7 4a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3z M7 13v7 M17 4a3 3 0 0 0-3 3v3a3 3 0 0 0 3 3z M17 13v7", // LibrePods
         "net.inverline.bancosabadell.officelocator.android" to "M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z M9 12.5V9.5l3-2 3 2v3", // Banco Sabadell
+        "org.kde.kdeconnect_tp" to "M3 4h7v15H3z M6 16h1 M13 8h8v7h-8z M17 15v4 M14.5 19h5", // KDE Connect
+        "org.localsend.localsend_app" to "M20 13a8 8 0 1 1-9-9 M12 12l8-8 M14.5 4H20v5.5", // LocalSend
         "org.moire.ultrasonic" to "M4 15v-3a8 8 0 0 1 16 0v3 M4 14h3v6H4z M17 14h3v6h-3z", // Ultrasonic
         "org.oxycblt.auxio" to "M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0 M12 6a6 6 0 0 1 6 6", // Auxio
         "org.stypox.dicio" to "M4 10v4 M8 7v10 M12 4v16 M16 7v10 M20 10v4", // Dicio

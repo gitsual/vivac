@@ -20,6 +20,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,7 +35,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -86,6 +88,7 @@ import dev.vivac.launcher.theme.LineIcon
 import dev.vivac.launcher.theme.Monogram
 import dev.vivac.launcher.theme.Type
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun PetateScreen(
     apps: List<InstalledApp>,
@@ -93,7 +96,6 @@ fun PetateScreen(
     focusSearch: Boolean,
     onOpenApp: (String) -> Unit,
     onAppMenu: (String) -> Unit,
-    recent: List<InstalledApp> = emptyList(),
     drag: DragBoard? = null,
     onDrop: (Held, Spot) -> Unit = { _, _ -> },
     onLand: () -> Unit = {},
@@ -138,20 +140,17 @@ fun PetateScreen(
     val carry: @Composable (InstalledApp, Color) -> Modifier? = { app, tone ->
         drag?.let { Modifier.carriable(it, Held(app, Zone.Petate, tone), app.label, { openApp(app.packageName) }, { onAppMenu(app.packageName) }, onDrop, onLand) }
     }
-    var filter by rememberSaveable { mutableStateOf<Group?>(null) }
     var showHidden by rememberSaveable { mutableStateOf(false) }
-    var category by rememberSaveable { mutableStateOf<String?>(null) }
     if (hidden.isEmpty()) showHidden = false
     // A chosen profile (work, private space) shows only its apps.
     var profileId by rememberSaveable { mutableStateOf<Long?>(null) }
     val profile = profiles.firstOrNull { it.id == profileId }
-    val found = remember(apps, hidden, showHidden, query, profile, category) {
+    val found = remember(apps, hidden, showHidden, query, profile) {
         Pack.search(profile?.apps ?: Pack.visible(apps, hidden, showHidden), query)
-            .filter { app -> category == null || app.category?.equals(category, ignoreCase = true) == true }
     }
-    val categories = remember(apps, hidden) { Pack.categories(Pack.visible(apps, hidden, false)) }
-    val shelves = remember(found, filter) { Pack.grouped(found, filter) }
-    val jumps = remember(shelves) { Pack.jumps(shelves) }
+    // One run, A to Z: no shelves.
+    val run = remember(found) { Pack.sorted(found) }
+    val jumps = remember(run) { Pack.jumps(run) }
     val grid = rememberLazyGridState()
     val scope = rememberCoroutineScope()
     var letter by remember { mutableStateOf<Char?>(null) }
@@ -159,104 +158,138 @@ fun PetateScreen(
     LaunchedEffect(focusSearch) { if (focusSearch) focus.requestFocus() }
 
     var searching by remember { mutableStateOf(false) }
-    Box(modifier.fillMaxSize().background(Ink.deep)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(Ink.deep)) {
+        // On its side the phone is short: the search and the label go to a column of their own on the
+        // left, and the pockets get the whole height beside it. Upright, everything is stacked as ever.
+        val wide = maxWidth > maxHeight
+        // On its side a tile stays about as wide as it is upright, so a row holds more of them.
+        val cell = maxHeight / columns * 0.8f
         Contours(Modifier.fillMaxSize(), color = Ink.surface)
-        Column(
-            Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
-        ) {
-        // The drawcord closes the bag's mouth; inside, the search, the label, the outer pocket, the zip pulls.
-        BagCord(Modifier.padding(horizontal = 18.dp))
+        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        // On its side with the keyboard up there is room for one row: the bag sheds its trim (cord, hem, zip,
+        // altimeter) so the search and what it finds both show.
+        val cramped = wide && maxHeight < 200.dp
+        Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (cramped) 4.dp else 12.dp)) {
+        // The drawcord closes the bag's mouth; inside, the search, the label, the zip pulls.
+        if (!cramped) BagCord(Modifier.padding(horizontal = 18.dp))
         Column(Modifier.weight(1f).fillMaxWidth().bagCloth()) {
-        BagHem()
-        Column(
-            Modifier.weight(1f).padding(start = 14.dp, top = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Column(Modifier.padding(end = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SearchField(query, { query = it }, focus, { searching = it }) { shelves.firstOrNull()?.second?.singleOrNull()?.let { openApp(it.packageName) } }
-                BagLabel()
-                if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
-                if (searches.isNotEmpty() && searching && query.isBlank() && !showHidden && profile == null) {
-                    Text("BÚSQUEDAS", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.semantics { heading() })
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        searches.forEach { q -> Chip(q, false) { query = q } }
-                        Chip("Borrar", false, onClearSearches)
-                    }
-                }
-                if (recent.isNotEmpty() && query.isBlank() && !showHidden && profile == null) LastPitch(recent, openApp, onAppMenu, carry)
-                // One row of zip pulls: the shelves, the hidden, the other profiles and the categories.
+        if (!cramped) BagHem()
+        val field: @Composable () -> Unit = {
+            SearchField(query, { query = it }, focus, { searching = it }) { run.singleOrNull()?.let { openApp(it.packageName) } }
+        }
+        val past: @Composable () -> Unit = {
+            if (searches.isNotEmpty() && searching && query.isBlank() && !showHidden && profile == null) {
+                Text("BÚSQUEDAS", style = Type.cota.copy(fontSize = 10.sp), modifier = Modifier.semantics { heading() })
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val main = profile == null
-                    PullTab("Todo", main && filter == null && category == null && !showHidden) { filter = null; category = null; showHidden = false; profileId = null }
-                    Group.entries.forEach { g -> PullTab(g.title, main && filter == g && !showHidden) { filter = if (filter == g) null else g; showHidden = false; profileId = null } }
-                    if (hidden.isNotEmpty()) PullTab("Ocultas · ${hidden.size}", main && showHidden) {
-                        if (showHidden) showHidden = false else askToSeeHidden { showHidden = true; filter = null; profileId = null }
-                    }
-                    profiles.forEach { p -> PullTab(p.kind.title, profileId == p.id) { profileId = if (profileId == p.id) null else p.id; filter = null; showHidden = false } }
-                    if (profile == null && !showHidden) categories.forEach { c -> PullTab(c, category == c) { category = if (category == c) null else c } }
-                }
-                val answer = remember(query) { Calc.answer(query) }
-                if (answer != null) Answer(answer) { onCopy(answer) }
-                val people by produceState(emptyList<Contact>(), query) { value = kotlinx.coroutines.withContext(io) { findContacts(query) } }
-                val agenda by produceState(emptyList<CalendarEvent>(), query) { value = kotlinx.coroutines.withContext(io) { findEvents(query) } }
-                if (people.isNotEmpty()) Results("CONTACTOS", people.map { it.name to null }) { openContact(people[it]) }
-                val found by produceState(emptyList<dev.vivac.launcher.core.FoundFile>(), query) { value = kotlinx.coroutines.withContext(io) { findFiles(query) } }
-                if (found.isNotEmpty()) Results("ARCHIVOS", found.map { it.name to it.kind.title }) { openFile(found[it]) }
-                if (agenda.isNotEmpty()) Results("CALENDARIO", agenda.map { it.title to When.of(it.startMillis) }) { openEvent(agenda[it]) }
-                val pages = remember(query) { Pack.searchSettings(query) }
-                if (pages.isNotEmpty()) Results("AJUSTES DE ANDROID", pages.map { it.title to it.detail }) { openPage(pages[it]) }
-                val foundShortcuts = remember(query, shortcuts) { Pack.searchShortcuts(shortcuts, query).take(4) }
-                if (foundShortcuts.isNotEmpty()) ShortcutResults(foundShortcuts, openShortcut)
-                if (query.isNotBlank()) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Chip("Buscar en la web", false) { webSearch(query.trim()) }
-                        Chip("Buscar en la tienda", false) { storeSearch(query.trim()) }
-                    }
-                }
-                if (shelves.isEmpty() && answer == null && pages.isEmpty() && foundShortcuts.isEmpty() && people.isEmpty() && agenda.isEmpty() && found.isEmpty()) {
-                    Text("Nada en el petate con «$query».", style = Type.body.copy(color = Ink.textMuted))
+                    searches.forEach { q -> Chip(q, false) { query = q } }
+                    Chip("Borrar", false, onClearSearches)
                 }
             }
-            Row(Modifier.weight(1f)) {
-                Column(Modifier.weight(1f)) {
-                Zipper()
+        }
+        // The zip pulls open what is kept apart: the hidden apps and the other profiles. Nothing kept apart, no pulls.
+        val pulled = hidden.isNotEmpty() || profiles.isNotEmpty()
+        val pulls: @Composable () -> Unit = {
+            if (hidden.isNotEmpty()) PullTab("Ocultas · ${hidden.size}", profile == null && showHidden) {
+                if (showHidden) showHidden = false else askToSeeHidden { showHidden = true; profileId = null }
+            }
+            profiles.forEach { p -> PullTab(p.kind.title, profileId == p.id) { profileId = if (profileId == p.id) null else p.id; showHidden = false } }
+        }
+        // What the search finds besides apps: a sum, people, files, events, settings pages, shortcuts.
+        val answers: @Composable () -> Unit = {
+            val answer = remember(query) { Calc.answer(query) }
+            if (answer != null) Answer(answer) { onCopy(answer) }
+            val people by produceState(emptyList<Contact>(), query) { value = kotlinx.coroutines.withContext(io) { findContacts(query) } }
+            val agenda by produceState(emptyList<CalendarEvent>(), query) { value = kotlinx.coroutines.withContext(io) { findEvents(query) } }
+            if (people.isNotEmpty()) Results("CONTACTOS", people.map { it.name to null }) { openContact(people[it]) }
+            val found by produceState(emptyList<dev.vivac.launcher.core.FoundFile>(), query) { value = kotlinx.coroutines.withContext(io) { findFiles(query) } }
+            if (found.isNotEmpty()) Results("ARCHIVOS", found.map { it.name to it.kind.title }) { openFile(found[it]) }
+            if (agenda.isNotEmpty()) Results("CALENDARIO", agenda.map { it.title to When.of(it.startMillis) }) { openEvent(agenda[it]) }
+            val pages = remember(query) { Pack.searchSettings(query) }
+            if (pages.isNotEmpty()) Results("AJUSTES DE ANDROID", pages.map { it.title to it.detail }) { openPage(pages[it]) }
+            val foundShortcuts = remember(query, shortcuts) { Pack.searchShortcuts(shortcuts, query).take(4) }
+            if (foundShortcuts.isNotEmpty()) ShortcutResults(foundShortcuts, openShortcut)
+            if (query.isNotBlank()) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip("Buscar en la web", false) { webSearch(query.trim()) }
+                    Chip("Buscar en la tienda", false) { storeSearch(query.trim()) }
+                }
+            }
+            if (run.isEmpty() && answer == null && pages.isEmpty() && foundShortcuts.isEmpty() && people.isEmpty() && agenda.isEmpty() && found.isEmpty()) {
+                Text("Nada en el petate con «$query».", style = Type.body.copy(color = Ink.textMuted))
+            }
+        }
+        val pockets: @Composable (Modifier) -> Unit = { into ->
+            Column(into) {
+                if (!cramped) Zipper()
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(columns),
+                    columns = if (wide) GridCells.Adaptive(cell) else GridCells.Fixed(columns),
                     state = grid,
                     modifier = Modifier.weight(1f).padding(end = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                     contentPadding = PaddingValues(bottom = 24.dp),
                 ) {
-                    shelves.forEachIndexed { i, (group, list) ->
-                        item(key = "h-${group.name}", span = { GridItemSpan(maxLineSpan) }) { PocketName(group.title, seamAbove = i > 0) }
-                        items(list, key = { it.packageName }) { app ->
-                            val deep = app.packageName.startsWith("com.termux")
-                            val tone = if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]
-                            AppTile(
-                                label = app.label,
-                                background = if (deep) Ink.deep else Ink.surface,
-                                border = Ink.field,
-                                onClick = { if (profile != null) onOpenInProfile(app.packageName, profile.id) else openApp(app.packageName) },
-                                onLongClick = { if (profile == null) onAppMenu(app.packageName) },
-                                dot = profile == null && app.packageName in LocalDots.current,
-                                count = if (profile == null) LocalCounts.current[app.packageName] ?: 0 else 0,
-                                badge = profile?.let { if (it.kind == Profile.Kind.WORK) "TRAB" else "PRIV" },
-                                gestures = if (profile == null) carry(app, tone) else null,
-                            ) {
-                                AppFace(app, tone)
-                            }
+                    items(run, key = { it.packageName }) { app ->
+                        val deep = app.packageName.startsWith("com.termux")
+                        val tone = if (app.packageName == "com.termux") Ink.ok else Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]
+                        AppTile(
+                            label = app.label,
+                            background = if (deep) Ink.deep else Ink.surface,
+                            border = Ink.field,
+                            onClick = { if (profile != null) onOpenInProfile(app.packageName, profile.id) else openApp(app.packageName) },
+                            onLongClick = { if (profile == null) onAppMenu(app.packageName) },
+                            dot = profile == null && app.packageName in LocalDots.current,
+                            count = if (profile == null) LocalCounts.current[app.packageName] ?: 0 else 0,
+                            badge = profile?.let { if (it.kind == Profile.Kind.WORK) "TRAB" else "PRIV" },
+                            gestures = if (profile == null) carry(app, tone) else null,
+                        ) {
+                            AppFace(app, tone)
                         }
                     }
                 }
+            }
+        }
+        val altimeter: @Composable () -> Unit = {
+            Altimeter(jumps.keys, letter, tight = wide) { ch ->
+                letter = ch
+                jumps[ch]?.let { scope.launch { grid.scrollToItem(it) } }
+            }
+        }
+        if (wide) {
+            Row(Modifier.weight(1f).padding(start = 14.dp, top = if (cramped) 6.dp else 14.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(
+                    Modifier.fillMaxWidth(0.3f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    field()
+                    if (!cramped) BagLabel()
+                    if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
+                    past()
+                    // Wrapped, so every pull is in sight without sliding the row.
+                    if (pulled) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { pulls() }
+                    answers()
                 }
-                Altimeter(jumps.keys, letter) { ch ->
-                    letter = ch
-                    jumps[ch]?.let { scope.launch { grid.scrollToItem(it) } }
+                pockets(Modifier.weight(1f))
+                if (!cramped) altimeter()
+            }
+        } else {
+            Column(
+                Modifier.weight(1f).padding(start = 14.dp, top = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(Modifier.padding(end = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    field()
+                    BagLabel()
+                    if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
+                    past()
+                    if (pulled) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { pulls() }
+                    answers()
+                }
+                Row(Modifier.weight(1f)) {
+                    pockets(Modifier.weight(1f))
+                    altimeter()
                 }
             }
+        }
         }
         }
         }
@@ -375,47 +408,20 @@ private fun Answer(text: String, onCopy: () -> Unit) {
     }
 }
 
-/** "Último largo": the apps you opened last through vivac, newest first. */
-@Composable
-private fun LastPitch(
-    recent: List<InstalledApp>,
-    onOpenApp: (String) -> Unit,
-    onAppMenu: (String) -> Unit,
-    carry: @Composable (InstalledApp, Color) -> Modifier?,
-) {
-    MeshPocket("ÚLTIMO LARGO") {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            recent.forEach { app ->
-                val tone = Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]
-                AppTile(
-                    label = app.label,
-                    background = Ink.surface,
-                    border = Ink.field,
-                    tile = 48.dp,
-                    onClick = { onOpenApp(app.packageName) },
-                    onLongClick = { onAppMenu(app.packageName) },
-                    modifier = Modifier.width(60.dp),
-                    gestures = carry(app, tone),
-                ) { AppFace(app, tone) }
-            }
-        }
-    }
-}
-
 private val ALTIMETER = "#ABCDEFGHIJKLMNOPQRSTUVWXYZ".toList()
 
 /**
  * The altimeter: every letter as a mark on the right edge. Letters with apps jump there (tap or slide along it);
- * the rest are only marks, so TalkBack lists just the ones that go somewhere.
+ * the rest are only marks, so TalkBack lists just the ones that go somewhere. [tight] is the phone on its side.
  */
 @Composable
-private fun Altimeter(present: Set<Char>, current: Char?, onJump: (Char) -> Unit) {
+private fun Altimeter(present: Set<Char>, current: Char?, tight: Boolean = false, onJump: (Char) -> Unit) {
     var height by remember { mutableStateOf(1) }
     Column(
         Modifier
             .width(24.dp)
             .fillMaxHeight()
-            .padding(bottom = 16.dp)
+            .padding(bottom = if (tight) 8.dp else 16.dp)
             .strap()
             .onSizeChanged { height = it.height }
             .semantics { contentDescription = "Altímetro: desliza para saltar de letra" }
@@ -428,7 +434,8 @@ private fun Altimeter(present: Set<Char>, current: Char?, onJump: (Char) -> Unit
         verticalArrangement = Arrangement.SpaceBetween,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Buckle()
+        // On its side there is no height to spare for the buckle: the letters need it all.
+        if (!tight) Buckle()
         ALTIMETER.forEach { ch ->
             val on = ch == current
             val has = ch in present

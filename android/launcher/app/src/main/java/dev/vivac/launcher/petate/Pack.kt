@@ -8,41 +8,14 @@ import java.util.Locale
 /** An app's shortcut, as the Petate's search finds it. */
 data class FoundShortcut(val app: InstalledApp, val shortcut: AppShortcut)
 
-/** The Petate's three shelves, in the order they are shown. */
-enum class Group(val title: String) {
-    INFRA("Infra"),
-    DAILY("Día a día"),
-    SYSTEM("Sistema"),
-}
-
-/** Pure rules of the Petate (the app drawer): grouping, monograms, search, summary. */
+/** Pure rules of the Petate (the app drawer): order, monograms, search. */
 object Pack {
-    /** Packages that run the camp: the vivac stack and what keeps the rope tied. */
-    private val infraPrefixes = listOf(
-        "dev.vivac.",
-        "com.termux",
-        "com.tailscale.",
-        "org.localsend.",
-        "com.kunzisoft.keepass",
-        "io.heckel.ntfy",
-        "de.nulide.findmydevice",
-    )
-
-    /** GrapheneOS' own apps update from its store, so Android stops flagging them as system apps. */
-    private val grapheneosPrefixes = listOf("app.grapheneos.", "app.attestation.", "app.vanadium.")
-
     private val monogramOverrides = mapOf("com.termux" to ">_")
 
     private val googlePrefixes = listOf("com.google.", "com.android.vending", "com.android.chrome")
 
     private val collator: Collator = Collator.getInstance(Locale.forLanguageTag("es-ES")).apply {
         strength = Collator.PRIMARY
-    }
-
-    fun groupOf(app: InstalledApp): Group = when {
-        infraPrefixes.any { app.packageName == it.trimEnd('.') || app.packageName.startsWith(it) } -> Group.INFRA
-        app.isSystem || grapheneosPrefixes.any { app.packageName.startsWith(it) } -> Group.SYSTEM
-        else -> Group.DAILY
     }
 
     /** Two letters for the tile: first letters of two words, else a first letter plus an inner capital, else the first two. */
@@ -130,24 +103,15 @@ object Pack {
     fun initialOf(app: InstalledApp): Char =
         fold(app.label.trim()).firstOrNull()?.takeIf { it in 'a'..'z' }?.uppercaseChar() ?: '#'
 
-    /** For each letter, the position of its first app in the Petate's grid, where each shelf header is one item. */
-    fun jumps(shelves: List<Pair<Group, List<InstalledApp>>>): Map<Char, Int> {
+    /** For each letter, the position of its first app in the Petate's run. */
+    fun jumps(run: List<InstalledApp>): Map<Char, Int> {
         val jumps = linkedMapOf<Char, Int>()
-        var index = 0
-        shelves.forEach { (_, apps) ->
-            index++ // the shelf header
-            apps.forEach { app -> jumps.putIfAbsent(initialOf(app), index); index++ }
-        }
+        run.forEachIndexed { index, app -> jumps.putIfAbsent(initialOf(app), index) }
         return jumps
     }
 
-    /** Groups in fixed order, each sorted alphabetically in Spanish; empty groups are left out. */
-    fun grouped(apps: List<InstalledApp>, filter: Group?): List<Pair<Group, List<InstalledApp>>> =
-        Group.entries
-            .filter { filter == null || it == filter }
-            .map { group -> group to apps.filter { groupOf(it) == group }.sortedWith(compareBy(collator) { it.label }) }
-            .filter { it.second.isNotEmpty() }
-
+    /** The whole bag as one run, alphabetical the Spanish way: no shelves, whatever the kind of app. */
+    fun sorted(apps: List<InstalledApp>): List<InstalledApp> = apps.sortedWith(compareBy(collator) { it.label })
 
     /** A stable colour slot per package, so a tile keeps its colour across label or locale changes. */
     fun toneIndex(app: InstalledApp, paletteSize: Int): Int = Math.floorMod(app.packageName.hashCode(), paletteSize)

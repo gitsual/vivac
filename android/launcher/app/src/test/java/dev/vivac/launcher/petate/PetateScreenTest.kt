@@ -12,6 +12,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
@@ -71,16 +72,6 @@ class PetateScreenTest {
     }
 
     @Test
-    fun `a group chip keeps only its shelf`() {
-        show()
-        val chip = compose.onNode(hasText("Sistema") and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab))
-        chip.performClick()
-        chip.assertIsSelected()
-        compose.onNodeWithText("Ajustes").assertExists()
-        compose.onNodeWithText("Organic Maps").assertDoesNotExist()
-    }
-
-    @Test
     fun `hidden apps only show behind the Ocultas chip`() {
         show(hidden = setOf("app.organicmaps"))
         compose.onNodeWithText("Organic Maps").assertDoesNotExist()
@@ -118,27 +109,6 @@ class PetateScreenTest {
         compose.onNodeWithContentDescription("Saltar a la Z").performClick()
         compose.onNodeWithText("Z-app 1").assertIsDisplayed()
         compose.onNodeWithContentDescription("Saltar a la #").assertDoesNotExist()
-    }
-
-    @Test
-    fun `the last pitch shows what you opened lately, and opens it`() {
-        compose.setContent {
-            PetateScreen(listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = { opened += it }, onAppMenu = {}, recent = listOf(maps))
-        }
-        compose.onNodeWithText("ÚLTIMO LARGO").assertExists()
-        compose.onAllNodesWithText("Organic Maps").assertCountEquals(2)
-        compose.onAllNodesWithText("Organic Maps")[0].performClick()
-        assertEquals(listOf("app.organicmaps"), opened)
-    }
-
-    @Test
-    fun `the last pitch steps aside while you search`() {
-        compose.setContent {
-            PetateScreen(listOf(termux, maps, settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {}, recent = listOf(maps))
-        }
-        compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("om")
-        compose.onNodeWithText("ÚLTIMO LARGO").assertDoesNotExist()
-        compose.onNodeWithText("Termux").assertDoesNotExist()
     }
 
     @Test
@@ -228,18 +198,6 @@ class PetateScreenTest {
     }
 
     @Test
-    fun `category chips show only the apps of that category, and a second tap shows all again`() {
-        compose.setContent {
-            PetateScreen(listOf(termux, maps.copy(category = "Mapas"), settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {})
-        }
-        compose.onNodeWithText("Mapas").performScrollTo().performClick()
-        compose.onNodeWithText("Organic Maps").assertExists()
-        compose.onNodeWithText("Termux").assertDoesNotExist()
-        compose.onNodeWithText("Mapas").performScrollTo().performClick()
-        compose.onNodeWithText("Termux").assertExists()
-    }
-
-    @Test
     fun `a search lists the photos, videos and music it matches, and a tap opens one`() {
         val opened = mutableListOf<dev.vivac.launcher.core.FoundFile>()
         val photo = dev.vivac.launcher.core.FoundFile(9, "playa.jpg", dev.vivac.launcher.core.FoundFile.Kind.FOTO)
@@ -292,7 +250,8 @@ class PetateScreenTest {
         compose.onNodeWithText("Privado").performScrollTo().performClick()
         compose.onNodeWithText("Espacio privado bloqueado: desbloquéalo para ver sus apps.").assertExists()
         compose.onNodeWithText("Desbloquear").performClick()
-        compose.onNodeWithText("Todo").performScrollTo().performClick()
+        // A second tap on the pull closes the profile: everything is back.
+        compose.onNodeWithText("Privado").performScrollTo().performClick()
         compose.onNodeWithText("Termux").assertExists()
         assertEquals(listOf("open:10:com.slack", "lock:10", "lock:11"), asked)
     }
@@ -337,5 +296,85 @@ class PetateScreenTest {
         compose.onNodeWithText("sáb 21 nov · 20:30").assertExists()
         compose.onNodeWithText("Cena con Ana").performClick()
         assertEquals(listOf("contact:1", "event:5"), opened)
+    }
+
+    private val many = ('A'..'Z').flatMap { c -> (1..3).map { InstalledApp("$c-app $it", "p.$c$it", false) } }
+
+    private fun bounds(text: String) = compose.onNodeWithText(text).fetchSemanticsNode().boundsInRoot
+
+    @Test
+    fun `the bag holds no category pulls and no last pitch, and without hidden apps or profiles no pulls at all`() {
+        compose.setContent { PetateScreen(listOf(termux, maps.copy(category = "Mapas"), settings), emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {}) }
+        compose.onAllNodes(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Tab)).assertCountEquals(0)
+        compose.onNodeWithText("Mapas").assertDoesNotExist()
+        compose.onNodeWithText("ÚLTIMO LARGO").assertDoesNotExist()
+    }
+
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "w914dp-h411dp-land-420dpi")
+    fun `turned on its side, the search and the pulls go left and the pockets get the whole height beside them`() {
+        val work = Profile(10, Profile.Kind.WORK, locked = false, apps = listOf(InstalledApp("Slack", "com.slack", false)))
+        compose.setContent {
+            PetateScreen(many + maps, setOf("app.organicmaps"), focusSearch = false, onOpenApp = { opened += it }, onAppMenu = {}, profiles = listOf(work))
+        }
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val search = compose.onNodeWithContentDescription("Buscar en el petate").fetchSemanticsNode().boundsInRoot
+        val first = bounds("A-app 1")
+        // The apps are in sight, whole, beside the search: not squeezed out under it.
+        compose.onNodeWithText("A-app 1").assertIsDisplayed()
+        assertTrue("search $search, first $first", search.right <= first.left)
+        assertTrue("first $first on $screen", first.top < screen.height * 0.6f && first.bottom <= screen.bottom)
+        // More than one row of apps shows whole.
+        val rows = compose.onAllNodes(hasText("-app", substring = true)).fetchSemanticsNodes().map { it.boundsInRoot }.filter { it.bottom <= screen.bottom }.map { it.top }.distinct()
+        assertTrue("rows $rows", rows.size >= 2)
+        // The pulls sit under the search, in sight, and still open what is kept apart.
+        val pulls = listOf("Ocultas · 1", "Trabajo").map { bounds(it) }
+        pulls.forEach { assertTrue("pull $it, search $search, first $first", it.top >= search.bottom && it.right <= first.left && it.bottom <= screen.bottom) }
+        compose.onNodeWithText("Trabajo").performClick()
+        compose.onNodeWithText("Slack").assertIsDisplayed()
+    }
+
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "w914dp-h411dp-land-420dpi")
+    fun `turned on its side, a row of the pockets holds more apps than upright, as wide as they are upright`() {
+        compose.setContent { PetateScreen(many, emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {}) }
+        val first = bounds("A-app 1")
+        // The three A apps and the B apps after them share the first row.
+        val row = listOf("A-app 2", "A-app 3", "B-app 1", "B-app 2").map { bounds(it) }
+        row.forEach { assertEquals("row $row", first.top, it.top) }
+    }
+
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "w914dp-h411dp-land-420dpi")
+    fun `turned on its side, the altimeter still jumps and a search shows its answer beside the apps`() {
+        compose.setContent { PetateScreen(many, emptySet(), focusSearch = false, onOpenApp = {}, onAppMenu = {}) }
+        compose.onNodeWithText("Z-app 1").assertIsNotDisplayed()
+        compose.onNodeWithContentDescription("Saltar a la Z").performClick()
+        compose.onNodeWithText("Z-app 1").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("2+2")
+        compose.onNodeWithContentDescription("Copiar 4").assertIsDisplayed()
+    }
+
+    @Test
+    @org.robolectric.annotation.Config(qualifiers = "w914dp-h130dp-land-420dpi")
+    fun `on its side with the keyboard up, what the search finds still shows whole beside it`() {
+        show()
+        compose.onNodeWithContentDescription("Buscar en el petate").performTextInput("organic")
+        val screen = compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val search = compose.onNodeWithContentDescription("Buscar en el petate").fetchSemanticsNode().boundsInRoot
+        val tile = bounds("Organic Maps")
+        assertTrue("tile $tile, search $search on $screen", tile.left >= search.right && tile.top >= 0f && tile.bottom <= screen.bottom)
+        // No room for the pocket's name or the altimeter: the apps take it.
+        compose.onNodeWithText("Día a día").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Altímetro: desliza para saltar de letra").assertDoesNotExist()
+    }
+
+    @Test
+    fun `everything is in one alphabetical run, with no pocket names between`() {
+        show()
+        listOf("Infra", "Día a día", "Sistema").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        val (ajustes, maps, termux) = listOf("Ajustes", "Organic Maps", "Termux").map { bounds(it) }
+        // System, daily and infra apps side by side on one row, A to Z.
+        assertTrue("$ajustes $maps $termux", ajustes.top == maps.top && maps.top == termux.top && ajustes.left < maps.left && maps.left < termux.left)
     }
 }

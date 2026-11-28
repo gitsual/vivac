@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -44,7 +43,7 @@ import dev.vivac.launcher.theme.Type
 
 /*
  * The petate drawn as what it is: a stuff sack. A drawcord closes its mouth (the search), the cloth is ripstop with
- * stitched seams, the last pitch rides in an outer mesh pocket, the shelves are pockets inside behind a zip, and
+ * stitched seams, the apps ride inside behind a zip, and
  * the altimeter is a webbing strap with its buckle. Only vivac's own palette; the seams are papel at low alpha.
  */
 
@@ -127,42 +126,6 @@ fun BagLabel() {
     }
 }
 
-/** An outer mesh pocket, its seam along the top and its name on a tab sewn over the edge. */
-@Composable
-fun MeshPocket(name: String, content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxWidth().padding(top = 8.dp)) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(Ink.raised)
-                .drawBehind {
-                    val dot = Ink.deep.copy(alpha = 0.55f)
-                    val step = 6.dp.toPx()
-                    var y = step / 2
-                    while (y < size.height) {
-                        var x = step / 2
-                        while (x < size.width) { drawCircle(dot, 1.2.dp.toPx(), Offset(x, y)); x += step }
-                        y += step
-                    }
-                    drawLine(Seam, Offset(10.dp.toPx(), 8.dp.toPx()), Offset(size.width - 10.dp.toPx(), 8.dp.toPx()), 1.5.dp.toPx(), pathEffect = Stitch)
-                }
-                .border(1.dp, Ink.field, RoundedCornerShape(18.dp))
-                .padding(start = 10.dp, end = 10.dp, top = 20.dp, bottom = 10.dp),
-        ) { content() }
-        Text(
-            name,
-            style = Type.cota.copy(fontSize = 10.sp, color = Ink.text),
-            modifier = Modifier
-                .offset(x = 14.dp, y = (-8).dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Ink.field)
-                .padding(horizontal = 8.dp, vertical = 2.dp)
-                .semantics { heading() },
-        )
-    }
-}
-
 /** A zip pull: a tab with its ring hole. Selected is coral filled and bold, never colour alone. */
 @Composable
 fun PullTab(text: String, on: Boolean, onClick: () -> Unit) {
@@ -199,17 +162,6 @@ fun Zipper() {
         val tooth = 3.dp.toPx()
         var x = 0f
         while (x < size.width) { drawRect(Ink.borderControl, Offset(x, 2.5.dp.toPx()), Size(tooth, 3.dp.toPx())); x += 2 * tooth }
-    }
-}
-
-/** A pocket's name inside the bag, over the seam that closes the pocket before it. */
-@Composable
-fun PocketName(name: String, seamAbove: Boolean) {
-    Column(Modifier.fillMaxWidth().padding(top = if (seamAbove) 4.dp else 8.dp, end = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (seamAbove) Canvas(Modifier.fillMaxWidth().height(2.dp)) {
-            drawLine(Seam, Offset(0f, 1f), Offset(size.width, 1f), 1.5.dp.toPx(), pathEffect = Stitch)
-        }
-        Text(name, style = Type.title.copy(fontSize = 15.sp, lineHeight = 18.sp, color = Brand.papel50), modifier = Modifier.semantics { heading() })
     }
 }
 

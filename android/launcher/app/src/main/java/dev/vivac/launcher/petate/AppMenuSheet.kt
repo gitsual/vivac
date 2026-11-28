@@ -71,11 +71,6 @@ fun AppMenuSheet(
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(app.label, style = Type.title.copy(fontSize = 28.sp, lineHeight = 30.sp, letterSpacing = (-0.03).em), modifier = Modifier.semantics { heading() })
                     Text(app.packageName, style = Type.mono.copy(fontSize = 11.sp), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        Pack.groupOf(app).title.uppercase(),
-                        style = Type.cota.copy(fontSize = 9.sp, color = Ink.text),
-                        modifier = Modifier.border(1.dp, Ink.borderControl, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
                 }
             }
             val shortcuts = entries.filterIsInstance<MenuEntry.Shortcut>()

@@ -283,11 +283,11 @@ class LauncherAppTest {
     }
 
     @Test
-    fun `the petate draws as a bag, its cloth over the night, with cord, label, mesh pocket, zip and strap`() {
+    fun `the petate draws as a bag, its cloth over the night, with cord, label, zip and strap`() {
         show()
         compose.runOnUiThread { launcher.openApp("com.termux"); launcher.openPetate(false) }
         compose.waitForIdle()
-        compose.onNodeWithText("ÚLTIMO LARGO").assertExists()
+        compose.onNodeWithText("Petate").assertExists()
         val root = compose.activity.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         compose.runOnUiThread { root.draw(Canvas(bitmap)) }
@@ -669,7 +669,9 @@ class LauncherAppTest {
         val tile = compose.onNodeWithText("Ajustes", useUnmergedTree = true)
         tile.performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(1_000)
-        tile.performTouchInput { repeat(5) { moveBy(androidx.compose.ui.geometry.Offset(0f, -20f)) }; up() }
+        // Up to the hour, where the camp takes nothing.
+        val climb = tile.fetchSemanticsNode().boundsInRoot.center.y - 300f
+        tile.performTouchInput { repeat(5) { moveBy(androidx.compose.ui.geometry.Offset(0f, -climb / 5)) }; up() }
         compose.waitForIdle()
         assertEquals(Screen.CAMPAMENTO, launcher.screen)
         assertEquals(emptyList<String>(), launcher.home.pinned)

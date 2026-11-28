@@ -18,26 +18,6 @@ class PackTest {
     private val play = app("Play Store", "com.android.vending", system = true)
 
     @Test
-    fun `infra apps go to Infra even when they are system apps`() {
-        assertEquals(Group.INFRA, Pack.groupOf(termux))
-        assertEquals(Group.INFRA, Pack.groupOf(tailscale))
-        assertEquals(Group.INFRA, Pack.groupOf(app("vivac", "dev.vivac.launcher", system = true)))
-    }
-
-    @Test
-    fun `system apps go to Sistema and the rest to Dia a dia`() {
-        assertEquals(Group.SYSTEM, Pack.groupOf(settings))
-        assertEquals(Group.DAILY, Pack.groupOf(whatsapp))
-    }
-
-    @Test
-    fun `grapheneos apps are Sistema even when updated from its store`() {
-        assertEquals(Group.SYSTEM, Pack.groupOf(app("Cámara", "app.grapheneos.camera")))
-        assertEquals(Group.SYSTEM, Pack.groupOf(app("Auditor", "app.attestation.auditor")))
-        assertEquals(Group.SYSTEM, Pack.groupOf(app("Vanadium", "app.vanadium.browser")))
-    }
-
-    @Test
     fun `monogram follows words, then inner capitals, then the first two letters`() {
         assertEquals("Om", Pack.monogram(maps))
         assertEquals("Ls", Pack.monogram(app("LocalSend", "org.localsend.localsend_app")))
@@ -85,27 +65,19 @@ class PackTest {
     }
 
     @Test
-    fun `the altimeter jumps to the first app of each letter, counting the shelf headers`() {
+    fun `the bag is one run, sorted the Spanish way whatever the kind of app`() {
         val angel = app("Ángel", "a.a")
         val zeta = app("Zeta", "z.z")
-        val shelves = Pack.grouped(listOf(termux, angel, zeta, whatsapp, settings), filter = null)
-        // Items: [Infra header, Termux, Día a día header, Ángel, WhatsApp, Zeta, Sistema header, Ajustes]
-        assertEquals(mapOf('T' to 1, 'A' to 3, 'W' to 4, 'Z' to 5), Pack.jumps(shelves))
+        assertEquals(listOf(settings, angel, termux, whatsapp, zeta), Pack.sorted(listOf(zeta, termux, whatsapp, settings, angel)))
     }
 
     @Test
-    fun `groups come in fixed order, sorted the Spanish way, empty ones dropped`() {
-        val zeta = app("Zeta", "z.z")
+    fun `the altimeter jumps to the first app of each letter`() {
         val angel = app("Ángel", "a.a")
-        val grouped = Pack.grouped(listOf(zeta, settings, angel, termux), filter = null)
-        assertEquals(listOf(Group.INFRA, Group.DAILY, Group.SYSTEM), grouped.map { it.first })
-        assertEquals(listOf(angel, zeta), grouped[1].second)
-    }
-
-    @Test
-    fun `a chip filter keeps only its group`() {
-        val grouped = Pack.grouped(listOf(whatsapp, settings, termux), filter = Group.SYSTEM)
-        assertEquals(listOf(Group.SYSTEM to listOf(settings)), grouped)
+        val zeta = app("Zeta", "z.z")
+        val run = Pack.sorted(listOf(termux, angel, zeta, whatsapp, settings))
+        // Items: [Ajustes, Ángel, Termux, WhatsApp, Zeta]
+        assertEquals(mapOf('A' to 0, 'T' to 2, 'W' to 3, 'Z' to 4), Pack.jumps(run))
     }
 
     @Test

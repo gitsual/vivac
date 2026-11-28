@@ -47,4 +47,12 @@ class GlyphsTest {
         compose.onNodeWithText(">_").assertDoesNotExist()
         compose.onNodeWithText("Zn").assertExists()
     }
+
+    @Test
+    fun `every app on the phone that still showed a monogram has its glyph`() {
+        listOf(
+            "com.gaurav.avnc", "com.starbucks.es", "com.termux.widget", "com.termux.x11",
+            "dev.vivac.launcher", "org.kde.kdeconnect_tp", "org.localsend.localsend_app",
+        ).forEach { assertNotNull(it, Glyphs.of(it)) }
+    }
 }

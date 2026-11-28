@@ -249,7 +249,6 @@ fun LauncherApp(
                     focusSearch = launcher.focusSearch,
                     onOpenApp = launcher::openFromPetate,
                     onAppMenu = launcher::openMenu,
-                    recent = launcher.visibleRecent().mapNotNull { pkg -> launcher.apps.find { it.packageName == pkg } },
                     drag = drag,
                     onDrop = { h, spot -> launcher.drop(h.app.packageName, h.from, spot.zone, spot.index) },
                     onLand = { launcher.back() },
