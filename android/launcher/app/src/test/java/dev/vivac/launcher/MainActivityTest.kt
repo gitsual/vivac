@@ -286,4 +286,13 @@ class MainActivityTest {
         assertEquals("android.permission.STATUS_BAR_SERVICE", entry.permission)
         assertEquals(MainActivity::class.java.name, entry.targetActivity)
     }
+
+    @Test
+    fun `turning the phone does not start vivac over, so the petate or the shade stays open`() {
+        val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val changes = app.packageManager.getActivityInfo(ComponentName(app, MainActivity::class.java), 0).configChanges
+        // Android leaves these to the activity instead of recreating it; the screens lay themselves out again.
+        listOf(ActivityInfo.CONFIG_ORIENTATION, ActivityInfo.CONFIG_SCREEN_SIZE, ActivityInfo.CONFIG_SCREEN_LAYOUT, ActivityInfo.CONFIG_SMALLEST_SCREEN_SIZE)
+            .forEach { assertTrue("configChanges $changes lacks $it", changes and it != 0) }
+    }
 }
