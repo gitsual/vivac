@@ -1339,7 +1339,7 @@ private fun Via(
                             val app = shown[index]
                             CarriedTile(
                                 app, Zone.Via, index, drag, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)], Ink.surface,
-                                onOpenApp, onAppMenu, onDrop, modifier = Modifier.weight(1f), badge = Route.pitch(index), tile = TILE,
+                                onOpenApp, onAppMenu, onDrop, modifier = Modifier.weight(1f), tile = TILE,
                             )
                         }
                     }

@@ -166,7 +166,7 @@ class PetateScreenTest {
     @Test
     fun `the petate is a bag with its own label and no filler text`() {
         show()
-        compose.onNodeWithText("Petate").assertExists()
+        compose.onNodeWithContentDescription("Buscar en el petate").assertExists()
         compose.onNodeWithText("Busca en el petate").assertExists()
         listOf("PETATE · MATERIAL", "BUSCAR · NOMBRE O INICIALES", "Organic Maps → om", "control del campamento", "lo de cada día", "grapheneos").forEach {
             compose.onNodeWithText(it).assertDoesNotExist()
@@ -312,7 +312,7 @@ class PetateScreenTest {
 
     @Test
     @org.robolectric.annotation.Config(qualifiers = "w914dp-h411dp-land-420dpi")
-    fun `turned on its side, the search, the pulls and the label share one bar and the apps take the whole width under it`() {
+    fun `turned on its side, the search and the pulls share one bar and the apps take the whole width under it`() {
         val work = Profile(10, Profile.Kind.WORK, locked = false, apps = listOf(InstalledApp("Slack", "com.slack", false)))
         compose.setContent {
             PetateScreen(many + maps, setOf("app.organicmaps"), focusSearch = false, onOpenApp = { opened += it }, onAppMenu = {}, profiles = listOf(work))
@@ -332,8 +332,8 @@ class PetateScreenTest {
         // The apps do not touch the zip above them.
         val dp = screen.width / 914f
         assertTrue("first $first under search $search", first.top - search.bottom >= 24 * dp)
-        // The pulls and the label sit in the bar beside the search.
-        (listOf("Ocultas · 1", "Trabajo", "Petate").map { bounds(it) }).forEach {
+        // The pulls sit in the bar beside the search.
+        (listOf("Ocultas · 1", "Trabajo").map { bounds(it) }).forEach {
             assertTrue("in the bar: $it, search $search", it.left >= search.right && it.bottom <= first.top)
         }
         compose.onNodeWithText("Trabajo").performClick()

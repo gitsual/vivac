@@ -11,6 +11,4 @@ object Route {
             val padded = pitches + List(columns - pitches.size) { null }
             if (row % 2 == 0) padded else padded.reversed()
         }
-
-    fun pitch(index: Int) = "L${index + 1}"
 }

@@ -122,7 +122,7 @@ class LauncherAppTest {
     @Test
     fun `the dock has no petate tile, and a swipe or the search pill open the petate, back returns`() {
         show()
-        compose.onNodeWithText("Petate").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Buscar en el petate").assertDoesNotExist()
         compose.runOnUiThread { launcher.openPetate(false) }
         compose.onNodeWithContentDescription("Buscar en el petate").assertExists()
         assertEquals(false, launcher.focusSearch)
@@ -189,7 +189,8 @@ class LauncherAppTest {
         compose.onNodeWithText("com.termux").assertExists()
         compose.onNodeWithText("Fijar en el campamento").tap()
         compose.onNodeWithText("Vía del campamento").assertDoesNotExist()
-        compose.onNodeWithText("L1").assertExists()
+        // Pinned: its tile is on the route, with no pitch number over it.
+        compose.onNodeWithText("L1").assertDoesNotExist()
         // Now both in the dock and pinned.
         compose.onAllNodesWithText("Termux").assertCountEquals(2)
         compose.onNodeWithText("Organic Maps").assertDoesNotExist()
@@ -283,11 +284,13 @@ class LauncherAppTest {
     }
 
     @Test
-    fun `the petate draws as a bag, its cloth over the night, with cord, label, zip and strap`() {
+    fun `the petate draws as a bag, its cloth over the night, with cord, zip and strap`() {
         show()
         compose.runOnUiThread { launcher.openApp("com.termux"); launcher.openPetate(false) }
         compose.waitForIdle()
-        compose.onNodeWithText("Petate").assertExists()
+        compose.onNodeWithContentDescription("Buscar en el petate").assertExists()
+        // The bag says what it is by its shape: no label sewn on.
+        compose.onNodeWithText("Petate").assertDoesNotExist()
         val root = compose.activity.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         compose.runOnUiThread { root.draw(Canvas(bitmap)) }
@@ -296,12 +299,13 @@ class LauncherAppTest {
     }
 
     @Test
-    fun `six pins make a route that turns at the wall's edge, numbered L1 to L6`() {
+    fun `six pins make a route that turns at the wall's edge, its tiles unnumbered`() {
         val six = (1..6).map { InstalledApp("App $it", "p.a$it", false) }
         store.values["pinned"] = six.joinToString(",") { it.packageName }
         show(apps = six)
         compose.onNodeWithText("6 LARGOS · A MANO").assertDoesNotExist()
-        listOf("L1", "L4", "L5", "L6").forEach { compose.onNodeWithText(it).assertExists() }
+        listOf("L1", "L4", "L5", "L6").forEach { compose.onNodeWithText(it).assertDoesNotExist() }
+        (1..6).forEach { compose.onNodeWithText("App $it").assertExists() }
         val root = compose.activity.window.decorView
         val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         compose.runOnUiThread { root.draw(Canvas(bitmap)) }

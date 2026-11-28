@@ -30,10 +30,4 @@ class RouteTest {
         assertEquals(listOf(listOf(0, 1, null, null)), Route.rows(count = 2, columns = 4))
         assertEquals(emptyList<List<Int?>>(), Route.rows(count = 0, columns = 4))
     }
-
-    @Test
-    fun `pitches are named L1 onwards`() {
-        assertEquals("L1", Route.pitch(0))
-        assertEquals("L8", Route.pitch(7))
-    }
 }

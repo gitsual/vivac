@@ -167,7 +167,7 @@ fun PetateScreen(
 
     var searching by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize().background(Ink.deep)) {
-        // On its side the phone is short: the search, the pulls and the label share one thin bar, and the apps
+        // On its side the phone is short: the search and the pulls share one thin bar, and the apps
         // get the whole width and the rest of the height under it. Upright, everything is stacked as ever.
         val wide = maxWidth > maxHeight
         // On its side a tile stays about as wide as it is upright, so a row holds more of them.
@@ -185,7 +185,7 @@ fun PetateScreen(
         // Over the bag, in place of Android's bar: the hour, the connections, the battery. With the keyboard up
         // on its side there is no room for it.
         if (!cramped) dev.vivac.launcher.campamento.StatusStrip(hour, status, battery, charging, Modifier.padding(horizontal = 14.dp), compact = wide)
-        // The drawcord closes the bag's mouth; inside, the search, the label, the zip pulls. On its side the
+        // The drawcord closes the bag's mouth; inside, the search and the zip pulls. On its side the
         // cord and the hem give their height to a third row of apps.
         if (!wide) BagCord(Modifier.padding(horizontal = 18.dp))
         Column(Modifier.weight(1f).fillMaxWidth().bagCloth(if (wide) BagMouth else BagShape)) {
@@ -289,7 +289,7 @@ fun PetateScreen(
                 Modifier.weight(1f).padding(start = 14.dp, top = if (cramped) 4.dp else 8.dp),
                 verticalArrangement = Arrangement.spacedBy(if (cramped) 4.dp else 8.dp),
             ) {
-                // The search takes all the bar the pulls and the label leave it.
+                // The search takes all the bar the pulls leave it.
                 Row(
                     Modifier.fillMaxWidth().padding(end = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -297,7 +297,6 @@ fun PetateScreen(
                 ) {
                     Box(Modifier.weight(1f)) { field() }
                     if (pulled && !cramped) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { pulls() }
-                    if (!cramped) BagTag()
                 }
                 Row(Modifier.weight(1f)) {
                     pockets(Modifier.weight(1f))
@@ -312,7 +311,6 @@ fun PetateScreen(
             ) {
                 Column(Modifier.padding(end = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     field()
-                    BagLabel()
                     if (profile != null) ProfileBar(profile) { onLockProfile(profile) }
                     past()
                     if (pulled) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { pulls() }
