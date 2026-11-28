@@ -128,21 +128,8 @@ fun AvisosScreen(
             // On its side height is short: the title a size down.
             Text("Avisos", style = Type.title.copy(fontSize = if (wide) 36.sp else 44.sp, lineHeight = if (wide) 38.sp else 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
         }
-        // The shade's own status bar: the hour on the left; Tailscale's key, Wi-Fi, signal and battery on the right.
-        val bar: @Composable () -> Unit = {
-            Row(Modifier.fillMaxWidth().heightIn(min = 34.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(hour, style = Type.figure.copy(fontSize = 20.sp, lineHeight = 26.sp), maxLines = 1, modifier = Modifier.weight(1f))
-                dev.vivac.launcher.campamento.Connections(status, Modifier, key = true)
-                Row(
-                    Modifier.semantics(mergeDescendants = true) { contentDescription = "Batería al $battery %" + if (charging) ", cargando" else "" },
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    dev.vivac.launcher.campamento.Battery(battery, charging)
-                    Text("$battery %", style = Type.mono.copy(color = Ink.text), maxLines = 1)
-                }
-            }
-        }
+        // The shade's own status bar, in place of Android's.
+        val bar: @Composable () -> Unit = { dev.vivac.launcher.campamento.StatusStrip(hour, status, battery, charging) }
         val notices: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
             if (shelf.isEmpty()) {
                 item(key = "calm") {

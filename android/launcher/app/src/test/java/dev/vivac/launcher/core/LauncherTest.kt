@@ -1355,6 +1355,10 @@ class LauncherTest {
         shade.onSwipeDown()
         assertEquals(Screen.AVISOS, shade.screen)
         assertTrue(shade.hidesStatusBar)
+        // The petate too: it carries the same bar.
+        shade.back()
+        shade.openPetate(false)
+        assertTrue(shade.hidesStatusBar)
     }
 
     @Test

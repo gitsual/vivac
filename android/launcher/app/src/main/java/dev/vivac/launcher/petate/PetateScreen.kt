@@ -127,6 +127,11 @@ fun PetateScreen(
     searches: List<String> = emptyList(),
     onSearched: (String) -> Unit = {},
     onClearSearches: () -> Unit = {},
+    /** What Android's status bar would say, which hides while the petate is up: the hour, the connections, the battery. */
+    hour: String = "",
+    status: dev.vivac.launcher.campamento.PhoneStatus = dev.vivac.launcher.campamento.PhoneStatus(),
+    battery: Int = 0,
+    charging: Boolean = false,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     // Whatever a search opens, the search is remembered.
@@ -177,6 +182,9 @@ fun PetateScreen(
         // On its side with the keyboard up there is room for the bar and one row: smaller tiles, no zip, no altimeter.
         val cramped = wide && maxHeight < 200.dp
         Column(Modifier.fillMaxSize().padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = if (wide) 0.dp else 12.dp)) {
+        // Over the bag, in place of Android's bar: the hour, the connections, the battery. With the keyboard up
+        // on its side there is no room for it.
+        if (!cramped) dev.vivac.launcher.campamento.StatusStrip(hour, status, battery, charging, Modifier.padding(horizontal = 14.dp), compact = wide)
         // The drawcord closes the bag's mouth; inside, the search, the label, the zip pulls. On its side the
         // cord and the hem give their height to a third row of apps.
         if (!wide) BagCord(Modifier.padding(horizontal = 18.dp))

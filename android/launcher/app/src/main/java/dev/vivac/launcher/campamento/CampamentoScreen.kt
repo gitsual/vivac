@@ -220,7 +220,15 @@ fun CampamentoScreen(
             // left, and the pages get the whole height beside it. Upright, everything is stacked as ever.
             val wide = maxWidth > maxHeight
             val side = maxWidth * 0.34f
-            val header: @Composable () -> Unit = { Header(onOpenSettings, noticeApps, onOpenAvisos, status) { lamp = it } }
+            // Upright, a ladera has no clock or facts of its own: its bar says the hour and the battery.
+            val bare = !wide && page != 0
+            val header: @Composable () -> Unit = {
+                Header(
+                    onOpenSettings, noticeApps, onOpenAvisos, status,
+                    hour = stamp.substringAfter(" · ", stamp).takeIf { bare },
+                    battery = (facts.batteryPercent to facts.charging).takeIf { bare },
+                ) { lamp = it }
+            }
             val pager = rememberPagerState(initialPage = page) { shownPages }
             // The launcher decides the page (home, a widget sent elsewhere); a swipe tells it where you went.
             LaunchedEffect(page) { if (pager.currentPage != page) pager.animateScrollToPage(page) }
@@ -964,14 +972,26 @@ private fun Header(
     noticeApps: List<InstalledApp> = emptyList(),
     onNotices: () -> Unit = {},
     status: PhoneStatus = PhoneStatus(),
+    /** The hour and the battery, on the pages that do not already show them large; null where they do. */
+    hour: String? = null,
+    battery: Pair<Int, Boolean>? = null,
     onPlaced: (Offset) -> Unit = {},
 ) {
     // No page name: the dots below say where you are. Top left, the apps with notices, as a status bar would; by
     // the lamp, the connections.
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) { if (noticeApps.isNotEmpty()) NoticeGlyphs(noticeApps, onNotices) }
+        // As many notice glyphs as the bar has room for, then how many more.
+        BoxWithConstraints(Modifier.weight(1f)) {
+            val fit = ((maxWidth - 36.dp) / 30.dp).toInt().coerceIn(1, 6)
+            if (noticeApps.isNotEmpty()) NoticeGlyphs(noticeApps, onNotices, fit)
+        }
         // The others keep out of the lamp's ring: it reaches LAMP_RING past the button's own box.
-        Connections(status, Modifier.padding(end = LAMP_RING - LAMP_BOX / 2 + 10.dp))
+        Row(Modifier.padding(end = LAMP_RING - LAMP_BOX / 2 + 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (hour != null) Text(hour, style = Type.figure.copy(fontSize = 16.sp, lineHeight = 20.sp), maxLines = 1)
+            // Android's own bar is hidden here, so Tailscale shows as it would there: a key.
+            Connections(status, Modifier)
+            if (battery != null) BatteryFigure(battery.first, battery.second, figure = false)
+        }
         // The headlamp itself: a bar icon like the others, but coral and alone at the centre of its own ring, where
         // the rings and the beam start. The box is the touch target; its ring, in thin coral, is what marks it out.
         Box(
@@ -1004,27 +1024,48 @@ private fun Clock(stamp: String) {
     }
 }
 
+/**
+ * What Android's status bar says, in vivac's line, for the screens where that bar hides: the hour on the left;
+ * Tailscale's key, Wi-Fi, mobile signal and the battery with its figure on the right. [compact] is for a thin bar.
+ */
+@Composable
+internal fun StatusStrip(hour: String, status: PhoneStatus, battery: Int, charging: Boolean, modifier: Modifier = Modifier, compact: Boolean = false) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = if (compact) 24.dp else 34.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(hour, style = Type.figure.copy(fontSize = if (compact) 16.sp else 20.sp, lineHeight = if (compact) 20.sp else 26.sp), maxLines = 1, modifier = Modifier.weight(1f))
+        Connections(status, Modifier)
+        BatteryFigure(battery, charging)
+    }
+}
+
+/** The battery's icon with its figure beside it, read as one. */
+@Composable
+internal fun BatteryFigure(percent: Int, charging: Boolean, figure: Boolean = true) {
+    Row(
+        Modifier.semantics(mergeDescendants = true) { contentDescription = "Batería al $percent %" + if (charging) ", cargando" else "" },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Battery(percent, charging)
+        if (figure) Text("$percent %", style = Type.mono.copy(color = Ink.text), maxLines = 1)
+    }
+}
+
 private const val VPN_KEY = "M3 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M11 12h10 M17 12v3.5 M20.5 12v2.5"
 
 /** Tailscale when it is up, Wi-Fi and mobile signal in bars: lit as strong as they are, the rest faint. */
 @Composable
-internal fun Connections(status: PhoneStatus, modifier: Modifier, key: Boolean = false) {
+internal fun Connections(status: PhoneStatus, modifier: Modifier) {
     Row(
         modifier.semantics(mergeDescendants = true) { contentDescription = status.spoken },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        // On the shade, in place of Android's bar, Tailscale shows as Android shows a VPN: a key.
-        if (status.tailscale && key) Box(Modifier.testTag("tailscale:key")) { LineIcon(VPN_KEY, Ink.text, 18.dp) }
-        if (status.tailscale && !key) {
-            // Tailscale's mark of nine dots, drawn in vivac's line: the middle row lit.
-            Canvas(Modifier.size(16.dp)) {
-                val step = size.width / 3
-                for (r in 0..2) for (c in 0..2) {
-                    drawCircle(if (r == 1 || (r == 2 && c == 1)) Ink.text else Ink.borderControl, step * 0.18f, Offset(step * (c + 0.5f), step * (r + 0.5f)))
-                }
-            }
-        }
+        // Android's own bar is hidden wherever this shows, so Tailscale is drawn as that bar draws a VPN: a key.
+        if (status.tailscale) Box(Modifier.testTag("tailscale:key")) { LineIcon(VPN_KEY, Ink.text, 18.dp) }
         status.wifi?.let { level ->
             Canvas(Modifier.size(width = 18.dp, height = 14.dp)) {
                 val w = 1.6.dp.toPx()
@@ -1054,9 +1095,9 @@ internal fun Connections(status: PhoneStatus, modifier: Modifier, key: Boolean =
     }
 }
 
-/** The glyphs of the apps with notices, newest first: six at most, then how many more. A tap opens the shade. */
+/** The glyphs of the apps with notices, newest first: [most] of them (six at most), then how many more. A tap opens the shade. */
 @Composable
-private fun NoticeGlyphs(apps: List<InstalledApp>, onClick: () -> Unit) {
+private fun NoticeGlyphs(apps: List<InstalledApp>, onClick: () -> Unit, most: Int = 6) {
     val names = apps.map { it.label }
     Row(
         Modifier
@@ -1069,14 +1110,14 @@ private fun NoticeGlyphs(apps: List<InstalledApp>, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        apps.take(6).forEach { app ->
+        apps.take(most).forEach { app ->
             Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
                 androidx.compose.runtime.CompositionLocalProvider(dev.vivac.launcher.apps.LocalIconChoice provides dev.vivac.launcher.apps.IconChoice(dev.vivac.launcher.core.IconStyle.GLYPHS, null)) {
                     Box(Modifier.graphicsLayer { scaleX = 0.66f; scaleY = 0.66f }) { AppFace(app, Ink.tileTones[Pack.toneIndex(app, Ink.tileTones.size)]) }
                 }
             }
         }
-        if (apps.size > 6) Text("+${apps.size - 6}", style = Type.cota.copy(fontSize = 11.sp))
+        if (apps.size > most) Text("+${apps.size - most}", style = Type.cota.copy(fontSize = 11.sp))
     }
 }
 

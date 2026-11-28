@@ -414,9 +414,9 @@ class Launcher(
 
     /**
      * Whether Android's status bar hides: on the camp, where a pull from the top opens vivac's shade, and on that
-     * shade, which shows the hour, the connections and the battery itself.
+     * shade and the petate. Each shows the hour, the connections and the battery itself.
      */
-    val hidesStatusBar: Boolean get() = screen == Screen.CAMPAMENTO || screen == Screen.AVISOS
+    val hidesStatusBar: Boolean get() = screen == Screen.CAMPAMENTO || screen == Screen.AVISOS || screen == Screen.PETATE
 
     /** Android's own shade, for its quick settings. */
     fun openAndroidShade() = actions.showNotifications()

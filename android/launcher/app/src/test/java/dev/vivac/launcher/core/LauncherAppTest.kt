@@ -1065,6 +1065,43 @@ class LauncherAppTest {
         assertTrue(launcher.hidesStatusBar)
     }
 
+    private fun withStatus() {
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets).also { it.refresh() }
+        val status = dev.vivac.launcher.campamento.PhoneStatus(cell = 3, wifi = 2, tailscale = true)
+        compose.setContent { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views, status = status) }
+    }
+
+    @Test
+    fun `the petate carries the status bar too, the hour, Tailscale's key, the connections and the battery`() {
+        withStatus()
+        compose.runOnUiThread { launcher.openPetate(false) }
+        compose.waitForIdle()
+        compose.onNodeWithText("15:48").assertExists()
+        compose.onNodeWithContentDescription("Cobertura 3 de 4, Wi-Fi 2 de 4, Tailscale conectado").assertExists()
+        compose.onNodeWithTag("tailscale:key", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription("Batería al 99 %, cargando").assertExists()
+        assertTrue(launcher.hidesStatusBar)
+    }
+
+    @Test
+    fun `on the camp Tailscale is a key, and a ladera, with no clock of its own, has the hour and the battery in its bar`() {
+        store.values["widgets"] = "@com.termux:1"
+        withStatus()
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        // The camp already says the hour and the battery, large: its bar does not repeat them.
+        compose.onNodeWithTag("tailscale:key", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithText("15:48").assertCountEquals(1)
+        compose.onAllNodesWithContentDescription("Batería al 99 %, cargando").assertCountEquals(1)
+        compose.runOnUiThread { launcher.showPage(1) }
+        compose.mainClock.advanceTimeBy(2_000)
+        compose.waitForIdle()
+        val lamp = compose.onNodeWithContentDescription("Ajustes del sistema").fetchSemanticsNode().boundsInRoot
+        val hour = compose.onNodeWithText("15:48").fetchSemanticsNode().boundsInRoot
+        val battery = compose.onNodeWithContentDescription("Batería al 99 %, cargando").fetchSemanticsNode().boundsInRoot
+        assertTrue("hour $hour, battery $battery, lamp $lamp", hour.bottom <= lamp.bottom + 20f && hour.right <= battery.left && battery.right <= lamp.left)
+    }
+
     @Test
     fun `a notice shows who wrote, its picture, its detail and the app's own buttons, which do their thing`() {
         val face = androidx.compose.ui.graphics.ImageBitmap(96, 96)
