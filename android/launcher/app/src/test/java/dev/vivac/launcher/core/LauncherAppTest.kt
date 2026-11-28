@@ -1048,6 +1048,24 @@ class LauncherAppTest {
     }
 
     @Test
+    fun `the shade carries its own status bar, the hour, the connections with Tailscale's key and the battery`() {
+        val notices = FakeNotices(listOf(aviso("a", "Ana")))
+        actions.dotsOn = true
+        launcher = Launcher(FakeSource(listOf(termux, maps, settings)), store, actions, widgets, notices = notices).also { it.refresh() }
+        val status = dev.vivac.launcher.campamento.PhoneStatus(cell = 3, wifi = 2, tailscale = true)
+        compose.setContent { LauncherApp(launcher, "mar 17 nov · 15:48", facts, actions, views, status = status) }
+        compose.runOnUiThread { launcher.onSwipeDown() }
+        compose.waitForIdle()
+        compose.onNodeWithText("Avisos").assertExists()
+        compose.onNodeWithText("15:48").assertExists()
+        compose.onNodeWithContentDescription("Cobertura 3 de 4, Wi-Fi 2 de 4, Tailscale conectado").assertExists()
+        compose.onNodeWithTag("tailscale:key", useUnmergedTree = true).assertExists()
+        compose.onNodeWithContentDescription("Batería al 99 %, cargando").assertExists()
+        // Android's own bar steps aside: vivac's says the same.
+        assertTrue(launcher.hidesStatusBar)
+    }
+
+    @Test
     fun `a notice shows who wrote, its picture, its detail and the app's own buttons, which do their thing`() {
         val face = androidx.compose.ui.graphics.ImageBitmap(96, 96)
         val photo = androidx.compose.ui.graphics.ImageBitmap(720, 360)

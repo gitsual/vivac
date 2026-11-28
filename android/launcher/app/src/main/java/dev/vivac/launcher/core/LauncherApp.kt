@@ -224,6 +224,10 @@ fun LauncherApp(
                     isOn = launcher::isOn,
                     editing = launcher.editingQuick,
                     brightness = launcher.brightness,
+                    hour = stamp.substringAfter(" · ", stamp),
+                    status = status,
+                    battery = facts.batteryPercent,
+                    charging = facts.charging,
                     act = dev.vivac.launcher.avisos.AvisosActions(
                         open = launcher::openAviso, dismiss = launcher::dismissAviso, act = launcher::actAviso,
                         reply = launcher::replyAviso, run = launcher::runQuick, edit = launcher::toggleQuickEditing,

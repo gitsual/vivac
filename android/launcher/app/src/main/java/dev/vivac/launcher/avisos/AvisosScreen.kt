@@ -106,6 +106,11 @@ fun AvisosScreen(
     editing: Boolean,
     act: AvisosActions,
     brightness: Float = 0.5f,
+    /** What Android's status bar would say, which hides while the shade is up: the hour, the connections, the battery. */
+    hour: String = "",
+    status: dev.vivac.launcher.campamento.PhoneStatus = dev.vivac.launcher.campamento.PhoneStatus(),
+    battery: Int = 0,
+    charging: Boolean = false,
 ) {
     val shelf = Avisos.shelf(avisos)
     val byPackage = apps.associateBy { it.packageName }
@@ -122,6 +127,21 @@ fun AvisosScreen(
         val title: @Composable () -> Unit = {
             // On its side height is short: the title a size down.
             Text("Avisos", style = Type.title.copy(fontSize = if (wide) 36.sp else 44.sp, lineHeight = if (wide) 38.sp else 46.sp, letterSpacing = (-0.04).em, color = Brand.papel50), modifier = Modifier.semantics { heading() })
+        }
+        // The shade's own status bar: the hour on the left; Tailscale's key, Wi-Fi, signal and battery on the right.
+        val bar: @Composable () -> Unit = {
+            Row(Modifier.fillMaxWidth().heightIn(min = 34.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(hour, style = Type.figure.copy(fontSize = 20.sp, lineHeight = 26.sp), maxLines = 1, modifier = Modifier.weight(1f))
+                dev.vivac.launcher.campamento.Connections(status, Modifier, key = true)
+                Row(
+                    Modifier.semantics(mergeDescendants = true) { contentDescription = "Batería al $battery %" + if (charging) ", cargando" else "" },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    dev.vivac.launcher.campamento.Battery(battery, charging)
+                    Text("$battery %", style = Type.mono.copy(color = Ink.text), maxLines = 1)
+                }
+            }
         }
         val notices: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
             if (shelf.isEmpty()) {
@@ -161,12 +181,14 @@ fun AvisosScreen(
                     QuickSection(quick, byPackage, isOn, editing, act, tileHeight = 86.dp)
                     if (!editing) Brightness(brightness, act.brightness)
                 }
-                Column(Modifier.weight(0.58f).fillMaxHeight().padding(top = 46.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(0.58f).fillMaxHeight().padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    bar()
                     LazyColumn(list.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { notices() }
                 }
             }
         } else {
             Column(padded, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                bar()
                 title()
                 LazyColumn(list.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     item(key = "quick") { QuickSection(quick, byPackage, isOn, editing, act) }

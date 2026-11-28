@@ -1004,15 +1004,19 @@ private fun Clock(stamp: String) {
     }
 }
 
+private const val VPN_KEY = "M3 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M11 12h10 M17 12v3.5 M20.5 12v2.5"
+
 /** Tailscale when it is up, Wi-Fi and mobile signal in bars: lit as strong as they are, the rest faint. */
 @Composable
-private fun Connections(status: PhoneStatus, modifier: Modifier) {
+internal fun Connections(status: PhoneStatus, modifier: Modifier, key: Boolean = false) {
     Row(
         modifier.semantics(mergeDescendants = true) { contentDescription = status.spoken },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (status.tailscale) {
+        // On the shade, in place of Android's bar, Tailscale shows as Android shows a VPN: a key.
+        if (status.tailscale && key) Box(Modifier.testTag("tailscale:key")) { LineIcon(VPN_KEY, Ink.text, 18.dp) }
+        if (status.tailscale && !key) {
             // Tailscale's mark of nine dots, drawn in vivac's line: the middle row lit.
             Canvas(Modifier.size(16.dp)) {
                 val step = size.width / 3
@@ -1149,7 +1153,7 @@ private fun FactsStrip(facts: PhoneFacts, onOpenAbout: () -> Unit) {
  * A battery drawn in line: filled to its level, coral when low, summit green with a bolt while charging.
  */
 @Composable
-private fun Battery(percent: Int, charging: Boolean) {
+internal fun Battery(percent: Int, charging: Boolean) {
     val level = percent.coerceIn(0, 100) / 100f
     val fill = when {
         charging -> Ink.ok
